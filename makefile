@@ -74,7 +74,8 @@ $(DIR)/System.class: $(DIR)/FDRTransitionMap.class $(DIR)/Components.class	\
 
 # $(DIR)/Debugger.class: $(DIR)/System.class
 
-# $(DIR)/Checker.class: $(DIR)/System.class $(DIR)/NewViewExtender.class $(DIR)/Debugger.class $(DIR)/Concurrency.class
+$(DIR)/Checker.class: $(DIR)/System.class 
+# $(DIR)/NewViewExtender.class $(DIR)/Debugger.class $(DIR)/Concurrency.class
 
 $(DIR)/VA.class: $(DIR)/System.class $(DIR)/Checker.class
 

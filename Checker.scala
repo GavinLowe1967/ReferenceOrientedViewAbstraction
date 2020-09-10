@@ -59,31 +59,61 @@ class Checker(system: System)
     v match{
       case cv: ComponentView =>
         val trans = system.transitions(cv)
-        for((pre, e, post) <- trans){
-          println(s"$pre -${system.showEvent(e)}-> $post")
+        for((pre, e, post, outsidePids) <- trans){ // FIXME
+          // Calculate all views corresponding to post.
+          println(s"$pre -${system.showEvent(e)}-> $post [$outsidePids]")
           assert(pre.components(0) == cv.principal)
           val princ1 = post.components(0)
 
           // Case 1: component view for cv.principal
           val otherIds = post.components.tail.map(_.ids(0))
           val newIds = princ1.ids.tail.filter(p => !otherIds.contains(p))
-          println(s"newIds = ${newIds.mkString(",")}")
+          if(newIds.nonEmpty) println(s"newIds = ${newIds.mkString(",")}")
           if(newIds.forall(isDistinguished)){
+            assert(outsidePids.isEmpty) // FIXME
             val v1 = Remapper.remapComponentView(post.toComponentView)
             println(v1)
             if(sysAbsViews.add(v1)) nextNewViews += v1
           }
           else{
             assert(newIds.length == 1) // FIXME
-            val newId = newIds.head
+            assert(outsidePids.map(_._2).sameElements(newIds), 
+              s"newIds = ${newIds.mkString(",")}; outsidePids = $outsidePids")
+            val outsidePid = outsidePids.head
+            // Find all states for outsidePid, consistent with cv, that can
+            // perform e.
 
-            ???
+            println("???"); ???
           }
 
           // FIXME: more cases
-        }
+
+          // Consider effect on other views of this transition.  For every
+          // view v1 in sysAbsViews, if it is consistent with cv
+          // (i.e. unifiable), and contains at least one process that changes
+          // state, then update as per this transition.
+          println("Effect on other views:")
+          for(v1 <- sysAbsViews.toArray) v1 match{ // IMPROVE iteration
+            case cv1: ComponentView  =>
+              if(cv1.servers == cv.servers){
+                println(cv1); 
+                val newCpts = Remapper.combine(cv, cv1)
+                for(cpts <- newCpts){
+                  val nv = Remapper.remapComponentView(
+                    new ComponentView(post.servers, cpts(0), cpts.tail) )
+                  println(s"  -> $nv")
+                  if(sysAbsViews.add(nv) && system.isActive(nv)) nextNewViews += nv
+                }
+              }
+          } // end of match
+          // IMPROVE: need better way of iterating over ViewSet
+
+        } // end of for((pre, e, post, outsidePids) <- trans)
     }
   } // FIXME
+
+
+
 
     // sysConcViews = 
     //   if(memoryless) new ImplicitSystemViewSet(sysAbsViews, aShapes)

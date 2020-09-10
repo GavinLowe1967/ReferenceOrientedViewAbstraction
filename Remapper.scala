@@ -29,7 +29,10 @@ object Remapper{
     *  {(t,arg) -> (t, map(t)(arg)) |
     *       0 <= t < numTypes, 0 <= arg < size(t), map(t)(arg) != -1}.
     */
-  private type RemappingMap = Array[Array[Int]]
+  private type RemappingMap = Array[Array[Identity]]
+
+  def showRemappingMap(map: RemappingMap) = 
+    map.map(_.mkString("[",",","]")).mkString("; ")
 
   /** A clear RemappingMap, representing the empty mapping; used as a
     * template for creating more such. */
@@ -68,6 +71,14 @@ object Remapper{
       // while(i < rowSizes(t)){ assert(map(t)(i) == -1); i += 1 }
     }
     map
+  }
+
+  /** Produce a (deep) clone of map. */
+  private def cloneMap(map: RemappingMap): RemappingMap = {
+    val map1 = ThreadLocalRemappingMap.get
+    for(t <- 0 until numTypes; i <- 0 until rowSizes(t)) 
+      map1(t)(i) = map(t)(i)
+    map1
   }
 
   // ------ NextArgMaps
@@ -215,6 +226,8 @@ object Remapper{
       : ServerStates = 
     ServerStates(remapStates(map, nextArg, ss.servers))
 
+  // =================== Remapping views
+
   /** Remap a ComponentView. */
   @inline def remapComponentView(v: ComponentView): ComponentView = {
     val map = newRemappingMap; var nextArg = newNextArgMap
@@ -228,7 +241,214 @@ object Remapper{
     case cv: ComponentView => remapComponentView(cv)
   }
 
+  /** Apply map to cpt. 
+    * Pre: map is defined on all parameters of cpt. */
+  private def applyRemappingToState(map: RemappingMap, cpt: State): State = {
+    val typeMap = cpt.typeMap; val ids = cpt.ids
+    val newIds = Array.tabulate(ids.length){i =>
+      val id = ids(i); 
+      if(isDistinguished(id)) id 
+      else{ val newId = map(typeMap(i))(id); assert(newId >= 0); newId }
+    }
+    MyStateMap(cpt.family, cpt.cs, newIds)
+  }  
 
+  /** Apply map to cpts. 
+    * Pre: map is defined on all parameters of cpts. */
+  private def applyRemapping(map: RemappingMap, cpts: Array[State])
+      : Array[State] =
+    cpts.map(cpt => applyRemappingToState(map, cpt))
+
+  // ==================== Unification
+
+  /** Try to extend map to map' st map'(st2) = st1.
+    * @return true if successful. */
+  private def unify(map: RemappingMap, st1: State, st2: State): Boolean = {
+    // Work with map1, and update map only if successful. 
+    val map1 = cloneMap(map) 
+    if(st1.cs != st2.cs) false
+    else{
+      val ids1 = st1.ids; val ids2 = st2.ids
+      val len = ids1.length; val typeMap = st1.typeMap
+      assert(st1.family == st2.family && st2.typeMap == typeMap && 
+        ids2.length == len)
+      // Iterate through the parameters; ok indicates if matching successful
+      // so far.
+      var i = 0; var ok = true
+      while(i < len && ok){
+        val id1 = ids1(i); val id2 = ids2(i); val t = typeMap(i)
+        if(isDistinguished(id1) || isDistinguished(id2)) ok = id1 == id2
+        if(map1(t)(id2) < 0) map1(t)(id2) = id1 // extend map
+        else ok = map1(t)(id2) == id1
+        i += 1
+      }
+      if(ok) for(f <- 0 until numFamilies) map(f) = map1(f)
+      ok
+    }
+  }
+
+
+// Check below.  In main function, rename identities to fresh parameters, then
+// call this.
+
+  /** Extend map, in all possible ways, to remap ids[i..) and then cpts, so that
+    * each parameter other than the identities gets mapped (injectively)
+    * either to a parameter of otherArgs or a fresh parameter (given by
+    * nextArg).
+    * @param map the RemappingMap that gets extended.  Used immutably.
+    * @param nextArg a NextArgMap giving the next fresh parameter to use for 
+    * each type.  Used mutably, but each update is backtracked.
+    * @param otherArgs for each type, a list of other values that a parameter
+    * can be mapped to.  Used mutably, but each update is backtracked.
+    * @param typeMap a type map giving the types of ids.
+    * @return all resulting maps. */
+  private def extendMapToCombineParams(map: RemappingMap, nextArg: NextArgMap, 
+    otherArgs: Array[List[Identity]], ids: Array[Identity], i: Int,
+    typeMap: Array[Type], cpts: List[State])
+      : List[RemappingMap] = {
+    if(i == ids.length){
+      if(cpts.isEmpty) List(map) // base case
+      else{ // move on to next component
+        val c = cpts.head
+        extendMapToCombineParams(
+          map, nextArg, otherArgs, c.ids, 1, c.typeMap, cpts.tail)
+      }
+    } // end of if(i == ids.length)
+    else{
+      val id = ids(i); val f = typeMap(i) // rename (f,id)
+      var result = List[RemappingMap]()
+
+      // Case 1: map id to an element of otherArgs(f)
+      val newIds = otherArgs(f)
+      for(id1 <- newIds){
+        otherArgs(f) = newIds.filter(_ != id1) // temporary update (*)
+        val map1 = cloneMap(map); map1(f)(id) = id1 // IMPROVE
+        val newMaps = extendMapToCombineParams(
+          map1, nextArg, otherArgs, ids, i+1, typeMap, cpts)
+        result = newMaps++result
+      }
+      otherArgs(f) = newIds // undo (*)
+
+      // Case 2: map id to nextArg(f)
+      val id1 = nextArg(f); nextArg(f) += 1 // temporary update (+)
+      val map1 = cloneMap(map); map1(f)(id) = id1 // IMPROVE
+      val newMaps = extendMapToCombineParams(
+        map1, nextArg, otherArgs, ids, i+1, typeMap, cpts)
+      result = newMaps++result
+      nextArg(f) -= 1 // undo (+)
+
+      result
+    }
+  }
+
+  /** Create a RemappingMap map that is the identity map on the identities of
+    * servers, and that if a server references both a component c1 in
+    * components1 and a component c2 in components2, then map(c2) = c1.  Or
+    * return null if this is not possible. */
+  private def unifyCommonReferencedComponents(
+    servers: ServerStates, components1: Array[State], components2: Array[State])
+      :RemappingMap = {
+    // The initial RenamingMap, the identity on the server parameters
+    var map = createMap(servers.rhoS)
+
+    // For each component c2 in v2, if its identity is referenced by a server
+    // and matches the identity of a component of v1, then they must be
+    // unifiable, or the combination fails.
+    var i = 0; var ok = true
+    while(i < components2.length && ok){
+      val c2 = components2(i)
+      val pId2 @ (f,id) = c2.componentProcessIdentity
+      if(servers.serverIds(f).contains(id)){ // c2 is refed by a server
+        // Find components of v1 with same process id.
+        val matches = components1.filter(_.componentProcessIdentity == pId2)
+        if(matches.nonEmpty){
+          assert(matches.length == 1); val c1 = matches.head
+          if(true || c1 != c2){
+            print(s"Unifying $c1 and $c2... ")
+            ok = unify(map, c1, c2)
+            assert(!ok) // FIXME:
+            // FIXME: if ok, I think remove this component from the list
+          }
+          else println(s"Not unifying $c1 with itself.")
+        }
+      } // end of if(servers.rhoS(t).contains(id))
+      i += 1
+    }
+
+    if(ok) map else null
+  }
+
+
+  /** Try to combine two component views.  Produce all pi(v2), for remapping pi,
+    * such that v1 U pi(v2) makes sense, i.e. the identities are disjoint. */
+  def combine(v1: ComponentView, v2: ComponentView): List[Array[State]] = {
+    // println(s"combine($v1, $v2)")
+    val servers = v1.servers; require(v2.servers == servers)
+    val components1 = v1.components; val components2 = v2.components
+    var map =  unifyCommonReferencedComponents(servers, components1, components2)
+
+    if(map != null){
+      // The identities used in v1
+      val cptIds1 = components1.map(_.componentProcessIdentity)
+      // The next parameter of each type not used in v1
+      // FIXME: wrong if some unification happened
+      val nextArg: NextArgMap = createNextArgMap(servers.rhoS)
+      // Parameters in v1 not as identities
+      // FIXME: wrong if some unification happened
+      val otherArgs = Array.tabulate(numTypes)(f =>
+        servers.serverIds(f).filter(id => !cptIds1.contains((f,id))) )
+      for(c <- v1.components; i <- 0 until c.ids.length){
+        val f = c.typeMap(i); val id = c.ids(i)
+        nextArg(f) = nextArg(f) max (id+1)
+        if(i > 0) if(!otherArgs(f).contains(id)) otherArgs(f) ::= id
+      }
+      // println("map = "+map.map(_.mkString("[",",","]")).mkString("; "))
+      // println("nextArg = "+nextArg.mkString("[",",","]")+
+      //   "; otherArgs = "+otherArgs.mkString("; "))
+
+      // Map each identity in v2 to a fresh parameter (given by nextArg)
+      for(c <- components2){
+        val ids = c.ids; val (f,id) = c.componentProcessIdentity
+        assert(map(f)(id) < 0, s"c = $c; "+map(f)(id))
+        // Map id to newId
+        val newId = nextArg(f); nextArg(f) += 1; map(f)(id) = newId
+      }
+
+      // Now map each other parameter either to a fresh parameter or a
+      // parameter of otherArgs
+      val c = components2.head
+      val maps = extendMapToCombineParams(
+        map, nextArg, otherArgs, c.ids, 1, c.typeMap, components2.toList.tail)
+      // for(map <- maps){
+      //   // println(showRemappingMap(map))
+      //   val newCpts = applyRemapping(map, components2)
+      //   println(newCpts.mkString("[", ",", "]"))
+      // }
+      maps.map(map => applyRemapping(map, components2))
+      // maps
+    }
+    else List()
+
+  }
+
+  def combineTest = {
+    ???
+  }
+
+  /** Try to combine two lists of component states, consistent with map.
+    * @return all extensions map' of map such that cpts1 U map'(cpts2) makes 
+    * sense, i.e. the identities are disjoint. */
+  // private def combineZZZ(map: RemappingMap, nextArg: NextArgMap, 
+  //   otherArgs: Array[List[Identity]], cpts2: List[State])
+  //     : List[RemappingMap] = {
+  //   if(cpts2.isEmpty) List(map)
+  //   else{
+  //     val c1 = cpts2.head
+  //     //val newMaps = extendMapToCombineState(map, nextArg, otherArgs, c1)
+  //     // newMaps.flatMat(map1 => combineZZZ(map1, nextArg
+  //     ???
+  //   }
+  // }
 
   /** Remap v, updating map and nextArg. */
   // @inline private 
@@ -487,4 +707,8 @@ object Remapper{
   // }
 
 
+
+
 }
+
+

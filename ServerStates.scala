@@ -35,7 +35,8 @@ class ServerStates(val servers: List[State]){
   val numParams = serverIds.map(_.length)
 
   /** Identity mapping on identities held by servers, for each type. */
-  val rhoS = Array.tabulate(numTypes){t => val ids = serverIds(t); ids.zip(ids) }
+  val rhoS: ParamMap = 
+    Array.tabulate(numTypes){t => val ids = serverIds(t); ids.zip(ids) }
 
   override def toString = servers.mkString("[", " || ", "]")
 }

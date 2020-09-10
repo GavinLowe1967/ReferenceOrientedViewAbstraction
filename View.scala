@@ -15,6 +15,8 @@ abstract class View{
 class ComponentView(
   val servers: ServerStates, val principal: State, val others: Array[State])
     extends View{
+  /** All the components in this view, with the principal component first. */
+  val components = principal +: others // IMPROVE
 
   override def toString = 
     s"$servers || $principal || ${others.mkString("[", " || ", "]")}"

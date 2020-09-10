@@ -183,7 +183,10 @@ class System(fname: String, checkDeadlock: Boolean,
     for(v <- views){
       val v1 = Remapper.remapView(v)
       println(v.toString+" -> "+v1.toString+(if(isActive(v)) "*" else ""))
-      if(viewSet.add(v1) && isActive(v1)){ activeViews += v1; println("**") }
+      if(viewSet.add(v1)){
+        if(isActive(v1)) activeViews += v1
+        println("**") 
+      }
     }
       // val sv = View.mkView(serverInits, vs)
       // if(!sysViews.add(sv)) View.returnView(sv)
@@ -201,10 +204,26 @@ class System(fname: String, checkDeadlock: Boolean,
   }
   //  View.alpha(aShapes, concViews, absViews, ply)
 
-  /** The transitions caused by the principal component of cv. */
-  def transitions(cv: ComponentView)
-      : List[(Concretization, EventInt, Concretization)] = {
-    var result = List[(Concretization, EventInt, Concretization)]()
+  /** We represent sets of transitions corresponding to a ComponentView cv using
+    * lists of tuples of type TransitionRep.  Each tuple (pre, e, post, pids)
+    * represents concrete transitions pre U new U cpts -e-> post U new' U
+    * cpts, for each set new and new', cpts such that: (1) new, new' have
+    * component identities pIds and transition new -e-> new'; the three parts
+    * have disjoint identities.  The concretizations pre and post contain the
+    * same component identities, namely those identities in cv.
+    */
+  type TransitionRep = 
+    (Concretization, EventInt, Concretization, List[ComponentProcessIdentity])
+
+  /** The transitions caused by the principal component of cv. 
+    * @return a list of tuples (pre, e, post, pids) representing concrete 
+    * transitions pre U new U cpts -e-> post U new' U cpts, for each set new
+    * and new', cpts such that: (1) new, new' have component identities pIds
+    * and transition new -e-> new'; the three parts have disjoint identities.
+    * The concretizations pre and post contain the same component identities,
+    * namely those identities in cv. */
+  def transitions(cv: ComponentView): List[TransitionRep] = {
+    var result = List[TransitionRep]()
     val princTrans = components.getTransComponent(cv.principal)
     val (pf,pi) = cv.principal.componentProcessIdentity
     // println(s"Transitions for ${(pf,pi)}")
@@ -216,9 +235,9 @@ class System(fname: String, checkDeadlock: Boolean,
     // Case 1: events of the principal component with no synchronisation
     val conc0 = Concretization(cv)
     for(i <- 0 until princTrans.eventsSolo.length-1; 
-      st1 <- princTrans.nextsSolo(i)){
+        st1 <- princTrans.nextsSolo(i)){
       val post = Concretization(cv.servers, st1, cv.others)
-      result ::= ((conc0, princTrans.eventsSolo(i), post))
+      result ::= ((conc0, princTrans.eventsSolo(i), post, List()))
     }
 
     // Case 2: synchronisation between principal component and server (only)
@@ -240,7 +259,7 @@ class System(fname: String, checkDeadlock: Boolean,
             // println(s"Server-principal sync on ${showEvent(pE)}")
             for(pNext <- pNexts(cptIndex); sNext <- sNexts(serverIndex)){
               val post = Concretization(ServerStates(sNext), pNext, cv.others)
-              result ::= ((conc0, sE, post))
+              result ::= ((conc0, sE, post, List()))
             }
             serverIndex += 1; sE = sEs(serverIndex)
             cptIndex += 1; pE = pEs(cptIndex)
@@ -255,10 +274,12 @@ class System(fname: String, checkDeadlock: Boolean,
       if(theseTrans != null){ 
         val (oEs, oNs): (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = 
           theseTrans
-        println((f,i).toString+": "+
-          oEs.filter(_ < Sentinel).map(showEvent).mkString("[", ", ", "]"))
+        // println((f,i).toString+": "+
+        //   oEs.filter(_ < Sentinel).map(showEvent).mkString("[", ", ", "]"))
         // Find id of relevant component; find compatible states of that component
-        for(e <- oEs; if e < Sentinel){
+        // for(e <- oEs; if e < Sentinel){
+        for(i <- 0 until oEs.length-1){
+          val e = oEs(i); assert(i < Sentinel)
           // Ids of passive components involved in this synchronisation.
           val passives = components.passiveCptsOfEvent(e)
           assert(passives.length == 1) // FIXME
@@ -268,8 +289,8 @@ class System(fname: String, checkDeadlock: Boolean,
           // Ids of components in the synchronisation but not in cv
           val absentPassives = passives.filterNot( pId => 
             cv.others.exists(_.componentProcessIdentity == pId) )
-          print(s"${showEvent(e)}: ${presentPassives.mkString("[",",","]")} ---")
-          println(absentPassives)
+          // print(s"${showEvent(e)}: ${presentPassives.mkString("[",",","]")} ---")
+          // println(absentPassives)
           if(presentPassives.nonEmpty){
             assert(absentPassives.isEmpty) // FIXME
             // Next states for the present passives
@@ -278,13 +299,21 @@ class System(fname: String, checkDeadlock: Boolean,
             ???
           }
           else{
-            val (cf, cId) = absentPassives.head
+            val cPid = absentPassives.head // the absent component
+            val conc0 = Concretization(cv)
+            for(st1 <- oNs(i)){ // the post state of the principal cpt
+              val post = Concretization(cv.servers, st1, cv.others)
+              result ::= ((conc0, e, post, List(cPid)))
+            }
             // println((cf, cId).toString)
 
             // Find all states of (cf, cId) from which e can be performed.
             // compatible with cv.  For each seen so far, add the transition.
             // But we also need to record information, so if such a state is
-            // found subsequently, we can then add the transition.
+            // found subsequently, we can then add the transition. ??? Just
+            // return the tuple (cv, e, post-state, (cf, cId)), representing
+            // that whenever the component (cf,cId) is in a state that can
+            // perform e, we create a new corresponding post-state?
           }
 
         }
