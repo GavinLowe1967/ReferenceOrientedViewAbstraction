@@ -42,7 +42,9 @@ class Checker(system: System)
     var newViews: Array[View] = initViews
 
     while(!done.get && ply != bound){
-      println("\nSTEP "+ply)
+      println("\nSTEP "+ply) 
+      println("#abstractions = "+printLong(sysAbsViews.size))
+      println("#new abstract views = "+printInt(newViews.size))
       val nextNewViews = new ArrayBuffer[View]
       for(v <- newViews) process(nextNewViews, v)
       ply += 1; newViews = nextNewViews.toArray; 
@@ -102,7 +104,10 @@ class Checker(system: System)
                   val nv = Remapper.remapComponentView(
                     new ComponentView(post.servers, cpts(0), cpts.tail) )
                   println(s"  -> $nv")
-                  if(sysAbsViews.add(nv) && system.isActive(nv)) nextNewViews += nv
+                  if(sysAbsViews.add(nv)){
+                    println("Added")
+                    if(system.isActive(nv))          nextNewViews += nv
+                  }
                 }
               }
           } // end of match
