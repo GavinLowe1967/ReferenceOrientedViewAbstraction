@@ -106,7 +106,7 @@ class Checker(system: System)
                   println(s"  -> $nv")
                   if(sysAbsViews.add(nv)){
                     println("Added")
-                    if(system.isActive(nv))          nextNewViews += nv
+                    if(system.isActive(nv)) nextNewViews += nv
                   }
                 }
               }
