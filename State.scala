@@ -23,6 +23,9 @@ class State(val family: Family, val cs: ControlState,
   /** The types of parameters. */
   def typeMap: Array[Type] = State.stateTypeMap(cs)
 
+  def processIdentities: Array[ComponentProcessIdentity] = 
+    Array.tabulate(ids.length)(i => (typeMap(i), ids(i)))
+
   /** Check the type sizes from the script are large enough for all the
     * parameters in this State.  This is not done during compilation, because
     * typeMap is not yet initialised, and the State is bound to pass the test,
@@ -282,4 +285,9 @@ object State{
 
   /** Type of the identity of component with control state cs. */
   private def idType(cs: ControlState): Type = idTypeArray(cs-minCS)
+
+  /** The script name for pid. */
+  def showProcessId(pid: ComponentProcessIdentity) = {
+    val (t,id) = pid; scriptNames(t)(id)
+  }
 }

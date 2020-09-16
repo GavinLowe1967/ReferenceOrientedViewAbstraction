@@ -122,13 +122,13 @@ class System(fname: String, checkDeadlock: Boolean,
     val serverAlphaMap: Array[Boolean] = servers.alphaBitMap
 
     // find three-way synchronisations
-    assert(cptEventMap.length == numEvents+3, 
+    assert(cptEventMap.length == eventsSize, 
            s"${cptEventMap.length}; $numEvents")
-    assert(serverAlphaMap.length == numEvents+3, 
+    assert(serverAlphaMap.length == eventsSize, 
            s"${serverAlphaMap.length}; $numEvents; ${showEvent(numEvents+2)}")
     var e = 3
     threeWaySyncs = Array.tabulate(numFamilies)(f => new Array[Boolean](f+1))
-    while(e < numEvents+3){
+    while(e < eventsSize){
       if(cptEventMap(e).length == 2 && serverAlphaMap(e)){
         val family1 = cptEventMap(e)(0)._1; val family2 = cptEventMap(e)(1)._1
         if(false)
@@ -243,7 +243,6 @@ class System(fname: String, checkDeadlock: Boolean,
     // Case 2: synchronisation between principal component and server (only)
     val serverTrans1 = serverTrans.transSync(pf)(pi)
     if(serverTrans1 != null){
-      // println(s"serverTrans1 = $serverTrans1")
       val (sEs, sNexts):
           (ArrayBuffer[EventInt], ArrayBuffer[List[List[State]]]) = serverTrans1
       val pEs = princTrans.eventsServer; val pNexts = princTrans.nextsServer
@@ -323,12 +322,94 @@ class System(fname: String, checkDeadlock: Boolean,
       // FIXME
     }
 
-
     // FIXME: other cases
 
     // for((pre, e, post) <- result) println(s"$pre -${showEvent(e)}-> $post")
     result
   }
+
+  /** Get all renamings of cv1, consistent with cv, that include a component
+    * with identity pid that can perform e with cv.principal.  */
+  def consistentStates(pid: ComponentProcessIdentity, cv: ComponentView, 
+    e: EventInt, cv1: ComponentView)
+      : ArrayBuffer[State] = {
+    val (f,id) = pid; val servers = cv.servers; require(cv1.servers == servers)
+    val cpts = cv.components; val cpts1 = cv1.components
+    val (fp, idp) = cv.principal.componentProcessIdentity
+    println(s"consistentStates(${State.showProcessId(pid)}, $cv)\n"+
+      s"  with $cv1")
+    // Find all components of $cv1 that can be renamed to a state of pid
+    // that can perform e.
+    for(i <- 0 until cpts1.length){
+      val st1 = cpts1(i)
+      if(st1.family == f){
+        // All ways of remapping st1 so that: (1) its identity maps to id; (2)
+        // the mapping is the identity on parameters in servers; and (3) other
+        // parameters are mapped either to another parameter in cv, or the
+        // next fresh parameter.
+        val (map0, otherArgs, nextArg) = Remapper.createMaps(servers, cpts)
+        println(s"Remapping $st1")
+        val maps = Remapper.remapToId(map0, otherArgs, nextArg, cpts1, i, id)
+        for(map <- maps){
+          val renamedState = Remapper.applyRemappingToState(map, st1)
+          println(s"map = ${Remapper.showRemappingMap(map)}; "+
+            s"renamedState = $renamedState}")
+          // Test whether e is possible, and get next states
+          val nexts = 
+            components.getTransComponent(renamedState).nexts(e, fp, idp)
+          println(s"nexts = $nexts")
+          if(nexts.nonEmpty){   
+            // IMPROVE: this can be simplified if cpts1 is a singleton.
+            // NOTE: hasn't been tested for cpts1 not a singleton.
+
+            // Extend map to the rest of cpts1, and obtain corresponding
+            // renamed components.
+            val rnTypeMap = renamedState.typeMap; val rnIds = renamedState.ids
+            // otherArgs with args of renamedState removed
+            val otherArgs1: Remapper.OtherArgMap =
+              Array.tabulate(numFamilies)(f => otherArgs(f))
+            for(j <- 0 until rnIds.length){
+              val f1 = rnTypeMap(j)
+              otherArgs1(f) = otherArgs1(f).filter(_ != rnIds(j))
+            }
+            for(renamedCpts <- Remapper.remapRest(map, otherArgs1, cpts1, i)){
+              println(s"renamedCpts = "+renamedCpts.mkString("[",",","]"))
+              // check that it is consistent with cpts on common components.
+              var i1 = 0; var ok = true
+              while(i1 < renamedCpts.length && ok){
+                val rnCpt = renamedCpts(i)
+                val rnCptId = rnCpt.componentProcessIdentity
+                var j = 0
+                while(j < cpts.length && ok){
+                  val cptj = cpts(j)
+                  if(cptj.componentProcessIdentity == rnCptId){
+                    ok = rnCpt == cptj
+                    println(s"Comparing $rnCpt and $cptj: $ok")
+                  }
+                  j += 1
+                }
+                i1 += 1
+              }
+
+              // .......
+
+            } // end of for(renamedCpts <- ...)
+          }
+        } // end of for(map <- maps)
+      }
+    } // end of for(i <- ...)
+    null // FIXME
+  }
+
+
+}
+
+
+// =======================================================
+// =======================================================
+// dead code below here
+
+
 
   /** Check that there are enough values of each type to capture all the
     * Views in svs. */
@@ -669,6 +750,6 @@ class System(fname: String, checkDeadlock: Boolean,
 
     // Views.returnView(cptView)
  
-}
+
 
 

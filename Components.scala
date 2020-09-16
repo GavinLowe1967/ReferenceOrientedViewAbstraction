@@ -200,17 +200,22 @@ class Components(
           var transList: List[(EventInt, State)] = 
             if(renamingMap == null) transMap0(s)
             else transMapBuilder.renameTransList(transMap0(s), renamingMap)
+          // println(s"transList = "+transList.map{ case (e,post) =>
+          //   s"${s.toString00} -$e${showEvent(e)}-> ${post.toString00}" })
           // Result for this state.
           val transListEvent = new ArrayBuffer[EventInt]
           val transListNexts = new ArrayBuffer[List[State]]
-          for(e <- 0 until numEvents){
+          for(e <- 0 until eventsSize /*numEvents */){
             assert(transList.isEmpty || transList.head._1 >= e)
             val (matches, rest) = transList.span(_._1 == e)
             transList = rest
             if(matches.nonEmpty){
               transListEvent += e; transListNexts += matches.map(_._2)
+              // for(post <- matches.map(_._2)) 
+              //   println(s"${s.toString00} -${showEvent(e)}-> ${post.toString00}")
             }
           }
+          assert(transList.isEmpty)
           transMap.synchronized{ transMap(s) = (transListEvent, transListNexts) }
         } // end of for(s <- seen.par)
       } // end of for (i <- indices(pt)
@@ -272,8 +277,14 @@ class Components(
     def nexts(e: EventInt, f: Family, id: Identity): List[State] = {
       //val es = transComponent(f)(id)
       val (es, ns) =  transComponent(f)(id)
-      // Binary search on es; if e found, return corresp entry in ns.
-      ??? // FIXME
+      var i = 0; var j = es.length-1; assert(es(j) == Sentinel)
+      // Binary search for e.  Inv es[0..i) < e <= es[j..)
+      while(i < j){
+        val m = (i+j)/2 // i <= m < j
+        if(es(m) < e) i = m+1 else j = m
+      }
+      // es[0..i) < e <= es[i..m)
+      if(es(i) == e) ns(i) else List()
     }
   } // end of class ComponentTransitions
 
