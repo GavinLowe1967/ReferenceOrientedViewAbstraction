@@ -68,13 +68,19 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     * component.  */
   def toComponentView: ComponentView = {
     val princ = components(0); val princIds = princ.ids
+    // println(s"toComponentView $this")
+    // println(s"princIds = ${princIds.mkString("[",",","]")}")
     // Other components to be included in the ComponentView
+    // println(components.tail.length)
     val components1 = components.tail.filter{cpt =>
+      // println(cpt)
       val (f,id) = cpt.componentProcessIdentity
       servers.serverIds(f).contains(id) || 
-      (1 until princIds.length).exists(j => 
-        princIds(j) == id && princ.typeMap(j) == f)
+      (1 until princIds.length).exists{j => 
+        // println(s"($f,$id) $j ${princIds(j)} ${princ.typeMap(j)}") 
+        princIds(j) == id && princ.typeMap(j) == f}
     }
+    // println(s"components1 = ${components1.mkString("[",",","]")}")
     // Check all princ's references included
     val cIds = components1.map(_.id)
     assert(princ.ids.tail.forall(id => isDistinguished(id) || cIds.contains(id)))
@@ -84,6 +90,10 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   override def toString = 
     s"$servers || ${components.mkString("[", " || ", "]")}"
+
+  /** A new concretization, extending this with component newState. */
+  def extend(newState: State): Concretization =
+    new Concretization(servers, components :+ newState)
 
 }
 

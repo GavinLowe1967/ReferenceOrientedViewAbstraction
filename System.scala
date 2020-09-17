@@ -329,15 +329,16 @@ class System(fname: String, checkDeadlock: Boolean,
   }
 
   /** Get all renamings of cv1, consistent with cv, that include a component
-    * with identity pid that can perform e with cv.principal.  */
+    * with identity pid that can perform e with cv.principal.  Add all such
+    * renamings, and the corresponding states after e, to buffer.  */
   def consistentStates(pid: ComponentProcessIdentity, cv: ComponentView, 
-    e: EventInt, cv1: ComponentView)
-      : ArrayBuffer[State] = {
+    e: EventInt, cv1: ComponentView, buffer: ArrayBuffer[(State, List[State])])
+  = {
     val (f,id) = pid; val servers = cv.servers; require(cv1.servers == servers)
     val cpts = cv.components; val cpts1 = cv1.components
     val (fp, idp) = cv.principal.componentProcessIdentity
-    println(s"consistentStates(${State.showProcessId(pid)}, $cv)\n"+
-      s"  with $cv1")
+    // println(s"consistentStates(${State.showProcessId(pid)}, $cv)\n"+
+    //   s"  with $cv1")
     // Find all components of $cv1 that can be renamed to a state of pid
     // that can perform e.
     for(i <- 0 until cpts1.length){
@@ -352,16 +353,15 @@ class System(fname: String, checkDeadlock: Boolean,
         val maps = Remapper.remapToId(map0, otherArgs, nextArg, cpts1, i, id)
         for(map <- maps){
           val renamedState = Remapper.applyRemappingToState(map, st1)
-          println(s"map = ${Remapper.showRemappingMap(map)}; "+
-            s"renamedState = $renamedState}")
+          // println(s"map = ${Remapper.showRemappingMap(map)}; "+
+          //   s"renamedState = $renamedState}")
           // Test whether e is possible, and get next states
           val nexts = 
             components.getTransComponent(renamedState).nexts(e, fp, idp)
-          println(s"nexts = $nexts")
+          // println(s"nexts = $nexts")
           if(nexts.nonEmpty){   
             // IMPROVE: this can be simplified if cpts1 is a singleton.
             // NOTE: hasn't been tested for cpts1 not a singleton.
-
             // Extend map to the rest of cpts1, and obtain corresponding
             // renamed components.
             val rnTypeMap = renamedState.typeMap; val rnIds = renamedState.ids
@@ -373,13 +373,12 @@ class System(fname: String, checkDeadlock: Boolean,
               otherArgs1(f) = otherArgs1(f).filter(_ != rnIds(j))
             }
             for(renamedCpts <- Remapper.remapRest(map, otherArgs1, cpts1, i)){
-              println(s"renamedCpts = "+renamedCpts.mkString("[",",","]"))
+              // println(s"renamedCpts = "+renamedCpts.mkString("[",",","]"))
               // check that it is consistent with cpts on common components.
               var i1 = 0; var ok = true
               while(i1 < renamedCpts.length && ok){
-                val rnCpt = renamedCpts(i)
-                val rnCptId = rnCpt.componentProcessIdentity
-                var j = 0
+                val rnCpt = renamedCpts(i1)
+                val rnCptId = rnCpt.componentProcessIdentity; var j = 0
                 while(j < cpts.length && ok){
                   val cptj = cpts(j)
                   if(cptj.componentProcessIdentity == rnCptId){
@@ -389,17 +388,14 @@ class System(fname: String, checkDeadlock: Boolean,
                   j += 1
                 }
                 i1 += 1
-              }
-
-              // .......
-
+              } // end of outer while
+              if(ok) buffer += ((renamedState, nexts))
             } // end of for(renamedCpts <- ...)
           }
         } // end of for(map <- maps)
       }
     } // end of for(i <- ...)
-    null // FIXME
-  }
+  } // end of consistentStates
 
 
 }

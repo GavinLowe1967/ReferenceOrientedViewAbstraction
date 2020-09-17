@@ -268,7 +268,7 @@ object Remapper{
       while(i < len && ok){
         val id1 = ids1(i); val id2 = ids2(i); val t = typeMap(i)
         if(isDistinguished(id1) || isDistinguished(id2)) ok = id1 == id2
-        if(map1(t)(id2) < 0) map1(t)(id2) = id1 // extend map
+        else if(map1(t)(id2) < 0) map1(t)(id2) = id1 // extend map
         else ok = map1(t)(id2) == id1
         i += 1
       }
@@ -380,47 +380,47 @@ object Remapper{
   }
 
   /** All ways of remapping certain states of states, consistent with map0,
-    * otherArgs and nextArg, so that its identity maps to id.  If selector =
-    * Left(i) then just the non-identity parameters of states(i) are renamed.
-    * If selector = Right(i) then every state except states(i) is renamed.
-    * Each parameter (f,id) not in the domain of map0 can be mapped to an
-    * element of otherArgs(f), or a fresh value given by nextArg(f). */
-  private def remapXXX(
+    * otherArgs and nextArg.  If selector = Left(i) then just the non-identity
+    * parameters of states(i) are renamed.  If selector = Right(i) then every
+    * state except states(i) is renamed.  Each parameter (f,id) not in the
+    * domain of map0 can be mapped to an element of otherArgs(f), or a fresh
+    * value given by nextArg(f).  map0 is treated immutably, but cloned.
+    * otherArgs and nextArg are treated mutably, but all updates are
+    * backtracked. */
+  private def remapSelectedStates(
     map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap,
     states: Array[State], selector: Either[Int, Int]) 
       : ArrayBuffer[RemappingMap] = {
     val result = ArrayBuffer[RemappingMap]()
 
     /* Extend map to remap states(i).ids[j..), then states[i+1..).  Add each
-     * resulting map to result.  map is treated immutably, but cloned.
-     * otherArgs and nextArg are treated mutably, but all updates are
-     * backtracked.*/
+     * resulting map to result.  */
     def rec(map: RemappingMap, i: Int, j: Int): Unit = {
       if(i == states.length || selector == Left(i-1)) 
         result += map // base case
       else if(selector == Right(i)){  // skip this component
-        assert(j == 0); rec(map, i+1, 0) 
-      }
+        assert(j == 0); rec(map, i+1, 0) }
       else{
         // IMPROVE: turn following into variables in outer scope; set when j = 0.
-        val st = states(i); val ids = st.ids; val typeMap = st.typeMap
-        if(j == ids.length) rec(map, i+1, 0)
+        val st = states(i); val ids = st.ids
+        if(j == ids.length) rec(map, i+1, 0) // advance to next component
         else{
+          val typeMap = st.typeMap
           val f = typeMap(j); val id = ids(j) // remap (f,id)
           if(isDistinguished(id) || map(f)(id) >= 0)
-            rec(map, i, j+1) // just move on
+            rec(map, i, j+1) // just move on; value of (f,id) fixed.
           else{
             // Case 1: map id to an element id1 of otherArgs(f)
             val newIds = otherArgs(f)
             for(id1 <- newIds){
               otherArgs(f) = newIds.filter(_ != id1) // temporary update (*)
-              rec(extendMap(map, f, id, id1), i, j+1)
+              rec(extendMap(map, f, id, id1), i, j+1) // extend map and continue
             }
             otherArgs(f) = newIds                    // undo (*)
 
             // Case 2: map id to nextArg(f)
             val id1 = nextArg(f); nextArg(f) += 1   // temporary update (+)
-            rec(extendMap(map, f, id, id1), i, j+1) // Move on to next parameter
+            rec(extendMap(map, f, id, id1), i, j+1) // extend map and continue
             nextArg(f) -= 1                         // undo (+)
           }
         }
@@ -428,8 +428,7 @@ object Remapper{
     } // end of rec
    
     selector match{ 
-      case Left(i) => rec(map0, i, 1)
-      case Right(_) => rec(map0, 0, 0)
+      case Left(i) => rec(map0, i, 1); case Right(_) => rec(map0, 0, 0)
     }
     result
   }
@@ -442,42 +441,11 @@ object Remapper{
   def remapToId(map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap,
     cpts: Array[State], i: Int, id: Identity)
       : ArrayBuffer[RemappingMap] = {
-    val st = cpts(i); val f = st.family; val id0 = st.ids(0); 
-    // val len = ids.length
+    // Map identity of cpts(i) to id
+    val st = cpts(i); val f = st.family; val id0 = st.ids(0)
     assert(map0(f)(id0) < 0); map0(f)(id0) = id
-    // val typeMap = st.typeMap
-    // val result = ArrayBuffer[RemappingMap]()
-    
-    /* Extend map to remap ids[i..).  Add each resulting map to result. 
-     * map is treated immutably, but cloned.  otherArgs and nextArg are treated
-     * mutably, but all updates are backtracked.*/
-    // def rec(map: RemappingMap, i: Int): Unit = {
-    //   if(i == len) result += map 
-    //   else{
-    //     val f = typeMap(i); val id1 = ids(i) // remap (f,id1)
-    //     if(isDistinguished(id1) || map(f)(id1) >= 0) 
-    //       rec(map, i+1) // just move on
-    //     else{
-    //       // Case 1: map id1 to an element id2 of otherArgs(f)
-    //       val newIds = otherArgs(f)
-    //       for(id2 <- newIds){
-    //         otherArgs(f) = newIds.filter(_ != id2) // temporary update (*)
-    //         rec(extendMap(map, f, id1, id2), i+1)
-    //       }
-    //       otherArgs(f) = newIds                    // undo (*)
-
-    //       // Case 2: map id1 to nextArg(f)
-    //       val id2 = nextArg(f); nextArg(f) += 1 // temporary update (+)
-    //       rec(extendMap(map, f, id1, id2), i+1) // Move on to next parameter
-    //       nextArg(f) -= 1                       // undo (+)
-    //     }
-    //   }
-    // } // end of rec
-
-    //rec(map0, 1); 
-    // println(result.map(showRemappingMap).mkString("; "))
-    //result
-    remapXXX(map0, otherArgs, nextArg, cpts, Left(i)) // IMPROVE
+    // Now remap the remaining components. 
+    remapSelectedStates(map0, otherArgs, nextArg, cpts, Left(i))
   }
 
   def remapRest(
@@ -487,7 +455,7 @@ object Remapper{
     val nextArg = new Array[Int](numTypes)
     for(f <- 0 until numFamilies; id <- map0(f))
       nextArg(f) = nextArg(f) max (id+1)
-    val maps = remapXXX(map0, otherArgs, nextArg, cpts, Right(i))
+    val maps = remapSelectedStates(map0, otherArgs, nextArg, cpts, Right(i))
     for(map <- maps) yield applyRemapping(map, cpts)
   }
 
