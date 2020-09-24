@@ -152,7 +152,7 @@ object VA{
     var significancePaths: List[SignificancePath] = List()
     // var k = -1; var aShapes = List[Shape]()
     var profiling = false; var profilingFlat = false; var interval = 20
-    var verbose = false; var bound = -1; var timing = false
+    var verbose = false; var bound = Int.MaxValue; var timing = false
 
     while(i < args.length) args(i) match{
       // case "-k" => k = args(i+1).toInt; i += 2

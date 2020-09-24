@@ -57,6 +57,8 @@ $(DIR)/View.class: $(DIR)/ServerStates.class
 
 $(DIR)/Remapper.class: $(DIR)/View.class
 
+$(DIR)/TransitionSet.class: $(DIR)/View.class
+
 $(DIR)/ViewSet.class: $(DIR)/View.class $(DIR)/MyHashSet.class
 
 $(DIR)/Components.class: $(DIR)/FDRSession.class	\
@@ -74,7 +76,7 @@ $(DIR)/System.class: $(DIR)/FDRTransitionMap.class $(DIR)/Components.class	\
 
 # $(DIR)/Debugger.class: $(DIR)/System.class
 
-$(DIR)/Checker.class: $(DIR)/System.class 
+$(DIR)/Checker.class: $(DIR)/System.class $(DIR)/TransitionSet.class
 # $(DIR)/NewViewExtender.class $(DIR)/Debugger.class $(DIR)/Concurrency.class
 
 $(DIR)/VA.class: $(DIR)/System.class $(DIR)/Checker.class

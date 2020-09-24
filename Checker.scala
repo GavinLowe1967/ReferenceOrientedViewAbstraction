@@ -3,30 +3,13 @@ package ViewAbstraction
 import scala.collection.mutable.ArrayBuffer
 import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
 
-import ox.gavin.profiling.Profiler
-
 /** A checker for the view abstraction algorithm, applied to system.
   * @param aShapes the shapes of abstractions.
   * @param cShapes the shapes of concretizations. */
 class Checker(system: System)
 {
-  // is there a three-way synchronisation between two components and a server?
-  private val threeWaySync = system.threeWaySyncFound
-
-  // val k = aShapes.head.sum; val l = cShapes.head.sum
-  // println(s"k = $k; l = $l")
-
   /** The abstract views. */
   var sysAbsViews: ViewSet = null
-
-  /** The concretizations. */
-  var sysConcViews: ViewSet = null 
-
-  /** The first view extender. */
-  // var nve1: NewViewExtender = null
-
-  // /** The second view extender. */
-  // var nve2: NewViewExtender = null
 
   val Million = 1000000
 
@@ -35,16 +18,18 @@ class Checker(system: System)
   /** The new views to be considered on the next ply. */
   private var nextNewViews: ArrayBuffer[View] = null
 
+  /** The transitions found so far. */
+  private val transitions: TransitionSet = new SimpleTransitionSet
+
   /** Run the checker. 
     * @param bound the number of plys to explore (with negative values meaning 
     * effectively infinite).  */
-  def apply(bound: Int = -1, verbose: Boolean = false)  = {
-
+  def apply(bound: Int = Int.MaxValue, verbose: Boolean = false)  = {
     // Get the initial views
     val (sav, initViews) = system.initViews; sysAbsViews = sav
     var newViews: Array[View] = initViews
 
-    while(!done.get && ply != bound){
+    while(!done.get && ply <= bound){
       println("\nSTEP "+ply) 
       println("#abstractions = "+printLong(sysAbsViews.size))
       println("#new active abstract views = "+printInt(newViews.size))
@@ -53,22 +38,22 @@ class Checker(system: System)
       ply += 1; newViews = nextNewViews.toArray; 
       if(newViews.isEmpty) done.set(true)
     }
+    println("\nSTEP "+ply)
+    println("#abstractions = "+printLong(sysAbsViews.size))
   }
 
   /** Add v to  sysAbsViews, and nextNewViews if new. */
-  private def addView(v: View): Unit = {
-    if(sysAbsViews.add(v)){ println(".  ***Added***."); nextNewViews += v }
-    else println(".  Already present.")
+  private def addView(v: View): Boolean = {
+    if(sysAbsViews.add(v)){ nextNewViews += v; true }
+    else false
   }
 
   /** Add the principal component view of conc to sysAbsViews, and nextNewViews
     * if new. */
-  private def addView(conc: Concretization): Unit = {
+  private def addView(conc: Concretization): Boolean = {
     val v = Remapper.remapComponentView(conc.toComponentView)
-    print(v)
-    addView(v)
-    // if(sysAbsViews.add(v)){ println(".  Added."); nextNewViews += v }
-    // else println(".  Already present.")
+    if(addView(v)){ println(s"$v.  ***Added***"); true }
+    else false // println(s"$v.  Already present.")
   }
 
   /** Process v, calculating all the concrete transitions from v, adding the
@@ -78,150 +63,178 @@ class Checker(system: System)
     println(s"\nProcessing $v")
     v match{
       case cv: ComponentView =>
-        val trans = system.transitions(cv)
-        for((pre, e, post, outsidePids) <- trans){ // FIXME: not all transitions
+        for((pre, e, post, outsidePids) <- system.transitions(cv)){ // FIXME: not all transitions included yet
           // outsidePids is the identities of components outside pre that 
           // synchronise on the transition.
           // Calculate all views corresponding to post.
           println(s"\n$pre -${system.showEvent(e)}-> $post ["+
             outsidePids.map(State.showProcessId)+"]")
           assert(pre.components(0) == cv.principal)
-          val princ1 = post.components(0)
-
-          // Case 1: component view for cv.principal
-          // Process ids of other components
-          val otherIds = pre.components.tail.map(_.componentProcessIdentity)
-          assert(post.components.map(_.componentProcessIdentity).sameElements(
-            pre.components.map(_.componentProcessIdentity)))
-          // newPids is the components to which the principal component gains
-          // references but that are outside pre/post.
-          val newPids: Array[ComponentProcessIdentity] = 
-            princ1.processIdentities.tail.filter(p => 
-              !isDistinguished(p._2) && !otherIds.contains(p))
-          // The following assertion (outsidePids subset of newPids) captures
-          // an assumption that the principal component cannot acquire a
-          // reference from nowhere: the reference must be acquired either
-          // from another process in the view or by synchronising with that
-          // other component.
-          assert(outsidePids.forall(pid => newPids.contains(pid)))
-          // if(newPids.nonEmpty) 
-          //   println(s"newPids = "+newPids.map(State.showProcessId).mkString(","))
-          if(newPids.isEmpty){
-            // Case 1(a): no new nondistinguished parameter
-            assert(outsidePids.isEmpty) // FIXME (simplifying assumption)
-            addView(post)
-            // Effect on other views of this transition.
-            effectOnOthers(pre, post)
-          }
-          else{ // Case 1(b): one new parameter from outside the view
-            assert(newPids.length == 1 && outsidePids.length <= 1) 
-            // FIXME (simplification)
-            val newPid = newPids.head
-            // Find all states for newPid, consistent with cv, that can
-            // perform e if in outsidePids, and their subsequent states
-            // (optionally after e).
-            val oe = if(outsidePids.nonEmpty) Some(e) else None
-            val consStates = consistentStates(newPid, cv, oe).distinct
-            // println("consStates = "+consStates.mkString("; "))
-            for((outsideSt, outsidePosts) <- consStates){
-              assert(outsidePosts.nonEmpty)
-              if(isExtendable(pre, outsideSt)){
-// FIXME: need to check this is consistent, i.e. all views of extendedPre are
-// in SysAbsViews.  This amounts to checking that SysAbsViews contains a view
-// with these servers, outsideSt as the principal component, and any states of
-// pre refernced by outsideSt (possibly reduced to canonical form).
-                val extendedPre = pre.extend(outsideSt)
-                for(postSt <- outsidePosts){
-                  val extendedPost = post.extend(postSt)
-                  println(s"Extended transition $extendedPre "+
-                    s"-${system.showEvent(e)}-> $extendedPost")
-                  // println(s"extendedPost = $extendedPost")
-                  addView(extendedPost)
-                  // Effect on other views of this transition.
-                  effectOnOthers(extendedPre, extendedPost)
-                  // ???
-                }
-              }
-              else println(s"$outsideSt not compatible with earlier views")
-              // FIXME: what if it later becomes compatible?
-            }
-          } // end of else
-
-
+// FIXME: or should we be storing the extended transitions?
+          transitions.add(pre, post)
+          // Find new views as a result of this transition
+          processTransition(cv, pre, e, post, outsidePids)
         } // end of for((pre, e, post, outsidePids) <- trans)
+        // Effect of previous transitions on this view
+        effectOfPreviousTransitions(cv)
     }
-  } // FIXME
+  } 
+
+  /** Process the transition pre -e-> post of cv, creating the corresponding new
+    * views and adding them to sysAbsViews and nextNewViews. */
+  @inline private def processTransition(
+    cv: ComponentView, pre: Concretization, e: EventInt, post: Concretization, 
+    outsidePids: List[ComponentProcessIdentity]) 
+  = {
+    val princ1 = post.components(0)
+
+    // Case 1: component view for cv.principal
+    // Process ids of other components
+    val otherIds = pre.components.tail.map(_.componentProcessIdentity)
+    assert(post.components.map(_.componentProcessIdentity).sameElements(
+      pre.components.map(_.componentProcessIdentity)))
+    // newPids is the components to which the principal component gains
+    // references but that are outside pre/post.
+    val newPids: Array[ComponentProcessIdentity] =
+      princ1.processIdentities.tail.filter(p =>
+        !isDistinguished(p._2) && !otherIds.contains(p))
+    // The following assertion (outsidePids subset of newPids) captures an
+    // assumption that the principal component cannot acquire a reference from
+    // nowhere: the reference must be acquired either from another process in
+    // the view or by synchronising with that other component.
+    assert(outsidePids.forall(pid => newPids.contains(pid)))
+    // if(newPids.nonEmpty)
+    //   println(s"newPids = "+newPids.map(State.showProcessId).mkString(","))
+    if(newPids.isEmpty){
+      // Case 1(a): no new nondistinguished parameter
+      assert(outsidePids.isEmpty) // FIXME (simplifying assumption)
+      // transitions.add(pre, post)
+      if(addView(post)){ } // println("***Added***")
+      // Effect on other views of this transition.
+      effectOnOthers(pre, post)
+    }
+    else{ // Case 1(b): one new parameter from outside the view
+      assert(newPids.length == 1 && outsidePids.length <= 1)
+      // FIXME (simplification)
+      val newPid = newPids.head
+      // Find all states for newPid, consistent with cv, that can perform e if
+      // in outsidePids, and their subsequent states (optionally after e).
+      val oe = if(outsidePids.nonEmpty) Some(e) else None
+      val consStates = consistentStates(newPid, cv, oe).distinct
+      // println("consStates = "+consStates.mkString("; "))
+      for((outsideSt, outsidePosts) <- consStates){
+        assert(outsidePosts.nonEmpty)
+        if(isExtendable(pre, outsideSt)){
+          val extendedPre = pre.extend(outsideSt)
+          for(postSt <- outsidePosts){
+            val extendedPost = post.extend(postSt)
+            println(s"Extended transition $extendedPre "+
+              s"-${system.showEvent(e)}-> $extendedPost")
+            // transitions.add(extendedPre, extendedPost)
+            if(addView(extendedPost)){ } //  println("***Added***")
+            // Effect on other views of this transition.
+            effectOnOthers(extendedPre, extendedPost)
+          }
+        }
+        else println(s"$outsideSt not compatible with earlier views")
+        // FIXME: what if it later becomes compatible?
+      }
+    } // end of else
+  }
+
+  // private def extendTransition(
+  //   pre: Concretization, post: Concretization, 
+  //   newPid: ComponentProcessIdentity, oe: Option[EventInt]) 
+  //     : ArrayBuffer[(Concretization, Concretization)] = {
+  //   val result = new ArrayBuffer[(Concretization, Concretization)]
+  //   val consStates = consistentStates(newPid, cv, oe).distinct
+  //   // println("consStates = "+consStates.mkString("; "))
+  //   for((outsideSt, outsidePosts) <- consStates){
+  //     assert(outsidePosts.nonEmpty)
+  //     if(isExtendable(pre, outsideSt)){
+  //       val extendedPre = pre.extend(outsideSt)
+  //       for(postSt <- outsidePosts){
+  //         val extendedPost = post.extend(postSt)
+  //         println(s"Extended transition $extendedPre "+
+  //           s"-${system.showEvent(e)}-> $extendedPost")
+  //         result += ((extendedPre, extendedPost))
+  //       }
+  //     }
+  //   }
+  //   result
+  // }
+
 
   /** Effect on other views of a transition pre -> post.  For every view v1 in
-    * sysAbsViews, if it is consistent with cv (i.e. unifiable), and contains
+    * sysAbsViews, if it is consistent with pre (i.e. unifiable), and contains
     * at least one process that changes state, then update as per this
     * transition. */
   private def effectOnOthers(pre: Concretization, post: Concretization) = {
     // println(s"effectOnOthers($pre, $post)")
     for(v1 <- sysAbsViews.toArray) v1 match{ // IMPROVE iteration
-      case cv1: ComponentView  =>
-        if(cv1.servers == pre.servers){
-          println(s"Effect on $cv1");
+      case cv: ComponentView  =>
+        if(cv.servers == pre.servers){
+          // println(s"Effect on $cv");
           // IMPROVE if nothing changed state.
-          val newCpts = Remapper.combine(pre, cv1)
-          for((cpts, unifs) <- newCpts){
-            // println("cpts = "+cpts.mkString("[",",","]")+s"; unifs = $unifs")
-            // Find the component of cpts with process identity pid, or return
-            // null if no such.
-            def find0(pid: ComponentProcessIdentity, cpts: Array[State])
-                : State = {
-              var i = 0; var done = false
-              while(i < cpts.length && !done){
-                if(cpts(i).componentProcessIdentity == pid) done = true
-                else i += 1
-              }
-              if(done) cpts(i) else null
-            }
-            // Find the component of post or cpts with process identity pid
-            def find(pid: ComponentProcessIdentity): State = {
-              val st1 = find0(pid, post.components)
-              if(st1 != null) st1
-              else{ 
-                val st2 = find0(pid, cpts)
-                assert(st2 != null, s"Not found identity $pid in $post or "+
-                  cpts.mkString("[",",","]"))
-                st2 
-              }
-            }
-            // Find what cpts(0) gets mapped to by unifs
-            val matches = unifs.filter(_._2 == 0)
-            val newPrinc = 
-              if(matches.isEmpty) cpts(0)
-              else{assert(matches.length == 1); post.components(matches.head._1)}
-            val others = newPrinc.processIdentities.tail.
-              filter{case(f,id) => !isDistinguished(id)}.map(find(_))
-            // println(s"newPrinc = $newPrinc; others = "+
-            //   others.mkString("[",",","]"))
-// IMPROVE: we don't use all of unifs
-            // For each (i1,i2) in unifs, replace cpts(i2) with
-            // post.components(i1).  No, this is wrong
-            // val cpts1 =
-            //   if(unifs.isEmpty) cpts
-            //   else Array.tabulate(cpts.length){ i =>
-            //     val matches = unifs.filter(_._2 == i)
-            //     if(matches.nonEmpty){
-            //       assert(matches.length == 1); val i1 = matches.head._1
-            //       val c1 = post.components(i1)
-            //       println(s"  Replaced ${cpts(i)} with ${c1}")
-            //       c1
-            //     }
-            //     else cpts(i)
-            //   }
-            // assert(cpts1.sameElements(newPrinc+:others))
-            val nv = Remapper.remapComponentView(
-              new ComponentView(post.servers, newPrinc, others) )
-            print(s"Effect on $cv1:  -> $nv")
-            addView(nv)
-          }
+          effectOn(pre, post, cv)
         }
     } // end of match
   }
-          // IMPROVE: need better way of iterating over ViewSet
+
+  // IMPROVE: need better way of iterating over ViewSet
+
+  /** The effect of the transition pre -> post on cv.  If cv is consistent with
+    * pre (i.e. unifiable), and contains at least one process that changes
+    * state, then update as per this transition.  Generate all new views that
+    * would result from this view under the transition. */
+  private def effectOn(
+    pre: Concretization, post: Concretization, cv: ComponentView)
+  = {
+    require(pre.servers == cv.servers)
+    val newCpts = Remapper.combine(pre, cv)
+    for((cpts, unifs) <- newCpts){
+      // println("cpts = "+cpts.mkString("[",",","]")+s"; unifs = $unifs")
+      // Find the component of cpts with process identity pid, or return
+      // null if no such.
+      def find0(pid: ComponentProcessIdentity, cpts: Array[State]): State = {
+        var i = 0; var done = false
+        while(i < cpts.length && !done){
+          if(cpts(i).componentProcessIdentity == pid) done = true else i += 1
+        }
+        if(done) cpts(i) else null
+      }
+      // Find the component of post or cpts with process identity pid
+      def find(pid: ComponentProcessIdentity): State = {
+        val st1 = find0(pid, post.components)
+        if(st1 != null) st1
+        else{
+          val st2 = find0(pid, cpts)
+          assert(st2 != null, s"Not found identity $pid in $post or "+
+            cpts.mkString("[",",","]"))
+          st2
+        }
+      }
+      // Find what cpts(0) gets mapped to by unifs
+      val matches = unifs.filter(_._2 == 0)
+      val newPrinc =
+        if(matches.isEmpty) cpts(0)
+        else{assert(matches.length == 1); post.components(matches.head._1)}
+      val others = newPrinc.processIdentities.tail.
+        filter{case(f,id) => !isDistinguished(id)}.map(find(_))
+      val nv = Remapper.remapComponentView(
+        new ComponentView(post.servers, newPrinc, others) )
+      if(addView(nv))
+        println(s"Effect of $pre -> $post\n  on $cv:  -> $nv.  ***Added***")
+    }
+  }
+
+  private def effectOfPreviousTransitions(cv: ComponentView) = {
+    println(s"effectOfPreviousTransitions($cv)")
+    for((pre,post) <- transitions.iterator){
+      // println(s"considering transition $pre -> $post")
+      if(pre.servers == cv.servers) effectOn(pre, post, cv)
+    }
+  }
 
   /** Find all states of component pid consistent with cv that can perform event
     * e, and the states those reach after e.  Consistent here means that there
@@ -269,6 +282,14 @@ class Checker(system: System)
   }
 
 }
+
+
+
+
+
+
+
+
 
 // ==================================================================
 // ==================================================================
