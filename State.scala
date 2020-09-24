@@ -38,7 +38,7 @@ class State(val family: Family, val cs: ControlState,
           val t = tm(i)
           println("Not enough identities of type "+typeNames(t)+" in script ("+
                     typeSizes(t)+") to represent system view\n"+toString0)
-          sys.exit
+          assert(false) // sys.exit // IMPROVE
         }
     }
   }

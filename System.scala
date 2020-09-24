@@ -1,6 +1,6 @@
 package ViewAbstraction
 
-import uk.ac.ox.cs.fdr._
+import uk.ac.ox.cs.fdr.{Option => _, _}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer}
 import ox.gavin.profiling.Profiler
@@ -208,9 +208,9 @@ class System(fname: String, checkDeadlock: Boolean,
     * lists of tuples of type TransitionRep.  Each tuple (pre, e, post, pids)
     * represents concrete transitions pre U new U cpts -e-> post U new' U
     * cpts, for each set new and new', cpts such that: (1) new, new' have
-    * component identities pIds and transition new -e-> new'; the three parts
-    * have disjoint identities.  The concretizations pre and post contain the
-    * same component identities, namely those identities in cv.
+    * component identities pIds and transition new -e-> new'; (2) the three
+    * parts have disjoint identities.  The concretizations pre and post
+    * contain the same component identities, namely those identities in cv.
     */
   type TransitionRep = 
     (Concretization, EventInt, Concretization, List[ComponentProcessIdentity])
@@ -219,11 +219,18 @@ class System(fname: String, checkDeadlock: Boolean,
     * @return a list of tuples (pre, e, post, pids) representing concrete 
     * transitions pre U new U cpts -e-> post U new' U cpts, for each set new
     * and new', cpts such that: (1) new, new' have component identities pIds
-    * and transition new -e-> new'; the three parts have disjoint identities.
-    * The concretizations pre and post contain the same component identities,
-    * namely those identities in cv. */
+    * and transition new -e-> new'; (2) the three parts have disjoint
+    * identities.  The concretizations pre and post contain the same component
+    * identities, namely those identities in cv; in fact, pre is the
+    * concretization corresponding to cv (IMPROVE). */
   def transitions(cv: ComponentView): List[TransitionRep] = {
     var result = List[TransitionRep]()
+    // Add an element to result if it's canonical
+    def maybeAdd(pre: Concretization, e: EventInt, post: Concretization, 
+        pids: List[ComponentProcessIdentity]) =
+      if(isCanonicalTransition(pre, post)) result ::= ((pre, e, post, pids)) 
+      else println(s"Not cannonical $pre -${showEvent(e)}-> $post")
+
     val princTrans = components.getTransComponent(cv.principal)
     val (pf,pi) = cv.principal.componentProcessIdentity
     // println(s"Transitions for ${(pf,pi)}")
@@ -237,7 +244,8 @@ class System(fname: String, checkDeadlock: Boolean,
     for(i <- 0 until princTrans.eventsSolo.length-1; 
         st1 <- princTrans.nextsSolo(i)){
       val post = Concretization(cv.servers, st1, cv.others)
-      result ::= ((conc0, princTrans.eventsSolo(i), post, List()))
+      // result ::= ((conc0, princTrans.eventsSolo(i), post, List()))
+      maybeAdd(conc0, princTrans.eventsSolo(i), post, List())
     }
 
     // Case 2: synchronisation between principal component and server (only)
@@ -246,7 +254,6 @@ class System(fname: String, checkDeadlock: Boolean,
       val (sEs, sNexts):
           (ArrayBuffer[EventInt], ArrayBuffer[List[List[State]]]) = serverTrans1
       val pEs = princTrans.eventsServer; val pNexts = princTrans.nextsServer
-      // println(s"sEs = $sEs"); println(s"pEs = $pEs")
       // Search for synchronisations
       var serverIndex = 0; var cptIndex = 0 // indexes for server, princ cpt
       var sE = sEs(0); var pE = pEs(0) // next events
@@ -258,7 +265,7 @@ class System(fname: String, checkDeadlock: Boolean,
             // println(s"Server-principal sync on ${showEvent(pE)}")
             for(pNext <- pNexts(cptIndex); sNext <- sNexts(serverIndex)){
               val post = Concretization(ServerStates(sNext), pNext, cv.others)
-              result ::= ((conc0, sE, post, List()))
+              maybeAdd(conc0, sE, post, List())
             }
             serverIndex += 1; sE = sEs(serverIndex)
             cptIndex += 1; pE = pEs(cptIndex)
@@ -273,46 +280,49 @@ class System(fname: String, checkDeadlock: Boolean,
       if(theseTrans != null){ 
         val (oEs, oNs): (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = 
           theseTrans
-        // println((f,i).toString+": "+
-        //   oEs.filter(_ < Sentinel).map(showEvent).mkString("[", ", ", "]"))
-        // Find id of relevant component; find compatible states of that component
-        // for(e <- oEs; if e < Sentinel){
+        // Find id of relevant component; find compatible states of that
+        // component.
         for(i <- 0 until oEs.length-1){
           val e = oEs(i); assert(i < Sentinel)
           // Ids of passive components involved in this synchronisation.
           val passives = components.passiveCptsOfEvent(e)
-          assert(passives.length == 1) // FIXME
+          assert(passives.length == 1) // IMPROVE (simplifying assumption).
           // Other components of cv in this synchronisation
-          val presentPassives = cv.others.filter(st => 
-            passives.contains(st.componentProcessIdentity))
+          val presentIndices = (0 until cv.others.length).filter(i =>
+            passives.contains(cv.others(i).componentProcessIdentity))
+          // val presentPassives = presentIndices.map(i => cv.others(i))
+          // val presentPassives1 = cv.others.filter(st => 
+          //   passives.contains(st.componentProcessIdentity))
+          // assert(presentPassives sameElements presentPassives1) // IMPROVE
           // Ids of components in the synchronisation but not in cv
           val absentPassives = passives.filterNot( pId => 
             cv.others.exists(_.componentProcessIdentity == pId) )
-          // print(s"${showEvent(e)}: ${presentPassives.mkString("[",",","]")} ---")
-          // println(absentPassives)
-          if(presentPassives.nonEmpty){
-            assert(absentPassives.isEmpty) // FIXME
+          if(presentIndices.nonEmpty){
+            assert(absentPassives.isEmpty) // IMPROVE (simplifying assumption)
+            val passiveIx = presentIndices.head
+            val passiveSt = cv.others(passiveIx) // presentPassives.head
             // Next states for the present passives
-            val pNexts =
-              components.getTransComponent(presentPassives.head).nexts(e, pf, pi)
-            ???
+            val pNexts = components.getTransComponent(passiveSt).nexts(e, pf, pi)
+            println(s"Searching for synchronisations with $passiveSt on "+
+              showEvent(e)+": "+pNexts)
+            for(pNext <- pNexts){
+              // NOTE: not tested for pNext != passiveSt
+              // Post-state of others: insert pNext into cv.others
+              val othersPost = cv.others.clone; othersPost(passiveIx) = pNext
+              for(st1 <- oNs(i)){
+                val post = Concretization(cv.servers, st1, othersPost)
+                // println(post)
+                maybeAdd(conc0, e, post, List())
+              }
+            }
           }
           else{
             val cPid = absentPassives.head // the absent component
             val conc0 = Concretization(cv)
             for(st1 <- oNs(i)){ // the post state of the principal cpt
               val post = Concretization(cv.servers, st1, cv.others)
-              result ::= ((conc0, e, post, List(cPid)))
+              maybeAdd(conc0, e, post, List(cPid))
             }
-            // println((cf, cId).toString)
-
-            // Find all states of (cf, cId) from which e can be performed.
-            // compatible with cv.  For each seen so far, add the transition.
-            // But we also need to record information, so if such a state is
-            // found subsequently, we can then add the transition. ??? Just
-            // return the tuple (cv, e, post-state, (cf, cId)), representing
-            // that whenever the component (cf,cId) is in a state that can
-            // perform e, we create a new corresponding post-state?
           }
 
         }
@@ -328,11 +338,46 @@ class System(fname: String, checkDeadlock: Boolean,
     result
   }
 
-  /** Get all renamings of cv1, consistent with cv, that include a component
-    * with identity pid that can perform e with cv.principal.  Add all such
-    * renamings, and the corresponding states after e, to buffer.  */
+  /** Is a transition canonical in the sense that fresh parameters that are
+    * introduced are minimal, i.e. there are no smaller unused prameters of
+    * the same type. */ 
+  private def isCanonicalTransition(pre: Concretization, post: Concretization)
+      : Boolean = {
+    // iterate through pre and post, recording which parameters are used.
+    val bitMap = 
+      Array.tabulate(numFamilies)(f => new Array[Boolean](typeSizes(f)))
+    // Record the parameters in bitMap 
+    @inline def recordIds(st: State) = {
+      val ids = st.ids; val typeMap = st.typeMap
+      for(i <- 0 until ids.length){
+        val id = ids(i)
+        if(!isDistinguished(id)) bitMap(typeMap(i))(id) = true
+      }
+    }
+    @inline def recordIdsL(sts: List[State]) = for(st <- sts) recordIds(st)
+    @inline def recordIdsA(sts: Array[State]) = for(st <- sts) recordIds(st)
+    recordIdsL(pre.servers.servers); recordIdsA(pre.components)
+    recordIdsL(post.servers.servers); recordIdsA(post.components)
+    // Now iterate through, seeing which are missing
+    var ok = true; var f = 0
+    while(f < numTypes && ok){
+      var i = 0; val size = typeSizes(f)
+      while(i < size && bitMap(f)(i)) i += 1
+      while(i < size && !bitMap(f)(i)) i += 1
+      ok = i == size // true if there's a gap in typeSizes(f)
+      f += 1
+    }
+    ok
+  }
+
+  /** Get all renamings of cv1, consistent with cv, that (1) include a component
+    * with identity pid, and (2) if oe = Some(e) can perform e with
+    * cv.principal.  Consistent here means that the views agree on the states
+    * of all common components.  Add all such renamings, and the corresponding
+    * states after e, to buffer.  */
   def consistentStates(pid: ComponentProcessIdentity, cv: ComponentView, 
-    e: EventInt, cv1: ComponentView, buffer: ArrayBuffer[(State, List[State])])
+    oe: Option[EventInt], cv1: ComponentView, 
+    buffer: ArrayBuffer[(State, List[State])])
   = {
     val (f,id) = pid; val servers = cv.servers; require(cv1.servers == servers)
     val cpts = cv.components; val cpts1 = cv1.components
@@ -345,21 +390,27 @@ class System(fname: String, checkDeadlock: Boolean,
       val st1 = cpts1(i)
       if(st1.family == f){
         // All ways of remapping st1 so that: (1) its identity maps to id; (2)
-        // the mapping is the identity on parameters in servers; and (3) other
-        // parameters are mapped either to another parameter in cv, or the
+        // other parameters are mapped either to a parameter in cv, or the
         // next fresh parameter.
-        val (map0, otherArgs, nextArg) = Remapper.createMaps(servers, cpts)
-        println(s"Remapping $st1")
+        // Following ensures identity on server ids, which I think is wrong
+        // val (map0, otherArgs, nextArg) = Remapper.createMaps(servers, cpts)
+        val map0 = Remapper.newRemappingMap
+        val (otherArgs, nextArg) = Remapper.createMaps1(servers, cpts)
+        // println(s"Remapping $st1")
         val maps = Remapper.remapToId(map0, otherArgs, nextArg, cpts1, i, id)
         for(map <- maps){
           val renamedState = Remapper.applyRemappingToState(map, st1)
           // println(s"map = ${Remapper.showRemappingMap(map)}; "+
           //   s"renamedState = $renamedState}")
           // Test whether e is possible, and get next states
-          val nexts = 
-            components.getTransComponent(renamedState).nexts(e, fp, idp)
+          val nexts = oe match{
+            case Some(e) =>
+              components.getTransComponent(renamedState).nexts(e, fp, idp)
+            case None => List(renamedState) 
+          }
           // println(s"nexts = $nexts")
           if(nexts.nonEmpty){   
+            // println(s"Remapping $st1")
             // IMPROVE: this can be simplified if cpts1 is a singleton.
             // NOTE: hasn't been tested for cpts1 not a singleton.
             // Extend map to the rest of cpts1, and obtain corresponding

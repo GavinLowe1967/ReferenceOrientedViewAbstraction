@@ -18,8 +18,19 @@ class ComponentView(
   /** All the components in this view, with the principal component first. */
   val components = principal +: others // IMPROVE
 
+  // Check all components referenced by principal are included
+  { 
+    val princRefs = principal.processIdentities.tail.filter{
+      case(f,id) => !isDistinguished(id)}
+    val otherPids = others.map(_.componentProcessIdentity)
+    assert(princRefs.forall(otherPids.contains(_)) &&
+      otherPids.forall(princRefs.contains(_)),
+    s"Not a correct ComponentView: $this")
+  }
+
   override def toString = 
-    s"$servers || $principal || ${others.mkString("[", " || ", "]")}"
+    s"$servers || $principal"+
+    (if(others.nonEmpty) " || "+others.mkString("[", " || ", "]") else "")
 
   override def equals(that: Any) = that match{
     case cv: ComponentView => 
@@ -65,19 +76,16 @@ object View{
 class Concretization(val servers: ServerStates, val components: Array[State]){ 
 
   /** Make a ComponentView from this, with components(0) as the principal
-    * component.  */
+    * component.  Note: not in canonical form IMPROVE. */
   def toComponentView: ComponentView = {
     val princ = components(0); val princIds = princ.ids
     // println(s"toComponentView $this")
     // println(s"princIds = ${princIds.mkString("[",",","]")}")
-    // Other components to be included in the ComponentView
-    // println(components.tail.length)
+    // Other components to be included in the ComponentView: those referenced 
+    // by princ
     val components1 = components.tail.filter{cpt =>
-      // println(cpt)
       val (f,id) = cpt.componentProcessIdentity
-      servers.serverIds(f).contains(id) || 
       (1 until princIds.length).exists{j => 
-        // println(s"($f,$id) $j ${princIds(j)} ${princ.typeMap(j)}") 
         princIds(j) == id && princ.typeMap(j) == f}
     }
     // println(s"components1 = ${components1.mkString("[",",","]")}")

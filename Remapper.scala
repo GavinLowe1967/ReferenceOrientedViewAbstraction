@@ -67,7 +67,7 @@ object Remapper{
 
   /** Create a RemappingMap corresponding to rho, i.e. the identity map
     * on (t,i) for i <- [0..rho(t), for each t. */
-  private def createMap(rho: ParamMap): RemappingMap = {
+  def createMap(rho: ParamMap): RemappingMap = {
     val map = newRemappingMap
     for(t <- 0 until numTypes){
       val len = rho(t).length; var i = 0
@@ -113,14 +113,15 @@ object Remapper{
     * to new Array[Int](numTypes) */
   @inline private def newNextArgMap: NextArgMap = {
     // We re-use previous maps, to reduce GC churn
-    val map = ThreadLocalNextArgMap.get
+    val map = new Array[Int](numTypes) // IMPROVE: ThreadLocalNextArgMap.get
     for(t <- 0 until numTypes) map(t) = 0
     map
   }
 
   /** Create a new NextArgMap corresponding to rho. */
-  @inline private def createNextArgMap(rho: ParamMap): NextArgMap = {
-    val naMap = ThreadLocalNextArgMap.get
+  @inline def createNextArgMap(rho: ParamMap): NextArgMap = {
+    // val naMap = ThreadLocalNextArgMap.get // IMPROVE: use pool
+    val naMap = new Array[Int](numTypes)
     for(i <- 0 until numTypes) naMap(i) = rho(i).length
     naMap
     // rho.map(_.length)
@@ -134,9 +135,9 @@ object Remapper{
     * identity on servers; (2) the identities of components that are not
     * shared with the servers, indexed by types; (3) a NextArgMap giving the
     * next fresh values not used in servers or components. */
-  def createMaps(servers: ServerStates, components: Array[State])
+  private 
+  def createCombiningMaps(servers: ServerStates, components: Array[State])
       : (RemappingMap, OtherArgMap, NextArgMap) = {
-
     val rhoS = servers.rhoS; val map0 = createMap(rhoS)
     val serverIds = servers.serverIds
     // The next fresh parameters
@@ -145,15 +146,36 @@ object Remapper{
     val otherArgs = Array.fill(numTypes)(List[Identity]())
     for(c <- components; i <- 0 until c.ids.length){
       val f = c.typeMap(i); val id = c.ids(i)
-      if(!serverIds(f).contains(id) && !otherArgs(f).contains(id)) //IMPROVE
+      if(!isDistinguished(id) && !serverIds(f).contains(id) && 
+          !otherArgs(f).contains(id)){ //IMPROVE
         otherArgs(f) ::= id; nextArg(f) = nextArg(f) max (id+1)
+      }
     }
     (map0, otherArgs, nextArg)
   }
 
+  /** Create (1) an OtherArgMap giving the identities in servers and components;
+    * (2) a NextArgMap giving the next fresh parameters. */ 
+  def createMaps1(servers: ServerStates, components: Array[State]) 
+      : (OtherArgMap, NextArgMap) = {
+    val otherArgs = Array.fill(numTypes)(List[Identity]())
+    val nextArg = new Array[Int](numTypes)
+    @inline def process(sts: Array[State]) = {
+      for(st <- sts; i <- 0 until st.ids.length){
+        val f = st.typeMap(i); val id = st.ids(i)
+        if(!isDistinguished(id) && !otherArgs(f).contains(id)){ //IMPROVE
+          otherArgs(f) ::= id; nextArg(f) = nextArg(f) max (id+1)
+        }
+      }
+    }
+    process(servers.servers.toArray); process(components) // IMPROVE
+    (otherArgs, nextArg)
+  }
+
   // ======================================================= Helper functions
 
-  /** Remap the parameter (t,arg), updating map and arg appropriately. */
+  /** Remap the parameter (t,arg), either following map, or by the next value
+    * specified by arg; update map and arg appropriately. */
   @inline private def remapArg(
     map: RemappingMap, nextArg: NextArgMap, t: Type, arg: Identity)
       : Identity = {
@@ -183,7 +205,7 @@ object Remapper{
   }
 
   /** Remap a single state st, updating map and nextArg. */
-  @inline private 
+  @inline  
   def remapState(map: RemappingMap, nextArg: NextArgMap, st: State): State = {
     val remappedParams = remapParams(map, nextArg, st)
     MyStateMap(st.family, st.cs, remappedParams)// potentially recycles remappedParams
@@ -250,11 +272,12 @@ object Remapper{
 
   // ==================== Unification
 
-  /** Try to extend map to map' st map'(st2) = st1.
+  /** Try to extend map to map' such that map'(st2) = st1.
     * If unsuccessful, map is unchanged.
     * @return true if successful. */
   private def unify(map: RemappingMap, st1: State, st2: State): Boolean = {
     // Work with map1, and update map only if successful. 
+    // println(s"unify(${showRemappingMap(map)}, $st1, $st2)")
     val map1 = cloneMap(map) 
     if(st1.cs != st2.cs) false
     else{
@@ -267,6 +290,7 @@ object Remapper{
       var i = 0; var ok = true
       while(i < len && ok){
         val id1 = ids1(i); val id2 = ids2(i); val t = typeMap(i)
+        // println((id1,id2))
         if(isDistinguished(id1) || isDistinguished(id2)) ok = id1 == id2
         else if(map1(t)(id2) < 0) map1(t)(id2) = id1 // extend map
         else ok = map1(t)(id2) == id1
@@ -284,9 +308,10 @@ object Remapper{
   /** Extend map, in all possible ways, to remap cpts2 so as to be compatible
     * with cpts1.  Each parameter (f,p), not in the domain of map, can be
     * mapped to an element of otherArgs(f) (a subset of the parameters of
-    * cpts1), or a fresh value given by nextArg(f).  If an identity parameter
-    * maps to an identity parameter of cpts1, then the corresponding States
-    * much match.
+    * cpts1), or a fresh value given by nextArg(f).  If the jth identity
+    * parameter of cpts2 maps to the kth identity parameter of cpts1, then the
+    * corresponding States much match, and the pair (k,j) is included in the
+    * Unifications returned.  Called by combine.
     * 
     * @param map the RemappingMap that gets extended.  Cloned before being 
     * mutated.
@@ -320,23 +345,27 @@ object Remapper{
             // println(s"idX = $idX; newIds = $newIds")
             for(id1 <- newIds){
               otherArgs(f) = newIds.filter(_ != id1) // temporary update (*)
-              val map1 = extendMap(map, f, id, id1) // cloneMap(map); map1(f)(id) = id1 // IMPROVE
+              val map1 = extendMap(map, f, id, id1) 
               if(i == 0){ // Identity; see if any cpt of cpts1 matches (f, id1)
                 var matchedId = false // have we found a cpt with matching id?
-                for(k <- 0 until cpts1.length){
+                for(k <- 0 until cpts1.length){ // ???????????? 0/
                   val c1 = cpts1(k)
                   if(c1.componentProcessIdentity == (f,id1)){
                     assert(!matchedId); matchedId = true
-                    println(s"  Trying to unify $c1 and $c")
-                    if(c1.cs == c.cs && unify(map1, c, c)){
-                      // println(showRemappingMap(map1))
-                      combineRec(map1, 0, j+1, (k,j) :: unifs)
-                    } 
-                    else println("failed")
+                    if(j != 0 || k != 0){ // NOTE: needs testing more
+                      print(s"  Trying to unify $c1 and $c.  ")
+                      if(c1.cs == c.cs && unify(map1, c1, c)){ // FIXME!
+                        println("Succeeded: "+showRemappingMap(map))
+                        // println(showRemappingMap(map1))
+                        combineRec(map1, 0, j+1, (k,j) :: unifs)
+                      }
+                      else println("Failed.")
+                    }
                   }
                 } // end of for(k <- ...)
-                if(!matchedId) // No cpt of cpts1 matched; move on
-                  combineRec(map1, i+1, j, unifs)
+                if(!matchedId){ // No cpt of cpts1 matched; move on
+                  // println("XXX"+showRemappingMap(map)+id1)
+                  combineRec(map1, i+1, j, unifs) }
               } // end of if(i == 0)
               else combineRec(map1, i+1, j, unifs) // Move on to next parameter
               otherArgs(f) = newIds // undo (*)
@@ -346,6 +375,7 @@ object Remapper{
             if(idX < 0){
               val id1 = nextArg(f); nextArg(f) += 1 // temporary update (+)
               val map1 = extendMap(map, f, id, id1) // cloneMap(map); map1(f)(id) = id1 // IMPROVE
+              // println("Case 2: "+showRemappingMap(map1))
               combineRec(map1, i+1, j, unifs) // Move on to next parameter
               nextArg(f) -= 1 // undo (+)
             }
@@ -357,10 +387,9 @@ object Remapper{
     combineRec(map0, 0, 0, List()); result
   }
 
-
   /** Try to combine two component views.  Produce all pi(v2), for remapping pi,
-    * such that v1 U pi(v2) makes sense, i.e. the identities are disjoint. */
-  def combine(v1: ComponentView, v2: ComponentView)
+    * such that v1 U pi(v2) makes sense, i.e. agree on common components. */
+  def combine(v1: Concretization, v2: ComponentView)
       : List[(Array[State], Unifications)] = {
     // println(s"combine($v1, $v2)")
     val servers = v1.servers; require(v2.servers == servers)
@@ -368,15 +397,19 @@ object Remapper{
     // The initial maps: map0 is the identity on the server parameters;
     // otherArgs gives parameters used in v1 but not the servers; nextArg
     // gives the next fresh parameters.
-    val (map0, otherArgs, nextArg) = createMaps(servers, components1)
+    val (map0, otherArgs, nextArg) = createCombiningMaps(servers, components1)
     // println(s"nextArg = "+nextArg.mkString(", "))
     // println(s"otherArgs = "+otherArgs.mkString(", "))
 
     val maps = combine1(map0, nextArg, otherArgs, components1, components2)
     // println(s"combine: "+maps.size+" results")
-    // println(maps.map(showRemappingMap).mkString("\n"))
+    // println(maps.map{case (map, unifs) => showRemappingMap(map)+"; "+unifs}
+    //   .mkString("\n"))
     maps.map{ 
-      case (map, unifs) => (applyRemapping(map, components2), unifs) }.toList
+      case (map, unifs) => 
+        // println(showRemappingMap(map)+"; "+components2.mkString("[",",","]")); 
+        (applyRemapping(map, components2), unifs) 
+    }.toList
   }
 
   /** All ways of remapping certain states of states, consistent with map0,
@@ -443,7 +476,10 @@ object Remapper{
       : ArrayBuffer[RemappingMap] = {
     // Map identity of cpts(i) to id
     val st = cpts(i); val f = st.family; val id0 = st.ids(0)
-    assert(map0(f)(id0) < 0); map0(f)(id0) = id
+    assert(map0(f)(id0) < 0 || map0(f)(id0) == id, 
+      s"cpts = "+cpts.mkString("[",";","]")+s"; f = $f; id0 = $id0 -> "+
+        map0(f)(id0)+s"; id = $id")
+    map0(f)(id0) = id
     // Now remap the remaining components. 
     remapSelectedStates(map0, otherArgs, nextArg, cpts, Left(i))
   }
