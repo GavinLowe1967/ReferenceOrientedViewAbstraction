@@ -22,9 +22,9 @@ package object ViewAbstraction{
     * server. */
   type Family = Int
 
-  /** The identity of a component process, comprising its family and
-    * identity. */
-  type ComponentProcessIdentity = (Family, Identity)
+  /** The identity of a process, typically a component, comprising its family
+    * and identity. */
+  type ProcessIdentity = (Family, Identity)
 
   /** Is p a distinguished parameter?  
     * This corresponds to the identity being negative. */

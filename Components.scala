@@ -71,11 +71,11 @@ class Components(
 
   /** Map that gives, for each event e, the identities of components that
     * synchronise on e. */
-  private var eventMap: Array[List[ComponentProcessIdentity]] = null
+  private var eventMap: Array[List[ProcessIdentity]] = null
 
   /** List of passive components that synchronise on each event; indexed by 
     * events. */
-  var passiveCptsOfEvent: Array[List[ComponentProcessIdentity]] = null
+  var passiveCptsOfEvent: Array[List[ProcessIdentity]] = null
 
   def getEventMap = eventMap
 

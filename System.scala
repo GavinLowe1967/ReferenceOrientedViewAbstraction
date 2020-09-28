@@ -117,7 +117,7 @@ class System(fname: String, checkDeadlock: Boolean,
 
     scriptNames = transMapBuilder.getNameMap
 
-    val cptEventMap: Array[List[ComponentProcessIdentity]] = 
+    val cptEventMap: Array[List[ProcessIdentity]] = 
       components.getEventMap
     val serverAlphaMap: Array[Boolean] = servers.alphaBitMap
 
@@ -213,7 +213,7 @@ class System(fname: String, checkDeadlock: Boolean,
     * contain the same component identities, namely those identities in cv.
     */
   type TransitionRep = 
-    (Concretization, EventInt, Concretization, List[ComponentProcessIdentity])
+    (Concretization, EventInt, Concretization, List[ProcessIdentity])
 
   /** The transitions caused by the principal component of cv. 
     * @return a list of tuples (pre, e, post, pids) representing concrete 
@@ -227,7 +227,7 @@ class System(fname: String, checkDeadlock: Boolean,
     var result = List[TransitionRep]()
     // Add an element to result if it's canonical
     def maybeAdd(pre: Concretization, e: EventInt, post: Concretization, 
-        pids: List[ComponentProcessIdentity]) =
+        pids: List[ProcessIdentity]) =
       if(isCanonicalTransition(pre, post)) result ::= ((pre, e, post, pids)) 
       else println(s"Not cannonical $pre -${showEvent(e)}-> $post")
 
@@ -370,18 +370,18 @@ class System(fname: String, checkDeadlock: Boolean,
     ok
   }
 
-  /** Get all renamings of cv1, consistent with cv, that (1) include a component
-    * with identity pid, and (2) if oe = Some(e) can perform e with
-    * cv.principal.  Consistent here means that the views agree on the states
-    * of all common components.  Add all such renamings, and the corresponding
-    * states after e, to buffer.  */
-  def consistentStates(pid: ComponentProcessIdentity, cv: ComponentView, 
+  /** Get all renamings of cv1, consistent with conc, that (1) include a
+    * component with identity pid, and (2) if oe = Some(e) can perform e with
+    * conc.principal.  Consistent here means that the views agree on the
+    * states of all common components.  Add all such renamings, and the
+    * corresponding states after e, to buffer.  */
+  def consistentStates(pid: ProcessIdentity, conc: Concretization, 
     oe: Option[EventInt], cv1: ComponentView, 
     buffer: ArrayBuffer[(State, List[State])])
   = {
-    val (f,id) = pid; val servers = cv.servers; require(cv1.servers == servers)
-    val cpts = cv.components; val cpts1 = cv1.components
-    val (fp, idp) = cv.principal.componentProcessIdentity
+    val (f,id) = pid; val servers = conc.servers; require(cv1.servers == servers)
+    val cpts = conc.components; val cpts1 = cv1.components
+    val (fp, idp) = cpts(0)./*cv.principal.*/componentProcessIdentity
     // println(s"consistentStates(${State.showProcessId(pid)}, $cv)\n"+
     //   s"  with $cv1")
     // Find all components of $cv1 that can be renamed to a state of pid

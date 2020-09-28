@@ -26,3 +26,4 @@ class SimpleTransitionSet extends TransitionSet{
   /** An iterator over the transitions. */
   def iterator = set.iterator 
 }
+ 

@@ -20,7 +20,7 @@ all:  $(DIR)/MyStateMap.class $(DIR)/VA.class $(DIR)/Remapper.class
 clean:
 	rm *.class $(DIR)/*.class; fsc -shutdown
 
-# $(DIR)/MyHashSet.class $(DIR)/ConcBuffer.class: $(DIR)/Sharding.class
+# States etc.
 
 $(DIR)/State.class: $(DIR)/package.class
 
@@ -32,26 +32,14 @@ $(DIR)/MyStateMap.class: $(DIR)/MyTrieStateMap.class $(DIR)/StateHashMap.class
 
 $(DIR)/ServerStates.class: $(DIR)/State.class $(DIR)/MyHashMap.class
 
-# $(DIR)/SystemView.class $(DIR)/SystemViewSet.class: SystemView.scala	\
-#   SystemViewSet.scala $(DIR)/Views.class $(DIR)/MyHashSet.class		\
-#   $(DIR)/ServerStates.class $(DIR)/ConcBuffer.class $(DIR)/Remapper.class
-# 	$(FSC) SystemView.scala SystemViewSet.scala
-
-# $(DIR)/SubSystemView.class: $(DIR)/State.class
-
-# $(DIR)/ExtenderMap.class: $(DIR)/SubSystemView.class $(DIR)/Sharding.class
-
-# $(DIR)/NewViewExtender.class: $(DIR)/Remapper.class $(DIR)/SystemView.class	\
-#   $(DIR)/SystemViewSet.class $(DIR)/ConcBuffer.class $(DIR)/ExtenderMap.class
-
-# # To create the system using FDR, we need the following classpath
+# FDR interaction
 
 $(DIR)/FDRSession.class: $(DIR)/Concurrency.class
 
 $(DIR)/FDRTransitionMap.class: $(DIR)/State.class $(DIR)/CSPFileParser.class	\
    $(DIR)/FDRSession.class
 
-# # The system itself
+# Views, etc.
 
 $(DIR)/View.class: $(DIR)/ServerStates.class
 
@@ -59,7 +47,11 @@ $(DIR)/Remapper.class: $(DIR)/View.class
 
 $(DIR)/TransitionSet.class: $(DIR)/View.class
 
+$(DIR)/TransitionTemplateSet.class: $(DIR)/View.class
+
 $(DIR)/ViewSet.class: $(DIR)/View.class $(DIR)/MyHashSet.class
+
+# # The system itself
 
 $(DIR)/Components.class: $(DIR)/FDRSession.class	\
   $(DIR)/FDRTransitionMap.class $(DIR)/View.class
@@ -67,16 +59,15 @@ $(DIR)/Components.class: $(DIR)/FDRSession.class	\
 $(DIR)/Servers.class: $(DIR)/FDRSession.class $(DIR)/MyHashMap.class	\
    $(DIR)/FDRTransitionMap.class
 
-$(DIR)/System.class: $(DIR)/FDRTransitionMap.class $(DIR)/Components.class	\
-    $(DIR)/Servers.class $(DIR)/ViewSet.class $(DIR)/Remapper.class
-# $(DIR)/NewViewExtender.class	\
-#    $(DIR)/SystemView.class
+$(DIR)/System.class: $(DIR)/FDRTransitionMap.class $(DIR)/Components.class \
+  $(DIR)/Servers.class $(DIR)/ViewSet.class $(DIR)/Remapper.class
 
 # # Checker and main program
 
 # $(DIR)/Debugger.class: $(DIR)/System.class
 
-$(DIR)/Checker.class: $(DIR)/System.class $(DIR)/TransitionSet.class
+$(DIR)/Checker.class: $(DIR)/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class
+
 # $(DIR)/NewViewExtender.class $(DIR)/Debugger.class $(DIR)/Concurrency.class
 
 $(DIR)/VA.class: $(DIR)/System.class $(DIR)/Checker.class

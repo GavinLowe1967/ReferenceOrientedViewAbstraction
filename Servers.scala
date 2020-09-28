@@ -153,12 +153,12 @@ class Servers(
       * transSync2Map(p1,p2) gives the synchronisations with p1 and
       * p2, or is empty if there are no such.  */
     private val transSync2Map = 
-      Map[(ComponentProcessIdentity, ComponentProcessIdentity), Trans]()
+      Map[(ProcessIdentity, ProcessIdentity), Trans]()
 
     /** Get transitions synchronising with p1 and p2, initialising if
       * needs be. */
     def getOrInitSync2
-      (p1: ComponentProcessIdentity, p2: ComponentProcessIdentity): Trans = {
+      (p1: ProcessIdentity, p2: ProcessIdentity): Trans = {
       assert(p1 != p2)
       transSync2Map.getOrElseUpdate(
         (p1 min p2, p1 max p2),
@@ -166,7 +166,7 @@ class Servers(
     }
 
     /** Get transitions synchronising with p1 and p2. */
-    def transSync2(p1: ComponentProcessIdentity, p2: ComponentProcessIdentity)
+    def transSync2(p1: ProcessIdentity, p2: ProcessIdentity)
         : Trans =
       transSync2Map.getOrElse((p1 min p2, p1 max p2), null)
 

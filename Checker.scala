@@ -18,8 +18,25 @@ class Checker(system: System)
   /** The new views to be considered on the next ply. */
   private var nextNewViews: ArrayBuffer[View] = null
 
-  /** The transitions found so far. */
+  /** An extended transition represents the pre- and post-states of a
+    * transition, and extends a View by adding in the states of any additional
+    * components that synchronise on the transition, and any components to
+    * which the principal component obtains a reference. */
+  private type ExtendedTransition = (Concretization, Concretization)
+
+  /** The extended transitions found so far.  Abstractly, a set of
+    * ExtendedTransitions. */
   private val transitions: TransitionSet = new SimpleTransitionSet
+
+  /** A TransitionTemplate (pre, post, id, oe) represents an extended transition
+    * pre U st --> post U st' for every state st and st' such that (1) st and
+    * st' have identity id; (2) st is compatible with pre; (3) if oe = Some(e)
+    * then st -e-> st', otherwise st = st'.  */
+  private type TransitionTemplate = TransitionTemplateSet.TransitionTemplate
+  // (Concretization, Concretization, ProcessIdentity, Option[EventInt])
+
+  private val transitionTemplates: TransitionTemplateSet = 
+    new SimpleTransitionTemplateSet
 
   /** Run the checker. 
     * @param bound the number of plys to explore (with negative values meaning 
@@ -63,39 +80,39 @@ class Checker(system: System)
     println(s"\nProcessing $v")
     v match{
       case cv: ComponentView =>
-        for((pre, e, post, outsidePids) <- system.transitions(cv)){ // FIXME: not all transitions included yet
-          // outsidePids is the identities of components outside pre that 
-          // synchronise on the transition.
-          // Calculate all views corresponding to post.
+        for((pre, e, post, outsidePids) <- system.transitions(cv)){ 
+          // FIXME: not all transitions included yet
           println(s"\n$pre -${system.showEvent(e)}-> $post ["+
             outsidePids.map(State.showProcessId)+"]")
           assert(pre.components(0) == cv.principal)
 // FIXME: or should we be storing the extended transitions?
           transitions.add(pre, post)
           // Find new views as a result of this transition
-          processTransition(cv, pre, e, post, outsidePids)
+          processTransition(pre, e, post, outsidePids)
         } // end of for((pre, e, post, outsidePids) <- trans)
         // Effect of previous transitions on this view
         effectOfPreviousTransitions(cv)
     }
   } 
 
-  /** Process the transition pre -e-> post of cv, creating the corresponding new
-    * views and adding them to sysAbsViews and nextNewViews. */
+  /** Process the transition pre -e-> post, creating the corresponding new
+    * views and adding them to sysAbsViews and nextNewViews.
+    * @param outsidePids the identities of components outside pre that 
+    * synchronise on the transition. */
   @inline private def processTransition(
-    cv: ComponentView, pre: Concretization, e: EventInt, post: Concretization, 
-    outsidePids: List[ComponentProcessIdentity]) 
+    pre: Concretization, e: EventInt, post: Concretization, 
+    outsidePids: List[ProcessIdentity]) 
   = {
     val princ1 = post.components(0)
 
-    // Case 1: component view for cv.principal
+    // Case 1: component view for pre.principal
     // Process ids of other components
     val otherIds = pre.components.tail.map(_.componentProcessIdentity)
     assert(post.components.map(_.componentProcessIdentity).sameElements(
       pre.components.map(_.componentProcessIdentity)))
     // newPids is the components to which the principal component gains
     // references but that are outside pre/post.
-    val newPids: Array[ComponentProcessIdentity] =
+    val newPids: Array[ProcessIdentity] =
       princ1.processIdentities.tail.filter(p =>
         !isDistinguished(p._2) && !otherIds.contains(p))
     // The following assertion (outsidePids subset of newPids) captures an
@@ -117,52 +134,48 @@ class Checker(system: System)
       assert(newPids.length == 1 && outsidePids.length <= 1)
       // FIXME (simplification)
       val newPid = newPids.head
-      // Find all states for newPid, consistent with cv, that can perform e if
+      // Find all states for newPid, consistent with pre, that can perform e if
       // in outsidePids, and their subsequent states (optionally after e).
       val oe = if(outsidePids.nonEmpty) Some(e) else None
-      val consStates = consistentStates(newPid, cv, oe).distinct
-      // println("consStates = "+consStates.mkString("; "))
-      for((outsideSt, outsidePosts) <- consStates){
-        assert(outsidePosts.nonEmpty)
-        if(isExtendable(pre, outsideSt)){
-          val extendedPre = pre.extend(outsideSt)
-          for(postSt <- outsidePosts){
-            val extendedPost = post.extend(postSt)
-            println(s"Extended transition $extendedPre "+
-              s"-${system.showEvent(e)}-> $extendedPost")
-            // transitions.add(extendedPre, extendedPost)
-            if(addView(extendedPost)){ } //  println("***Added***")
-            // Effect on other views of this transition.
-            effectOnOthers(extendedPre, extendedPost)
-          }
-        }
-        else println(s"$outsideSt not compatible with earlier views")
-        // FIXME: what if it later becomes compatible?
+      // Store transition template
+      transitionTemplates.add(pre, post, newPid, oe)
+      // Get extended transitions based on this
+      val extendedTs = extendTransition(pre, post, newPid, oe)
+      for((extendedPre, extendedPost) <- extendedTs){
+        println(s"Extended transition $extendedPre "+
+          s"-${system.showEvent(e)}-> $extendedPost")
+        transitions.add(extendedPre, extendedPost)
+        if(addView(extendedPost)){ } //  println("***Added***")
+        // Effect on other views of this transition.
+        effectOnOthers(extendedPre, extendedPost)
       }
     } // end of else
   }
 
-  // private def extendTransition(
-  //   pre: Concretization, post: Concretization, 
-  //   newPid: ComponentProcessIdentity, oe: Option[EventInt]) 
-  //     : ArrayBuffer[(Concretization, Concretization)] = {
-  //   val result = new ArrayBuffer[(Concretization, Concretization)]
-  //   val consStates = consistentStates(newPid, cv, oe).distinct
-  //   // println("consStates = "+consStates.mkString("; "))
-  //   for((outsideSt, outsidePosts) <- consStates){
-  //     assert(outsidePosts.nonEmpty)
-  //     if(isExtendable(pre, outsideSt)){
-  //       val extendedPre = pre.extend(outsideSt)
-  //       for(postSt <- outsidePosts){
-  //         val extendedPost = post.extend(postSt)
-  //         println(s"Extended transition $extendedPre "+
-  //           s"-${system.showEvent(e)}-> $extendedPost")
-  //         result += ((extendedPre, extendedPost))
-  //       }
-  //     }
-  //   }
-  //   result
-  // }
+  /** Extended the TransitionTemplate (pre, post, newPid, oe) based on prior
+    * views to give ExtendedTransitions. */
+  private def extendTransition(
+    pre: Concretization, post: Concretization, 
+    newPid: ProcessIdentity, oe: Option[EventInt]) 
+      : ArrayBuffer[ExtendedTransition] = {
+    val result = new ArrayBuffer[ExtendedTransition]
+    val consStates = consistentStates(newPid, pre, oe).distinct
+    // println("consStates = "+consStates.mkString("; "))
+    for((outsideSt, outsidePosts) <- consStates){
+      assert(outsidePosts.nonEmpty)
+      if(isExtendable(pre, outsideSt)){
+        val extendedPre = pre.extend(outsideSt)
+        for(postSt <- outsidePosts){
+          val extendedPost = post.extend(postSt)
+          // println(s"Extended transition $extendedPre "+
+          //   s"-${system.showEvent(e)}-> $extendedPost")
+          result += ((extendedPre, extendedPost))
+        }
+      }
+      else println(s"$outsideSt not compatible with earlier views")
+    }
+    result
+  }
 
 
   /** Effect on other views of a transition pre -> post.  For every view v1 in
@@ -196,7 +209,7 @@ class Checker(system: System)
       // println("cpts = "+cpts.mkString("[",",","]")+s"; unifs = $unifs")
       // Find the component of cpts with process identity pid, or return
       // null if no such.
-      def find0(pid: ComponentProcessIdentity, cpts: Array[State]): State = {
+      def find0(pid: ProcessIdentity, cpts: Array[State]): State = {
         var i = 0; var done = false
         while(i < cpts.length && !done){
           if(cpts(i).componentProcessIdentity == pid) done = true else i += 1
@@ -204,7 +217,7 @@ class Checker(system: System)
         if(done) cpts(i) else null
       }
       // Find the component of post or cpts with process identity pid
-      def find(pid: ComponentProcessIdentity): State = {
+      def find(pid: ProcessIdentity): State = {
         val st1 = find0(pid, post.components)
         if(st1 != null) st1
         else{
@@ -228,6 +241,7 @@ class Checker(system: System)
     }
   }
 
+  /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
     println(s"effectOfPreviousTransitions($cv)")
     for((pre,post) <- transitions.iterator){
@@ -236,20 +250,20 @@ class Checker(system: System)
     }
   }
 
-  /** Find all states of component pid consistent with cv that can perform event
-    * e, and the states those reach after e.  Consistent here means that there
-    * is a view v1 in sysAbsViews and a renaming pi such that pi(v1) contains
-    * the state of pid, agrees with v on common components, and every view of
-    * pi(v1) U v is in sysAbsViews.  Pre: pid is not in cv. */
+  /** Find all states of component pid consistent with conc that can perform
+    * event e, and the states those reach after e.  Consistent here means that
+    * there is a view v1 in sysAbsViews and a renaming pi such that pi(v1)
+    * contains the state of pid, agrees with conc on common components, and
+    * every view of pi(v1) U v is in sysAbsViews.  Pre: pid is not in conc. */
   private def consistentStates(
-    pid: ComponentProcessIdentity, cv: ComponentView, oe: Option[EventInt])
+    pid: ProcessIdentity, conc: Concretization, oe: Option[EventInt])
       : ArrayBuffer[(State, List[State])] = {
     val result = new ArrayBuffer[(State, List[State])]()
-    val (f,id) = pid; val servers = cv.servers; val components = cv.components
+    val (f,id) = pid; val servers = conc.servers; val components = conc.components
     for(v1 <- sysAbsViews.toArray) v1 match{ // IMPROVE iteration
       case cv1: ComponentView =>
         if(cv1.servers == servers) 
-          system.consistentStates(pid, cv, oe, cv1, result)
+          system.consistentStates(pid, conc, oe, cv1, result)
     } // end of match/for(v1 <- ...)
     // println(s"conistentStates result: "+result.mkString("; "))
     result
@@ -273,7 +287,8 @@ class Checker(system: System)
       case cv1: ComponentView =>
         if(cv1.servers == servers && cv1.principal == st1){
           // println(s"Match found $cv1")
-          // FIXME: need to check rest of components are compatible
+          // FIXME: need to check rest of components are compatible.  At
+          // present this is safe, but maybe giving too many matches.
           found = true
         }
         i += 1

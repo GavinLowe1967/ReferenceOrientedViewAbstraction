@@ -15,7 +15,7 @@ class State(val family: Family, val cs: ControlState,
             val ids: Array[Identity], isNew: Boolean = false){
 
   /** The component process identity. */
-  def componentProcessIdentity: ComponentProcessIdentity = {
+  def componentProcessIdentity: ProcessIdentity = {
     // assert(family >= 0)
     (family, ids.head)
   }
@@ -23,7 +23,7 @@ class State(val family: Family, val cs: ControlState,
   /** The types of parameters. */
   def typeMap: Array[Type] = State.stateTypeMap(cs)
 
-  def processIdentities: Array[ComponentProcessIdentity] = 
+  def processIdentities: Array[ProcessIdentity] = 
     Array.tabulate(ids.length)(i => (typeMap(i), ids(i)))
 
   /** Check the type sizes from the script are large enough for all the
@@ -287,7 +287,7 @@ object State{
   private def idType(cs: ControlState): Type = idTypeArray(cs-minCS)
 
   /** The script name for pid. */
-  def showProcessId(pid: ComponentProcessIdentity) = {
+  def showProcessId(pid: ProcessIdentity) = {
     val (t,id) = pid; scriptNames(t)(id)
   }
 }
