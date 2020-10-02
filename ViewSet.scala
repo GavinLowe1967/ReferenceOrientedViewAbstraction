@@ -39,6 +39,7 @@ trait ViewSet{
   /** Add inc to the current count. */
   def addCount(inc: Int): Unit
 
+  override def toString = toArray.map(_.toString).sorted.mkString("\n")
 }
 
 // =======================================================

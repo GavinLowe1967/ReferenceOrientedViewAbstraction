@@ -353,13 +353,11 @@ object Remapper{
                   if(c1.componentProcessIdentity == (f,id1)){
                     assert(!matchedId); matchedId = true
                     if(j != 0 || k != 0){ // NOTE: needs testing more
-                      print(s"  Trying to unify $c1 and $c.  ")
                       if(c1.cs == c.cs && unify(map1, c1, c)){ // FIXME!
-                        println("Succeeded: "+showRemappingMap(map))
-                        // println(showRemappingMap(map1))
+                        //println("  Unified $c1 and $c: "+showRemappingMap(map))
                         combineRec(map1, 0, j+1, (k,j) :: unifs)
                       }
-                      else println("Failed.")
+                      // else println("  Failed to unify $c1 and $c.")
                     }
                   }
                 } // end of for(k <- ...)

@@ -376,9 +376,9 @@ class System(fname: String, checkDeadlock: Boolean,
     * states of all common components.  Add all such renamings, and the
     * corresponding states after e, to buffer.  */
   def consistentStates(pid: ProcessIdentity, conc: Concretization, 
-    oe: Option[EventInt], cv1: ComponentView, 
-    buffer: ArrayBuffer[(State, List[State])])
-  = {
+    oe: Option[EventInt], cv1: ComponentView)
+      : ArrayBuffer[(State, List[State])] = {
+    val buffer = new ArrayBuffer[(State, List[State])]()
     val (f,id) = pid; val servers = conc.servers; require(cv1.servers == servers)
     val cpts = conc.components; val cpts1 = cv1.components
     val (fp, idp) = cpts(0)./*cv.principal.*/componentProcessIdentity
@@ -434,7 +434,7 @@ class System(fname: String, checkDeadlock: Boolean,
                   val cptj = cpts(j)
                   if(cptj.componentProcessIdentity == rnCptId){
                     ok = rnCpt == cptj
-                    println(s"Comparing $rnCpt and $cptj: $ok")
+                    // println(s"Comparing $rnCpt and $cptj: $ok")
                   }
                   j += 1
                 }
@@ -446,6 +446,7 @@ class System(fname: String, checkDeadlock: Boolean,
         } // end of for(map <- maps)
       }
     } // end of for(i <- ...)
+    buffer
   } // end of consistentStates
 
 
