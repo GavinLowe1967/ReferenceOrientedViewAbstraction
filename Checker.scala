@@ -130,31 +130,10 @@ class Checker(system: System)
       // Store transition template
       transitionTemplates.add(pre, post, newPid, oe)
       // Get extended transitions based on this
-      val extendedTs = instantiateTransitionTemplate(pre, post, newPid, oe)
-      for((extendedPre, extendedPost) <- extendedTs)
-        println(s"Extended transition $extendedPre "+
-          s"-${system.showEvent(e)}-> $extendedPost")
-      addExtendedTransitions(extendedTs)
-
-
-      //   addViewFromConc(extendedPost)
-      //   // Store this transition, and calculate effect on other views.
-      //   addTransition(extendedPre, extendedPost)
-      // }
+      instantiateTransitionTemplate(pre, post, newPid, oe)
     } // end of else
   }
 
-  /** For each given ExtendedTransition, store the post-state, the transition,
-    * and calculate the effect on other views. */
-  @inline private 
-  def addExtendedTransitions(
-    extendedTs: ArrayBuffer[ExtendedTransition]) = {
-      for((extendedPre, extendedPost) <- extendedTs){
-        addViewFromConc(extendedPost)
-        // Store this transition, and calculate effect on other views.
-        addTransition(extendedPre, extendedPost)
-      }
-  }
 
   // ========= Extending TransitionTemplates 
 
@@ -165,44 +144,33 @@ class Checker(system: System)
   private def instantiateTransitionTemplate(
     pre: Concretization, post: Concretization, 
     newPid: ProcessIdentity, oe: Option[EventInt]) 
-      : ArrayBuffer[ExtendedTransition] = {
-    val result = new ArrayBuffer[ExtendedTransition]()
-    val (f,id) = newPid 
-    val servers = pre.servers; val components = pre.components
+  = {
+    val servers = pre.servers
     for(v1 <- sysAbsViews.toArray) v1 match{ // IMPROVE iteration
       case cv: ComponentView =>
         if(cv.servers == servers)
-          instantiateTransitionTemplateBy(pre, post, newPid, oe, cv, result)
+          instantiateTransitionTemplateBy(pre, post, newPid, oe, cv)
     } // end of for ... match
-    result
+    // result
   }
 
-  /** The effect of view cv on previous TransitionTemplates. */
+  /** The effect of view cv on previous TransitionTemplates.
+    *  Called from process. */
   private def effectOfPreviousTransitionTemplates(cv: ComponentView) = {
-    val extendedTs = new ArrayBuffer[ExtendedTransition]
     for((pre, post, id, oe) <- transitionTemplates.iterator){
       if(pre.servers == cv.servers)
-        instantiateTransitionTemplateBy(pre, post, id, oe, cv, extendedTs)
+        instantiateTransitionTemplateBy(pre, post, id, oe, cv)
     }
-    addExtendedTransitions(extendedTs)
-    // for((extendedPre, extendedPost) <- extendedTs){
-    //   // println(s"Extended transition from template $extendedPre --> $extendedPost")
-    //   // (oe match{ case Some(e) => system.showEvent(e); case None => ""})+
-    //   addViewFromConc(extendedPost)
-    //   // Store this transition, and calculate effect on other views.
-    //   addTransition(extendedPre, extendedPost)
-    // }
-
-    // IMPROVE: merge with repeated code in processTransitions
   }
 
-
   /** Produce ExtendedTransitions from the TransitionTemplate (pre, post,
-    * newPid, oe) and the view cv.  Add all such to result */
+    * newPid, oe) and the view cv.  For each, store the transition, the
+    * post-state, and calculate the effect on other views.
+    * Called from instantiateTransitionTemplate and 
+    * effectOfPreviousTransitionTemplates. */
   @inline private def instantiateTransitionTemplateBy(
     pre: Concretization, post: Concretization, 
-    newPid: ProcessIdentity, oe: Option[EventInt], cv: ComponentView, 
-    result: ArrayBuffer[ExtendedTransition])
+    newPid: ProcessIdentity, oe: Option[EventInt], cv: ComponentView)
   = {
     require(pre.servers == cv.servers)
     val extenders = system.consistentStates(newPid, pre, oe, cv)
@@ -215,25 +183,39 @@ class Checker(system: System)
           println(s"Extended transition from template $extendedPre -"+
             (oe match{ case Some(e) => system.showEvent(e); case None => ""})+
             s"-> $extendedPost")
-          result += ((extendedPre, post.extend(postSt)))
+          addViewFromConc(extendedPost)
+          // Store this transition, and calculate effect on other views.
+          addTransition(extendedPre, extendedPost)
         }
       }
       else println(s"$outsideSt not compatible with earlier views")
     } // end of for((outsideSt, outsidePosts) <- ...)
   }
 
-  /** Is v extendable by state st, given the current set of views?  Is there a
-    * view in SysAbsViews matching v.servers and containing st (maybe renamed)
-    * as the principal component, and agreeing with any other component common
-    * with v FIXME.  Pre: st is not referenced by any process of v.
+  /** Is conc extendable by state st, given the current set of views?  For each
+    * cpt component of conc U st, is there a view in SysAbsViews with cpt as
+    * the principal component and agreeing on all common processes. 
+
+    * PRE: conc is compatible with SysAbsViews, and conc does not include
+    * st.identity.  This means it is enough to check the condition for cpt =
+    * st or a non-principal component of conc that references st. ??????
     */
   @inline private def isExtendable(conc: Concretization, st: State): Boolean = {
+    require(sysAbsViews.contains(conc.toComponentView))
+    // Also every other state in conc is compatible FIXME CHECK
+    // require(conc.components.forall(
+    //   _.componentProcessIdentity != st.componentProcessIdentity))
     // Rename st to make it canonical with servers
-    val servers = conc.servers; val map = Remapper.createMap(servers.rhoS)
+    val servers = conc.servers; val components = conc.components
+    val map = Remapper.createMap(servers.rhoS)
     val nextArg = Remapper.createNextArgMap(servers.rhoS)
-    var st1 = Remapper.remapState(map, nextArg, st)
-    // println(s"isExtendable($conc, $st) renamed to $st1")
-    // IMPROVE: iteration
+    var st1 = Remapper.remapState(map, nextArg, st) // this seems wrong *** 
+    val id1 = st1.componentProcessIdentity
+    require(components.forall(_.componentProcessIdentity != id1))
+    println(s"isExtendable($conc, $st) renamed to $st1")
+
+    // Test whether there is an existing view with a renaming of st as
+    // principal component, and the same servers as conc.  IMPROVE: iteration
     val viewsArray = sysAbsViews.toArray
     var i = 0; var found = false
     while(i < viewsArray.length && !found) viewsArray(i) match{
@@ -246,8 +228,60 @@ class Checker(system: System)
         }
         i += 1
     } // end of while ... match
+
+    if(found){
+      // If any component cpt of conc references st, then search for a
+      // suitable view with a renaming of cpt and st.
+      val id = st.componentProcessIdentity
+      // Test whether any component of conc references st
+      var j = 0; val length = components.length
+      while(j < length && found){
+        val cpt = components(j)
+        if(cpt.processIdentities.contains(id)){
+          println(s"isExtendable($conc) with reference to $st")
+          found = containsXXX(conc, st1, j) // || true // FIXME
+        }
+        j += 1
+      }
+    }
     found    
   }
+
+  /** Does sysAbsViews contain a view corresponding to component j's view of
+    * conc and st?  Pre: component j references st. */
+  private def containsXXX(conc: Concretization, st: State, j : Int): Boolean = {
+    println(s"containsXXX($conc, $st, $j)")
+    val pCpt = conc.components(j)
+    // Rename pCpt to be principal component
+    val servers = conc.servers; val rhoS = servers.rhoS
+    val map = Remapper.createMap(rhoS)
+    val nextArg = Remapper.createNextArgMap(rhoS)
+    val pCptR = Remapper.remapState(map, nextArg, pCpt)
+    println(s"$pCpt renamed to $pCptR") // TEST: find case where not identity
+    // Find index in cpt of reference to st, and hence what st.id gets renamed to
+    val stId = st.id
+    val k = pCpt.ids.indexOf(stId); assert(k > 0)
+    val stIdR = pCptR.ids(k)
+    println(s"$st identity renamed to "+State.showProcessId((st.family, stIdR)))
+    val cs1 = st.cs    
+    
+    // Test whether sysAbsViews contains a view matching servers, with cptR as
+    // the principal component, and containing a component with identity idR
+    // in control state cs1.
+    // FIXME: need to check rest also compatible with conc.
+    val viewsArray = sysAbsViews.toArray; var i = 0; var found = false
+    while(i < viewsArray.length && !found) viewsArray(i) match{
+      case cv1: ComponentView =>
+        if(cv1.servers == servers && cv1.principal == pCptR &&
+          cv1.components.exists(cpt1 => cpt1.cs == cs1 && cpt1.id == stIdR) ){
+          println(s"found match with $cv1"); found = true; ???
+// FIXME: I'm very unsure about this.
+        }
+        i += 1
+    }
+    found
+  }
+
 
   // ========= Effect of transitions on other views
 
@@ -271,10 +305,12 @@ class Checker(system: System)
   /** The effect of the transition pre -> post on cv.  If cv is consistent with
     * pre (i.e. unifiable), and contains at least one process that changes
     * state, then update as per this transition.  Generate all new views that
-    * would result from this view under the transition. */
+    * would result from this view under the transition.  Called by
+    * effectOnOthers and effectOfPreviousTransitions.  */
   private def effectOn(
     pre: Concretization, post: Concretization, cv: ComponentView)
   = {
+    println(s"effectOn($pre, $post, $cv)")
     require(pre.servers == cv.servers)
     val newCpts = Remapper.combine(pre, cv)
     for((cpts, unifs) <- newCpts){

@@ -86,16 +86,30 @@ object Remapper{
     map1
   }
 
+  private def isInjective(map: RemappingMap): Boolean =
+    (0 until numTypes).forall{f =>
+      val range = map(f).filter(!isDistinguished(_))
+      range.length == range.distinct.length
+    }
+
+
   /** Produce a new RemappingMap, extending map0 so (f,id) maps to id1.
     * Note: the resulting map shares some entries with map0, so neither should 
-    * be mutated. */
+    * be mutated.  Pre: this does not make the map non-injective. */
   private def extendMap(
     map0: RemappingMap, f: Family, id: Identity, id1: Identity)
-      : RemappingMap = 
+      : RemappingMap = {
+    // id1 should not appear in map0(f), except perhaps in position id
+    require((0 until map0(f).length).forall(i => i == id || map0(f)(i) != id1),
+      s"extendMap: value $id1 already appears in map: "+
+        map0(f).mkString("[",",","]")+"; "+(id,id1))
     Array.tabulate(numTypes)(t =>
       if(t != f) map0(t) 
-      else{ val newRow = map0(f).clone; newRow(id) = id1; newRow }
+      else{ 
+        val newRow = map0(f).clone; newRow(id) = id1; newRow
+      }
     )
+  }
 
   // ------ NextArgMaps
 
@@ -154,21 +168,31 @@ object Remapper{
     (map0, otherArgs, nextArg)
   }
 
-  /** Create (1) an OtherArgMap giving the identities in servers and components;
-    * (2) a NextArgMap giving the next fresh parameters. */ 
+  /** Create (1) an OtherArgMap giving the identities in components but not
+    * servers; (2) a NextArgMap giving the next fresh parameters.  Called by
+    * System.consistentStates.  */ 
   def createMaps1(servers: ServerStates, components: Array[State]) 
       : (OtherArgMap, NextArgMap) = {
     val otherArgs = Array.fill(numTypes)(List[Identity]())
-    val nextArg = new Array[Int](numTypes)
-    @inline def process(sts: Array[State]) = {
-      for(st <- sts; i <- 0 until st.ids.length){
-        val f = st.typeMap(i); val id = st.ids(i)
-        if(!isDistinguished(id) && !otherArgs(f).contains(id)){ //IMPROVE
-          otherArgs(f) ::= id; nextArg(f) = nextArg(f) max (id+1)
-        }
-      }
+// FIXME
+    val serverNumParams = servers.numParams
+    val nextArg = serverNumParams.map(_+1)  // new Array[Int](numTypes)
+    for(st <- components; i <- 0 until st.ids.length){
+      val f = st.typeMap(i); val id = st.ids(i)
+      if(!isDistinguished(id) && id >= serverNumParams(f) && 
+        !otherArgs(f).contains(id))
+        otherArgs(f) ::= id; nextArg(f) = nextArg(f) max (id+1)
     }
-    process(servers.servers.toArray); process(components) // IMPROVE
+    // @inline def process(sts: Array[State]) = {
+    //   for(st <- sts; i <- 0 until st.ids.length){
+    //     val f = st.typeMap(i); val id = st.ids(i)
+    //     if(!isDistinguished(id) && !otherArgs(f).contains(id)){ //IMPROVE
+    //       otherArgs(f) ::= id; nextArg(f) = nextArg(f) max (id+1)
+    //     }
+    //   }
+    // }
+    // process(servers.servers.toArray); process(components)
+    // IMPROVE
     (otherArgs, nextArg)
   }
 
@@ -292,7 +316,10 @@ object Remapper{
         val id1 = ids1(i); val id2 = ids2(i); val t = typeMap(i)
         // println((id1,id2))
         if(isDistinguished(id1) || isDistinguished(id2)) ok = id1 == id2
-        else if(map1(t)(id2) < 0) map1(t)(id2) = id1 // extend map
+        else if(map1(t)(id2) < 0){
+          if(map1(t).contains(id1)) ok = false // must preserve injectivity 
+          else map1(t)(id2) = id1 // extend map
+        }
         else ok = map1(t)(id2) == id1
         i += 1
       }
@@ -323,11 +350,15 @@ object Remapper{
   private def combine1(map0: RemappingMap, nextArg: NextArgMap, 
     otherArgs: Array[List[Identity]], cpts1: Array[State], cpts2: Array[State]) 
       : ArrayBuffer[(RemappingMap, Unifications)] = {
+    // println("combine1: "+showRemappingMap(map0)+"; "+
+    //   nextArg.mkString("[",",","]")+"; "+otherArgs.mkString("[",",","]")+"; "+
+    //   cpts1.mkString("[",",","]")+"; "+cpts2.mkString("[",",","]"))
     val result = new ArrayBuffer[(RemappingMap, Unifications)]
 
     // Extend map to remap cpts2(j).ids[i..) and then cpts2[j+1..). 
     def combineRec(map: RemappingMap, i: Int, j: Int, unifs: Unifications)
         : Unit = {
+      require(isInjective(map), "combineRec: "+showRemappingMap(map))
       // println(s"combineRec(${showRemappingMap(map)}, $i, $j)")
       if(j == cpts2.length) result += ((map, unifs))  // base case
       else{
@@ -346,6 +377,7 @@ object Remapper{
             for(id1 <- newIds){
               otherArgs(f) = newIds.filter(_ != id1) // temporary update (*)
               val map1 = extendMap(map, f, id, id1) 
+              // assert(isInjective(map1), showRemappingMap(map1)) // IMPROVE
               if(i == 0){ // Identity; see if any cpt of cpts1 matches (f, id1)
                 var matchedId = false // have we found a cpt with matching id?
                 for(k <- 0 until cpts1.length){ // ???????????? 0/
@@ -354,6 +386,7 @@ object Remapper{
                     assert(!matchedId); matchedId = true
                     if(j != 0 || k != 0){ // NOTE: needs testing more
                       if(c1.cs == c.cs && unify(map1, c1, c)){ // FIXME!
+                        assert(isInjective(map1), showRemappingMap(map1))
                         //println("  Unified $c1 and $c: "+showRemappingMap(map))
                         combineRec(map1, 0, j+1, (k,j) :: unifs)
                       }
@@ -386,7 +419,10 @@ object Remapper{
   }
 
   /** Try to combine two component views.  Produce all pi(v2), for remapping pi,
-    * such that v1 U pi(v2) makes sense, i.e. agree on common components. */
+    * such that v1 U pi(v2) makes sense, i.e. agree on common components.  If
+    * the jth identity parameter of v2 maps to the kth identity parameter of
+    * v1, then the corresponding States much match, and the pair (k,j) is
+    * included in the Unifications returned. */
   def combine(v1: Concretization, v2: ComponentView)
       : List[(Array[State], Unifications)] = {
     // println(s"combine($v1, $v2)")
@@ -396,6 +432,7 @@ object Remapper{
     // otherArgs gives parameters used in v1 but not the servers; nextArg
     // gives the next fresh parameters.
     val (map0, otherArgs, nextArg) = createCombiningMaps(servers, components1)
+    // println(s"map0 = "+showRemappingMap(map0))
     // println(s"nextArg = "+nextArg.mkString(", "))
     // println(s"otherArgs = "+otherArgs.mkString(", "))
 
@@ -405,7 +442,8 @@ object Remapper{
     //   .mkString("\n"))
     maps.map{ 
       case (map, unifs) => 
-        // println(showRemappingMap(map)+"; "+components2.mkString("[",",","]")); 
+        // println(showRemappingMap(map)+"; "+unifs)
+        // components2.mkString("[",",","]"))
         (applyRemapping(map, components2), unifs) 
     }.toList
   }
@@ -422,6 +460,12 @@ object Remapper{
     map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap,
     states: Array[State], selector: Either[Int, Int]) 
       : ArrayBuffer[RemappingMap] = {
+    // println("remapSelectedStates: "+showRemappingMap(map0)+"; otherArgs = "+
+    //   otherArgs.mkString(";")+"; nextArg = "+nextArg.mkString(";"))
+    // Elements of otherArgs should not appear in the range of the
+    // corresponding part of map.
+    for(f <- 0 until numTypes)
+      require(otherArgs(f).forall(id => !map0(f).contains(id)))
     val result = ArrayBuffer[RemappingMap]()
 
     /* Extend map to remap states(i).ids[j..), then states[i+1..).  Add each
@@ -474,9 +518,13 @@ object Remapper{
       : ArrayBuffer[RemappingMap] = {
     // Map identity of cpts(i) to id
     val st = cpts(i); val f = st.family; val id0 = st.ids(0)
+    assert(!otherArgs(f).contains(id))
     assert(map0(f)(id0) < 0 || map0(f)(id0) == id, 
       s"cpts = "+cpts.mkString("[",";","]")+s"; f = $f; id0 = $id0 -> "+
         map0(f)(id0)+s"; id = $id")
+    // println(s"remapToId($st): "+showRemappingMap(map0)+"; otherArgs = "+
+    //   otherArgs.mkString(";")+"; nextArg = "+nextArg.mkString(",")+";"+
+    //   (id0,id))
     map0(f)(id0) = id
     // Now remap the remaining components. 
     remapSelectedStates(map0, otherArgs, nextArg, cpts, Left(i))

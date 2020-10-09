@@ -370,32 +370,36 @@ class System(fname: String, checkDeadlock: Boolean,
     ok
   }
 
-  /** Get all renamings of cv1, consistent with conc, that (1) include a
-    * component with identity pid, and (2) if oe = Some(e) can perform e with
-    * conc.principal.  Consistent here means that the views agree on the
-    * states of all common components.  Add all such renamings, and the
-    * corresponding states after e, to buffer.  */
+  /** Get all renamings of cv1 that: (1) include a component with identity pid;
+    * (2) agree with conc on the states of all common components; and (3) if
+    * oe = Some(e) can perform e with conc.principal. 
+    * @return the renaming of the component with pid, and all post-states of that
+    * component optionally after oe.  */
   def consistentStates(pid: ProcessIdentity, conc: Concretization, 
     oe: Option[EventInt], cv1: ComponentView)
       : ArrayBuffer[(State, List[State])] = {
     val buffer = new ArrayBuffer[(State, List[State])]()
     val (f,id) = pid; val servers = conc.servers; require(cv1.servers == servers)
     val cpts = conc.components; val cpts1 = cv1.components
-    val (fp, idp) = cpts(0)./*cv.principal.*/componentProcessIdentity
+    val (fp, idp) = cpts(0).componentProcessIdentity
+    // println(s"consistentStates($pid, $conc, $cv1)")
     // println(s"consistentStates(${State.showProcessId(pid)}, $cv)\n"+
     //   s"  with $cv1")
-    // Find all components of $cv1 that can be renamed to a state of pid
+    // Find all components of cv1 that can be renamed to a state of pid
     // that can perform e.
     for(i <- 0 until cpts1.length){
       val st1 = cpts1(i)
-      if(st1.family == f){
-        // All ways of remapping st1 so that: (1) its identity maps to id; (2)
-        // other parameters are mapped either to a parameter in cv, or the
-        // next fresh parameter.
-        // Following ensures identity on server ids, which I think is wrong
-        // val (map0, otherArgs, nextArg) = Remapper.createMaps(servers, cpts)
-        val map0 = Remapper.newRemappingMap
+      // Need st1 of family f, and its identity either not in the server
+      // identities, or equal to id (so the renaming doesn't change servers).
+      if(st1.family == f && (st1.id == id || st1.id >= servers.numParams(f))){
+        // All ways of remapping st1 (consistent with the servers) so that:
+        // (1) its identity maps to id; (2) other parameters are injectively
+        // mapped either to a parameter in cv, or the next fresh parameter.
+        // Create appropriate maps.
+        val map0 = Remapper.createMap(servers.rhoS)  // newRemappingMap
         val (otherArgs, nextArg) = Remapper.createMaps1(servers, cpts)
+        otherArgs(f) = otherArgs(f).filter(_ != id)
+        nextArg(f) = nextArg(f) max (id+1)
         // println(s"Remapping $st1")
         val maps = Remapper.remapToId(map0, otherArgs, nextArg, cpts1, i, id)
         for(map <- maps){
