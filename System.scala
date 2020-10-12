@@ -1,5 +1,6 @@
 package ViewAbstraction
 
+import ViewAbstraction.RemapperP.Remapper
 import uk.ac.ox.cs.fdr.{Option => _, _}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer}
@@ -389,6 +390,8 @@ class System(fname: String, checkDeadlock: Boolean,
     // that can perform e.
     for(i <- 0 until cpts1.length){
       val st1 = cpts1(i)
+      // println(s"consistentStates: st1 = $st1 "+(st1.family == f)+st1.id+","+id+
+      //   (st1.id >= servers.numParams(f)))
       // Need st1 of family f, and its identity either not in the server
       // identities, or equal to id (so the renaming doesn't change servers).
       if(st1.family == f && (st1.id == id || st1.id >= servers.numParams(f))){
@@ -398,6 +401,7 @@ class System(fname: String, checkDeadlock: Boolean,
         // Create appropriate maps.
         val map0 = Remapper.createMap(servers.rhoS)  // newRemappingMap
         val (otherArgs, nextArg) = Remapper.createMaps1(servers, cpts)
+        // println("nextArg = "+nextArg.mkString("; "))
         otherArgs(f) = otherArgs(f).filter(_ != id)
         nextArg(f) = nextArg(f) max (id+1)
         // println(s"Remapping $st1")
@@ -450,6 +454,7 @@ class System(fname: String, checkDeadlock: Boolean,
         } // end of for(map <- maps)
       }
     } // end of for(i <- ...)
+    if(buffer.nonEmpty) println(buffer.mkString("\n"))
     buffer
   } // end of consistentStates
 

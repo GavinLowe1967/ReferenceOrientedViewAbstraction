@@ -1,6 +1,7 @@
-package ViewAbstraction
+package ViewAbstraction.RemapperP 
 
-import ox.gavin.profiling.Profiler
+import ViewAbstraction._
+// import ox.gavin.profiling.Profiler
 import scala.math.Ordering.Implicits._ // for sorting list of lists
 import scala.collection.mutable.ArrayBuffer
 
@@ -33,18 +34,7 @@ object Remapper{
 
   def showRemappingMap(map: RemappingMap) = 
     map.map(_.mkString("[",",","]")).mkString("; ")
-
-  /** A clear RemappingMap, representing the empty mapping; used as a
-    * template for creating more such. */
-  // private val remappingMapTemplate: RemappingMap = 
-  //   Array.tabulate(numTypes)(t => Array.fill(rowSizes(t))(-1))
-
-  /** A thread-local RemappingMap. */
-  // private object ThreadLocalRemappingMap extends ThreadLocal[RemappingMap]{
-  //   override def initialValue() = {
-  //     Array.tabulate(numTypes)(t => Array.fill(rowSizes(t))(-1))
-  //   }
-  // }
+  def show(map: RemappingMap) = showRemappingMap(map)
 
   // IMPROVE: reinstate pools
 
@@ -52,18 +42,8 @@ object Remapper{
     * entries to -1.  Different calls to this will use the same arrays, so two
     * RemappingMaps created by the same thread should not be in use at the
     * same time. */
-  @inline def newRemappingMap: RemappingMap = {
+  @inline def newRemappingMap: RemappingMap = 
     Array.tabulate(numTypes)(t => Array.fill(rowSizes(t))(-1))
-    // val map = ThreadLocalRemappingMap.get;
-    // var t = 0
-    // do{
-    //   var i = 0; val len = map(t).length
-    //   do{ map(t)(i) = -1; i += 1 } while(i < len)
-    //   t += 1
-    // } while(t < numTypes)
-    // //assert(map.forall(_.forall(_ == -1)))
-    // map 
-  }
 
   /** Create a RemappingMap corresponding to rho, i.e. the identity map
     * on (t,i) for i <- [0..rho(t), for each t. */
@@ -72,7 +52,6 @@ object Remapper{
     for(t <- 0 until numTypes){
       val len = rho(t).length; var i = 0
       while(i < len){ map(t)(i) = i; i += 1 }
-      // while(i < rowSizes(t)){ assert(map(t)(i) == -1); i += 1 }
     }
     map
   }
@@ -80,18 +59,17 @@ object Remapper{
   /** Produce a (deep) clone of map. */
   private def cloneMap(map: RemappingMap): RemappingMap = {
     val map1 = Array.tabulate(numTypes)(t => new Array[Int](rowSizes(t)))
-    // val map1 = ThreadLocalRemappingMap.get
     for(t <- 0 until numTypes; i <- 0 until rowSizes(t)) 
       map1(t)(i) = map(t)(i)
     map1
   }
 
+  /** Is the mapping represtned by map injective? */
   private def isInjective(map: RemappingMap): Boolean =
     (0 until numTypes).forall{f =>
       val range = map(f).filter(!isDistinguished(_))
       range.length == range.distinct.length
     }
-
 
   /** Produce a new RemappingMap, extending map0 so (f,id) maps to id1.
     * Note: the resulting map shares some entries with map0, so neither should 
@@ -118,15 +96,16 @@ object Remapper{
     * parameters (t,i) for i <- [0..nextArg(t)), for each t. */
   type NextArgMap = Array[Int]
 
-  /** A thread-local NextArgMap. */
-  private object ThreadLocalNextArgMap extends ThreadLocal[NextArgMap]{
-    override def initialValue() = new Array[Int](numTypes)
-  }
+  def show(nexts: NextArgMap) = nexts.mkString("[", ", ", "]")
+
+  // /** A thread-local NextArgMap. */
+  // private object ThreadLocalNextArgMap extends ThreadLocal[NextArgMap]{
+  //   override def initialValue() = new Array[Int](numTypes)
+  // }
 
   /** Create a new NextArgMap, corresponding to the empty mapping.  Equivalent
     * to new Array[Int](numTypes) */
   @inline private def newNextArgMap: NextArgMap = {
-    // We re-use previous maps, to reduce GC churn
     val map = new Array[Int](numTypes) // IMPROVE: ThreadLocalNextArgMap.get
     for(t <- 0 until numTypes) map(t) = 0
     map
@@ -134,22 +113,27 @@ object Remapper{
 
   /** Create a new NextArgMap corresponding to rho. */
   @inline def createNextArgMap(rho: ParamMap): NextArgMap = {
-    // val naMap = ThreadLocalNextArgMap.get // IMPROVE: use pool
     val naMap = new Array[Int](numTypes)
     for(i <- 0 until numTypes) naMap(i) = rho(i).length
     naMap
-    // rho.map(_.length)
   }
 
   /** A list, for each type, of non-fresh values that a particular parameter can
     * be mapped to. */
   type OtherArgMap = Array[List[Identity]]
 
+  def show(otherArgs: OtherArgMap) = otherArgs.mkString("[", ";", "]")
+
   /** Create maps suitable for remapping: (1) a RemappingMap that is the
     * identity on servers; (2) the identities of components that are not
     * shared with the servers, indexed by types; (3) a NextArgMap giving the
-    * next fresh values not used in servers or components. */
-  private 
+    * next fresh values not used in servers or components. 
+    * 
+    * Example:
+    * [21[-1](T0) || 22[-1](Null) || 23[-1]()] || [12[1](T0,N0) || 7[0](N0,N1)]
+    * gives [-1,-1,-1,-1,-1,-1,-1,-1]; [0,-1,-1,-1]; [List(1, 0);List()]; [2, 1]
+    */
+  private [RemapperP]
   def createCombiningMaps(servers: ServerStates, components: Array[State])
       : (RemappingMap, OtherArgMap, NextArgMap) = {
     val rhoS = servers.rhoS; val map0 = createMap(rhoS)
@@ -170,29 +154,24 @@ object Remapper{
 
   /** Create (1) an OtherArgMap giving the identities in components but not
     * servers; (2) a NextArgMap giving the next fresh parameters.  Called by
-    * System.consistentStates.  */ 
+    * System.consistentStates. 
+    * 
+    * Example:
+    * [21[-1](T0) || 22[-1](Null) || 23[-1]()] || [12[1](T0,N0) || 7[0](N0,N1)]
+    * gives [List(1, 0);List()] (or permutations) and [2,1] */ 
   def createMaps1(servers: ServerStates, components: Array[State]) 
       : (OtherArgMap, NextArgMap) = {
     val otherArgs = Array.fill(numTypes)(List[Identity]())
-// FIXME
     val serverNumParams = servers.numParams
-    val nextArg = serverNumParams.map(_+1)  // new Array[Int](numTypes)
+    //println("serverNumParams = "+serverNumParams.mkString(", "))
+    val nextArg = serverNumParams.clone // Note: need to clone
+    // println("createMap1: nextArg = "+show(nextArg))
     for(st <- components; i <- 0 until st.ids.length){
       val f = st.typeMap(i); val id = st.ids(i)
       if(!isDistinguished(id) && id >= serverNumParams(f) && 
         !otherArgs(f).contains(id))
         otherArgs(f) ::= id; nextArg(f) = nextArg(f) max (id+1)
     }
-    // @inline def process(sts: Array[State]) = {
-    //   for(st <- sts; i <- 0 until st.ids.length){
-    //     val f = st.typeMap(i); val id = st.ids(i)
-    //     if(!isDistinguished(id) && !otherArgs(f).contains(id)){ //IMPROVE
-    //       otherArgs(f) ::= id; nextArg(f) = nextArg(f) max (id+1)
-    //     }
-    //   }
-    // }
-    // process(servers.servers.toArray); process(components)
-    // IMPROVE
     (otherArgs, nextArg)
   }
 
@@ -299,7 +278,7 @@ object Remapper{
   /** Try to extend map to map' such that map'(st2) = st1.
     * If unsuccessful, map is unchanged.
     * @return true if successful. */
-  private def unify(map: RemappingMap, st1: State, st2: State): Boolean = {
+  private[RemapperP] def unify(map: RemappingMap, st1: State, st2: State): Boolean = {
     // Work with map1, and update map only if successful. 
     // println(s"unify(${showRemappingMap(map)}, $st1, $st2)")
     val map1 = cloneMap(map) 
@@ -338,18 +317,34 @@ object Remapper{
     * cpts1), or a fresh value given by nextArg(f).  If the jth identity
     * parameter of cpts2 maps to the kth identity parameter of cpts1, then the
     * corresponding States much match, and the pair (k,j) is included in the
-    * Unifications returned.  Called by combine.
+    * Unifications returned.  Called by combine.  See combine1Test for examples.
     * 
     * @param map the RemappingMap that gets extended.  Cloned before being 
     * mutated.
     * @param nextArg a NextArgMap giving the next fresh parameter to use for 
-    * each type.  Used mutably, but each update is backtracked.
+    * each type.  For each type, at least one more than the maximum of the
+    * corresponding parameters of cpts1 and elements of map0 and otherArgs.
+    * Used mutably, but each update is backtracked.
     * @param otherArgs for each type, a list of other values that a parameter
-    * can be mapped to.  Used mutably, but each update is backtracked.
+    * can be mapped to.  For each type, disjoint from the range of the
+    * corresponding element of map0.  Used mutably, but each update is
+    * backtracked.
     * @return all resulting maps. */
-  private def combine1(map0: RemappingMap, nextArg: NextArgMap, 
+  private[RemapperP] def combine1(map0: RemappingMap, nextArg: NextArgMap, 
     otherArgs: Array[List[Identity]], cpts1: Array[State], cpts2: Array[State]) 
       : ArrayBuffer[(RemappingMap, Unifications)] = {
+    for(f <- 0 until numTypes){
+      // otherArgs(f) disjoint from ran(map0(f))
+      require(otherArgs(f).forall(i => !map0(f).contains(i)),
+        s"combine1: otherArgs not disjoint from map0 for $f: "+
+          map0(f).mkString("[",",","]")+"; "+otherArgs(f).mkString("[",",","]"))
+      // nextArg(f) holds next fresh value
+      require(nextArg(f) > (
+        if(otherArgs(f).isEmpty) map0(f).max 
+        else(map0(f).max max otherArgs(f).max)  ),
+        s"combine1: nextArg($f) with incorrect value: "+nextArg(f)+"; "+
+          map0(f).mkString("[",",","]")+"; "+otherArgs(f).mkString("[",",","]"))
+    }
     // println("combine1: "+showRemappingMap(map0)+"; "+
     //   nextArg.mkString("[",",","]")+"; "+otherArgs.mkString("[",",","]")+"; "+
     //   cpts1.mkString("[",",","]")+"; "+cpts2.mkString("[",",","]"))
@@ -369,44 +364,38 @@ object Remapper{
           val id = ids(i); val f = typeMap(i)
           if(isDistinguished(id)) combineRec(map, i+1, j, unifs) // just move on
           else{ // rename (f, id)
-            // Case 1: map id to the corresponding value in map, if any;
+            // Case 1: map id to the corresponding value idX in map, if any;
             // otherwise to an element id1 of otherArgs(f)
-            val idX = map(f)(id) //; println(s"${(f,id)} -> $idX")
+            val idX = map(f)(id)
             val newIds = if(idX < 0) otherArgs(f) else List(idX)
-            // println(s"idX = $idX; newIds = $newIds")
             for(id1 <- newIds){
               otherArgs(f) = newIds.filter(_ != id1) // temporary update (*)
               val map1 = extendMap(map, f, id, id1) 
-              // assert(isInjective(map1), showRemappingMap(map1)) // IMPROVE
               if(i == 0){ // Identity; see if any cpt of cpts1 matches (f, id1)
                 var matchedId = false // have we found a cpt with matching id?
-                for(k <- 0 until cpts1.length){ // ???????????? 0/
+                for(k <- 0 until cpts1.length){ 
                   val c1 = cpts1(k)
                   if(c1.componentProcessIdentity == (f,id1)){
                     assert(!matchedId); matchedId = true
-                    if(j != 0 || k != 0){ // NOTE: needs testing more
-                      if(c1.cs == c.cs && unify(map1, c1, c)){ // FIXME!
-                        assert(isInjective(map1), showRemappingMap(map1))
-                        //println("  Unified $c1 and $c: "+showRemappingMap(map))
-                        combineRec(map1, 0, j+1, (k,j) :: unifs)
-                      }
-                      // else println("  Failed to unify $c1 and $c.")
+                    // if(j != 0 || k != 0) // ??? I think this was an error
+                    if(unify(map1, c1, c)){
+                      //println("  Unified $c1 and $c: "+showRemappingMap(map))
+                      combineRec(map1, 0, j+1, (k,j) :: unifs)
                     }
+                    // else println("  Failed to unify $c1 and $c.")
                   }
                 } // end of for(k <- ...)
-                if(!matchedId){ // No cpt of cpts1 matched; move on
-                  // println("XXX"+showRemappingMap(map)+id1)
-                  combineRec(map1, i+1, j, unifs) }
+                if(!matchedId) // No cpt of cpts1 matched; move on
+                  combineRec(map1, i+1, j, unifs) 
               } // end of if(i == 0)
               else combineRec(map1, i+1, j, unifs) // Move on to next parameter
               otherArgs(f) = newIds // undo (*)
             } // end of for(id1 <- newIds)
 
             // Case 2: map id to nextArg(f)
-            if(idX < 0){
+            if(idX < 0){ 
               val id1 = nextArg(f); nextArg(f) += 1 // temporary update (+)
-              val map1 = extendMap(map, f, id, id1) // cloneMap(map); map1(f)(id) = id1 // IMPROVE
-              // println("Case 2: "+showRemappingMap(map1))
+              val map1 = extendMap(map, f, id, id1) 
               combineRec(map1, i+1, j, unifs) // Move on to next parameter
               nextArg(f) -= 1 // undo (+)
             }
@@ -541,330 +530,153 @@ object Remapper{
     for(map <- maps) yield applyRemapping(map, cpts)
   }
 
+  // ==================================================================
+  // Unit tests
 
-  def combineTest = {
-    ???
-  }
+  /** Testing object.  Most methods in this object assume that the file
+    * CSP/test3.csp is loaded. */ 
+  // object Test{
+  //   import TestStates._
+
+  //   /** Check that map is the mapping {i -> j}. */
+  //   private def checkMap(map: Array[Int], i: Int, j: Int) = 
+  //     map(i) == j && map.indices.forall(i1 => i1 == i || map(i1) == -1)
+
+  //   /** Check that map is the mapping {(i,j) | (i,j) <- pairs}. */
+  //   private def checkMap(map: Array[Int], pairs: List[(Int,Int)]) = 
+  //     map.indices.forall(i => pairs.filter(_._1 == i) match{
+  //       case List() => map(i) == -1
+  //       case List((i1,j)) => map(i) == j
+  //     })
+
+  //   private def emptyMap(map: Array[Int]) = map.forall(_ == -1)
+
+  //   /** Test on createCombiningMaps. */
+  //   def createCombiningMapsTest = {
+  //     val (map, otherArgs, nextArgs) = createCombiningMaps(servers1, components1)
+  //     // [21[-1](T0) || 22[-1](Null) || 23[-1]()] || [12[1](T0,N0) || 7[0](N0,N1)]
+  //     assert(map(0).forall(_ == -1) && checkMap(map(1), 0, 0) ) 
+  //     assert(otherArgs(0).sorted == List(0,1) && otherArgs(1).sorted == List())
+  //     assert(nextArgs(0) == 2 && nextArgs(1) == 1)
+  //   }
+
+  //   def createMaps1Test = {
+  //     // [21[-1](T0) || 22[-1](Null) || 23[-1]()] || [12[1](T0,N0) || 7[0](N0,N1)]
+  //     val (others, nexts) = createMaps1(servers1, components1)
+  //     assert(others(0).sorted == List(0,1) && others(1).sorted == List())
+  //     assert(nexts(0)==2 && nexts(1)==1)
+
+  //     // [21[-1](T0) || 22[-1](N0) || 23[-1]()] || 6[0](N1)
+  //     val (others2, nexts2) = createMaps1(servers2, Array(initNode1))
+  //     assert(others2(0) == List(1) && others2(1) == List() && 
+  //       nexts2(0) == 2 && nexts2(1) == 1)
+  //   }
+
+  //   def unifyTest = {
+  //     var map = newRemappingMap
+  //     assert(! unify(map, aNode0, aNode1)) // 7[0](N0,Null), 7[0](N0,N1)
+  //     assert(! unify(map, aNode2, aNode1)) // 7[0](N1,Null), 7[0](N0,N1)
+
+  //     var ok = unify(map, aNode0, aNode2) // 7[0](N0,Null), 7[0](N1,Null), gives N1->N0
+  //     assert(ok && checkMap(map(0), 1, 0) && map(1).forall(_ == -1))
+
+  //     // 7[0](N0,Null), 7[0](N1,Null), but fix N1 -> N2, so unification should fail
+  //     map = newRemappingMap; map(0)(1) = 2; assert(!unify(map, aNode0, aNode2)) 
+
+  //     // 7[0](N0,N1), 7[0](N1,N0)
+  //     map = newRemappingMap; ok = unify(map, aNode1, aNode3) // gives N0 -> N1, N1 -> N0
+  //     assert(ok && map(0)(1) == 0 && map(0)(0) == 1 && 
+  //       map(0).indices.forall(i => i<=1 || map(0)(i) == -1) && map(1).forall(_ == -1))
+
+  //     // 7[0](N0,N1), 7[0](N1,N2) fixing N1 -> N0; adds N2 -> N1
+  //     map = newRemappingMap; map(0)(1) = 0; ok = unify(map, aNode1, aNode4)
+  //     assert(ok && map(0)(1) == 0 && map(0)(2) == 1 && 
+  //       map(0).indices.forall(i => i == 1 || i ==2 || map(0)(i) == -1) && 
+  //       map(1).forall(_ == -1))
+  //   }
+
+  //   def combine1Test = {
+  //     { // 6[0](N0), 6[0](N1), allowing N1 -> N0
+  //       val buff = combine1(newRemappingMap, Array(1,0), Array(List(0), List()),
+  //         Array(initNode0), Array(initNode1))
+  //       assert(buff.length == 2)
+  //       assert(buff.exists{case(map1,unifs) => // mapping N1 -> N0 with unification
+  //         checkMap(map1(0), 1, 0) && map1(1).forall(_ == -1) && unifs == List((0,0))
+  //       })
+  //       assert(buff.exists{case(map1,unifs) => // mapping N1 -> N1
+  //         checkMap(map1(0), 1, 1) && map1(1).forall(_ == -1) && unifs == List()
+  //       })
+  //     }
+
+  //     { // Thread(T0) and InitNode(N0/N1)
+  //       val buff = combine1(newRemappingMap, Array(1,1), Array(List(0), List()),
+  //         Array(initSt, initNode0), Array(initSt, initNode1)) 
+  //       // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
+  //       assert(buff.length == 2)
+  //       assert(buff.exists{case(map1,unifs) => // N1 -> N0, with unification, T0 -> T1
+  //         checkMap(map1(0), 1, 0) && checkMap(map1(1), 0, 1) && unifs == List((1,1))
+  //       })
+  //       assert(buff.exists{case(map1,unifs) => // N1 -> N1, no unification, T0 -> T1
+  //         checkMap(map1(0), 1, 1) && checkMap(map1(1), 0, 1) && unifs == List()
+  //       })
+  //     }
+
+  //    { // Thread(T0) and InitNode(N0/N1)
+  //      val buff = combine1(newRemappingMap, Array(1,1), Array(List(0), List(0)),
+  //        Array(initSt, initNode0), Array(initSt, initNode1))
+  //      assert(buff.length == 4)
+  //      assert(buff.forall{case(map1,unifs) =>
+  //        // N1 -> N0 with unification; or N1 -> N1 without unification
+  //        ( checkMap(map1(0), 1, 0) && unifs.contains((1,1)) || 
+  //          checkMap(map1(0), 1, 1) && !unifs.contains((1,1)) ) &&
+  //        // T0 -> T0 with unification; or T0 -> T1 without unification
+  //        ( checkMap(map1(1), 0, 0) && unifs.contains((0,0)) ||
+  //          checkMap(map1(1), 0, 1) && !unifs.contains((0,0)) ) &&
+  //        unifs.forall(u => u == (0,0) || u == (1,1)) 
+  //      })
+  //    }
+
+  //    { // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2) 
+  //      val buff = combine1(newRemappingMap, Array(2,1), Array(List(0), List(0)),
+  //        components1, nodes)
+  //      // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
+  //      assert(buff.length == 3)
+  //      assert(buff.exists{case(map1,unifs) => // N0 -> N0, N1 -> N1 with unif, N2 -> N2
+  //        checkMap(map1(0), List((0,0), (1,1), (2,2))) &&
+  //        map1(1).forall(_ == -1) && unifs == List((1,0))
+  //      })
+  //      assert(buff.exists{case(map1,unifs) => // N1 -> N0, N2 -> N1 with unif; N0 -> N2
+  //        checkMap(map1(0), List((1,0), (2,1), (0,2))) && 
+  //        emptyMap(map1(1)) && unifs == List((1,1))
+  //      })
+  //      assert(buff.exists{case(map1,unifs) => // N0 -> N2, N1 -> N3, N2 -> N4, no unifs
+  //        checkMap(map1(0), List((0,2), (1,3), (2,4))) && 
+  //        emptyMap(map1(1)) && unifs.isEmpty
+  //      })
+  //    }     
+
+  //    { // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2) with N1 -> N0
+  //      val map = newRemappingMap; map(0)(1) = 0 
+  //      val buff = combine1(map, Array(2,1), Array(List(), List(0)), components1, nodes)
+  //      // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
+  //      assert(buff.length == 1) // just second case from previous test
+  //      assert{val (map1,unifs) = buff.head; // N1 -> N0, N2 -> N1 with unif; N0 -> N2
+  //        checkMap(map1(0), List((1,0), (2,1), (0,2))) && 
+  //        emptyMap(map1(1)) && unifs == List((1,1)) }
+  //      // ......................
+  //     }
+  //   } // end of combine1Test
+
+
+
+  // }
+
+  // def test = {
+  //   Test.createCombiningMapsTest
+  //   Test.createMaps1Test
+  //   Test.unifyTest
+  //   Test.combine1Test
+  //   println("Tests done")
+  // }
 
 }
-
-
-
-///////////////////////////////////////////////////////
-///////////////////////////////////////////////////////
-// Dead code below
-
-
-
-  // ----- Array[StateIndex]
-
-  // private type StateIndexArray = Array[StateIndex]
-
-  /** Maximum size of Array[StateIndex] pooled. */
-  // private val MaxViewSize = 7 // Views.MaxViewSize FIXME
-
-  // /** Maximum number of StateIndexArrays to store for each size.  
-  //   * The two remapSplit*Canonical functions use two such.  */
-  // private val MaxStateIndexPoolSize = 2
-
-  /** Class for managing pool of StateIndexArrays; owned by a single thread. */
-  // private class StateIndexPool{
-  //   /** pools(i) stores a pool of StateIndexArrays of size i. */
-  //   private val pools = Array.fill(MaxViewSize+1)(
-  //     new Array[StateIndexArray](MaxStateIndexPoolSize))
-
-  //   /** counts(i) stores the number of StateIndexArrays of size i stored. */
-  //   private val counts = new Array[Int](MaxViewSize+1)
-
-  //   /** Get a StateIndexArray of size size, maybe reusing a previous one. */
-  //   @inline def get(size: Int): StateIndexArray = 
-  //     if(counts(size) > 0){ counts(size) -= 1; pools(size)(counts(size)) } 
-  //     else new StateIndexArray(size)
-
-  //   /** Return a for recycling. */
-  //   @inline def put(a: StateIndexArray) = {
-  //     val size = a.length
-  //     if(counts(size) < MaxStateIndexPoolSize){
-  //       pools(size)(counts(size)) = a; counts(size) += 1
-  //     }
-  //     else Profiler.count("StateIndexPool.put fail"+size)
-  //   }
-  // } // End of StateIndexPool
-
-  // /** Thread-local supply of StateIndexArrays. */
-  // private object ThreadLocalStateIndexPool extends ThreadLocal[StateIndexPool]{
-  //   override def initialValue() = { 
-  //     // Profiler.count("TLSIP.init")
-  //     new StateIndexPool
-  //   }
-  // }
-
-  /** Get a StateIndexArray of size size, maybe reusing a previous one. */
-  // @inline private def newStateIndexArray(size: Int): StateIndexArray = 
-  //   ThreadLocalStateIndexPool.get.get(size)
-
-  // /** Return a StateIndexArray for recycling. */
-  // @inline def returnStateIndexArray(a: StateIndexArray) =
-  //   ThreadLocalStateIndexPool.get.put(a)
-
-
-
-  /** Remap v, updating map and nextArg. */
-  // @inline private 
-  // def remapView(map: RemappingMap, nextArg: NextArgMap, v: View): View = {
-  //   val len = v.length; val newView = Views.newView(len) 
-  //   for(i <- 0 until len) newView(i) = remapState(map, nextArg, v(i))
-  //   newView
-  // }
-
-  // /** Remap v, returning representation with StateIndexes, and updating map and
-  //   * nextArg. */
-  // @inline private 
-  // def remapViewToIndexes(map: RemappingMap, nextArg: NextArgMap, v: View)
-  //     : Array[StateIndex] = {
-  //   val len = v.length; val indexes = newStateIndexArray(len)
-  //   for(i <- 0 until len) indexes(i) = remapStateToIndex(map, nextArg, v(i))
-  //   indexes
-  // }
-
-  // =================================== Permuting states
-
-  /** All permutations of v that preserve that control states are in increasing
-    * order. */
-  // @inline def viewPerms(v: View): List[View] = 
-  //   /* if(v.isEmpty) List(v) else */ viewPermsFrom(v, 0)
-
-  // /** All permutations of v[from..) that are ordered by control state. 
-  //   * Pre: from < v.length. */ 
-  // private def viewPermsFrom(v: View, from: Int): List[View] = {
-  //   val len = v.length
-  //   // We avoid recursing on the empty View
-  //   if(from == len-1){
-  //     val v1 = Views.newView(len); v1(len-1) = v(len-1); List(v1)
-  //   }
-  //   else{
-  //     val h = v(from); val cs = h.cs; var i = from+1
-  //     while(i < len && v(i).cs == cs) i += 1
-  //     // states v[from..i) all have the same control state.
-  //     if(i == len){
-  //       if(i+1 == len){ // optimise for this case
-  //         val thisPerm = Views.newView(len); thisPerm(i) = v(i); List(thisPerm)
-  //       }
-  //       else{
-  //         var result = List[View]()
-  //         for(indexPerm <- indexPerms(i-from)){
-  //           val thisPerm = Views.newView(len)
-  //           for(j <- 0 until i-from) thisPerm(from+j) = v(from+indexPerm(j))
-  //           result ::= thisPerm
-  //         }
-  //         result
-  //       }
-  //     } // end of if(i == len)
-  //     else{ // optimise in the cases i = from+1, from+2
-  //       var tails = viewPermsFrom(v, i)
-  //       if(i == from+1){ for(tail <- tails) tail(from) = v(from); tails }
-  //       else if(i == from+2){
-  //         for(tail <- tails){
-  //           val thisPerm = Views.newView(len)
-  //           for(j <- i until len) thisPerm(j) = tail(j)
-  //           thisPerm(from) = v(from); thisPerm(from+1) = v(from+1)
-  //           tails ::= thisPerm; tail(from) = v(from+1); tail(from+1) = v(from)
-  //         }
-  //         tails
-  //       }
-  //       else{ // i-from > 2
-  //         val myIndexPerms = indexPerms(i-from)
-  //         val myIndexPerm0 = myIndexPerms.head
-  //         for(tail <- tails){
-  //           // re-use tail for first perm
-  //           for(j <- 0 until i-from) tail(from+j) = v(from+myIndexPerm0(j))
-  //           // Insert all perms of v[from..i) into tail
-  //           for(indexPerm <- myIndexPerms.tail){
-  //             // assert(indexPerm.length == i-from)
-  //             val thisPerm = Views.newView(len)
-  //             for(j <- i until len) thisPerm(j) = tail(j)
-  //             for(j <- 0 until i-from) thisPerm(from+j) = v(from+indexPerm(j))
-  //             // assert((from until len).forall(j => thisPerm(j) != null))
-  //             tails ::= thisPerm
-  //           }
-  //         }
-  //         tails
-  //       }
-  //     }
-  //   }
-  // }
-
-  /** Array that holds permutations of indices.  indexPerms(j) will hold all
-    * permutations of [0..j). */
-  // private var indexPerms: Array[Array[Array[Int]]] = null
-
-  // /** Initialise indexPerms.
-  //   * @param n the largest number of indices for which to calculate 
-  //   * permutations. */
-  // def mkIndexPerms(n: Int) = {
-  //   indexPerms = new Array[Array[Array[Int]]](n+1)
-  //   indexPerms(1) = Array(Array(0))
-  //   for(i <- 2 to n){
-  //     val prevPerms = indexPerms(i-1)
-  //     indexPerms(i) = // array to hold i! perms of [0..i)
-  //       new Array[Array[Int]](prevPerms.length*i)
-  //     // insert i-1 into each element of prevPerms in all ways
-  //     var j = 0
-  //     for(perm <- prevPerms; k <- 0 until i){
-  //       // Create perm with i-1 in position k; and perm(k) in position i-1
-  //       assert(perm.length == i-1)
-  //       val thisPerm = new Array[Int](i); perm.copyToArray(thisPerm)
-  //       thisPerm(k) = i-1; if(k < i-1) thisPerm(i-1) = perm(k)
-  //       indexPerms(i)(j) = thisPerm; j += 1
-  //     }
-  //   }
-  // }
-
-  // ================================= Making canonical forms
-
-  /** Convert components to canonical form, respecting rhoS.  
-    * Pre: control states of components are ordered. */
-  // def mkCanonical1(components: View, rhoS: ParamMap): (View, Array[Int]) = {
-  //   // assert(components.forall(st => st.ids.forall(_ < SplitFreshVal)))
-  //   mkCanonicalHelper(components, createMap(rhoS), createNextArgMap(rhoS))
-  // }
-
-  // /** Convert servers and components into canonical form.
-  //   * @return the canonical form for servers and components, and the number of 
-  //   * parameters of each type. */
-  // def mkCanonical2(servers: List[State], components: View)
-  //     : (List[State], View, Array[Int]) = {
-  //   val map = newRemappingMap; var nextArg = newNextArgMap
-  //   val newServers = remapStates(map, nextArg, servers)
-  //   val (newCpts, newNextArg) = mkCanonicalHelper(components, map, nextArg)
-  //   (newServers, newCpts, newNextArg) 
-  // }
-
-  // /** Convert components into canonical form, remapping according to map
-  //   * and nextArg. */
-  // private def mkCanonicalHelper(
-  //   components: View, map: RemappingMap, nextArg: NextArgMap)
-  //     : (View, Array[Int]) = {
-  //   val perms0: List[View] = viewPerms(components)
-  //   if(perms0.length == 1){ // optimise for this case
-  //     val newView = remapView(map, nextArg, components)
-  //     Views.returnView(perms0.head); (newView, nextArg)
-  //   }
-  //   else{
-  //     // Variables to store clones of map and nextArg, to be used with each
-  //     // remap of component states, below.  
-  //     val newMap = map.map(_.clone) 
-  //     var newNextArg: NextArgMap = nextArg.clone
-  //     var minPerm: View = remapView(newMap, newNextArg, perms0.head) 
-  //     Views.returnView(perms0.head)
-  //     for(v <- perms0.tail){
-  //       for(i <- 0 until numTypes) newMap(i) = map(i).clone
-  //       newNextArg = nextArg.clone
-  //       val nextPerm = remapView(newMap, newNextArg, v); Views.returnView(v)
-  //       if(Views.compare(nextPerm, minPerm) < 0){ 
-  //         Views.returnView(minPerm); minPerm = nextPerm
-  //       }
-  //       else Views.returnView(nextPerm)
-  //     }
-  //     (minPerm, newNextArg)
-  //   }
-  // }
-
-  // =================================== Remapping of splits, in two directions.
-  // Used in NewViewExtender
-
-  // val SplitFreshVal = State.SplitFreshVal
-
-  /** Remap v0 to its canonical form in terms of StateIndexes, and then remap
-    * st, mapping new parameters in the latter to large values, at least
-    * SplitFreshVal.
-    * @return a pair (minPerm, remappedSts) where minPerm is the canonical
-    * form of v0, and remappedSt is st remapped by the same permutation. */
-  // def remapSplitCanonical(v0: View, st: State, rhoS: ParamMap)
-  //     : (Array[StateIndex], List[StateIndex]) = {
-  //   /* Remap v returning its StateIndexes; remap st by the corresponding map,
-  //    * and also return its index. IMPROVE: it might be better to remap st only
-  //    * for the canonical v1, which means saving the corresponding map. */
-  //   @inline def mkSplit(v: View): (Array[StateIndex], StateIndex) = {
-  //     val map = createMap(rhoS); val nextArg = createNextArgMap(rhoS)
-  //     val ixs = remapViewToIndexes(map, nextArg, v); Views.returnView(v)
-  //     for(i <- 0 until numTypes) nextArg(i) = SplitFreshVal
-  //     val stix = remapStateToIndex(map, nextArg, st)
-  //     assert(stix != 0, s"v = $v; st = $st")
-  //     (ixs, stix)
-  //   }
-  //   // Find min of mkSplit over perms
-  //   val perms = viewPerms(v0); val (ixs0, ix0) = mkSplit(perms.head)
-  //   // Min perm found so far, and corresponding remapped states
-  //   var minPermIxs = ixs0; var minIxs = List(ix0)
-  //   for(v <- perms.tail){
-  //     val (ixs, ix) = mkSplit(v)
-  //     val cmp = compareArrays(ixs, minPermIxs) 
-  //     if(cmp == 0){  // v1 == minPerm, value equality!
-  //       returnStateIndexArray(ixs); minIxs ::= ix
-  //     }
-  //     else if(cmp < 0){  // v1 < minPerm 
-  //       returnStateIndexArray(minPermIxs); minPermIxs = ixs; minIxs = List(ix)
-  //     }
-  //     else returnStateIndexArray(ixs)
-  //   }
-  //   (minPermIxs, minIxs.distinct)
-  //   // minPermIxs should be recycled by caller
-  // }  
-
-  // /** A thread-local RemappingMap for use in remapSplit1Canonical. */
-  // private object ThreadLocalSplitRemappingMaps
-  //     extends ThreadLocal[(RemappingMap, Array[List[Identity]])]{
-  //   override def initialValue() = {
-  //     (new Array[Array[Int]](numTypes), new Array[List[Identity]](numTypes))
-  //   }
-  // }
-
-  /** Remap v0 to its canonical form, returning representation in terms of
-    * StateIndexes; also return ParamMap for variables in remapped v0, and
-    * parameters that are new in st (i.e. not in rhoS or v0).
-    * @return a tuple (rv, map1, newArgs) where: rv is the remapped
-    * version of v0 in terms of StateIndexes; map1 is a map to rename rv back
-    * to v0; newArgs gives the new parameters in sts that didn't appear in v0
-    * or rhoS. */
-  // def remapSplit1Canonical(v0: View, st: State, rhoS: ParamMap)
-  //     : (StateIndexArray, Array[Array[Int]], Array[List[Identity]]) = {
-  //   // Representation of min value found so far
-  //   var ixsMin: StateIndexArray = null
-  //   // Map to rename ixsMin back to v, and list of fresh parameters.  Note: the
-  //   // former exists concurrently with the ThreadLocalRemappingMap, so needs
-  //   // to be distinct.
-  //   val (map1, newArgs) = ThreadLocalSplitRemappingMaps.get
-  //   for(v <- viewPerms(v0)){ 
-  //     val map = createMap(rhoS); val nextArg = createNextArgMap(rhoS)
-  //     val ixs = remapViewToIndexes(map, nextArg, v)
-  //     Views.returnView(v)
-  //     if(ixsMin == null || compareArrays(ixs, ixsMin) < 0){ // ixs < ixsMin
-  //       // This is a new min
-  //       if(ixsMin != null) returnStateIndexArray(ixsMin)
-  //       ixsMin = ixs
-  //       // Create map to rename v1 back to v
-  //       for(t <- 0 until numTypes){
-  //         map1(t) = remappingMapTemplate(t).clone
-  //         for(i <- 0 until rowSizes(t)){
-  //           val j = map(t)(i); if(j >= 0) map1(t)(j) = i
-  //         }
-  //       }
-  //       // Find parameters of sts not in v0 or rhoS, and hence not in map at this
-  //       // point
-  //       for(t <- 0 until numTypes) newArgs(t) = List[Identity]()
-  //       val ids = st.ids; var index = 0; val n = ids.length
-  //       while(index < n){
-  //         val id = ids(index); val t = st.typeMap(index); index += 1
-  //         if(id >= 0 && map(t)(id) == -1 && !newArgs(t).contains(id))
-  //           newArgs(t) ::= id
-  //       }
-  //     } // end of "This is a new min".
-  //     else returnStateIndexArray(ixs)
-  //   } // end of for
-  //   (ixsMin, map1, newArgs) // ixsMin should be recycled by caller
-  // }
-
-
-
-

@@ -276,7 +276,7 @@ object State{
     println("maxParamsOfType = "+maxParamsOfType.mkString(", "))
 
 
-    MyStateMap.renewStateStore(stma.length, minCS)
+    // MyStateMap.renewStateStore(stma.length, minCS)
   }
 
   /** Array giving the types of identities for control state cs. */

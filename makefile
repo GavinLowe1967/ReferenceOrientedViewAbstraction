@@ -15,10 +15,11 @@ DIR = ViewAbstraction
 FSC = fsc -deprecation -cp $(CP)
 
 # all:	$(DIR)/VA.class Instrumentation.class Experiment.class
-all:  $(DIR)/MyStateMap.class $(DIR)/VA.class $(DIR)/Remapper.class
+all:   $(DIR)/VA.class
+#  $(DIR)/Remapper.class $(DIR)/MyStateMap.class
 
 clean:
-	rm *.class $(DIR)/*.class; fsc -shutdown
+	rm $(DIR)/*.class $(DIR)/*/*.class; fsc -shutdown
 
 # States etc.
 
@@ -37,13 +38,17 @@ $(DIR)/ServerStates.class: $(DIR)/State.class $(DIR)/MyHashMap.class
 $(DIR)/FDRSession.class: $(DIR)/Concurrency.class
 
 $(DIR)/FDRTransitionMap.class: $(DIR)/State.class $(DIR)/CSPFileParser.class	\
-   $(DIR)/FDRSession.class
+   $(DIR)/FDRSession.class $(DIR)/MyStateMap.class
 
 # Views, etc.
 
 $(DIR)/View.class: $(DIR)/ServerStates.class
 
-$(DIR)/Remapper.class: $(DIR)/View.class
+$(DIR)/TestStates.class: $(DIR)/MyStateMap.class
+
+$(DIR)/RemapperP/Remapper.class: $(DIR)/View.class 
+
+$(DIR)/RemapperP/RemapperTest.class: $(DIR)/TestStates.class $(DIR)/RemapperP/Remapper.class
 
 $(DIR)/TransitionSet.class: $(DIR)/View.class
 
@@ -60,7 +65,7 @@ $(DIR)/Servers.class: $(DIR)/FDRSession.class $(DIR)/MyHashMap.class	\
    $(DIR)/FDRTransitionMap.class
 
 $(DIR)/System.class: $(DIR)/FDRTransitionMap.class $(DIR)/Components.class \
-  $(DIR)/Servers.class $(DIR)/ViewSet.class $(DIR)/Remapper.class
+  $(DIR)/Servers.class $(DIR)/ViewSet.class $(DIR)/RemapperP/Remapper.class
 
 # # Checker and main program
 
@@ -70,9 +75,12 @@ $(DIR)/Checker.class: $(DIR)/System.class $(DIR)/TransitionSet.class $(DIR)/Tran
 
 # $(DIR)/NewViewExtender.class $(DIR)/Debugger.class $(DIR)/Concurrency.class
 
-$(DIR)/VA.class: $(DIR)/System.class $(DIR)/Checker.class
+$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class
 
 # # Standard recipe
+
+$(DIR)/RemapperP/%.class:	%.scala
+	$(FSC) $<
 
 $(DIR)/%.class:     %.scala
 	$(FSC) $<

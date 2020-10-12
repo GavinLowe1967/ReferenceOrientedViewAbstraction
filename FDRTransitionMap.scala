@@ -390,6 +390,7 @@ class FDRTransitionMap(
     val stateTypeMapArray = new Array[Array[Type]](maxCS-minCS+1)
     for((cs,ts) <- stateTypeMap0.iterator) stateTypeMapArray(cs-minCS) = ts
     State.setStateTypeMap(stateTypeMapArray, minCS)
+    MyStateMap.renewStateStore(stateTypeMapArray.length, minCS)
   }
 
 
