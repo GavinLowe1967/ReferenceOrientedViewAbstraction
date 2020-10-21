@@ -1,5 +1,6 @@
-package ViewAbstraction
+package ViewAbstraction.SystemP
 
+import ViewAbstraction._
 import ViewAbstraction.RemapperP.Remapper
 import uk.ac.ox.cs.fdr.{Option => _, _}
 import scala.collection.JavaConverters._
@@ -197,12 +198,12 @@ class System(fname: String, checkDeadlock: Boolean,
   
   /** Calculate all views of concs, and
     * add them to absViews. */
-  def alpha(concs: ArrayBuffer[Concretization], views: ViewSet)
-      : ArrayBuffer[View] = {
-    val ab = new ArrayBuffer[View]
-    for(conc <- concs; v <- View.alpha(conc)){ views.add(v); ab += v }
-    ab
-  }
+  // def alpha(concs: ArrayBuffer[Concretization], views: ViewSet)
+  //     : ArrayBuffer[View] = {
+  //   val ab = new ArrayBuffer[View]
+  //   for(conc <- concs; v <- View.alpha(conc)){ views.add(v); ab += v }
+  //   ab
+  // }
   //  View.alpha(aShapes, concViews, absViews, ply)
 
   /** We represent sets of transitions corresponding to a ComponentView cv using
@@ -374,31 +375,31 @@ class System(fname: String, checkDeadlock: Boolean,
   /** Get all renamings of cv1 that: (1) include a component with identity pid;
     * (2) agree with conc on the states of all common components; and (3) if
     * oe = Some(e) can perform e with conc.principal. 
-    * @return the renaming of the component with pid, and all post-states of that
-    * component optionally after oe.  */
+    * @return the renaming of the component with identity pid, and all
+    * post-states of that component optionally after oe.  */
   def consistentStates(pid: ProcessIdentity, conc: Concretization, 
     oe: Option[EventInt], cv1: ComponentView)
       : ArrayBuffer[(State, List[State])] = {
     val buffer = new ArrayBuffer[(State, List[State])]()
     val (f,id) = pid; val servers = conc.servers; require(cv1.servers == servers)
     val cpts = conc.components; val cpts1 = cv1.components
+    val serverRefs = id < servers.numParams(f) // do servers reference pid?
     val (fp, idp) = cpts(0).componentProcessIdentity
-    // println(s"consistentStates($pid, $conc, $cv1)")
-    // println(s"consistentStates(${State.showProcessId(pid)}, $cv)\n"+
-    //   s"  with $cv1")
+    // println(s"consistentStates(${State.showProcessId(pid)}, $conc, $cv1)")
     // Find all components of cv1 that can be renamed to a state of pid
     // that can perform e.
     for(i <- 0 until cpts1.length){
       val st1 = cpts1(i)
-      // println(s"consistentStates: st1 = $st1 "+(st1.family == f)+st1.id+","+id+
-      //   (st1.id >= servers.numParams(f)))
-      // Need st1 of family f, and its identity either not in the server
-      // identities, or equal to id (so the renaming doesn't change servers).
-      if(st1.family == f && (st1.id == id || st1.id >= servers.numParams(f))){
+      // Try to make st1 the component that gets renamed.  Need st1 of family
+      // f, and its identity either equal to id, or neither of those
+      // identities in the server identities (so the renaming doesn't change
+      // servers).
+      if(st1.family == f && 
+        (st1.id == id || !serverRefs && st1.id >= servers.numParams(f))){
         // All ways of remapping st1 (consistent with the servers) so that:
         // (1) its identity maps to id; (2) other parameters are injectively
-        // mapped either to a parameter in cv, or the next fresh parameter.
-        // Create appropriate maps.
+        // mapped either to a parameter in conc.components, but not the
+        // servers; or the next fresh parameter.  Create appropriate maps.
         val map0 = Remapper.createMap(servers.rhoS)  // newRemappingMap
         val (otherArgs, nextArg) = Remapper.createMaps1(servers, cpts)
         // println("nextArg = "+nextArg.mkString("; "))
@@ -410,53 +411,79 @@ class System(fname: String, checkDeadlock: Boolean,
           val renamedState = Remapper.applyRemappingToState(map, st1)
           // println(s"map = ${Remapper.showRemappingMap(map)}; "+
           //   s"renamedState = $renamedState}")
-          // Test whether e is possible, and get next states
-          val nexts = oe match{
-            case Some(e) =>
-              components.getTransComponent(renamedState).nexts(e, fp, idp)
-            case None => List(renamedState) 
+          if(!agreesWithCommonComponent(renamedState, cpts)){
+            println(s"consistentStates($pid, $conc, $cv1): \n"+
+              s"  renaming $st1 to $renamedState failed to match other "+
+              "components (case 1).")
           }
-          // println(s"nexts = $nexts")
-          if(nexts.nonEmpty){   
-            // println(s"Remapping $st1")
-            // IMPROVE: this can be simplified if cpts1 is a singleton.
-            // NOTE: hasn't been tested for cpts1 not a singleton.
-            // Extend map to the rest of cpts1, and obtain corresponding
-            // renamed components.
-            val rnTypeMap = renamedState.typeMap; val rnIds = renamedState.ids
-            // otherArgs with args of renamedState removed
-            val otherArgs1: Remapper.OtherArgMap =
-              Array.tabulate(numFamilies)(f => otherArgs(f))
-            for(j <- 0 until rnIds.length){
-              val f1 = rnTypeMap(j)
-              otherArgs1(f) = otherArgs1(f).filter(_ != rnIds(j))
+          else{
+            // Test whether e is possible, and get next states
+            val nexts = oe match{
+              case Some(e) =>
+                components.getTransComponent(renamedState).nexts(e, fp, idp)
+              case None => List(renamedState)
             }
-            for(renamedCpts <- Remapper.remapRest(map, otherArgs1, cpts1, i)){
-              // println(s"renamedCpts = "+renamedCpts.mkString("[",",","]"))
-              // check that it is consistent with cpts on common components.
-              var i1 = 0; var ok = true
-              while(i1 < renamedCpts.length && ok){
-                val rnCpt = renamedCpts(i1)
-                val rnCptId = rnCpt.componentProcessIdentity; var j = 0
-                while(j < cpts.length && ok){
-                  val cptj = cpts(j)
-                  if(cptj.componentProcessIdentity == rnCptId){
-                    ok = rnCpt == cptj
-                    // println(s"Comparing $rnCpt and $cptj: $ok")
-                  }
-                  j += 1
-                }
-                i1 += 1
-              } // end of outer while
-              if(ok) buffer += ((renamedState, nexts))
-            } // end of for(renamedCpts <- ...)
-          }
+            // println(s"nexts = $nexts")
+            if(nexts.nonEmpty && !buffer.contains((renamedState, nexts))){
+              // Check a corresponding renaming of the rest of cpts1 agrees
+              // with cpts on common components.
+              // IMPROVE: this can be simplified if cpts1 is a singleton.
+              // Extend map to the rest of cpts1, and obtain corresponding
+              // renamed components.
+              val rnTypeMap = renamedState.typeMap; val rnIds = renamedState.ids
+              // otherArgs with args of renamedState removed
+              val otherArgs1: Remapper.OtherArgMap = otherArgs.clone
+              for(j <- 0 until rnIds.length){
+                val f1 = rnTypeMap(j)
+                otherArgs1(f1) = otherArgs1(f1).filter(_ != rnIds(j))
+              }
+              val remappedCptss = Remapper.remapRest(map, otherArgs1, cpts1, i)
+              if(remappedCptss.exists(agreeOnCommonComponents(_, cpts)))
+                buffer += ((renamedState, nexts))
+              else{
+                println(s"consistentStates($pid, $conc, $cv1): \n"+
+                  s"  renaming $st1 to $renamedState failed to match other "+
+                  "components ")
+                // remappedCptss.map(View.showStates).mkString("; "))
+                assert(cpts1.length > 1)
+              }
+            }
+          } // end of else
         } // end of for(map <- maps)
       }
     } // end of for(i <- ...)
-    if(buffer.nonEmpty) println(buffer.mkString("\n"))
+    //if(buffer.nonEmpty) println(buffer.mkString("\n"))
     buffer
   } // end of consistentStates
+
+  /** Do cpts1 and cpts2 agree on all components with the same identity? */
+  private def agreeOnCommonComponents(cpts1: Array[State], cpts2: Array[State])
+      : Boolean = {
+    var i = 0; var ok = true
+    while(i < cpts1.length && agreesWithCommonComponent(cpts1(i), cpts2)){
+      //ok = agreesWithCommonComponent(cpts1(i), cpts2)
+      // val cpt1 = cpts1(i); val cpt1Id = cpt1.componentProcessIdentity; var j = 0
+      // while(j < cpts2.length && ok){
+      //   val cpt2 = cpts2(j)
+      //   if(cpt2.componentProcessIdentity == cpt1Id) ok = cpt1 == cpt2
+      //   j += 1
+      // }
+      i += 1
+    } // end of outer while
+    i == cpts1.length // ok
+  }
+
+  /** If cpt shares a process identity with cpts, are they the same state? */
+  @inline private 
+  def agreesWithCommonComponent(cpt: State, cpts: Array[State]): Boolean = {
+    val cptId = cpt.componentProcessIdentity; var j = 0; var ok = true
+    while(j < cpts.length && ok){
+      val cpt2 = cpts(j)
+      if(cpt2.componentProcessIdentity == cptId) ok = cpt == cpt2
+      j += 1
+    }
+    ok
+  }
 
 
 }

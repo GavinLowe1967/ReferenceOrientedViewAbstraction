@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
 /** A checker for the view abstraction algorithm, applied to system.
   * @param aShapes the shapes of abstractions.
   * @param cShapes the shapes of concretizations. */
-class Checker(system: System)
+class Checker(system: SystemP.System)
 {
   /** The abstract views. */
   var sysAbsViews: ViewSet = null

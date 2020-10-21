@@ -262,7 +262,12 @@ object Remapper{
     val newIds = Array.tabulate(ids.length){i =>
       val id = ids(i); 
       if(isDistinguished(id)) id 
-      else{ val newId = map(typeMap(i))(id); assert(newId >= 0); newId }
+      else{ 
+        val newId = map(typeMap(i))(id); 
+        assert(newId >= 0, 
+          "applyMappingToState: map"+show(map)+" undefined at "+(i, id)+
+            " for "+cpt)
+        newId }
     }
     MyStateMap(cpt.family, cpt.cs, newIds)
   }  
@@ -278,7 +283,8 @@ object Remapper{
   /** Try to extend map to map' such that map'(st2) = st1.
     * If unsuccessful, map is unchanged.
     * @return true if successful. */
-  private[RemapperP] def unify(map: RemappingMap, st1: State, st2: State): Boolean = {
+  private[RemapperP] 
+  def unify(map: RemappingMap, st1: State, st2: State): Boolean = {
     // Work with map1, and update map only if successful. 
     // println(s"unify(${showRemappingMap(map)}, $st1, $st2)")
     val map1 = cloneMap(map) 
@@ -330,7 +336,8 @@ object Remapper{
     * corresponding element of map0.  Used mutably, but each update is
     * backtracked.
     * @return all resulting maps. */
-  private[RemapperP] def combine1(map0: RemappingMap, nextArg: NextArgMap, 
+  private[RemapperP] 
+  def combine1(map0: RemappingMap, nextArg: NextArgMap,
     otherArgs: Array[List[Identity]], cpts1: Array[State], cpts2: Array[State]) 
       : ArrayBuffer[(RemappingMap, Unifications)] = {
     for(f <- 0 until numTypes){
@@ -445,10 +452,11 @@ object Remapper{
     * value given by nextArg(f).  map0 is treated immutably, but cloned.
     * otherArgs and nextArg are treated mutably, but all updates are
     * backtracked. */
-  private def remapSelectedStates(
+  private[RemapperP] def remapSelectedStates(
     map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap,
     states: Array[State], selector: Either[Int, Int]) 
       : ArrayBuffer[RemappingMap] = {
+    require(isInjective(map0), show(map0))
     // println("remapSelectedStates: "+showRemappingMap(map0)+"; otherArgs = "+
     //   otherArgs.mkString(";")+"; nextArg = "+nextArg.mkString(";"))
     // Elements of otherArgs should not appear in the range of the
@@ -497,186 +505,50 @@ object Remapper{
     result
   }
 
-
   /** All ways of remapping cpts(i), consistent with map0, otherArgs and
-    * nextArg, so that its identity maps to id.  Each parameter (f,id) not in
+    * nextArg, so that its identity maps to id.  Each parameter (f,id1) not in
     * the domain of map0 can be mapped to an element of otherArgs(f), or a
-    * fresh value given by nextArg(f). */
+    * fresh value given by nextArg(f). 
+    * Pre: extending map0 with so cpts(i).id -> id gives an injective map, and 
+    * id is not in otherArgs(f).  Also otherArgs(f) is disjoint from ran(f). */
   def remapToId(map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap,
     cpts: Array[State], i: Int, id: Identity)
       : ArrayBuffer[RemappingMap] = {
+    assert(isInjective(map0), show(map0))
     // Map identity of cpts(i) to id
     val st = cpts(i); val f = st.family; val id0 = st.ids(0)
-    assert(!otherArgs(f).contains(id))
-    assert(map0(f)(id0) < 0 || map0(f)(id0) == id, 
+    // Check id not already in ran map0(f) other than at id0
+    assert(map0(f).indices.forall(j => j == id0 || map0(f)(j) != id))
+    assert(map0(f)(id0) < 0 || map0(f)(id0) == id,
       s"cpts = "+cpts.mkString("[",";","]")+s"; f = $f; id0 = $id0 -> "+
         map0(f)(id0)+s"; id = $id")
+    assert(!otherArgs(f).contains(id))
+    for(f <- 0 until numTypes)
+      require(otherArgs(f).forall(id1 => !map0(f).contains(id1)))
     // println(s"remapToId($st): "+showRemappingMap(map0)+"; otherArgs = "+
     //   otherArgs.mkString(";")+"; nextArg = "+nextArg.mkString(",")+";"+
     //   (id0,id))
     map0(f)(id0) = id
-    // Now remap the remaining components. 
+    // Now remap the remaining components.
     remapSelectedStates(map0, otherArgs, nextArg, cpts, Left(i))
   }
 
+  /** Extend map0 to all elements of cpts except cpts(i), consistently with map0
+    * and otherArgs, and then apply each such renaming to cpts.  
+    * 
+    * Pre: map0 is defined on the parameters of cpts(i)?? */
   def remapRest(
     map0: RemappingMap, otherArgs: OtherArgMap, cpts: Array[State], i: Int)
       : ArrayBuffer[Array[State]] = {
     // IMPROVE: if cpts is a singleton, this can be simplified -- just map0
     val nextArg = new Array[Int](numTypes)
-    for(f <- 0 until numFamilies; id <- map0(f))
+    for(f <- 0 until numFamilies; id <- map0(f)){
       nextArg(f) = nextArg(f) max (id+1)
+      if(otherArgs(f).nonEmpty) nextArg(f) = nextArg(f) max (otherArgs(f).max+1)
+    }
     val maps = remapSelectedStates(map0, otherArgs, nextArg, cpts, Right(i))
     for(map <- maps) yield applyRemapping(map, cpts)
   }
 
-  // ==================================================================
-  // Unit tests
-
-  /** Testing object.  Most methods in this object assume that the file
-    * CSP/test3.csp is loaded. */ 
-  // object Test{
-  //   import TestStates._
-
-  //   /** Check that map is the mapping {i -> j}. */
-  //   private def checkMap(map: Array[Int], i: Int, j: Int) = 
-  //     map(i) == j && map.indices.forall(i1 => i1 == i || map(i1) == -1)
-
-  //   /** Check that map is the mapping {(i,j) | (i,j) <- pairs}. */
-  //   private def checkMap(map: Array[Int], pairs: List[(Int,Int)]) = 
-  //     map.indices.forall(i => pairs.filter(_._1 == i) match{
-  //       case List() => map(i) == -1
-  //       case List((i1,j)) => map(i) == j
-  //     })
-
-  //   private def emptyMap(map: Array[Int]) = map.forall(_ == -1)
-
-  //   /** Test on createCombiningMaps. */
-  //   def createCombiningMapsTest = {
-  //     val (map, otherArgs, nextArgs) = createCombiningMaps(servers1, components1)
-  //     // [21[-1](T0) || 22[-1](Null) || 23[-1]()] || [12[1](T0,N0) || 7[0](N0,N1)]
-  //     assert(map(0).forall(_ == -1) && checkMap(map(1), 0, 0) ) 
-  //     assert(otherArgs(0).sorted == List(0,1) && otherArgs(1).sorted == List())
-  //     assert(nextArgs(0) == 2 && nextArgs(1) == 1)
-  //   }
-
-  //   def createMaps1Test = {
-  //     // [21[-1](T0) || 22[-1](Null) || 23[-1]()] || [12[1](T0,N0) || 7[0](N0,N1)]
-  //     val (others, nexts) = createMaps1(servers1, components1)
-  //     assert(others(0).sorted == List(0,1) && others(1).sorted == List())
-  //     assert(nexts(0)==2 && nexts(1)==1)
-
-  //     // [21[-1](T0) || 22[-1](N0) || 23[-1]()] || 6[0](N1)
-  //     val (others2, nexts2) = createMaps1(servers2, Array(initNode1))
-  //     assert(others2(0) == List(1) && others2(1) == List() && 
-  //       nexts2(0) == 2 && nexts2(1) == 1)
-  //   }
-
-  //   def unifyTest = {
-  //     var map = newRemappingMap
-  //     assert(! unify(map, aNode0, aNode1)) // 7[0](N0,Null), 7[0](N0,N1)
-  //     assert(! unify(map, aNode2, aNode1)) // 7[0](N1,Null), 7[0](N0,N1)
-
-  //     var ok = unify(map, aNode0, aNode2) // 7[0](N0,Null), 7[0](N1,Null), gives N1->N0
-  //     assert(ok && checkMap(map(0), 1, 0) && map(1).forall(_ == -1))
-
-  //     // 7[0](N0,Null), 7[0](N1,Null), but fix N1 -> N2, so unification should fail
-  //     map = newRemappingMap; map(0)(1) = 2; assert(!unify(map, aNode0, aNode2)) 
-
-  //     // 7[0](N0,N1), 7[0](N1,N0)
-  //     map = newRemappingMap; ok = unify(map, aNode1, aNode3) // gives N0 -> N1, N1 -> N0
-  //     assert(ok && map(0)(1) == 0 && map(0)(0) == 1 && 
-  //       map(0).indices.forall(i => i<=1 || map(0)(i) == -1) && map(1).forall(_ == -1))
-
-  //     // 7[0](N0,N1), 7[0](N1,N2) fixing N1 -> N0; adds N2 -> N1
-  //     map = newRemappingMap; map(0)(1) = 0; ok = unify(map, aNode1, aNode4)
-  //     assert(ok && map(0)(1) == 0 && map(0)(2) == 1 && 
-  //       map(0).indices.forall(i => i == 1 || i ==2 || map(0)(i) == -1) && 
-  //       map(1).forall(_ == -1))
-  //   }
-
-  //   def combine1Test = {
-  //     { // 6[0](N0), 6[0](N1), allowing N1 -> N0
-  //       val buff = combine1(newRemappingMap, Array(1,0), Array(List(0), List()),
-  //         Array(initNode0), Array(initNode1))
-  //       assert(buff.length == 2)
-  //       assert(buff.exists{case(map1,unifs) => // mapping N1 -> N0 with unification
-  //         checkMap(map1(0), 1, 0) && map1(1).forall(_ == -1) && unifs == List((0,0))
-  //       })
-  //       assert(buff.exists{case(map1,unifs) => // mapping N1 -> N1
-  //         checkMap(map1(0), 1, 1) && map1(1).forall(_ == -1) && unifs == List()
-  //       })
-  //     }
-
-  //     { // Thread(T0) and InitNode(N0/N1)
-  //       val buff = combine1(newRemappingMap, Array(1,1), Array(List(0), List()),
-  //         Array(initSt, initNode0), Array(initSt, initNode1)) 
-  //       // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
-  //       assert(buff.length == 2)
-  //       assert(buff.exists{case(map1,unifs) => // N1 -> N0, with unification, T0 -> T1
-  //         checkMap(map1(0), 1, 0) && checkMap(map1(1), 0, 1) && unifs == List((1,1))
-  //       })
-  //       assert(buff.exists{case(map1,unifs) => // N1 -> N1, no unification, T0 -> T1
-  //         checkMap(map1(0), 1, 1) && checkMap(map1(1), 0, 1) && unifs == List()
-  //       })
-  //     }
-
-  //    { // Thread(T0) and InitNode(N0/N1)
-  //      val buff = combine1(newRemappingMap, Array(1,1), Array(List(0), List(0)),
-  //        Array(initSt, initNode0), Array(initSt, initNode1))
-  //      assert(buff.length == 4)
-  //      assert(buff.forall{case(map1,unifs) =>
-  //        // N1 -> N0 with unification; or N1 -> N1 without unification
-  //        ( checkMap(map1(0), 1, 0) && unifs.contains((1,1)) || 
-  //          checkMap(map1(0), 1, 1) && !unifs.contains((1,1)) ) &&
-  //        // T0 -> T0 with unification; or T0 -> T1 without unification
-  //        ( checkMap(map1(1), 0, 0) && unifs.contains((0,0)) ||
-  //          checkMap(map1(1), 0, 1) && !unifs.contains((0,0)) ) &&
-  //        unifs.forall(u => u == (0,0) || u == (1,1)) 
-  //      })
-  //    }
-
-  //    { // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2) 
-  //      val buff = combine1(newRemappingMap, Array(2,1), Array(List(0), List(0)),
-  //        components1, nodes)
-  //      // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
-  //      assert(buff.length == 3)
-  //      assert(buff.exists{case(map1,unifs) => // N0 -> N0, N1 -> N1 with unif, N2 -> N2
-  //        checkMap(map1(0), List((0,0), (1,1), (2,2))) &&
-  //        map1(1).forall(_ == -1) && unifs == List((1,0))
-  //      })
-  //      assert(buff.exists{case(map1,unifs) => // N1 -> N0, N2 -> N1 with unif; N0 -> N2
-  //        checkMap(map1(0), List((1,0), (2,1), (0,2))) && 
-  //        emptyMap(map1(1)) && unifs == List((1,1))
-  //      })
-  //      assert(buff.exists{case(map1,unifs) => // N0 -> N2, N1 -> N3, N2 -> N4, no unifs
-  //        checkMap(map1(0), List((0,2), (1,3), (2,4))) && 
-  //        emptyMap(map1(1)) && unifs.isEmpty
-  //      })
-  //    }     
-
-  //    { // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2) with N1 -> N0
-  //      val map = newRemappingMap; map(0)(1) = 0 
-  //      val buff = combine1(map, Array(2,1), Array(List(), List(0)), components1, nodes)
-  //      // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
-  //      assert(buff.length == 1) // just second case from previous test
-  //      assert{val (map1,unifs) = buff.head; // N1 -> N0, N2 -> N1 with unif; N0 -> N2
-  //        checkMap(map1(0), List((1,0), (2,1), (0,2))) && 
-  //        emptyMap(map1(1)) && unifs == List((1,1)) }
-  //      // ......................
-  //     }
-  //   } // end of combine1Test
-
-
-
-  // }
-
-  // def test = {
-  //   Test.createCombiningMapsTest
-  //   Test.createMaps1Test
-  //   Test.unifyTest
-  //   Test.combine1Test
-  //   println("Tests done")
-  // }
 
 }

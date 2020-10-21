@@ -64,22 +64,25 @@ $(DIR)/Components.class: $(DIR)/FDRSession.class	\
 $(DIR)/Servers.class: $(DIR)/FDRSession.class $(DIR)/MyHashMap.class	\
    $(DIR)/FDRTransitionMap.class
 
-$(DIR)/System.class: $(DIR)/FDRTransitionMap.class $(DIR)/Components.class \
-  $(DIR)/Servers.class $(DIR)/ViewSet.class $(DIR)/RemapperP/Remapper.class
+$(DIR)/SystemP/System.class: $(DIR)/FDRTransitionMap.class		\
+  $(DIR)/Components.class $(DIR)/Servers.class $(DIR)/ViewSet.class	\
+  $(DIR)/RemapperP/Remapper.class
+
+$(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.class
 
 # # Checker and main program
 
 # $(DIR)/Debugger.class: $(DIR)/System.class
 
-$(DIR)/Checker.class: $(DIR)/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class
+$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class
 
 # $(DIR)/NewViewExtender.class $(DIR)/Debugger.class $(DIR)/Concurrency.class
 
-$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class
+$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class $(DIR)/SystemP/SystemTest.class
 
 # # Standard recipe
 
-$(DIR)/RemapperP/%.class:	%.scala
+$(DIR)/RemapperP/%.class $(DIR)/SystemP/%.class:	%.scala
 	$(FSC) $<
 
 $(DIR)/%.class:     %.scala

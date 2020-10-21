@@ -6,7 +6,7 @@ import ox.gavin.profiling.{SamplingProfiler,ProfilerSummaryTree}
 
 object VA{ 
   /** Model of the system. */
-  var system: System = null // public for profiling
+  var system: SystemP.System = null // public for profiling
 
   /** The checker. */
   var checker: Checker = null
@@ -16,7 +16,7 @@ object VA{
             checkDeadlock: Boolean, significancePaths: List[SignificancePath],
             verbose: Boolean) 
       : Unit = {
-    system = new System(fname, checkDeadlock, significancePaths)
+    system = new SystemP.System(fname, checkDeadlock, significancePaths)
 
     // Create and run the checker
     println("Created system")
@@ -94,7 +94,7 @@ object VA{
     val start = java.lang.System.nanoTime
     try{
       def run() = {
-        system = new System(fname, checkDeadlock, significancePaths)
+        system = new SystemP.System(fname, checkDeadlock, significancePaths)
         // // Create and run the checker
         checker = new Checker(system)
         print("Compiled for "); printTime(java.lang.System.nanoTime-start)
@@ -102,8 +102,9 @@ object VA{
       }
 
       if(testing){ 
-        system = new System("CSP/test3.csp", false, List())
+        system = new SystemP.System("CSP/test3.csp", false, List())
         RemapperP.RemapperTest.test
+        SystemP.SystemTest.test(system)
       }
       else if(profiling || profilingFlat) profiler(run()) else run()
       // if(profiler != null) println(profiler.iters)

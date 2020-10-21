@@ -66,7 +66,9 @@ object View{
   }
 
   /** All the views of a particular concretization. */
-  def alpha(conc: Concretization): List[View] = ???
+  //def alpha(conc: Concretization): List[View] = ???
+
+  def showStates(states: Array[State]) = states.mkString("[", " || ", "]")
 
 }
 
