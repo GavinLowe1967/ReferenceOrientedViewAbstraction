@@ -76,9 +76,11 @@ $(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.c
 
 $(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class
 
+$(DIR)/CheckerTest.class: $(DIR)/Checker.class
+
 # $(DIR)/NewViewExtender.class $(DIR)/Debugger.class $(DIR)/Concurrency.class
 
-$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class $(DIR)/SystemP/SystemTest.class
+$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class $(DIR)/SystemP/SystemTest.class $(DIR)/CheckerTest.class
 
 # # Standard recipe
 

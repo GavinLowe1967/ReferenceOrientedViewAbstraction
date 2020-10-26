@@ -278,6 +278,13 @@ object Remapper{
       : Array[State] =
     cpts.map(cpt => applyRemappingToState(map, cpt))
 
+  /** Remap st so that it can be the principal component in a view with
+    * servers. */
+  def remapToPrincipal(servers: ServerStates, st: State): State = {
+    remapState(createMap(servers.rhoS), createNextArgMap(servers.rhoS), st)
+  }
+
+
   // ==================== Unification
 
   /** Try to extend map to map' such that map'(st2) = st1.

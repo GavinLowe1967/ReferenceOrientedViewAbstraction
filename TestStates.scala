@@ -16,10 +16,13 @@ object TestStates{
   
   // The watchdog
   val wd0 = MyStateMap(-1, 23, Array()) // 23[-1]() = WD0
+  val wd0B = MyStateMap(-1, 25, Array()) // push2!B -> WD1
+  val wd1 = MyStateMap(-1, 27, Array()) // WD1
 
   // Nodes
   val N0 = 0; val N1 = 1; val N2 = 2; val N3 = 3; val N4 = 4; val Null = -1
-  val initNode0 = MyStateMap(0, 6, Array(N0)) // 6[0](N0)
+  def initNode(n: Int) = MyStateMap(0, 6, Array(n))
+  // val initNode0 = MyStateMap(0, 6, Array(N0)) // 6[0](N0)
   val initNode1 = MyStateMap(0, 6, Array(N1)) // 6[0](N1)
   def aNode(id: Int, nxt: Int) = MyStateMap(0, 7, Array(id,nxt))
   def bNode(id: Int, nxt: Int) = MyStateMap(0, 8, Array(id,nxt))
@@ -33,15 +36,25 @@ object TestStates{
 
   // Threads
   val T0 = 0; val T1 = 1; val T2 = 2; val T3 = 3
-  val initSt = MyStateMap(1, 10, Array(T0)) // 10[1](T0) = Thread(T0)
+  // Initial state of Thread(t)
+  def initSt(t: Int) = MyStateMap(1, 10, Array(t))
+  // Thread with lock, doing push
+  def gotLock(t: Int) = MyStateMap(1, 11, Array(t))
   // val pushSt = MyStateMap(1, 12, Array(T0, N0)) // 12[1](T0,N0) = push... ->
   def pushSt(t: Int, n: Int) = MyStateMap(1, 12, Array(t,n))
+  // State of thread t about to do initNode...A, with ref to node n
+  def initNodeSt(t: Int, n: Int) = MyStateMap(1, 15, Array(t,n))
+  // State of thread about to do a setTop.t.n.PushOp.B
+  def setTopB(t: Int, n: Int) = MyStateMap(1, 18, Array(t,n))
+  // Unlock(t)
+  def unlock(t: Int) = MyStateMap(1, 17, Array(t))
 
   // Combined servers
+  val servers0 = ServerStates(List(lock0, top(Null), wd0))
   // 21[-1](T0) || 22[-1](Null) || 23[-1]()
-  val servers1 = new ServerStates(List(lock1(T0), top(Null), wd0))
+  val servers1 = ServerStates(List(lock1(T0), top(Null), wd0))
   // 21[-1](T0) || 22[-1](N0) || 23[-1]()
-  val servers2 = new ServerStates(List(lock1(T0), top(N0), wd0))
+  val servers2 = ServerStates(List(lock1(T0), top(N0), wd0))
 
   // Combined components
   val components1 = Array(pushSt(T0,N0), aNode(0,1))

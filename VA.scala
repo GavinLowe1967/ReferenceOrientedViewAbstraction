@@ -104,7 +104,9 @@ object VA{
       if(testing){ 
         system = new SystemP.System("CSP/test3.csp", false, List())
         RemapperP.RemapperTest.test
+        // val systemTest = new SystemP.SystemTest(fname); systemTest.test
         SystemP.SystemTest.test(system)
+        val checkerTest = new CheckerTest(system); checkerTest.test
       }
       else if(profiling || profilingFlat) profiler(run()) else run()
       // if(profiler != null) println(profiler.iters)
