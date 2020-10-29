@@ -5,8 +5,13 @@ import scala.collection.mutable.ArrayBuffer
 class CheckerTest(system: SystemP.System) extends Checker(system){
   import TestStates._
 
-  val (sav, initViews) = system.initViews; sysAbsViews = sav
-  nextNewViews = new ArrayBuffer[View]
+  def reset() = { 
+    val (sav, initViews) = system.initViews; sysAbsViews = sav
+    nextNewViews = new ArrayBuffer[View] 
+  }
+
+  
+  reset()
 
   /** Test of effectOn. */
   private def effectOnTest = {
@@ -30,7 +35,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
     // transition on setTop.T0.N1
     def test2 = {
       println("test2")
-      nextNewViews = new ArrayBuffer[View]
+      reset() // nextNewViews = new ArrayBuffer[View]
       val serversA = ServerStates(List(lock1(T0), top(N0), wd0B))
       val pre = new Concretization(serversA, Array(setTopB(T0, N1), bNode(N1,N0)))
       val serversB = ServerStates(List(lock1(T0), top(N1), wd1))
@@ -68,6 +73,39 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
     test1; test2
   }
 
+  /** Test on compatibleWith. */
+  private def compatibleWithTest = {
+    println("compatibleWithTest")
+    reset()
+    def test1 = {
+      println("sysAbsViews = "+sysAbsViews)
+      // println(servers0)
+      // Views with servers0 and initSt(T0) or initNode(N0) are in sysAbsViews
+      assert(compatibleWith(servers0, Array(), initSt(T0)))
+      assert(compatibleWith(servers0, Array(), initSt(T1)))
+      assert(compatibleWith(servers0, Array(), initNode(N0)))
+      assert(compatibleWith(servers0, Array(), initNode(N1)))
+      // But not other views
+      assert(!compatibleWith(servers0, Array(), pushSt(T0, N0)))
+      assert(!compatibleWith(servers0, Array(), aNode(N0, Null)))
+      // Add another view, and check compatibility
+      sysAbsViews.add(new ComponentView(servers0, aNode(N0, Null), Array()))
+      assert(compatibleWith(servers0, Array(), aNode(N0, Null)))
+      assert(compatibleWith(servers0, Array(), aNode(N1, Null)))
+      assert(!compatibleWith(servers0, Array(), aNode(N0, N1)))
+      // Add a view where Top has reference to N0.
+      sysAbsViews.add(new ComponentView(servers2, aNode(N0, Null), Array()))
+      assert(compatibleWith(servers2, Array(), aNode(N0, Null)))
+      assert(!compatibleWith(servers2, Array(), aNode(N1, Null)))
+
+    }
+
+    test1
+    // IMPROVE: compatibleWith needs extending; test that
+
+  }
+
+
   private def isExtendableTest = {
     isExtendable(???, ???)
   }
@@ -76,6 +114,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
   def test = {
     println("CheckerTest")
     effectOnTest
+    compatibleWithTest
   }
 
 }

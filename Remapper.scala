@@ -30,7 +30,7 @@ object Remapper{
     *  {(t,arg) -> (t, map(t)(arg)) |
     *       0 <= t < numTypes, 0 <= arg < size(t), map(t)(arg) != -1}.
     */
-  private type RemappingMap = Array[Array[Identity]]
+  type RemappingMap = Array[Array[Identity]]
 
   def showRemappingMap(map: RemappingMap) = 
     map.map(_.mkString("[",",","]")).mkString("; ")
@@ -555,6 +555,30 @@ object Remapper{
     }
     val maps = remapSelectedStates(map0, otherArgs, nextArg, cpts, Right(i))
     for(map <- maps) yield applyRemapping(map, cpts)
+  }
+
+
+
+  /** Is there some renaming of cpts1, excluding cpts1(i) that agrees with cpts2
+    * on common components?  The remapping must be compatible with map, and
+    * with otherArgs with the parameters of renamedState removed. */
+  def areUnifiable(cpts1: Array[State], cpts2: Array[State], 
+    map: RemappingMap, otherArgs: OtherArgMap, i: Int, renamedState: State)
+      : Boolean = {              
+    if(cpts1.length == 1){ assert(i == 0); true }
+    else{
+      val rnTypeMap = renamedState.typeMap; val rnIds = renamedState.ids
+      // otherArgs with parameters of renamedState removed
+      val otherArgs1 = otherArgs.clone
+      for(j <- 0 until rnIds.length){
+        val f1 = rnTypeMap(j)
+        otherArgs1(f1) = otherArgs1(f1).filter(_ != rnIds(j))
+      }
+      // All renamings of cpts1.
+      val remappedCptss = remapRest(map, otherArgs1, cpts1, i)
+      // Test if any agrees with cpts2 on common components.
+      remappedCptss.exists(View.agreeOnCommonComponents(_, cpts2, i))
+    }
   }
 
 

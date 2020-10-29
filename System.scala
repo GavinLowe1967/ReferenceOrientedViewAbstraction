@@ -411,7 +411,7 @@ class System(fname: String, checkDeadlock: Boolean,
           val renamedState = Remapper.applyRemappingToState(map, st1)
           // println(s"map = ${Remapper.showRemappingMap(map)}; "+
           //   s"renamedState = $renamedState}")
-          if(!agreesWithCommonComponent(renamedState, cpts)){
+          if(!View.agreesWithCommonComponent(renamedState, cpts)){
             // println(s"consistentStates($pid, $conc, $cv1): \n"+
             //   s"  renaming $st1 to $renamedState failed to match other "+
             //   "components (case 1).")
@@ -426,63 +426,33 @@ class System(fname: String, checkDeadlock: Boolean,
             if(nexts.nonEmpty && !buffer.contains((renamedState, nexts))){
               // Check a corresponding renaming of the rest of cpts1 agrees
               // with cpts on common components.  Trivially true if singleton
-              if(cpts1.length == 1) buffer += ((renamedState, nexts))
-              else{
-                // Extend map to the rest of cpts1, and obtain corresponding
-                // renamed components.
-                val rnTypeMap = renamedState.typeMap
-                val rnIds = renamedState.ids
-                // otherArgs with args of renamedState removed
-                val otherArgs1: Remapper.OtherArgMap = otherArgs.clone
-                for(j <- 0 until rnIds.length){
-                  val f1 = rnTypeMap(j)
-                  otherArgs1(f1) = otherArgs1(f1).filter(_ != rnIds(j))
-                }
-                val remappedCptss = Remapper.remapRest(map, otherArgs1, cpts1, i)
-                if(remappedCptss.exists(agreeOnCommonComponents(_, cpts, i)))
-                  buffer += ((renamedState, nexts))
-                // else{
-                //   println(s"consistentStates($pid, $conc, $cv1): \n"+
-                //     s"  renaming $st1 to $renamedState failed to match other "+
-                //     "components ")
-                //   // remappedCptss.map(View.showStates).mkString("; "))
-                //   assert(cpts1.length > 1)
-                // }
-              }
+              if(Remapper.areUnifiable(cpts1, cpts, map, otherArgs, i, renamedState))
+                buffer += ((renamedState, nexts))
+              // if(cpts1.length == 1) buffer += ((renamedState, nexts))
+              // else{
+              //   // Extend map to the rest of cpts1, and obtain corresponding
+              //   // renamed components.
+              //   val rnTypeMap = renamedState.typeMap
+              //   val rnIds = renamedState.ids
+              //   // otherArgs with args of renamedState removed
+              //   val otherArgs1: Remapper.OtherArgMap = otherArgs.clone
+              //   for(j <- 0 until rnIds.length){
+              //     val f1 = rnTypeMap(j)
+              //     otherArgs1(f1) = otherArgs1(f1).filter(_ != rnIds(j))
+              //   }
+              //   val remappedCptss = Remapper.remapRest(map, otherArgs1, cpts1, i)
+              //   if(remappedCptss.exists(View.agreeOnCommonComponents(_, cpts, i)))
+              //     buffer += ((renamedState, nexts))
+              // }
             } // end of if(nexts.nonEmpty && !buffer.contains(...))
           } // end of else (Renamed state consistent with cpts)
         } // end of for(map <- maps)
       }
     } // end of for(i <- ...)
-    //if(buffer.nonEmpty) println(buffer.mkString("\n"))
     buffer
   } // end of consistentStates
 
-  /** Do cpts1 and cpts2 agree on all components with the same identity?
-    * Pre: cpts1(i) agrees with cpts2 on any component with the same identity. */
-  private 
-  def agreeOnCommonComponents(cpts1: Array[State], cpts2: Array[State], i: Int)
-      : Boolean = {
-    require(agreesWithCommonComponent(cpts1(i), cpts2)) // IMPROVE
-    var j = 0
-    while(j < cpts1.length && 
-        // Use precondition to be lazy
-        (j == i || agreesWithCommonComponent(cpts1(j), cpts2)) )
-      j += 1
-    j == cpts1.length // ok
-  }
 
-  /** If cpt shares a process identity with cpts, are they the same state? */
-  @inline private 
-  def agreesWithCommonComponent(cpt: State, cpts: Array[State]): Boolean = {
-    val cptId = cpt.componentProcessIdentity; var j = 0; var ok = true
-    while(j < cpts.length && ok){
-      val cpt2 = cpts(j)
-      if(cpt2.componentProcessIdentity == cptId) ok = cpt == cpt2
-      j += 1
-    }
-    ok
-  }
 
 
 }

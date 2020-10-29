@@ -70,6 +70,31 @@ object View{
 
   def showStates(states: Array[State]) = states.mkString("[", " || ", "]")
 
+  /** Do cpts1 and cpts2 agree on all components with the same identity?
+    * Pre: cpts1(i) agrees with cpts2 on any component with the same identity. */
+  def agreeOnCommonComponents(cpts1: Array[State], cpts2: Array[State], i: Int)
+      : Boolean = {
+    require(agreesWithCommonComponent(cpts1(i), cpts2)) // IMPROVE
+    var j = 0
+    while(j < cpts1.length && 
+        // Use precondition to be lazy
+        (j == i || agreesWithCommonComponent(cpts1(j), cpts2)) )
+      j += 1
+    j == cpts1.length // ok
+  }
+
+  /** If cpt shares a process identity with cpts, are they the same state? */
+  @inline
+  def agreesWithCommonComponent(cpt: State, cpts: Array[State]): Boolean = {
+    val cptId = cpt.componentProcessIdentity; var j = 0; var ok = true
+    while(j < cpts.length && ok){
+      val cpt2 = cpts(j)
+      if(cpt2.componentProcessIdentity == cptId) ok = cpt == cpt2
+      j += 1
+    }
+    ok
+  }
+
 }
 
 // =======================================================

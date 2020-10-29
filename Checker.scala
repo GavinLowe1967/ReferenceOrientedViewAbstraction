@@ -205,38 +205,21 @@ class Checker(system: SystemP.System)
   def isExtendable(conc: Concretization, st: State): Boolean = {
     require(sysAbsViews.contains(conc.toComponentView))
     // Also every other state in conc is compatible FIXME CHECK
-    // require(conc.components.forall(
-    //   _.componentProcessIdentity != st.componentProcessIdentity))
-    // Rename st to make it canonical with servers
+    require(conc.components.forall(
+      _.componentProcessIdentity != st.componentProcessIdentity))
     val servers = conc.servers; val components = conc.components
-    // val map = Remapper.createMap(servers.rhoS)
-    // val nextArg = Remapper.createNextArgMap(servers.rhoS)
-    // val st1 = Remapper.remapToPrincipal(servers, st) // remapState(map, nextArg, st) // this seems wrong *** 
-//     val id1 = st1.componentProcessIdentity
-//     require(components.forall(_.componentProcessIdentity != id1))
-//     println(s"isExtendable($conc, $st) renamed to $st1")
-//     // assert(st == st1)
 
-//     // Test whether there is an existing view with a renaming of st as
-//     // principal component, and the same servers as conc.  IMPROVE: iteration
-//     val viewsArray = sysAbsViews.toArray
-//     var i = 0; var found = false
-//     while(i < viewsArray.length && !found) viewsArray(i) match{
-//       case cv1: ComponentView =>
-//         if(cv1.servers == servers && cv1.principal == st1){
-// // FIXME: need to check rest of components are compatible.  At present this is
-// // safe, but maybe giving too many matches.  Gives an extension[12[1](T0,N0)
-// // || 7[0](N0,N1) || 6[0](N1)] from where initNode.T0.N1.A.N0 performed.
-//           found = true
-//         }
-//         i += 1
-//     } // end of while ... match
-
-    var found = compatibleWithServers(servers, st)
+    // FIXME in following: the found view has to be compatible with
+    // components, i.e. there has to be a renaming that agrees on any common
+    // component.  Test case, the only matching view is aNode(N1,N0) ||
+    // bNode(N0,Null) but conc has aNode(N0,Null).
+    var found = compatibleWith(servers, components, st)
 
     if(found){
       // If any component cpt of conc references st, then search for a
-      // suitable view with a renaming of cpt and st.
+      // suitable view with a renaming of cpt and st.  Test case:
+      // initNode(T0,N0) || aNode(N0,N1) with st = initNode(N1) should fail,
+      // as there's no corresponding view aNode(N0,N1) || initNode(N1).
       val id = st.componentProcessIdentity
       // Test whether any component of conc references st
       var j = 0; val length = components.length
@@ -244,7 +227,7 @@ class Checker(system: SystemP.System)
         val cpt = components(j)
         if(cpt.processIdentities.contains(id)){
           println(s"isExtendable($conc) with reference to $st")
-          found = containsXXX(conc, st /*st1*/, j) // st or st1? 
+          found = containsXXX(conc, st, j)
         }
         j += 1
       }
@@ -252,15 +235,16 @@ class Checker(system: SystemP.System)
     found    
   }
 
-  @inline protected def compatibleWithServers(servers: ServerStates, st: State)
+  /** Is st compatible with servers and components given the current views?  Is
+    * there a view containing servers, with a renaming of st as principal
+    * component, and such that some renaming of the other components agrees
+    * with components on common components? */ 
+  @inline protected def compatibleWith(servers: ServerStates, components: Array[State], st: State)
       : Boolean = {
-    // val map = Remapper.createMap(servers.rhoS)
-    // val nextArg = Remapper.createNextArgMap(servers.rhoS)
-    var st1 = Remapper.remapToPrincipal(servers, st) // remapState(map, nextArg, st) // this seems wrong *** 
+    var st1 = Remapper.remapToPrincipal(servers, st) 
+    // I think following is incorrect.
     // val id1 = st1.componentProcessIdentity
     // require(components.forall(_.componentProcessIdentity != id1))
-    // println(s"isExtendable(, $st) renamed to $st1")
-    // assert(st == st1)
 
     // Test whether there is an existing view with a renaming of st as
     // principal component, and the same servers as conc.  IMPROVE: iteration
@@ -287,10 +271,8 @@ class Checker(system: SystemP.System)
     println(s"containsXXX($conc, $st, $j)")
     val pCpt = conc.components(j)
     // Rename pCpt to be principal component
-    val servers = conc.servers; val rhoS = servers.rhoS
-    val map = Remapper.createMap(rhoS)
-    val nextArg = Remapper.createNextArgMap(rhoS)
-    val pCptR = Remapper.remapState(map, nextArg, pCpt)
+    val servers = conc.servers 
+    val pCptR = Remapper.remapToPrincipal(servers, pCpt)
     println(s"$pCpt renamed to $pCptR") // TEST: find case where not identity
     // Find index in cpt of reference to st, and hence what st.id gets renamed to
     val stId = st.id
