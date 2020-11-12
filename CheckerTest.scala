@@ -10,7 +10,6 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
     nextNewViews = new ArrayBuffer[View] 
   }
 
-  
   reset()
 
   /** Test of effectOn. */
@@ -78,7 +77,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
     println("compatibleWithTest")
     reset()
     def test1 = {
-      println("sysAbsViews = "+sysAbsViews)
+      //println("sysAbsViews = "+sysAbsViews)
       // println(servers0)
       // Views with servers0 and initSt(T0) or initNode(N0) are in sysAbsViews
       assert(compatibleWith(servers0, Array(), initSt(T0)))
@@ -97,11 +96,78 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
       sysAbsViews.add(new ComponentView(servers2, aNode(N0, Null), Array()))
       assert(compatibleWith(servers2, Array(), aNode(N0, Null)))
       assert(!compatibleWith(servers2, Array(), aNode(N1, Null)))
-
     }
 
-    test1
-    // IMPROVE: compatibleWith needs extending; test that
+    def test2 = {
+      reset()
+      println("test2")
+      assert(! compatibleWith(servers2, Array(aNode(N0,Null)), aNode(N1,N0)))
+      sysAbsViews.add(
+        new ComponentView(servers2, aNode(N1,N0), Array(bNode(N0,Null))))
+      assert(compatibleWith(servers2, Array(), aNode(N1,N0)))
+      assert(compatibleWith(servers2, Array(bNode(N0,Null)), aNode(N1,N0)))
+      // Following should give false: aNode(N0,Null) || aNode(N1,N0) isn't
+      // compatible with the view just added, because that has N0 as a bNode.
+      assert(! compatibleWith(servers2, Array(aNode(N0,Null)), aNode(N1,N0)))
+      // Similarly for following
+      assert(! compatibleWith(servers2, Array(bNode(N0,Null)), bNode(N1,N0)))
+      // The following should make aNode(N0,Null) || aNode(N1,N0) compatible
+      sysAbsViews.add(
+        new ComponentView(servers2, aNode(N1,N0), Array(aNode(N0,Null))))
+      assert(compatibleWith(servers2, Array(bNode(N0,Null)), aNode(N1,N0)))
+      assert( compatibleWith(servers2, Array(aNode(N0,Null)), aNode(N1,N0)))
+      assert(! compatibleWith(servers2, Array(bNode(N0,Null)), bNode(N1,N0)))
+      // And the following should make bNode(N0,Null) || bNode(N1,N0) compatible.
+      sysAbsViews.add(
+        new ComponentView(servers2, bNode(N1,N0), Array(bNode(N0,Null))))
+      assert(compatibleWith(servers2, Array(bNode(N0,Null)), aNode(N1,N0)))
+      assert( compatibleWith(servers2, Array(aNode(N0,Null)), aNode(N1,N0)))
+      assert(compatibleWith(servers2, Array(bNode(N0,Null)), bNode(N1,N0)))
+    }
+
+    test1; test2
+
+  }
+
+  /** Test containsReferencingView. */
+  private def containsReferencingViewTest = {
+    def test1 = {
+      reset()
+      val conc = 
+        new Concretization(servers1, Array(initNodeSt(T0,N0), aNode(N0,N1)))
+      val st = initNode(N1)
+      assert(! containsReferencingView(conc, st, 1))
+      sysAbsViews.add(new ComponentView(servers1, aNode(N0,N1), Array(st)))
+      assert(containsReferencingView(conc, st, 1))
+    }
+    def test2 = {
+      println("test2")
+      reset()
+      val conc = 
+        new Concretization(servers1, Array(initNodeSt(T0,N0), aNode(N0,N1)))
+      val st = bNode(N1,N2)
+      assert(! containsReferencingView(conc, st, 1))
+      // Following matches control state of st, but not its next ref
+      sysAbsViews.add(
+        new ComponentView(servers1, aNode(N0,N1), Array(bNode(N1,Null))) )
+      assert(! containsReferencingView(conc, st, 1))
+      // Following should match
+      sysAbsViews.add(new ComponentView(servers1, aNode(N0,N1), Array(st)) )
+      assert(containsReferencingView(conc, st, 1))
+    }
+    def test3 = {
+      println("test3")
+      reset()
+      val conc = 
+        new Concretization(servers1, Array(initNodeSt(T0,N0), aNode(N0,N1)))
+      val st = bNode(N1,N2)
+      // Test renaming of the "next" component of st
+      sysAbsViews.add(
+        new ComponentView(servers1, aNode(N0,N1), Array(bNode(N1,N3))))
+      assert(containsReferencingView(conc, st, 1))
+    }
+    // Need to find tests where views contain more than two states
+    test1; test2; test3
 
   }
 
@@ -115,6 +181,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
     println("CheckerTest")
     effectOnTest
     compatibleWithTest
+    containsReferencingViewTest
   }
 
 }

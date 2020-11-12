@@ -13,6 +13,8 @@ class System(fname: String, checkDeadlock: Boolean,
              significancePaths: List[SignificancePath]) {
   // type View = Views.View
 
+  var verbose = false
+
   /** The parser of the annotations in the CSP file. */
   private val file: CSPFileParser =
     try{ new CSPFileParser(fname) }
@@ -154,7 +156,7 @@ class System(fname: String, checkDeadlock: Boolean,
   // private val Tau = 1
 
   /** Representation of the event error. */
-  private val Error = fdrSession.eventToInt("error")
+  val Error = fdrSession.eventToInt("error")
 
   /** Finaliser.  Should be called on exit. */
   def finalise = fdr.libraryExit()
@@ -184,10 +186,11 @@ class System(fname: String, checkDeadlock: Boolean,
     // assert(cptViews.forall(_.length == k))
     for(v <- views){
       val v1 = Remapper.remapView(v)
-      println(v.toString+" -> "+v1.toString+(if(isActive(v)) "*" else ""))
+      if(verbose) 
+        println(v.toString+" -> "+v1.toString+(if(isActive(v)) "*" else ""))
       if(viewSet.add(v1)){
         if(isActive(v1)) activeViews += v1
-        println("**") 
+        if(verbose) println("**") 
       }
     }
       // val sv = View.mkView(serverInits, vs)
@@ -231,7 +234,7 @@ class System(fname: String, checkDeadlock: Boolean,
     def maybeAdd(pre: Concretization, e: EventInt, post: Concretization, 
         pids: List[ProcessIdentity]) =
       if(isCanonicalTransition(pre, post)) result ::= ((pre, e, post, pids)) 
-      else println(s"Not cannonical $pre -${showEvent(e)}-> $post")
+      else if(verbose) println(s"Not cannonical $pre -${showEvent(e)}-> $post")
 
     val princTrans = components.getTransComponent(cv.principal)
     val (pf,pi) = cv.principal.componentProcessIdentity
@@ -305,8 +308,9 @@ class System(fname: String, checkDeadlock: Boolean,
             val passiveSt = cv.others(passiveIx) // presentPassives.head
             // Next states for the present passives
             val pNexts = components.getTransComponent(passiveSt).nexts(e, pf, pi)
-            println(s"Searching for synchronisations with $passiveSt on "+
-              showEvent(e)+": "+pNexts)
+            if(verbose)
+              println(s"Searching for synchronisations with $passiveSt on "+
+                showEvent(e)+": "+pNexts)
             for(pNext <- pNexts){
               // NOTE: not tested for pNext != passiveSt
               // Post-state of others: insert pNext into cv.others
@@ -318,7 +322,7 @@ class System(fname: String, checkDeadlock: Boolean,
               }
             }
           }
-          else{
+          else{ // presentIndices.isEmpty
             val cPid = absentPassives.head // the absent component
             val conc0 = Concretization(cv)
             for(st1 <- oNs(i)){ // the post state of the principal cpt
@@ -326,13 +330,23 @@ class System(fname: String, checkDeadlock: Boolean,
               maybeAdd(conc0, e, post, List(cPid))
             }
           }
+        } // end of for(i <- 0 until oEs.length-1)
+      } // end of if(theseTrans != null)
+    } // end of case 3
 
-        }
-
-        // ???
+    // Case 4: events only of server
+    val sEsSolo = serverTrans.eventsSolo; val sNsSolo = serverTrans.nextsSolo
+    var index = 0; var e = sEsSolo(0)
+    while(e < Sentinel){
+      for(newServers <- sNsSolo(index)){
+        val post = 
+          Concretization(ServerStates(newServers), cv.principal, cv.others)
+        maybeAdd(conc0, e, post, List())
       }
-      // FIXME
+      // println("sEsSolo = "+sEsSolo.init.map(showEvent).mkString("; "))
+      index += 1; e = sEsSolo(index)
     }
+    
 
     // FIXME: other cases
 
@@ -372,21 +386,21 @@ class System(fname: String, checkDeadlock: Boolean,
     ok
   }
 
-  /** Get all renamings of cv1 that: (1) include a component with identity pid;
+  /** Get all renamings of cv that: (1) include a component with identity pid;
     * (2) agree with conc on the states of all common components; and (3) if
     * oe = Some(e) can perform e with conc.principal. 
     * @return the renaming of the component with identity pid, and all
     * post-states of that component optionally after oe.  */
   def consistentStates(pid: ProcessIdentity, conc: Concretization, 
-    oe: Option[EventInt], cv1: ComponentView)
+    oe: Option[EventInt], cv: ComponentView)
       : ArrayBuffer[(State, List[State])] = {
     val buffer = new ArrayBuffer[(State, List[State])]()
-    val (f,id) = pid; val servers = conc.servers; require(cv1.servers == servers)
-    val cpts = conc.components; val cpts1 = cv1.components
+    val (f,id) = pid; val servers = conc.servers; require(cv.servers == servers)
+    val cpts = conc.components; val cpts1 = cv.components
     val serverRefs = id < servers.numParams(f) // do servers reference pid?
-    val (fp, idp) = cpts(0).componentProcessIdentity
-    // println(s"consistentStates(${State.showProcessId(pid)}, $conc, $cv1)")
-    // Find all components of cv1 that can be renamed to a state of pid
+    val (fp, idp) = cpts(0).componentProcessIdentity// id of principal of conc
+    // println(s"consistentStates(${State.showProcessId(pid)}, $conc, $cv)")
+    // Find all components of cv that can be renamed to a state of pid
     // that can perform e.
     for(i <- 0 until cpts1.length){
       val st1 = cpts1(i)
@@ -396,10 +410,10 @@ class System(fname: String, checkDeadlock: Boolean,
       // servers).
       if(st1.family == f && 
         (st1.id == id || !serverRefs && st1.id >= servers.numParams(f))){
-        // All ways of remapping st1 (consistent with the servers) so that:
-        // (1) its identity maps to id; (2) other parameters are injectively
-        // mapped either to a parameter in conc.components, but not the
-        // servers; or the next fresh parameter.  Create appropriate maps.
+        // Calculate (in maps) all ways of remapping st1 (consistent with the
+        // servers) so that: (1) its identity maps to id; (2) other parameters
+        // are injectively mapped either to a parameter in conc.components,
+        // but not the servers; or the next fresh parameter.
         val map0 = Remapper.createMap(servers.rhoS)  // newRemappingMap
         val (otherArgs, nextArg) = Remapper.createMaps1(servers, cpts)
         // println("nextArg = "+nextArg.mkString("; "))
@@ -409,10 +423,17 @@ class System(fname: String, checkDeadlock: Boolean,
         val maps = Remapper.remapToId(map0, otherArgs, nextArg, cpts1, i, id)
         for(map <- maps){
           val renamedState = Remapper.applyRemappingToState(map, st1)
+          // should have renamedState.ids in ran map
+          assert({ 
+            val ids1 = renamedState.ids; val typeMap = renamedState.typeMap
+              (0 until ids1.length).forall(j =>
+                ids1(j) < 0 || map(typeMap(j)).contains(ids1(j))
+              )},
+            "\nmap = "+Remapper.show(map)+"undefined on = "+renamedState)
           // println(s"map = ${Remapper.showRemappingMap(map)}; "+
           //   s"renamedState = $renamedState}")
           if(!View.agreesWithCommonComponent(renamedState, cpts)){
-            // println(s"consistentStates($pid, $conc, $cv1): \n"+
+            // println(s"consistentStates($pid, $conc, $cv): \n"+
             //   s"  renaming $st1 to $renamedState failed to match other "+
             //   "components (case 1).")
           }
@@ -426,24 +447,9 @@ class System(fname: String, checkDeadlock: Boolean,
             if(nexts.nonEmpty && !buffer.contains((renamedState, nexts))){
               // Check a corresponding renaming of the rest of cpts1 agrees
               // with cpts on common components.  Trivially true if singleton
-              if(Remapper.areUnifiable(cpts1, cpts, map, otherArgs, i, renamedState))
+              val otherArgs1 = Remapper.removeParamsOf(otherArgs, renamedState)
+              if(Remapper.areUnifiable(cpts1, cpts, map, i, otherArgs1))
                 buffer += ((renamedState, nexts))
-              // if(cpts1.length == 1) buffer += ((renamedState, nexts))
-              // else{
-              //   // Extend map to the rest of cpts1, and obtain corresponding
-              //   // renamed components.
-              //   val rnTypeMap = renamedState.typeMap
-              //   val rnIds = renamedState.ids
-              //   // otherArgs with args of renamedState removed
-              //   val otherArgs1: Remapper.OtherArgMap = otherArgs.clone
-              //   for(j <- 0 until rnIds.length){
-              //     val f1 = rnTypeMap(j)
-              //     otherArgs1(f1) = otherArgs1(f1).filter(_ != rnIds(j))
-              //   }
-              //   val remappedCptss = Remapper.remapRest(map, otherArgs1, cpts1, i)
-              //   if(remappedCptss.exists(View.agreeOnCommonComponents(_, cpts, i)))
-              //     buffer += ((renamedState, nexts))
-              // }
             } // end of if(nexts.nonEmpty && !buffer.contains(...))
           } // end of else (Renamed state consistent with cpts)
         } // end of for(map <- maps)

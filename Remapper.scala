@@ -122,6 +122,8 @@ object Remapper{
     * be mapped to. */
   type OtherArgMap = Array[List[Identity]]
 
+  def newOtherArgMap: OtherArgMap = Array.fill(numTypes)(List[Identity]())
+
   def show(otherArgs: OtherArgMap) = otherArgs.mkString("[", ";", "]")
 
   /** Create maps suitable for remapping: (1) a RemappingMap that is the
@@ -173,6 +175,18 @@ object Remapper{
         otherArgs(f) ::= id; nextArg(f) = nextArg(f) max (id+1)
     }
     (otherArgs, nextArg)
+  }
+
+  /** New OtherArgMap, equivalent to otherArgs except with the parameters of st
+    * removed. */
+  def removeParamsOf(otherArgs: OtherArgMap, st: State): OtherArgMap = {
+    val newOtherArgs = otherArgs.clone
+    val typeMap = st.typeMap; val ids = st.ids
+    for(j <- 0 until ids.length){
+      val f1 = typeMap(j)
+      newOtherArgs(f1) = newOtherArgs(f1).filter(_ != ids(j))
+    }
+    newOtherArgs
   }
 
   // ======================================================= Helper functions
@@ -285,12 +299,15 @@ object Remapper{
   }
 
 
+
+
+
   // ==================== Unification
 
   /** Try to extend map to map' such that map'(st2) = st1.
     * If unsuccessful, map is unchanged.
     * @return true if successful. */
-  private[RemapperP] 
+  // private[RemapperP] 
   def unify(map: RemappingMap, st1: State, st2: State): Boolean = {
     // Work with map1, and update map only if successful. 
     // println(s"unify(${showRemappingMap(map)}, $st1, $st2)")
@@ -543,39 +560,47 @@ object Remapper{
   /** Extend map0 to all elements of cpts except cpts(i), consistently with map0
     * and otherArgs, and then apply each such renaming to cpts.  
     * 
-    * Pre: map0 is defined on the parameters of cpts(i)?? */
-  def remapRest(
+    * Pre: cpts.length > 1. */
+  protected[RemapperP] def remapRest(
     map0: RemappingMap, otherArgs: OtherArgMap, cpts: Array[State], i: Int)
       : ArrayBuffer[Array[State]] = {
-    // IMPROVE: if cpts is a singleton, this can be simplified -- just map0
+    assert(cpts.length > 1)
+    // The following tests fail.
+    // If coming via Checker.compatibleWith, parameters of cpts(i) are in the
+    // range of map0; but not if coming via System.consistentStates.
+    // assert({ val ids1 = cpts(i).ids; val typeMap = cpts(i).typeMap
+    //   (0 until ids1.length).forall(j => 
+    //     ids1(j) < 0 || map0(typeMap(j)).contains(ids1(j))
+    //   )}, 
+    //   "\nmap = "+show(map0)+"undefined on cpts(i) = "+cpts(i) )
+    // If coming via System.consistentStates, cpts(i) are in the domain of map0;
+    // but not if coming via Checker.compatibleWith.
+    assert({ val ids1 = cpts(i).ids; val typeMap = cpts(i).typeMap
+      (0 until ids1.length).forall(j => 
+        ids1(j) < 0 || map0(typeMap(j))(ids1(j)) >= 0
+      )}, 
+      "\nmap = "+show(map0)+"undefined on cpts(i) = "+cpts(i) )
+    // But we potentialy need this property within applyRenaming, below.
     val nextArg = new Array[Int](numTypes)
-    for(f <- 0 until numFamilies; id <- map0(f)){
-      nextArg(f) = nextArg(f) max (id+1)
+    for(f <- 0 until numFamilies){
+      for(id <- map0(f)) nextArg(f) = nextArg(f) max (id+1)
       if(otherArgs(f).nonEmpty) nextArg(f) = nextArg(f) max (otherArgs(f).max+1)
     }
     val maps = remapSelectedStates(map0, otherArgs, nextArg, cpts, Right(i))
     for(map <- maps) yield applyRemapping(map, cpts)
   }
 
-
-
   /** Is there some renaming of cpts1, excluding cpts1(i) that agrees with cpts2
-    * on common components?  The remapping must be compatible with map, and
-    * with otherArgs with the parameters of renamedState removed. */
+    * on common components?  The remapping must be compatible with map and
+    * otherArgs.  Both map and otherArgs are guaranteed not to change.  */
   def areUnifiable(cpts1: Array[State], cpts2: Array[State], 
-    map: RemappingMap, otherArgs: OtherArgMap, i: Int, renamedState: State)
+    map: RemappingMap, i: Int, otherArgs: OtherArgMap)
       : Boolean = {              
     if(cpts1.length == 1){ assert(i == 0); true }
     else{
-      val rnTypeMap = renamedState.typeMap; val rnIds = renamedState.ids
-      // otherArgs with parameters of renamedState removed
-      val otherArgs1 = otherArgs.clone
-      for(j <- 0 until rnIds.length){
-        val f1 = rnTypeMap(j)
-        otherArgs1(f1) = otherArgs1(f1).filter(_ != rnIds(j))
-      }
+      //var otherArgs1: OtherArgMap = otherArgs // null
       // All renamings of cpts1.
-      val remappedCptss = remapRest(map, otherArgs1, cpts1, i)
+      val remappedCptss = remapRest(map, otherArgs, cpts1, i)
       // Test if any agrees with cpts2 on common components.
       remappedCptss.exists(View.agreeOnCommonComponents(_, cpts2, i))
     }

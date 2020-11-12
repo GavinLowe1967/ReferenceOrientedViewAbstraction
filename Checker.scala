@@ -7,8 +7,11 @@ import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
 /** A checker for the view abstraction algorithm, applied to system.
   * @param aShapes the shapes of abstractions.
   * @param cShapes the shapes of concretizations. */
-class Checker(system: SystemP.System)
-{
+class Checker(system: SystemP.System){
+  private var verbose = true 
+
+  private var veryVerbose = false
+
   /** The abstract views. */
   protected var sysAbsViews: ViewSet = null
 
@@ -49,7 +52,7 @@ class Checker(system: SystemP.System)
     * if new. */
   @inline private def addViewFromConc(conc: Concretization) = {
     val v = Remapper.remapComponentView(conc.toComponentView)
-    if(addView(v)) println(s"$v.  ***Added***") 
+    if(addView(v) && verbose) println(s"$v.  ***Added***") 
     // else false // println(s"$v.  Already present.")
   }
 // FIXME: should we be extracting other views here?
@@ -65,23 +68,28 @@ class Checker(system: SystemP.System)
 
   /** Process v, calculating all the concrete transitions from v, adding the
     * post-states to sysAbsViews, and adding new ones to nextNewViews.
+    * @return true if a concrete transition on error is generated. 
     */
-  private def process(v: View) = { 
-    println(s"\nProcessing $v")
+  private def process(v: View): Boolean = { 
+    if(verbose) println(s"\n**** Processing $v")
     v match{
       case cv: ComponentView =>
         for((pre, e, post, outsidePids) <- system.transitions(cv)){ 
           // FIXME: not all transitions included yet
-          println(s"\n$pre -${system.showEvent(e)}-> $post ["+
-            outsidePids.map(State.showProcessId)+"]")
+          if(verbose)
+            println(s"\n$pre -${system.showEvent(e)}-> $post ["+
+              outsidePids.map(State.showProcessId)+"]")
           assert(pre.components(0) == cv.principal)
           // Find new views as a result of this transition
-          processTransition(pre, e, post, outsidePids)
+          if(processTransition(pre, e, post, outsidePids)){
+            assert(e == system.Error); return true
+          }
         } // end of for((pre, e, post, outsidePids) <- trans)
         // Effect of previous transitions on this view
         effectOfPreviousTransitions(cv)
         effectOfPreviousTransitionTemplates(cv)
     }
+    false
   } 
 
   // ========= Processing a transition from a view.
@@ -91,11 +99,12 @@ class Checker(system: SystemP.System)
     * TransitionTemplates and ExtendedTransitions to transitionTemplates and
     * transitions, respectively.
     * @param outsidePids the identities of components outside pre that 
-    * synchronise on the transition. */
+    * synchronise on the transition. 
+    * @return true if a concrete transition on error is generated. */
   @inline private def processTransition(
     pre: Concretization, e: EventInt, post: Concretization, 
-    outsidePids: List[ProcessIdentity]) 
-  = {
+    outsidePids: List[ProcessIdentity])
+      : Boolean = {
     val princ1 = post.components(0)
     // Process ids of other components
     val otherIds = pre.components.tail.map(_.componentProcessIdentity)
@@ -117,6 +126,7 @@ class Checker(system: SystemP.System)
     if(newPids.isEmpty){
       // Case 1: no new nondistinguished parameter
       assert(outsidePids.isEmpty) // FIXME (simplifying assumption)
+      if(e == system.Error) return true
       addViewFromConc(post)
       // Store this transition, and calculate effect on other views.
       addTransition(pre, post)
@@ -133,6 +143,7 @@ class Checker(system: SystemP.System)
       // Get extended transitions based on this
       instantiateTransitionTemplate(pre, post, newPid, oe)
     } // end of else
+    false
   }
 
 
@@ -165,9 +176,12 @@ class Checker(system: SystemP.System)
   }
 
   /** Produce ExtendedTransitions from the TransitionTemplate (pre, post,
-    * newPid, oe) and the view cv.  For each, store the transition, the
-    * post-state, and calculate the effect on other views.
-    * Called from instantiateTransitionTemplate and 
+    * newPid, oe) and the view cv.  That is, find each renaming of cv
+    * compatible with pre, and that includes a component with identity newPid
+    * that optionally can perform oe.  For each, store the transition
+    * (extending pre -> post with the transition of the component with
+    * identity newPid), the post-state, and calculate the effect on other
+    * views.  Called from instantiateTransitionTemplate and
     * effectOfPreviousTransitionTemplates. */
   @inline private def instantiateTransitionTemplateBy(
     pre: Concretization, post: Concretization, 
@@ -181,22 +195,25 @@ class Checker(system: SystemP.System)
         val extendedPre = pre.extend(outsideSt)
         for(postSt <- outsidePosts){
           val extendedPost = post.extend(postSt)
-          println(s"Extended transition from template $extendedPre -"+
-            (oe match{ case Some(e) => system.showEvent(e); case None => ""})+
-            s"-> $extendedPost")
+          if(verbose)
+            println(s"Extended transition from template $extendedPre -"+
+              (oe match{ case Some(e) => system.showEvent(e); case None => ""})+
+              s"-> $extendedPost")
+          assert(oe != Some(system.Error)) // FIXME
           addViewFromConc(extendedPost)
           // Store this transition, and calculate effect on other views.
           addTransition(extendedPre, extendedPost)
         }
       }
-      else println(s"$outsideSt not compatible with earlier views")
+      else if(verbose) println(s"$outsideSt not compatible with earlier views")
     } // end of for((outsideSt, outsidePosts) <- ...)
   }
 
   /** Is conc extendable by state st, given the current set of views?  For each
     * component cpt of conc U st, is there a view in SysAbsViews with cpt as
-    * the principal component and agreeing on all common processes. 
-
+    * the principal component and agreeing on all common processes (up to
+    * renaming).
+    * 
     * PRE: conc is compatible with SysAbsViews, and conc does not include
     * st.identity.  This means it is enough to check the condition for cpt =
     * st or a non-principal component of conc that references st. ??????
@@ -209,25 +226,20 @@ class Checker(system: SystemP.System)
       _.componentProcessIdentity != st.componentProcessIdentity))
     val servers = conc.servers; val components = conc.components
 
-    // FIXME in following: the found view has to be compatible with
-    // components, i.e. there has to be a renaming that agrees on any common
-    // component.  Test case, the only matching view is aNode(N1,N0) ||
-    // bNode(N0,Null) but conc has aNode(N0,Null).
+    // Does SysAbsViews contain a view consistent with conc and with a
+    // renaming of st as principal component?
     var found = compatibleWith(servers, components, st)
 
     if(found){
       // If any component cpt of conc references st, then search for a
-      // suitable view with a renaming of cpt and st.  Test case:
-      // initNode(T0,N0) || aNode(N0,N1) with st = initNode(N1) should fail,
-      // as there's no corresponding view aNode(N0,N1) || initNode(N1).
+      // suitable view with a renaming of cpt and st. 
       val id = st.componentProcessIdentity
       // Test whether any component of conc references st
       var j = 0; val length = components.length
       while(j < length && found){
-        val cpt = components(j)
-        if(cpt.processIdentities.contains(id)){
-          println(s"isExtendable($conc) with reference to $st")
-          found = containsXXX(conc, st, j)
+        if(components(j).processIdentities.contains(id)){
+          if(verbose) println(s"isExtendable($conc) with reference to $st")
+          found = containsReferencingView(conc, st, j)
         }
         j += 1
       }
@@ -235,28 +247,44 @@ class Checker(system: SystemP.System)
     found    
   }
 
-  /** Is st compatible with servers and components given the current views?  Is
-    * there a view containing servers, with a renaming of st as principal
-    * component, and such that some renaming of the other components agrees
-    * with components on common components? */ 
-  @inline protected def compatibleWith(servers: ServerStates, components: Array[State], st: State)
+  /** Is st compatible with servers and components given the current views?
+    * Does some renaming of an existing view match servers, have st as
+    * principal component, and agree with components on common components?
+    * Equivalently, is there a view containing servers, with a renaming of st
+    * as principal component, and such that some renaming of the other
+    * components agrees with components on common components? */ 
+  @inline protected def compatibleWith(
+    servers: ServerStates, components: Array[State], st: State)
       : Boolean = {
-    var st1 = Remapper.remapToPrincipal(servers, st) 
-    // I think following is incorrect.
-    // val id1 = st1.componentProcessIdentity
-    // require(components.forall(_.componentProcessIdentity != id1))
+    // Remap st so it can be the principal component with servers.
+    val map = Remapper.createMap(servers.rhoS)
+    val nextArgs = Remapper.createNextArgMap(servers.rhoS)
+    var st1 = Remapper.remapState(map, nextArgs, st)
+    // IMPROVE: compare with Remapper.remapToPrincipal(servers, st)
+
+    val otherArgs = Remapper.newOtherArgMap
+    // Create map as identity function on server ids and mapping st1 back to
+    // st.  This is the base of the renaming applied to a view in sysAbsViews,
+    // to try to produce a view that matches servers, has st as principal
+    // component, and agrees with components on common components
+    val map1 = Remapper.createMap(servers.rhoS)
+    for(j <- 0 until st1.ids.length){
+      val id = st1.ids(j); if(id >= 0) map1(st1.typeMap(j))(id) = st.ids(j)
+    }
+// FIXME: I think otherArgs should include ids of components that are not in 
 
     // Test whether there is an existing view with a renaming of st as
     // principal component, and the same servers as conc.  IMPROVE: iteration
     val viewsArray = sysAbsViews.toArray
     var i = 0; var found = false
+    // println(st1)
     while(i < viewsArray.length && !found) viewsArray(i) match{
       case cv1: ComponentView =>
         if(cv1.servers == servers && cv1.principal == st1){
-// FIXME: need to check rest of components are compatible.  At present this is
-// safe, but maybe giving too many matches.  Gives an extension[12[1](T0,N0)
-// || 7[0](N0,N1) || 6[0](N1)] from where initNode.T0.N1.A.N0 performed.
-          found = true
+          // Test if a renaming of cv1.components that matches st also agrees
+          // with components on common components.
+          found = Remapper.areUnifiable(
+            cv1.components, components, map1, 0, otherArgs)
         }
         i += 1
     } // end of while ... match
@@ -264,21 +292,30 @@ class Checker(system: SystemP.System)
     found
   }
 
-
-  /** Does sysAbsViews contain a view corresponding to component j's view of
-    * conc and st?  Pre: component j references st. */
-  private def containsXXX(conc: Concretization, st: State, j : Int): Boolean = {
-    println(s"containsXXX($conc, $st, $j)")
-    val pCpt = conc.components(j)
+  /** Does sysAbsViews contain a view with conc.servers, conc.components(j) as
+    * principal component, and including a renaming of st?  FIXME: should also
+    * include any other component of conc referenced by conc.components(j).
+    * 
+    * Pre: component j references st.
+    * Test case: conc.components = initNodeSt(T0,N0) || aNode(N0,N1), st =
+    * initNode(N1), would need a view aNode(N0,N1) || initNode(N1). */
+  protected[Checker] 
+  def containsReferencingView(conc: Concretization, st: State, j : Int)
+      : Boolean = {
+    if(verbose) println(s"containsReferencingView($conc, $st, $j)")
+    val servers = conc.servers; val pCpt = conc.components(j); val stId = st.id
     // Rename pCpt to be principal component
-    val servers = conc.servers 
-    val pCptR = Remapper.remapToPrincipal(servers, pCpt)
-    println(s"$pCpt renamed to $pCptR") // TEST: find case where not identity
-    // Find index in cpt of reference to st, and hence what st.id gets renamed to
-    val stId = st.id
-    val k = pCpt.ids.indexOf(stId); assert(k > 0)
-    val stIdR = pCptR.ids(k)
-    println(s"$st identity renamed to "+State.showProcessId((st.family, stIdR)))
+    val map = Remapper.createMap(servers.rhoS)
+    val nextArgs = Remapper.createNextArgMap(servers.rhoS)
+    val pCptR = Remapper.remapState(map, nextArgs, pCpt)
+    // Remapper.remapToPrincipal(servers, pCpt)
+    if(verbose) println(s"$pCpt renamed to $pCptR") // TEST: find case where not identity
+    // what st.id gets renamed to
+    val stIdR = map(st.family)(stId)
+    // Following fails if pCpt does not reference st, i.e. precondition false.
+    assert({val ix = pCpt.ids.indexOf(stId); ix >= 0 && pCptR.ids(ix) == stIdR}, 
+      s"pCptR = $pCptR; st = $st")
+    if(verbose) println(s"$st identity renamed to "+State.showProcessId((st.family, stIdR)))
     val cs1 = st.cs    
     
     // Test whether sysAbsViews contains a view matching servers, with cptR as
@@ -288,10 +325,22 @@ class Checker(system: SystemP.System)
     val viewsArray = sysAbsViews.toArray; var i = 0; var found = false
     while(i < viewsArray.length && !found) viewsArray(i) match{
       case cv1: ComponentView =>
-        if(cv1.servers == servers && cv1.principal == pCptR &&
-          cv1.components.exists(cpt1 => cpt1.cs == cs1 && cpt1.id == stIdR) ){
-          println(s"found match with $cv1"); found = true; ???
-// FIXME: I'm very unsure about this.
+        if(cv1.servers == servers && cv1.principal == pCptR){
+          // Test if cv1 contains a component that is a renaming of st under
+          // an extension of map
+          var j = 1
+          while(j < cv1.components.length && !found){
+            val cpt1 = cv1.components(j)
+            if(cpt1.cs == cs1 && cpt1.id == stIdR){
+              // test if cpt1 is a renaming of st under an extension of map
+              if(Remapper.unify(map, cpt1, st)) found = true
+              else if(verbose) println(s"failed to unify $cpt1 and $st") 
+            }
+            j += 1
+          }
+          if(found && verbose) println(s"found match with $cv1")
+// FIXME: check remainder of conc consistent with cv1.
+// NOTE: need to clone map.
         }
         i += 1
     }
@@ -360,7 +409,7 @@ class Checker(system: SystemP.System)
         filter{case(f,id) => !isDistinguished(id)}.map(find(_))
       val nv = Remapper.remapComponentView(
         new ComponentView(post.servers, newPrinc, others) )
-      if(addView(nv))
+      if(addView(nv) && verbose)
         println(s"Effect of $pre -> $post\n  on $cv:  -> $nv.  ***Added***")
     }
   }
@@ -379,7 +428,7 @@ class Checker(system: SystemP.System)
   /** Run the checker. 
     * @param bound the number of plys to explore (with negative values meaning 
     * effectively infinite).  */
-  def apply(bound: Int = Int.MaxValue, verbose: Boolean = false)  = {
+  def apply(bound: Int = Int.MaxValue)  = {
     // Get the initial views
     val (sav, initViews) = system.initViews; sysAbsViews = sav
     var newViews: Array[View] = initViews
@@ -389,7 +438,12 @@ class Checker(system: SystemP.System)
       println("#abstractions = "+printLong(sysAbsViews.size))
       println("#new active abstract views = "+printInt(newViews.size))
       nextNewViews = new ArrayBuffer[View]
-      for(v <- newViews) process(v)
+      var i = 0
+      while(i < newViews.length && !done.get){
+        if(process(newViews(i))){ ???; done.set(true) }
+        i += 1
+      }
+      // for(v <- newViews) assert(! process(v))
       ply += 1; newViews = nextNewViews.toArray; 
       if(newViews.isEmpty) done.set(true)
     }

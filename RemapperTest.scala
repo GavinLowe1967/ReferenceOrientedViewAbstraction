@@ -197,8 +197,8 @@ object RemapperTest{
       // 7[0](N2,N3) || 7[0](N3,N4); List()
       assert(buff.length == 5)
       assert(buff.forall{ case(Array(st1, st2), unifs) =>
-        st1 == aNode(0,1) && st2 == aNode(1,2) && unifs == List((1,0)) || // N0 -> N0
-        st1 == aNode(2,0) && st2 == aNode(0,1) && unifs == List((1,1)) || // N1 -> N0
+        st1 == aNode(0,1) && st2 == aNode(1,2) && unifs == List((1,0)) || // N0->N0
+        st1 == aNode(2,0) && st2 == aNode(0,1) && unifs == List((1,1)) || // N1->N0
         st1 == aNode(1,2) && st2 == aNode(2,3) && unifs.isEmpty ||  // N0 -> N1
         st1 == aNode(2,1) && st2 == aNode(1,3) && unifs.isEmpty|| // N1 -> N1
         st1 == aNode(2,3) && st2 == aNode(3,4) && unifs.isEmpty // distinct nodes
@@ -262,7 +262,8 @@ object RemapperTest{
       // N0 -> N0 and N1 -> N1 or N2
       assert(buff.length == 2)
       assert(buff.forall(map => 
-        (checkMap(map(0), List((0,0), (1,1))) || checkMap(map(0), List((0,0), (1,2)))
+        (checkMap(map(0), List((0,0), (1,1))) || 
+          checkMap(map(0), List((0,0), (1,2)))
         ) && emptyMap(map(1)) ))
     }    
     def test13 = {
@@ -318,6 +319,7 @@ object RemapperTest{
 
   /** Test for remapRest. */
   private def remapRestTest = {
+    // Note: test1 now fails precondition of remapRest
     def test1 = {
       val map = newRemappingMap; map(0)(N0) = N0; map(0)(N1) = N2
       val buff = remapRest(map, Array(List(N3), List(T0)), 
@@ -332,7 +334,8 @@ object RemapperTest{
       // pushSt(T1,N1) || aNode(N1, N0|N2|N3)
       assert(buff.length == 3 && buff.forall(sts =>
         sts.length == 2 && sts(0) == pushSt(T1,N1) &&
-          (sts(1) == aNode(N1,N0) || sts(1) == aNode(N1,N2) || sts(1) == aNode(N1,N3))
+          (sts(1) == aNode(N1,N0) || sts(1) == aNode(N1,N2) || 
+            sts(1) == aNode(N1,N3))
       ))
     }
     def test3 = {
@@ -347,10 +350,74 @@ object RemapperTest{
       ))
     }
 
-    test1; test2; test3
+    // test1; // no longer valid
+    test2; test3
   }
 
+  def remapToPrincipalTest = {
+    println("*** remapToPrincipalTest")
+    // Servers holding no IDs
+    assert(remapToPrincipal(servers0, pushSt(T0,N0)) == pushSt(T0,N0))
+    assert(remapToPrincipal(servers0, pushSt(T1,N1)) == pushSt(T0,N0))
+    // Now servers holding T0
+    assert(remapToPrincipal(servers1, pushSt(T0,N0)) == pushSt(T0,N0))
+    assert(remapToPrincipal(servers1, pushSt(T1,N1)) == pushSt(T1,N0))
+    assert(remapToPrincipal(servers1, pushSt(T2,N2)) == pushSt(T1,N0))
+    // Now servers holding T0 and N0
+    assert(remapToPrincipal(servers2, pushSt(T0,N0)) == pushSt(T0,N0))
+    assert(remapToPrincipal(servers2, pushSt(T1,N1)) == pushSt(T1,N1))
+    assert(remapToPrincipal(servers2, pushSt(T2,N2)) == pushSt(T1,N1))
+  }
+
+  def areUnifiableTest = {
+    println("*** areUnifiableTest")
+    def test1 = {
+      val map = newRemappingMap; val otherArgs = newOtherArgMap
+      // Following is trivial
+      assert(areUnifiable(Array(aNode(N0,Null)), Array(aNode(N1, Null)), 
+        map, 0, otherArgs))
+      val cpts1 = Array(pushSt(T0, N0), aNode(N0,Null))
+      map(0)(N0) = N0; map(1)(T0) = T0
+      // aNode(N0,Null) => aNode(N0,Null) so no common components
+      assert(areUnifiable(cpts1, Array(aNode(N1, Null)), map, 0, otherArgs))
+      // aNode(N0,Null) => aNode(N0,Null) so matches
+      assert(areUnifiable(cpts1, Array(aNode(N0, Null)), map, 0, otherArgs))
+      // But doesn't match following
+      assert(!areUnifiable(cpts1, Array(aNode(N0, N1)), map, 0, otherArgs))
+      assert(!areUnifiable(cpts1, Array(bNode(N0, Null)), map, 0, otherArgs))
+    }
+
+    def test2 = {
+      val map = newRemappingMap; val otherArgs = newOtherArgMap
+      val cpts1 = Array(pushSt(T0, N0), aNode(N0,N1))
+      map(0)(N0) = N0; map(1)(T0) = T0
+      otherArgs(0) = List(N1)
+      //  aNode(N0,N1) => aNode(N0,N1) 
+      assert(areUnifiable(cpts1, Array(aNode(N0, N1)), map, 0, otherArgs))
+      // aNode(N0,N1) => aNode(N0,N2)
+      assert(areUnifiable(cpts1, Array(aNode(N0, N2)), map, 0, otherArgs))
+
+      otherArgs(0) = List(N1,N2)
+      //  aNode(N0,N1) => aNode(N0,N1) 
+      assert(areUnifiable(cpts1, Array(aNode(N0, N1)), map, 0, otherArgs))
+      //  N1 => N1
+      assert(areUnifiable(cpts1, Array(aNode(N0, N1)), map, 0, otherArgs))
+      // aNode(N0,N1) => aNode(N0,N2)
+      assert(areUnifiable(cpts1, Array(aNode(N0, N2)), map, 0, otherArgs))
+
+      otherArgs(0) = List(N2)
+      // Now can't have aNode(N0,N1) => aNode(N0,N1)
+      assert(! areUnifiable(cpts1, Array(aNode(N0, N1)), map, 0, otherArgs))
+      // aNode(N0,N1) => aNode(N0,N2)
+      assert(areUnifiable(cpts1, Array(aNode(N0, N2)), map, 0, otherArgs))
+    }
+
+    test1; test2
+  }
+
+
   def test = {
+    println("******** RemapperTest ********")
     createCombiningMapsTest
     createMaps1Test
     unifyTest
@@ -359,6 +426,8 @@ object RemapperTest{
     remapSelectedStatesTest
     remapToIdTest
     remapRestTest
+    remapToPrincipalTest
+    areUnifiableTest
   }
 
 }

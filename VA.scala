@@ -13,15 +13,14 @@ object VA{
 
   /** Run a check.  Called by ScalaInstrumentation. */
   def check(fname: String, bound: Int,
-            checkDeadlock: Boolean, significancePaths: List[SignificancePath],
-            verbose: Boolean) 
+            checkDeadlock: Boolean, significancePaths: List[SignificancePath]) 
       : Unit = {
     system = new SystemP.System(fname, checkDeadlock, significancePaths)
 
     // Create and run the checker
     println("Created system")
     checker = new Checker(system)
-    checker(bound = bound, verbose = verbose)
+    checker(bound = bound)
   }
 
   /** Print a time given in nanoseconds. */
@@ -67,7 +66,7 @@ object VA{
       case fn => fname = fn; i += 1
     }
 
-    assert(fname.nonEmpty, "no filename specified")
+    assert(fname.nonEmpty || testing, "no filename specified")
     if(checkDeadlock && significancePaths.isEmpty){
       println("No significance path specified."); sys.exit
     }
@@ -98,11 +97,11 @@ object VA{
         // // Create and run the checker
         checker = new Checker(system)
         print("Compiled for "); printTime(java.lang.System.nanoTime-start)
-        checker(bound = bound, verbose = verbose)
+        checker(bound = bound)
       }
 
       if(testing){ 
-        system = new SystemP.System("CSP/test3.csp", false, List())
+        system = new SystemP.System("CSP/test-file.csp", false, List())
         RemapperP.RemapperTest.test
         // val systemTest = new SystemP.SystemTest(fname); systemTest.test
         SystemP.SystemTest.test(system)
