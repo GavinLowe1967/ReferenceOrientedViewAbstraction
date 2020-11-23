@@ -2,7 +2,16 @@ package ViewAbstraction
 
 /** Superclass of views of a system state. */
 abstract class View{
+  /** This view was created by the extended transition pre -e-> post. */
+  var pre, post: Concretization = null
+  var e: EventInt = -1
 
+  /** Record that this view was created by the extended transition 
+    * pre1 -e1-> post1. */
+  def setCreationInfo(pre1: Concretization, e1: EventInt, post1: Concretization) 
+  = {
+    pre = pre1; e = e1; post = post1
+  }
 }
 
 // =======================================================
@@ -95,6 +104,15 @@ object View{
     ok
   }
 
+  /** The union of cpts1 and cpts2.  Pre: they agree on components with common
+    * identities. */
+  def union(cpts1: Array[State], cpts2: Array[State]): Array[State] = {
+    val ids1 = cpts1.map(_.componentProcessIdentity)
+    require(cpts2.forall(st => 
+      !ids1.contains(st.componentProcessIdentity) || cpts1.contains(st)))
+    cpts1 ++ cpts2.filter(st => !ids1.contains(st.componentProcessIdentity))
+  }
+
 }
 
 // =======================================================
@@ -104,10 +122,15 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   /** Make a ComponentView from this, with components(0) as the principal
     * component.  Note: not in canonical form IMPROVE. */
-  def toComponentView: ComponentView = {
-    val princ = components(0); val princIds = princ.ids
-    // println(s"toComponentView $this")
-    // println(s"princIds = ${princIds.mkString("[",",","]")}")
+  def toComponentView: ComponentView = getViewOf(components(0))
+
+  /** Get the view of this with princ as principal component.  Pre: this
+    * includes all the components referenced by princ. Note: not in canonical
+    * form IMPROVE. */
+// FIXME: I think this goes wrong if princ has two references to the same
+// component.
+  def getViewOf(princ: State): ComponentView = {
+    val princIds = princ.ids
     // Other components to be included in the ComponentView: those referenced 
     // by princ
     val components1 = components.tail.filter{cpt =>
@@ -115,12 +138,10 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       (1 until princIds.length).exists{j => 
         princIds(j) == id && princ.typeMap(j) == f}
     }
-    // println(s"components1 = ${components1.mkString("[",",","]")}")
     // Check all princ's references included
     val cIds = components1.map(_.id)
     assert(princ.ids.tail.forall(id => isDistinguished(id) || cIds.contains(id)))
     new ComponentView(servers, princ, components1)
-    // IMPROVE: make canonical before constructing
   }
 
   override def toString = 
@@ -130,7 +151,18 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   def extend(newState: State): Concretization =
     new Concretization(servers, components :+ newState)
 
+  override def equals(that: Any) = that match{
+    case c: Concretization => 
+      servers == c.servers && components.sameElements(c.components)
+  }
+
+  def matches(that: View) = that match{
+    case cv: ComponentView =>
+      servers == cv.servers && components.sameElements(cv.components)
+  }
 }
+
+// =======================================================
 
 object Concretization{
   /** Make a concretization from cv. */

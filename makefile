@@ -72,9 +72,9 @@ $(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.c
 
 # # Checker and main program
 
-# $(DIR)/Debugger.class: $(DIR)/System.class
+$(DIR)/Debugger.class: $(DIR)/SystemP/System.class
 
-$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class
+$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/Debugger.class
 
 $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 

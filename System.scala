@@ -147,7 +147,6 @@ class System(fname: String, checkDeadlock: Boolean,
       println(s"Three-way synchronisation involving families $f2 and $f1")
 
     fdr.libraryExit()
-    // BitPackedSubSystemView.init(State.stateCount)
   }
 
   init()
@@ -164,15 +163,6 @@ class System(fname: String, checkDeadlock: Boolean,
   // At end of construction, close FDR.
   finalise
 
-  /** The shapes of concretizations. */
-  // private var cShapes: List[Array[Int]] = null
-  // def setCShapes(cs: List[Array[Int]]) = cShapes = cs
-
-  // ============================== Main functions called while checking
-
-  /** Companion object of the relevant subclass of View. */
-  // val viewCompanion = View
-
   /** The initial system views. */
   def initViews: (ViewSet, Array[View]) = {
     // val k = aShapes.head.sum
@@ -188,27 +178,11 @@ class System(fname: String, checkDeadlock: Boolean,
       val v1 = Remapper.remapView(v)
       if(verbose) 
         println(v.toString+" -> "+v1.toString+(if(isActive(v)) "*" else ""))
-      if(viewSet.add(v1)){
-        if(isActive(v1)) activeViews += v1
-        if(verbose) println("**") 
-      }
+      if(viewSet.add(v1)){ activeViews += v1; if(verbose) println("**") }
     }
-      // val sv = View.mkView(serverInits, vs)
-      // if(!sysViews.add(sv)) View.returnView(sv)
-      // Views.returnView(vs)
     (viewSet, activeViews.toArray)
   }
   
-  /** Calculate all views of concs, and
-    * add them to absViews. */
-  // def alpha(concs: ArrayBuffer[Concretization], views: ViewSet)
-  //     : ArrayBuffer[View] = {
-  //   val ab = new ArrayBuffer[View]
-  //   for(conc <- concs; v <- View.alpha(conc)){ views.add(v); ab += v }
-  //   ab
-  // }
-  //  View.alpha(aShapes, concViews, absViews, ply)
-
   /** We represent sets of transitions corresponding to a ComponentView cv using
     * lists of tuples of type TransitionRep.  Each tuple (pre, e, post, pids)
     * represents concrete transitions pre U new U cpts -e-> post U new' U
