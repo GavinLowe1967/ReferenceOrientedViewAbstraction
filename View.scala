@@ -140,9 +140,21 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     }
     // Check all princ's references included
     val cIds = components1.map(_.id)
-    assert(princ.ids.tail.forall(id => isDistinguished(id) || cIds.contains(id)))
+    assert(princ.ids.tail.forall(id => isDistinguished(id) || cIds.contains(id)),
+      s"\nConcretization.getViewOf: Not all references of $princ included in\n"+
+        this)
     new ComponentView(servers, princ, components1)
   }
+
+  /** In the case that this was created by extending one view with a component
+    * from a secondary view, that secondary view. */
+  private var secondaryView: ComponentView = null
+
+  def setSecondaryView(sv: ComponentView) = {
+    assert(secondaryView == null); secondaryView = sv
+  }
+
+  def getSecondaryView = secondaryView
 
   override def toString = 
     s"$servers || ${components.mkString("[", " || ", "]")}"

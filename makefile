@@ -12,11 +12,12 @@ CP = .:$(UTIL):$(FDRHOME)/lib/fdr.jar
 
 DIR = ViewAbstraction
 
+COMBINERP = $(DIR)/CombinerP
+
 FSC = fsc -deprecation -cp $(CP)
 
 # all:	$(DIR)/VA.class Instrumentation.class Experiment.class
 all:   $(DIR)/VA.class
-#  $(DIR)/Remapper.class $(DIR)/MyStateMap.class
 
 clean:
 	rm $(DIR)/*.class $(DIR)/*/*.class; fsc -shutdown
@@ -50,6 +51,10 @@ $(DIR)/RemapperP/Remapper.class: $(DIR)/View.class
 
 $(DIR)/RemapperP/RemapperTest.class: $(DIR)/TestStates.class $(DIR)/RemapperP/Remapper.class
 
+$(COMBINERP)/Combiner.class: $(DIR)/RemapperP/Remapper.class
+
+$(COMBINERP)/CombinerTest.class:  $(DIR)/TestStates.class $(COMBINERP)/Combiner.class 
+
 $(DIR)/TransitionSet.class: $(DIR)/View.class
 
 $(DIR)/TransitionTemplateSet.class: $(DIR)/View.class
@@ -66,7 +71,7 @@ $(DIR)/Servers.class: $(DIR)/FDRSession.class $(DIR)/MyHashMap.class	\
 
 $(DIR)/SystemP/System.class: $(DIR)/FDRTransitionMap.class		\
   $(DIR)/Components.class $(DIR)/Servers.class $(DIR)/ViewSet.class	\
-  $(DIR)/RemapperP/Remapper.class
+  $(COMBINERP)/Combiner.class
 
 $(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.class
 
@@ -80,11 +85,11 @@ $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 
 # $(DIR)/NewViewExtender.class $(DIR)/Debugger.class $(DIR)/Concurrency.class
 
-$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class $(DIR)/SystemP/SystemTest.class $(DIR)/CheckerTest.class
+$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class $(COMBINERP)/CombinerTest.class $(DIR)/SystemP/SystemTest.class $(DIR)/CheckerTest.class
 
 # # Standard recipe
 
-$(DIR)/RemapperP/%.class $(DIR)/SystemP/%.class:	%.scala
+$(DIR)/RemapperP/%.class $(DIR)/SystemP/%.class $(COMBINERP)/%.class:	%.scala
 	$(FSC) $<
 
 $(DIR)/%.class:     %.scala

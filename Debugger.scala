@@ -140,23 +140,31 @@ class Debugger(
   /** Expand the concretization conc, giving the trace leading to the secondary
     * view. */
   private def expandConc(conc: Concretization) = {
-    // Try to find the start of the secondary component.
-    val cpts = conc.components; val princ = cpts(0); val ids = princ.ids
-    val pIds = princ.processIdentities
-    var i = 1; var j = 1 // i indexes ids; j indexes cpts
-    while(i < ids.length){
-      if(!isDistinguished(ids(i))){
-        assert(cpts(j).componentProcessIdentity == pIds(i)); j += 1
-      }
-      i += 1
-    }
-    if(j == cpts.length) println(s"No secondary components found in $conc")
-    else{
-      val princ1 = cpts(j)
-      val cv = sysAbsViews.getRepresentative(conc.getViewOf(princ1))
-      println(s"Cutting at $j, with principal "+princ1+" producing "+cv)
-      apply1(cv, conc)
-    }
+    val cv = conc.getSecondaryView
+    if(cv == null) println(s"No secondary components found in $conc")
+    else apply1(cv, conc)
+
+//     // Try to find the start of the secondary component.
+//     val cpts = conc.components; val princ = cpts(0); val ids = princ.ids
+//     val pIds = princ.processIdentities
+//     var i = 1; var j = 1 // i indexes ids; j indexes cpts
+//     while(i < ids.length){
+//       if(!isDistinguished(ids(i))){
+//         assert(cpts(j).componentProcessIdentity == pIds(i)); j += 1
+//       }
+//       i += 1
+//     }
+//     if(j == cpts.length) println(s"No secondary components found in $conc")
+//     else{
+//       val princ1 = cpts(j)
+// // FIXME: following may fail because the components referenced by princ1 might
+// // not be in conc.  Need to find how conc was produced during the main check.
+//       val newView = RemapperP.Remapper.remapComponentView(conc.getViewOf(princ1))
+//       // println(s"Cutting at $j, with principal "+princ1+" producing "+newView)
+//       val cv = sysAbsViews.getRepresentative(newView)
+//       println(s"Cutting at $j, with principal "+princ1+" producing "+cv)
+//       apply1(cv, conc)
+//     }
   }
 
   /** Print the server names. */

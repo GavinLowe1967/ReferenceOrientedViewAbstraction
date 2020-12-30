@@ -2,6 +2,7 @@ package ViewAbstraction.SystemP
 
 import ViewAbstraction._
 import ViewAbstraction.RemapperP.Remapper
+import ViewAbstraction.CombinerP.Combiner
 import uk.ac.ox.cs.fdr.{Option => _, _}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer}
@@ -172,7 +173,7 @@ class System(fname: String, checkDeadlock: Boolean,
     // All views 
     val views = components.initViews(ServerStates(serverInits))
     // println("views = \n  "+views.map(_.toString).mkString("\n  "))
-    println("#views = "+views.length)
+    // println("#views = "+views.length)
     // assert(cptViews.forall(_.length == k))
     for(v <- views){
       val v1 = Remapper.remapView(v)
@@ -246,16 +247,18 @@ class System(fname: String, checkDeadlock: Boolean,
               val post = Concretization(ServerStates(sNext), pNext, cv.others)
               maybeAdd(conc0, sE, post, List())
             }
-            serverIndex += 1; sE = sEs(serverIndex)
-            cptIndex += 1; pE = pEs(cptIndex)
+            serverIndex += 1; assert(sE != sEs(serverIndex))
+            sE = sEs(serverIndex)
+            cptIndex += 1; assert(pE != pEs(cptIndex)) 
+            pE = pEs(cptIndex)
           }
         }
       }
     }
 
     // Case 3: events synchronising principal component and one component.
-    for(f <- passiveFamilies; i <- 0 until idSizes(f)){
-      val theseTrans = princTrans.transComponent(f)(i)
+    for(f <- passiveFamilies; id <- 0 until idSizes(f)){
+      val theseTrans = princTrans.transComponent(f)(id)
       if(theseTrans != null){ 
         val (oEs, oNs): (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = 
           theseTrans
@@ -266,6 +269,7 @@ class System(fname: String, checkDeadlock: Boolean,
           // Ids of passive components involved in this synchronisation.
           val passives = components.passiveCptsOfEvent(e)
           assert(passives.length == 1) // IMPROVE (simplifying assumption).
+          assert(passives.head == (f,id)) // IMPROVE: use this to simplify  
           // Other components of cv in this synchronisation
           val presentIndices = (0 until cv.others.length).filter(i =>
             passives.contains(cv.others(i).componentProcessIdentity))
@@ -320,9 +324,75 @@ class System(fname: String, checkDeadlock: Boolean,
       // println("sEsSolo = "+sEsSolo.init.map(showEvent).mkString("; "))
       index += 1; e = sEsSolo(index)
     }
-    
 
-    // FIXME: other cases
+    // Case 5: events between server, principal component and one other
+    // component.  FIXME: include
+    val cptTrans2 = princTrans.transServerComponent
+    for(of <- passiveFamilies; oi <- 0 until idSizes(of)){
+      // Synchronisations between principal, other component (of,oi) and
+      // server, from principal's state, and then from server's state.
+      val theseCptTrans: (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) =
+        cptTrans2(of)(oi)
+      val theseServerTrans
+          : (ArrayBuffer[EventInt], ArrayBuffer[List[List[State]]]) =
+        serverTrans.transSync2((pf,pi), (of,oi))
+      if(theseCptTrans != null && theseServerTrans != null){
+        val (pEs,pNexts) = theseCptTrans; val (sEs, sNexts) = theseServerTrans
+        // is the other component in cv?
+        val otherIndices = (0 until cv.others.length).filter(i =>
+          cv.others(i).componentProcessIdentity == (of,oi))
+        // val otherPresent = 
+        //   cv.others.exists(_.componentProcessIdentity == (of,oi))
+        // Scan through arrays, looking for synchronisations.  Indexes into
+        // the arrays and corresp events: Inv: pE = pEs(pj), sE = sEs(sj)
+        var pj = 0; var pE = pEs(pj); var sj = 0; var sE = sEs(sj)
+        while(pE < Sentinel && sE < Sentinel){
+          while(sE < pE){ sj += 1; sE = sEs(sj) }
+          if(sE < Sentinel){
+            while(pE < sE){ pj += 1; pE = pEs(pj) }
+            if(sE == pE){ // can synchronise
+              // println("Synchronisation: "+showEvent(sE)+": "+pNexts(pj)+"; "+
+              //   sNexts(sj)+"; "+otherPresent)
+              if(otherIndices.nonEmpty){
+                println("Synchronisation: "+cv+"; "+showEvent(sE)+": "+
+                  pNexts(pj)+"; "+sNexts(sj))
+                assert(otherIndices.length == 1) // FIXME: could have two refs 
+                val otherIndex = otherIndices.head
+                val otherState = cv.others(otherIndex)
+                // Synchronisations between otherState and the principal
+                val otherNexts
+                    : (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) =
+                  components.getTransComponent(otherState).
+                    transServerComponent(pf)(pi)
+                if(otherNexts != null){
+                  ??? // FIXME
+                }
+              }
+              else{
+                val pre = Concretization(cv)
+                for(newServers <- sNexts(sj); newPrincSt <- pNexts(pj)){
+                  val post = Concretization(ServerStates(newServers), 
+                    newPrincSt, cv.others)
+                  println(s"Three-way synchronisation: "+
+                    s"$pre -${showEvent(sE)}-> $post with ${(of,oi)}")
+                  maybeAdd(pre, sE, post, List((of,oi)))
+                }
+              }
+
+            } // end of synchronisation case
+            sj += 1; assert(sE != sEs(sj)); sE = sEs(sj)
+            pj += 1; assert(pE != pEs(pj)); pE = pEs(pj)
+          }
+        } // end of while(pE < Sentinel && sE < Sentinel)
+      }
+    } // end of for
+    
+    // Use serverTrans/transSync2
+
+
+    // These cases represent the assumptions that: at most two components are
+    // involved in any transition; and if a component is involved, it can be
+    // as a principal component.
 
     // for((pre, e, post) <- result) println(s"$pre -${showEvent(e)}-> $post")
     result
@@ -394,7 +464,7 @@ class System(fname: String, checkDeadlock: Boolean,
         otherArgs(f) = otherArgs(f).filter(_ != id)
         nextArg(f) = nextArg(f) max (id+1)
         // println(s"Remapping $st1")
-        val maps = Remapper.remapToId(map0, otherArgs, nextArg, cpts1, i, id)
+        val maps = Combiner.remapToId(map0, otherArgs, nextArg, cpts1, i, id)
         for(map <- maps){
           val renamedState = Remapper.applyRemappingToState(map, st1)
           // should have renamedState.ids in ran map
@@ -422,7 +492,7 @@ class System(fname: String, checkDeadlock: Boolean,
               // Check a corresponding renaming of the rest of cpts1 agrees
               // with cpts on common components.  Trivially true if singleton
               val otherArgs1 = Remapper.removeParamsOf(otherArgs, renamedState)
-              if(Remapper.areUnifiable(cpts1, cpts, map, i, otherArgs1))
+              if(Combiner.areUnifiable(cpts1, cpts, map, i, otherArgs1))
                 buffer += ((renamedState, nexts))
             } // end of if(nexts.nonEmpty && !buffer.contains(...))
           } // end of else (Renamed state consistent with cpts)

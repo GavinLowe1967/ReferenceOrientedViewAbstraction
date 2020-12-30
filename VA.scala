@@ -103,6 +103,7 @@ object VA{
       if(testing){ 
         system = new SystemP.System("CSP/test-file.csp", false, List())
         RemapperP.RemapperTest.test
+        CombinerP.CombinerTest.test
         // val systemTest = new SystemP.SystemTest(fname); systemTest.test
         SystemP.SystemTest.test(system)
         val checkerTest = new CheckerTest(system); checkerTest.test

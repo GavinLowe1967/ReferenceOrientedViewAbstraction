@@ -275,8 +275,19 @@ class Components(
     /** The next states possible after event e synchronising with component
       * (f,i). */
     def nexts(e: EventInt, f: Family, id: Identity): List[State] = {
-      //val es = transComponent(f)(id)
-      val (es, ns) =  transComponent(f)(id)
+      val ens = transComponent(f)(id)
+      if(ens != null){
+        val (es, ns) = ens; binSearch(e, es, ns)
+      }
+      else{
+        val (es, ns) = transServerComponent(f)(id); binSearch(e, es, ns)
+      }
+    }
+
+    /** Find the next-states in ns corresponding to e. */ 
+    @inline private def binSearch(
+      e: EventInt, es: ArrayBuffer[EventInt], ns: ArrayBuffer[List[State]])
+        : List[State] = {
       var i = 0; var j = es.length-1; assert(es(j) == Sentinel)
       // Binary search for e.  Inv es[0..i) < e <= es[j..)
       while(i < j){
@@ -286,6 +297,7 @@ class Components(
       // es[0..i) < e <= es[i..m)
       if(es(i) == e) ns(i) else List()
     }
+
   } // end of class ComponentTransitions
 
   // -------------------------------------------------------
