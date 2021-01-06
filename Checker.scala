@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
   * @param aShapes the shapes of abstractions.
   * @param cShapes the shapes of concretizations. */
 class Checker(system: SystemP.System){
-  private var verbose = true 
+  private var verbose = false 
   private var veryVerbose = false
 
   /** The abstract views. */
@@ -48,7 +48,10 @@ class Checker(system: SystemP.System){
 
   /** Add v to  sysAbsViews, and nextNewViews if new. */
   @inline private def addView(v: View): Boolean = {
-    if(sysAbsViews.add(v)){ nextNewViews += v; true }
+    if(sysAbsViews.add(v)){ 
+      if(verbose) println(s"$v.  ***Added***") 
+      nextNewViews += v; true 
+    }
     else false
   }
 
@@ -58,8 +61,7 @@ class Checker(system: SystemP.System){
   def addViewFromConc(pre: Concretization, e: EventInt, post: Concretization) = {
     val v = Remapper.remapComponentView(post.toComponentView)
     if(addView(v)){
-      if(verbose) println(s"$v.  ***Added***") 
-      // from ${showTransition(pre,e,post)}
+      if(verbose) println(s"  from ${showTransition(pre,e,post)}")
       v.setCreationInfo(pre, e, post)
     }
   }
@@ -84,7 +86,7 @@ class Checker(system: SystemP.System){
         for((pre, e, post, outsidePids) <- system.transitions(cv)){ 
           // FIXME: not all transitions included yet
           if(verbose)
-            println(s"\n$pre -${system.showEvent(e)}-> $post ["+
+            println(s"$pre -${system.showEvent(e)}-> $post ["+
               outsidePids.map(State.showProcessId)+"]")
           assert(pre.components(0) == cv.principal)
           // Find new views as a result of this transition
@@ -213,7 +215,8 @@ class Checker(system: SystemP.System){
           addTransition(extendedPre, e, extendedPost)
         }
       }
-      else if(verbose) println(s"$outsideSt not compatible with earlier views")
+      else if(veryVerbose) 
+        println(s"$outsideSt not compatible with earlier views")
     } // end of for((outsideSt, outsidePosts) <- ...)
   }
 
@@ -415,7 +418,8 @@ class Checker(system: SystemP.System){
   protected def effectOn(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
   = {
-    // println(s"effectOn($pre, $post, $cv)")
+    if(veryVerbose) 
+      println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers)
     val newCpts = Remapper.combine(pre, cv)
     for((cpts, unifs) <- newCpts){
@@ -458,6 +462,8 @@ class Checker(system: SystemP.System){
       val nv = Remapper.remapComponentView(
         new ComponentView(post.servers, newPrinc, others) )
       if(addView(nv)){
+        // if(verbose) 
+        //   println(s"  from effectOn($pre, ${system.showEvent(e)}, $post, $cv)")
         val extendedPre = new Concretization(pre.servers, 
             View.union(pre.components, cpts))
         extendedPre.setSecondaryView(cv) // ???
@@ -491,7 +497,7 @@ class Checker(system: SystemP.System){
     // Get the initial views
     val (sav, initViews) = system.initViews; sysAbsViews = sav
     println("initViews = "+initViews.mkString("; "))
-    var newViews: Array[View] = initViews.filter(system.isActive)
+    var newViews: Array[View] = initViews // .filter(system.isActive)
 
     while(!done.get && ply <= bound){
       println("\nSTEP "+ply) 
@@ -513,7 +519,7 @@ class Checker(system: SystemP.System){
       if(newViews.isEmpty) done.set(true)
     }
     println("\nSTEP "+ply)
-    println(sysAbsViews)
+    if(verbose) println(sysAbsViews)
     println("#abstractions = "+printLong(sysAbsViews.size))
   }
 

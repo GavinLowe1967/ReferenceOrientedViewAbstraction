@@ -124,7 +124,6 @@ class Components(
         new Array[scala.collection.immutable.Set[EventInt]](idSizes(f)))
     // All events 
     val allEvents = scala.collection.mutable.Set[EventInt]()
-//def initAlphas1 = {
     // IMPROVE: can the following be done in parallel? 
     for(f <- 0 until numFamilies; i <- indices(f)){
       // String representing name of alphabet of this process
@@ -140,14 +139,12 @@ class Components(
       allEvents ++= eventIntList // alphas(f)(i)
       println(s"(${alphaList.length} events).  Done.")
     }
-//}
 
     // eventMap, maps each event e to the list of identities of processes that
     // synchronise on e.
     eventMap = new Array[List[Parameter]](eventsSize)
     // alphaBitmap shows which events are in alphabet
     alphaBitMap = new Array[Boolean](eventsSize)
-//def initAlphas2 = {
     for(e <- (0 until eventsSize)/*.par*/){ // IMPROVE: par?
       eventMap(e) = 
         (for(f <- 0 until numFamilies;
@@ -159,9 +156,6 @@ class Components(
       alphaBitMap(e) = allEvents.contains(e)
     }
     passiveCptsOfEvent = eventMap.map(_.filter{ case(f,_) => !actives(f) })
-//}
-
-//    initAlphas1; initAlphas2 //; initAlphas3
   }
 
   /** Initialise model of the transition systems: inits and transMap. */

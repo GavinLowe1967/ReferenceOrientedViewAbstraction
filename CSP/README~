@@ -1,0 +1,34 @@
+Lock-based stack
+================
+
+Not using three-way synchronisations:
+
+lockBasedStack0.csp: correct version of the lock-based stack, not using
+three-way synchronisations.  286 abstractions.
+
+lockBasedStack0Err1.csp: version where pop does not obtain lock.  Finds error. 
+
+lockBasedStack0Err2.csp: version where push does not obtain lock.  Finds error.
+
+With three-way synchronisations:
+
+lockBasedStack.csp: correct version with three-way synchronisation.  209
+abstractions.
+
+lockBasedStackErr1.csp:  version where pop does not obtain lock.  Finds error.
+
+lockBasedStackErr2.csp:  version where push does not obtain lock.  Finds error.
+
+lockBasedStackKeep.csp: version that gives an error, I think because of too
+few synchronisations with the watchdog.
+
+Lock-based queue
+================
+
+lockBasedQueue.csp: at present finds only four states.  I think the initial
+synchronisation between the constructor and the header node is blocked.
+
+Test files
+==========
+
+test-file.csp: file used for the unit tests.  125 states

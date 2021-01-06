@@ -1,0 +1,160 @@
+-- @VA component process = FreeNode
+-- @VA component alphabet = alphaNode
+-- @VA component identity type = NodeID
+-- @VA component active = false
+-- @VA component process = Thread
+-- @VA component alphabet = alphaThread
+-- @VA component identity type = ThreadID
+-- @VA component active = true
+-- @VA servers = ServerSet
+-- synchronisation set = SyncSet
+
+-- A model of a lock-based stack, corresponding to the following pseudocode.
+
+-- class Node(x: D, next: Node)
+-- var Top: Node = null; val Lock = new Lock
+-- def Push(x: D) = {
+--   Lock.lock; val top = Top; val n = new Node(x, top); 
+--   top = n; Lock.unlock
+-- }
+-- def Pop: D = {
+--   Lock.lock; val top = Top
+--   if(top == null){ Lock.unlock; return Empty }
+--   else{ val n = top.next; Top = n; val x = n.x; 
+--         Lock.unlock; return x }
+-- }
+
+include "definitions.csp"
+
+-------- Basic types
+-- the type of nodes; the former is for use with FDR; the latter with the
+-- view abstraction program.
+datatype NodeIDType =  Null | N0 | N1 | N2 | N3 -- | N3 -- | N4 | N5 | N6 | N7
+NodeID =  diff(NodeIDType, {Null})             -- real nodes
+datatype Data = A | B | C                      -- the type of data
+datatype ThreadID = T0 | T1 | T2 --| T3          -- the type of thread IDs
+
+------------------------ Nodes ----------------------
+
+channel initNode : ThreadID.NodeID.Data.NodeIDType -- initialise a node
+channel getDatum : ThreadID.NodeID.Data -- read data from a node
+channel getNext : ThreadID.NodeID.NodeIDType -- read next reference from a node
+
+-- A single node with identity me, initially free
+FreeNode(me) = initNode?t!me?datum?next -> Node(me, datum, next)
+
+-- A node holding datum with reference to next
+Node(me, datum, next) = 
+  getDatum?t!me!datum -> Node(me, datum, next)
+  [] getNext?t!me!next -> Node(me, datum, next)
+
+alphaNode(n) =
+  {| initNode.t.n, getDatum.t.n, getNext.t.n | t <- ThreadID |}
+
+Nodes = || n <- NodeID @ [alphaNode(n)] FreeNode(n)
+
+---------------------- Servers ----------------------
+
+-------- Variable storing the value of the top node
+
+channel getTop, setTop : ThreadID.NodeIDType -- get or set the top pointer
+
+Top(top) = getTop?t!top -> Top(top) [] setTop?t?top1 -> Top(top1) 
+
+alphaTop = {| getTop, setTop |}
+
+-------- A lock process
+channel lock, unlock : ThreadID
+Lock = lock?t -> unlock.t -> Lock
+
+alphaLock = {| lock, unlock |}
+
+-------- Threads
+channel push, pop : ThreadID.Data   -- Signal operation
+channel popEmpty : ThreadID         -- Signal operation
+
+Pop(me) =
+  lock.me ->  
+  getTop.me?top ->
+  if top != Null then
+    getNext.me.top?next -> setTop.me.next -> getDatum.me.top?d -> pop.me.d ->
+    Unlock(me)
+  else popEmpty.me -> Unlock(me)
+
+Unlock(me) = unlock.me -> Thread(me)
+
+Push(me) =
+  lock.me -> push.me?v -> getTop.me?top -> initNode.me?node!v.top ->
+  setTop.me.node -> Unlock(me)
+
+
+-- Thread(me) = Pop(me)
+Thread(me) = Push(me) -- |~| Pop(me)
+
+alphaThread(t) =
+  {| initNode.t, getDatum.t, getNext.t, getTop.t, setTop.t, 
+     lock.t, unlock.t, push.t, pop.t, popEmpty.t |}
+
+-- -------- Watchdog.  Ensure that, once B is pushed: B is popped before A; that
+-- -- B is popped only once; and that the stack is not empty before B is popped.
+-- -- Note the alphabet of this process does not include push._.A or push._.C.
+
+channel error
+
+
+WD0 =
+  push?_!A -> WD0
+  [] push?_!B -> WD1
+  [] pop?_?x -> (if x==A then WD0 else WDErr)
+  [] popEmpty?_ -> WD0
+
+-- Pushes from A*BC*; B not yet popped; expect more pushes of C; allow pops of
+-- B or C.
+
+WD1 =
+  push?_!C -> WD1
+  [] pop?_?x -> (if x==A then WDErr else if x==B then WD2 else WD1)
+  [] popEmpty?_ -> WDErr
+
+-- Pushes from A*BC*, B popped; expect more pushes of A; allow pops of A 
+-- or empty.
+
+WD2 =
+  push?_!A -> WD2
+  [] pop?_?x -> (if x==A then WD2 else WDErr)
+  [] popEmpty?_ -> WD2
+
+-- Signal error
+
+WDErr = error -> STOP
+
+alphaWatchdog = {| push, pop, popEmpty, error |}
+
+-------- Put servers together
+ServerSet :: <(Proc, {Event})>
+ServerSet = 
+  < (Lock, alphaLock), (Top(Null), alphaTop), 
+    -- (Reg, {|push|}), 
+    (WD0, alphaWatchdog) >
+
+Servers = || (S, Alpha) <- set(ServerSet) @ [Alpha] S
+
+SyncSet = {| initNode, getDatum, getNext, push, pop, lock, unlock, popEmpty |}
+
+System = Nodes [| SyncSet |] Servers
+	 
+-- The specification; Spec(s) represents a stack holding s
+
+Spec(s) =
+  (if s != <> then pop?t!head(s) -> Spec(tail(s)) else popEmpty?t -> Spec(s))
+  [] length(s) <= card(NodeID) & push?t?d -> Spec(<d>^s)
+  
+assert Spec(<>) [T= System \ diff(Events, {| push, pop, popEmpty |})
+
+-- Watchdog-based specificaiton
+
+assert STOP [T= System \ diff(Events, {error})
+
+assert System :[deadlock free]
+
+assert STOP [T= STOP :[symmetry reduce]: -- NodeIDType

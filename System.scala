@@ -326,7 +326,7 @@ class System(fname: String, checkDeadlock: Boolean,
     }
 
     // Case 5: events between server, principal component and one other
-    // component.  FIXME: include
+    // component. 
     val cptTrans2 = princTrans.transServerComponent
     for(of <- passiveFamilies; oi <- 0 until idSizes(of)){
       // Synchronisations between principal, other component (of,oi) and
@@ -354,8 +354,9 @@ class System(fname: String, checkDeadlock: Boolean,
               // println("Synchronisation: "+showEvent(sE)+": "+pNexts(pj)+"; "+
               //   sNexts(sj)+"; "+otherPresent)
               if(otherIndices.nonEmpty){
-                println("Synchronisation: "+cv+"; "+showEvent(sE)+": "+
-                  pNexts(pj)+"; "+sNexts(sj))
+                if(verbose)
+                  println("Synchronisation: "+cv+"; "+showEvent(sE)+": "+
+                    pNexts(pj)+"; "+sNexts(sj))
                 assert(otherIndices.length == 1) // FIXME: could have two refs 
                 val otherIndex = otherIndices.head
                 val otherState = cv.others(otherIndex)
@@ -365,16 +366,41 @@ class System(fname: String, checkDeadlock: Boolean,
                   components.getTransComponent(otherState).
                     transServerComponent(pf)(pi)
                 if(otherNexts != null){
-                  ??? // FIXME
+                  val (otherEs, otherStates) = otherNexts
+                  // println(s"transitions($cv)")
+                  // println(showEvent(sE)+s"; otherIndices = $otherIndices")
+                  // println(s"otherState = $otherState")
+                  // println(otherEs.map(n => 
+                  //   if(n == Sentinel) n.toString else showEvent(n)).
+                  //   mkString(", "))
+                  // println(otherStates.mkString(", "))
+                  var oj = 0;  while(otherEs(oj) < pE) oj += 1
+                  if(otherEs(oj) == pE){
+                    val pre = Concretization(cv)
+                    // Possible next states of others
+                    val newOtherss = otherStates(oj).map{ st => 
+                      val nos = cv.others.clone; nos(otherIndex) = st; nos }
+                    for(newServers <- sNexts(sj); newPrincSt <- pNexts(pj);
+                      newOthers <- newOtherss){
+                      val post = Concretization(ServerStates(newServers), 
+                        newPrincSt, newOthers)
+                      if(verbose)
+                        println(s"Three-way synchronisation: "+
+                          s"$pre -${showEvent(sE)}-> $post "+
+                          "with present other ${(of,oi)}")
+                      maybeAdd(pre, sE, post, List())
+                    }
+                  }
                 }
-              }
+              } // end of otherIndices.nonEmpty
               else{
                 val pre = Concretization(cv)
                 for(newServers <- sNexts(sj); newPrincSt <- pNexts(pj)){
                   val post = Concretization(ServerStates(newServers), 
                     newPrincSt, cv.others)
-                  println(s"Three-way synchronisation: "+
-                    s"$pre -${showEvent(sE)}-> $post with ${(of,oi)}")
+                  if(verbose)
+                    println(s"Three-way synchronisation: "+
+                      s"$pre -${showEvent(sE)}-> $post with ${(of,oi)}")
                   maybeAdd(pre, sE, post, List((of,oi)))
                 }
               }

@@ -1,0 +1,24 @@
+-- The n_-th element of xs_
+nth_(xs_, n_) = if n_ == 0 then head(xs_) else nth_(tail(xs_), n_-1)
+
+-- Extract components of a pair
+first_((x_, _)) = x_
+second_((_, y_)) = y_
+
+-- Extract components of a triple
+first3_((x_, _, _)) = x_
+second3_((_, y_ ,_)) = y_
+third3_((_, _, z_)) = z_
+
+-- Returns (take n xs, drop n xs)
+takeDrop_ :: (Int, <a>) -> (<a>, <a>)
+takeDrop_(n_, xs_) = 
+  if n_ == 0 or null(xs_) then (<>, xs_)
+  else let (ys_, zs_) = takeDrop_(n_-1, tail(xs_)) within (<head(xs_)>^ys_, zs_)
+
+-- Split xs_ into sublists of size size_
+makeChunks_ :: (<a>, Int) -> <<a>>
+makeChunks_(xs_, size_) = 
+  if(null(xs_)) then <> 
+  else let (chunk_, rest_) = takeDrop_(size_, xs_) 
+       within <chunk_>^makeChunks_(rest_, size_)

@@ -1,0 +1,110 @@
+With lockBasedStack.csp, debugger gives error when selecting "6".  The
+concretization does not include the node N1 referenced by N0.  Need to store
+the contributing view(s) for each concretization.  Done: used in
+Debugger.expandConc.  This needs testing more.  It might be that
+lockBasedStack needs a second synchronisation between thread and watchdog.
+But the debug info isn't clear at present.  I think the contributing view also
+needs to be stored at l463 of Checker.scala.
+
+=======================================================
+
+We need to consider:
+
+1. Transitions from new abstractions.  process -> processTransition.
+  * Giving new TransitionTemplates
+  * Giving new ExtendedTransitions
+
+2. The effect of previous extended transitions on new abstractions.
+process -> effectOfPreviousTransitions -> effectOn
+
+3. The effect of new abstractions on previous transition templates, creating
+new extended transitions.  processTransition -> addTransition ->
+effectOnOthers -> effectOn.
+
+4. The effect of new extended transitions on previous abstractions.
+effectOfOthers -> effectOn.
+
+
+ExtendedTransitions include all the components that synchronise on the
+transition.  Do they also include all the components to which a process
+receives a reference, e.g. in a getNext.T0.N0.N1 transition?  I think such
+cases have to be treated as transition templates, since if we find a new state
+for N1 subsequently, that will create a new ExtendedTransition.  However, if
+the principal component passes a reference to another component or a server,
+e.g. a setNext.T0.N0.N1 transition, then the component for that reference will
+be held by the principal in the prior state and so will be in the prior view.
+
+===================================
+
+Def: a concretization conc is strongly consistent with a set V of views if
+there exists a global state g \in gamma(V) such that conc \sqsubseteq g.
+
+This is too strong for algorithmic checking, so we overapproximate it by the
+following condition. 
+
+Def: a concretization conc is weakly consistent with a set V of views if for each
+component state st in conc, there is a view v \in V where st is the principal
+component, and v and conc agree on common processes (i.e. they agree on the
+states of servers and of all components with common identities).
+
+Say "consistent" for "weakly consistent". 
+
+Lemma: strongly consistency implies consistency.  
+
+Proof: suppose conc strongly consistent with V.  So there is some g \in
+gamma(V) such that conc \sqsubseteq g.  So \alpha(g) \subseteq V.  Consider a
+component state st in conc, and let v \in \alpha(g) be the view of g with st
+as the principal component.  Then v satisfies the requirement of consistency.
+
+So we can safely overapproximate the strongly compatible components by the
+compatible ones.  (I don't think the converse holds.)
+
+Def: Suppose st is a component state whose identity is not in the
+concretization conc.  Then, given a set V of views, st is strongly consistent
+with conc and V if conc U st is strongly consistent with V.
+
+Conj: Suppose st is strongly consistent with conc and V.  Then (1) conc is
+strongly consistent with V; (2) there is a view v \in V where st is the
+principal component, and v and conc agree on common processes; (3) for every
+component st1 in v that has a reference to st, there is a view v \in V where
+st1 is the principal component, and v and conc U st agree on common processes.
+
+Proof: Suppose st is strongly consistent with conc and V.  So there is a
+global state g \in \gamma(V) such that conc U st \sqsubseteq g.  So \alpha(g)
+\subseteq V.  (1) So conc \sqsubseteq g, so conc strongly consistent with V.
+(2) is satisfied by taking v \in \alpha(g) to be the view of g with st as the
+principal component.  (3) similar but for st1. 
+
+
+
+=========================================
+
+
+Creating abstract transitions.
+
+For the moment, ignore server views.
+
+We need to perform a case analysis over the processes involved in the
+synchronisation: 
+
+* Just the principal component: done as Case 1. 
+
+* Principal component + server: done as Case 2.
+
+* Principal component + a passive component.  Subcase analysis:
+  
+  - That passive component is in the view: not yet done;
+
+  - That passive component is not in the view: current focus **
+
+* Principal component + server + passive component.  Not yet done; similar
+  subcase analysis. 
+
+
+Then extracting views from the post-transition concretization.
+
+
+Assumptions:
+
+- Each synchronisation involves a principal component and at most one passive
+  component (and maybe the servers).  

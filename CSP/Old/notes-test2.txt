@@ -1,0 +1,349 @@
+Notes on test2 with just pushes of A
+
+STEP 1: 2 abstractions
+
+Via lock.T0: Lock moves to CS 18 and (1) princ cpt moves to CS 11; (2) thread
+in CS 10; (3) node in CS 6.
+
+
+STEP 2: 5 abstractions
+
+Via getTop.T0.Null.  Thread moves to CS 12.
+
+
+STEP 3, 6 abstractions
+
+Via initNode.T0.N0.A.Null: (1) state with thread in CS 14, node in CS 7; (2)
+similar with just the node.
+
+
+STEP 4, 8 abstractions
+
+Via setTop.T0.N0.PushOp.A: Top moves to 17(N0), WD moves to CS 18 (= WD1), and
+(1) thread moves to CS 14; (2) other thread in CS 10; (3) N0 in state 7; (4-5)
+other node in state 6, or 7.
+
+
+STEP 5, 13 abstractions
+
+Via unlock T0: lock moves to CS 15, WD stays in CS 18, and (1) thread moves to
+CS 10; (2) N0 in state 7; (3-4) other node in state 6, 7
+
+
+STEP 6, 17 abstractions
+
+Via lock.T0: lock moves to CS 16, thread moves to CS 11, WD stays in CS 18.
+
+
+STEP 7, 18 abstractions
+
+Via getTop.T0.N0: thread moves to CS 12 and thread has ref to node in CS 7 (=
+A).
+
+
+STEP 8, 19 abstractions
+
+Via initNode.T0.N1.C.N0: thread to C 13 with refs to node
+in CS 7; or view of new node (CS 7 with ref to node in CS 7 with Null ref).
+
+
+STEP 9: 21 abstractions
+
+Via setTop.T0.N1.PushOp.A.  Gives views of nodes: (1) 7[0](N0,N1) ||
+[7[0](N1,Null)]; (2) 7[0](N1,N2) || [7[0](N2,Null)]; (3) 7[0](N1,N0) ||
+[7[0](N0,Null)].  The last two are unexpected, but a consequence of the
+abstraction. 
+
+
+STEP 10: 24 abstractions.
+
+(1) component view 12[1](T0,N0) || [7[0](N0,N1)]; (2,3) the first two from the
+previous step but with the lock not held.
+
+
+STEP 11: 27 abstractions.
+
+Via initNode: 7[0](N1,N0) || [7[0](N0,N2)]
+
+
+STEP 12: 28 abstractions
+
+STEP 13: 31 abstractions
+
+STEP 14: 33 abstractions
+
+
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 10[1](T0)
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 6[0](N1)
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N0,N1) || [7[0](N1,N2)]
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N0,N1) || [7[0](N1,Null)]
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N0,Null)
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,N2)]
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,Null)]
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N1,N2) || [7[0](N2,N3)]
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N1,N2) || [7[0](N2,Null)]
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N1,Null)
+[15[-1]() || 17[-1](Null) || 18[-1]()] || 10[1](T0)
+[15[-1]() || 17[-1](Null) || 18[-1]()] || 6[0](N0)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 10[1](T1)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 11[1](T0)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 12[1](T0,N0) || [7[0](N0,N1)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 12[1](T0,N0) || [7[0](N0,Null)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 13[1](T0,N1) || [7[0](N1,N0)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 14[1](T0)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 6[0](N1)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N0,N1) || [7[0](N1,N2)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N0,N1) || [7[0](N1,Null)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N0,Null)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,N2)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,Null)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,N2) || [7[0](N2,N3)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,N2) || [7[0](N2,Null)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,Null)
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 10[1](T1)
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 11[1](T0)
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 12[1](T0,Null)
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 13[1](T0,N0) || [7[0](N0,Null)]
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 6[0](N0)
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 7[0](N0,Null)
+
+
+With data from {A,B}, 82 abstractions.  Includes views where an A-node points
+to a B-node, or a B-node points to a B-node, in each case where the latter is
+the top node.  This is to be expected, because the watchdog blocks the setTop,
+not the initialisation of the node.
+
+With data from {A,B,C}, 137 abstractions.  This includes views like (1)
+9[0](N1,N2) || [7[0](N2,N3)]; (2) 8[0](N1,N2) || [8[0](N2,N3)]; (3)
+8[0](N1,N2) || [9[0](N2,N3)], which look wrong.  I think these come about as
+an effect of such a link where top points to the latter node, followed by a
+setTop.  
+
+Effect of 
+  [18[-1](T0) || 19[-1](N0) || 20[-1]()] || [14[1](T0,N1) || 8[0](N1,N0)] 
+  -> [18[-1](T0) || 19[-1](N1) || 21[-1]()] || [16[1](T0) || 8[0](N1,N0)]
+on [18[-1](T0) || 19[-1](N0) || 20[-1]()] || 9[0](N1,N0) || [7[0](N0,Null)]: 
+  -> [18[-1](T0) || 19[-1](N0) || 21[-1]()] || 9[0](N1,N2) || [7[0](N2,Null)].
+
+That looks wrong.  Also 
+
+Effect of 
+  [18[-1](T0) || 19[-1](N0) || 20[-1]()] || [15[1](T0,N1) || 7[0](N1,N0)] 
+  -> [18[-1](T0) || 19[-1](N1) || 20[-1]()] || [16[1](T0) || 7[0](N1,N0)]
+on [18[-1](T0) || 19[-1](N0) || 20[-1]()] || 9[0](N1,N0) || [7[0](N0,Null)]: 
+  -> [18[-1](T0) || 19[-1](N0) || 20[-1]()] || 9[0](N1,N2) || [7[0](N2,Null)].  
+
+That looks more believable.
+
+This model isn't strong enough to capture the desired invariant that the stack
+does not contain two consecutive B nodes (and similar invariants).  We could
+fix this by adding a "joined" field to the nodes.  Or we could have the
+watchdog synchronise on the initNode events (not yet supported).  Or have the
+thread sync with the WD before initialising the node.  Do the latter in
+test2.csp. 
+
+==================================================================
+
+Now with pushes and pops.
+
+STEP 1: 2 abstractions
+
+Two lock.T0 transitions.  One additional state corresponding to a popping
+thread getting the lock. 
+
+
+STEP 2: 6 abstractions
+
+Two getTop.T0.Null transitions.  One additional state corresp to the popping
+thread. 
+
+
+STEP 3: 8 abstractions
+
+Additional popEmpty.T0 transition (to CS 19) giving one additional state.
+
+
+STEP 4: 15 abstractions
+
+Additional unlock.T0 transition by popping thread. Gives three additional
+states with node in CS 7, 8 or 9 and servers in initial state.  
+
+
+STEP 5: 32 abstractions
+
+unlock transitions.  All as previously, I think. 
+
+
+STEP 6: 44 abstractions
+
+4 lock transitions.  Two additional states corresponding to popping.
+
+
+STEP 7: 48 abstractions
+
+4 getTop transitions.  Two additional states corresp to popping. 
+
+
+STEP 8: 52 abstractions
+
+Two new transitions by popping thread on getNext.T0.N0.Null, each giving one
+additional state.
+
+
+STEP 9: 66 abstractions
+
+New transitions on getDatum.T0.N0.(A|B), each giving one new state.
+
+Also applying effects of previous transitions to the new pairs of nodes
+introduced by pushes in the previous step.
+
+Effect of unlocking on C->B pair of nodes, where Top pointing to the B node.
+Or a B->B, A->B, C->A, B->A, A->A.  None of these corresponds to a concrete
+transition.
+
+
+STEP 10: 80 abstractions -> 86
+
+New transition on setTop.T0.Null.PopOp.B.  WD changes to CS 30 (= WD2).  New
+states: for this thread; thread in initial state; node in initial state; node
+in CS 7, 8 or 9 with Null reference; nodes with links (A|B|C) -> (A|B).  (12
+total).
+
+New transition on setTop.T0.Null.PopOp.A.  WD stays in CS 27.  New states with
+nodes with links (7|8|9) -> 7.  (3 total).
+
+ 
+STEP 11: 95 abstractions
+
+New transition on unlock.T0.  New states: for this thread (back to initial
+state); node in initial state; node in CS 7, 8 or 9 with Null reference; nodes
+with links (A|B|C) -> (A|B).  (11 total).
+
+
+STEP 12: 106 abstractions
+
+New lock.T0 transitions for pushing or popping.  Two new states.
+
+
+STEP 13: 108 abstractions
+
+getTop.T0.N0 transitions for pushing and popping.  Two new states.
+
+
+STEP 14: 110 abstractions.
+
+popEmpty.T0 transition: no new states.
+
+initNode.T0.N0.(A|B|C).Null transitions: one new state each.
+
+
+STEP 15: 113 abstractions.
+
+Transitions on setTop.T0.N0.PushOpA
+
+...
+
+STEP 21: 155 abstractions.
+
+
+At present, all setTop.....PopOp.... transitions leave Top pointing to Null.
+This is because no abstraction corresponds to a queue of size greater than 2.
+We need to consider the effect of previous transitions on new abstractions. 
+
+================================================================
+
+With just pushes of A
+
+STEP 1: 2 abstractions
+
+STEP 2: 5 abstractions
+
+STEP 3, 6 abstractions
+
+STEP 4: 8 abstractions
+
+STEP 5: 13 abstractions
+
+STEP 6: 17 abstractions
+
+STEP 7: 18 abstractions
+
+STEP 8: 19 abstractions
+
+STEP 9: 21 abstractions
++ 1, thread doing getTop to acquire ref to 7(N0,N1)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 12[1](T0,N0) || [7[0](N0,N1)]
+
+STEP 10: 24 abstractions -> 25 abstractiond
++ initNode from above giving Top pointing to A-node pointing to A-node
+pointing to another node 
+
+STEP 11: 29 abstractions
+
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 10[1](T0)
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 6[0](N1)
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N0,N1) || [7[0](N1,Null)]
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N0,Null)
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,Null)] ?? 
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N1,N2) || [7[0](N2,Null)]
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N1,Null)
+[15[-1]() || 17[-1](Null) || 18[-1]()] || 10[1](T0)
+[15[-1]() || 17[-1](Null) || 18[-1]()] || 6[0](N0)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 10[1](T1)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 11[1](T0)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 12[1](T0,N0) || [7[0](N0,N1)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 12[1](T0,N0) || [7[0](N0,Null)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 13[1](T0,N1) || [7[0](N1,N0)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 14[1](T0)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 6[0](N1)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N0,N1) || [7[0](N1,Null)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N0,Null)
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,N1)] * no longer
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,N2)] * no longer?
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,Null)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,N2) || [7[0](N2,Null)]
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,Null)
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 10[1](T1)
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 11[1](T0)
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 12[1](T0,Null)
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 13[1](T0,N0) || [7[0](N0,Null)]
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 6[0](N0)
+[16[-1](T0) || 17[-1](Null) || 18[-1]()] || 7[0](N0,Null)
+
+STEP 12: 35 abstractions
+
+STEP 13: 39 abstractions.  
+
+The set looks correct, except we get views like 
+[16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N0,N1) || [7[0](N1,N0)]
+(in step 10) via the extended transition from template 
+  [16[-1](T0) || 17[-1](N0) || 18[-1]()] || [12[1](T0,N0) || 7[0](N0,N1) || 6[0](N1)] 
+  -initNode.T0.N1.A.N0-> 
+  [16[-1](T0) || 17[-1](N0) || 18[-1]()] || [13[1](T0,N1) || 7[0](N0,N1) || 7[0](N1,N0)]
+This shouldn't happen because the state 6[0](N1) is not consistent with
+  [16[-1](T0) || 17[-1](N0) || 18[-1]()] || [12[1](T0,N0) || 7[0](N0,N1)]
+and the view set, because there is no view 
+  [16[-1](T0) || 17[-1](N0) || 18[-1]()] || [7[0](N0,N1) || 6[0](N1)]
+
+Also there are views like
+[15[-1]() || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,N1)]
+with a node pointing to the top node, and no thread holding the lock, which
+wouldn't be possible in real systems without pops.  It comes about by the
+effect of the transition 
+  [16[-1](T0) || 17[-1](N0) || 18[-1]()] || [14[1](T0)] ->
+  [15[-1]() || 17[-1](N0) || 18[-1]()] || [10[1](T0)]
+(thread releasing the lock) on the view 
+  [16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,Null)]
+(which arises when the pushing thread is about to do a setTop).  There is no
+concrete state compatible with the pre-state and the view.  The abstraction
+doesn't capture the invariant: if a node points to the top node, then the
+pushing thread is about to do a setTop. 
+
+The following looks incorrect (STEP 11, second view added)
+Effect of 
+  [16[-1](T0) || 17[-1](N0) || 18[-1]()] || [11[1](T0) || 7[0](N0,N1)] ->
+  [16[-1](T0) || 17[-1](N0) || 18[-1]()] || [12[1](T0,N0) || 7[0](N0,N1)]
+ on [16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,N2)]:  
+ -> [16[-1](T0) || 17[-1](N0) || 18[-1]()] || 7[0](N1,N0) || [7[0](N0,N1)].  ***Added***
+
+combine gives the **non-injective** map [0,1,1,-1,-1,-1,-1,-1]; [0,-1,-1,-1];
