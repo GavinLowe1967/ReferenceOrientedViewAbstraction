@@ -62,62 +62,67 @@ class Servers(
   /** List of server names. */
   val serverNames = new Array[String](numServers)
 
+  /** Bitmap indicating which servers are active. */
+  private val activeServer = new Array[Boolean](numServers)
+
+  /** Bitmaps indicating which events are events of an active server. */
+  private val activeServerEvent = new Array[Boolean](eventsSize)
+
+  def isActiveServerEvent(e: EventInt) = activeServerEvent(e)
+
   /** Maximum event number synchronised on with a component. */
   val maxComponentEvent = componentEventMap.length-1
 
-  // private val nthString = fdrSession.nthString
-    // "let nth(xs_,n_) = if n_ == 0 then head(xs_) else nth(tail(xs_), n_-1) "+
-    //   "within "
-
   /** Build transition system for servers. */
+// FIXME: has not been tested without renaming (FDR may give type error)
   private def init() = {
     println("Creating servers")
-    // The value of ServerSet from the file
-    // val pairsStrings = fdrSession.setStringToList(file.serversName)
     val indices = (0 until numServers).toList
-    // Name of i-th server
-    // def getServerName(i: Int) =
-    //   fdrSession.eval(
-    //     if(usesRenaming) s"first3_(nth_(${file.serversRenameName}, $i))"
-    //     else s"first_(nth_(${file.serversName}, $i))" )
-    // val sNames = Array.tabulate(numServers)(getServerName)
-    for(i <- 0 until numServers) 
+    // String giving i'th entry in the servers set.
+    def entry(i: Int) = 
+      if(usesRenaming) s"nth_(${file.serversRenameName}, $i)"
+      else s"nth_(${file.serversName}, $i)"
+    for(i <- 0 until numServers){ 
       serverNames(i) = fdrSession.eval(
-        if(usesRenaming) s"first3_(nth_(${file.serversRenameName}, $i))"
-        else s"first_(nth_(${file.serversName}, $i))" )
+        if(usesRenaming) s"first4_(${entry(i)})"   
+          // "first4_(nth_(${file.serversRenameName}, $i))"
+        else s"first3_(${entry(i)})") // "first_(nth_(${file.serversName}, $i))")
+      val activeString = fdrSession.eval(
+        if(usesRenaming) s"fourth4_(${entry(i)})" else s"third3_(${entry(i)})")
+      assert(activeString == "true" || activeString == "false")
+      activeServer(i) = activeString == "true"
+      println(serverNames(i)+": "+(if(activeServer(i)) "active" else "passive"))
+    }
     // Build alphabet for each component
     print("Creating alphabets")
     val alphas: Array[Set[EventInt]] = Array.fill(numServers)(Set[Int]())
     for(i <- indices){
       print(s"Building alphabet for server $i: ${serverNames(i)}...")
       val alpha = fdrSession.evalSeqSeqOrSeq( 
-        if(usesRenaming) s"third3_(nth_(${file.serversRenameName}, $i))"
-        else s"second_(nth_(${file.serversName}, $i))",
+        if(usesRenaming) s"third4_(${entry(i)})" else s"second3_(${entry(i)})",
         st => st)
       for(st <- alpha) alphas(i) += fdrSession.eventToInt(st)
       println
     }
     println
-    val maxEvent = alphas.map(_.max).max // IMPROVE: use eventsSize?
+    // val maxEvent = alphas.map(_.max).max // IMPROVE: use eventsSize?
     // Build map (as array) from events to the list of synchronising servers.
-    eventMap = Array.tabulate(maxEvent+1)( 
+    eventMap = Array.tabulate(eventsSize)( // (maxEvent+1)( 
       e => indices.filter(alphas(_).contains(e)).toArray)
     // Build bitmap showing which events are in alphabet of any server
     alphaBitMap = new Array[Boolean](eventsSize)
-    for(alpha <- alphas; e <- alpha) alphaBitMap(e) = true
-
+    for(i <- 0 until numServers; e <- alphas(i)){
+      alphaBitMap(e) = true
+      if(activeServer(i)) activeServerEvent(e) = true
+    }
     // Build transitions
     val initStates: Array[State] = new Array[State](numServers)
     for(i <- indices){
       val sName = serverNames(i)
-      // fdrSession.eval(
-        // if(usesRenaming) s"first3_(nth_(${file.serversRenameName}, $i))"
-        // else s"first_(nth_(${file.serversName}, $i))" )
       print(s"Building serverTransMap for server $i: $sName")
       // serverNames(i) = sName
       val oRenamingString = 
-        if(usesRenaming) Some(s"second3_(nth_(${file.serversRenameName}, $i))")
-        else None
+        if(usesRenaming) Some(s"second4_(${entry(i)})") else None
       val (init, map) = 
         transMapBuilder.buildTransMap(sName, alphas(i), -1, oRenamingString)
       initStates(i) = init; transMaps(i) = map

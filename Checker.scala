@@ -48,6 +48,7 @@ class Checker(system: SystemP.System){
 
   /** Add v to  sysAbsViews, and nextNewViews if new. */
   @inline private def addView(v: View): Boolean = {
+    View.checkDistinct(v.asInstanceOf[ComponentView].components)
     if(sysAbsViews.add(v)){ 
       if(verbose) println(s"$v.  ***Added***") 
       nextNewViews += v; true 
@@ -84,7 +85,6 @@ class Checker(system: SystemP.System){
     v match{
       case cv: ComponentView =>
         for((pre, e, post, outsidePids) <- system.transitions(cv)){ 
-          // FIXME: not all transitions included yet
           if(verbose)
             println(s"$pre -${system.showEvent(e)}-> $post ["+
               outsidePids.map(State.showProcessId)+"]")
@@ -399,14 +399,19 @@ class Checker(system: SystemP.System){
   private 
   def effectOnOthers(pre: Concretization, e: EventInt, post: Concretization) = {
     // println(s"effectOnOthers($pre, $post)")
-    for(v1 <- sysAbsViews.toArray) v1 match{ // IMPROVE iteration
-      case cv: ComponentView  =>
-        if(cv.servers == pre.servers){
-          // println(s"Effect on $cv");
-          // IMPROVE if nothing changed state.
-          effectOn(pre, e, post, cv)
-        }
-    } // end of match
+    val vs = sysAbsViews.toArray; var i = 0
+    while(i < vs.length){
+      vs(i) match{ // IMPROVE iteration
+        case cv: ComponentView  =>
+          View.checkDistinct(cv.components)
+          if(cv.servers == pre.servers){
+            // println(s"Effect on $cv");
+            // IMPROVE if nothing changed state.
+            effectOn(pre, e, post, cv)
+          }
+      } // end of match
+      i += 1
+    }
   }
   // IMPROVE: need better way of iterating over ViewSet
 
@@ -421,31 +426,22 @@ class Checker(system: SystemP.System){
     if(veryVerbose) 
       println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers)
+    // Check elements of cv.components are distinct
+    View.checkDistinct(cv.components)
     val newCpts = Remapper.combine(pre, cv)
     for((cpts, unifs) <- newCpts){
+      View.checkDistinct(cpts)
       // println("cpts = "+cpts.mkString("[",",","]")+s"; unifs = $unifs")
       // pre U cpts is a consistent view.  
       // pre.components(i) = cpts(j)  iff  (i,j) in unifs
 
       // Find the component of cpts with process identity pid, or return
       // null if no such.
-      def find0(pid: ProcessIdentity, cpts: Array[State]): State = {
-        var i = 0; var done = false
-        while(i < cpts.length && !done){
-          if(cpts(i).componentProcessIdentity == pid) done = true else i += 1
-        }
-        if(done) cpts(i) else null
-      }
-      // Find the component of post or cpts with process identity pid
-      def find(pid: ProcessIdentity): State = {
-        val st1 = find0(pid, post.components)
-        if(st1 != null) st1
-        else{
-          val st2 = find0(pid, cpts)
-          assert(st2 != null, s"Not found identity $pid in $post or "+
-            cpts.mkString("[",",","]"))
-          st2
-        }
+      @inline def find0(pid: ProcessIdentity, cpts: Array[State]): State = {
+        var i = 0
+        while(i < cpts.length && cpts(i).componentProcessIdentity != pid)
+          i += 1
+        if(i < cpts.length) cpts(i) else null
       }
       // Find what cpts(0) gets mapped to by unifs
       val matches = unifs.filter(_._2 == 0)
@@ -457,19 +453,45 @@ class Checker(system: SystemP.System){
             s"${cpts(0)}, ${pre.components(matches.head._1)}")
           post.components(matches.head._1)
         }
-      val others = newPrinc.processIdentities.tail.
-        filter{case(f,id) => !isDistinguished(id)}.map(find(_))
+      // Find other processes referenced by newPrinc
+      // val others = newPrinc.processIdentities.tail.distinct.
+      //   filter{case(f,id) => !isDistinguished(id)}.map(find(_))
+      var others = new ArrayBuffer[State]; val pids = newPrinc.processIdentities
+      var i = 1; val princId = pids(0)
+      while(i < pids.length){
+        val pid = pids(i)
+        if(!isDistinguished(pid._2) && pid != princId){
+          // check this is first occurrence of pid
+          var j = 1; while(j < i && pids(j) != pid) j += 1
+          if(j == i){
+            // others += find(pid)
+            // Find the component of post or cpts with process identity pid, 
+            // and add to others
+            val st1 = find0(pid, post.components)
+            if(st1 != null) others += st1
+            else{
+              val st2 = find0(pid, cpts)
+              assert(st2 != null, s"Not found identity $pid in $post or "+
+                cpts.mkString("[",",","]"))
+              others += st2
+            }
+          }
+        }
+        i += 1
+      }
+      val othersA = others.toArray
+      // View.checkDistinct(others, newPrinc.toString)
       val nv = Remapper.remapComponentView(
-        new ComponentView(post.servers, newPrinc, others) )
+        new ComponentView(post.servers, newPrinc, othersA) )
+      // View.checkDistinct(nv.components, View.showStates(others))
       if(addView(nv)){
         // if(verbose) 
-        //   println(s"  from effectOn($pre, ${system.showEvent(e)}, $post, $cv)")
+        //   println(s" from effectOn($pre, ${system.showEvent(e)}, $post, $cv)")
         val extendedPre = new Concretization(pre.servers, 
             View.union(pre.components, cpts))
-        extendedPre.setSecondaryView(cv) // ???
-// FIXME: store the contributing view in extendedPre
+        extendedPre.setSecondaryView(cv) 
         val extendedPost = new Concretization(post.servers, 
-          View.union(post.components, newPrinc +: others))
+          View.union(post.components, newPrinc +: othersA))
         if(veryVerbose)
           println(s"Effect of "+showTransition(pre,e,post)+
             // "\n"+showTransition(extendedPre, e, extendedPost)+
@@ -484,7 +506,7 @@ class Checker(system: SystemP.System){
     // println(s"effectOfPreviousTransitions($cv)")
     for((pre, e, post) <- transitions.iterator){
       // println(s"considering transition $pre -> $post")
-      if(pre.servers == cv.servers) effectOn(pre, e, post, cv) // FIXME
+      if(pre.servers == cv.servers) effectOn(pre, e, post, cv) 
     }
   }
 
@@ -519,7 +541,7 @@ class Checker(system: SystemP.System){
       if(newViews.isEmpty) done.set(true)
     }
     println("\nSTEP "+ply)
-    if(verbose) println(sysAbsViews)
+    if(true || verbose) println(sysAbsViews)
     println("#abstractions = "+printLong(sysAbsViews.size))
   }
 

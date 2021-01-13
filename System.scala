@@ -218,15 +218,16 @@ class System(fname: String, checkDeadlock: Boolean,
       servers.transitions(cv.servers.servers)
 
     // IMPROVE: the transitions probably aren't in the best form
+    val conc0 = Concretization(cv)
+    val activePrincipal = isActive(cv) // is the principal active
 
     // Case 1: events of the principal component with no synchronisation
-    val conc0 = Concretization(cv)
-    for(i <- 0 until princTrans.eventsSolo.length-1; 
+    if(activePrincipal) 
+      for(i <- 0 until princTrans.eventsSolo.length-1;
         st1 <- princTrans.nextsSolo(i)){
-      val post = Concretization(cv.servers, st1, cv.others)
-      // result ::= ((conc0, princTrans.eventsSolo(i), post, List()))
-      maybeAdd(conc0, princTrans.eventsSolo(i), post, List())
-    }
+        val post = Concretization(cv.servers, st1, cv.others)
+        maybeAdd(conc0, princTrans.eventsSolo(i), post, List())
+      }
 
     // Case 2: synchronisation between principal component and server (only)
     val serverTrans1 = serverTrans.transSync(pf)(pi)
@@ -242,22 +243,23 @@ class System(fname: String, checkDeadlock: Boolean,
         if(sE < Sentinel){
           while(pE < sE){ cptIndex += 1; pE = pEs(cptIndex) }
           if(sE == pE){ // can synchronise
-            // println(s"Server-principal sync on ${showEvent(pE)}")
-            for(pNext <- pNexts(cptIndex); sNext <- sNexts(serverIndex)){
-              val post = Concretization(ServerStates(sNext), pNext, cv.others)
-              maybeAdd(conc0, sE, post, List())
+            if(activePrincipal || servers.isActiveServerEvent(sE)){
+              if(!activePrincipal) println("server-only event: "+showEvent(sE))
+              // println(s"Server-principal sync on ${showEvent(pE)}")
+              for(pNext <- pNexts(cptIndex); sNext <- sNexts(serverIndex)){
+                val post = Concretization(ServerStates(sNext), pNext, cv.others)
+                maybeAdd(conc0, sE, post, List())
+              }
             }
-            serverIndex += 1; assert(sE != sEs(serverIndex))
-            sE = sEs(serverIndex)
-            cptIndex += 1; assert(pE != pEs(cptIndex)) 
-            pE = pEs(cptIndex)
+            serverIndex += 1; sE = sEs(serverIndex)
+            cptIndex += 1; pE = pEs(cptIndex)
           }
         }
       }
     }
 
     // Case 3: events synchronising principal component and one component.
-    for(f <- passiveFamilies; id <- 0 until idSizes(f)){
+    if(activePrincipal) for(f <- passiveFamilies; id <- 0 until idSizes(f)){
       val theseTrans = princTrans.transComponent(f)(id)
       if(theseTrans != null){ 
         val (oEs, oNs): (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = 
@@ -312,7 +314,7 @@ class System(fname: String, checkDeadlock: Boolean,
       } // end of if(theseTrans != null)
     } // end of case 3
 
-    // Case 4: events only of server
+    // Case 4: events only of servers (typically the constructor, but also error)
     val sEsSolo = serverTrans.eventsSolo; val sNsSolo = serverTrans.nextsSolo
     var index = 0; var e = sEsSolo(0)
     while(e < Sentinel){
@@ -350,9 +352,9 @@ class System(fname: String, checkDeadlock: Boolean,
           while(sE < pE){ sj += 1; sE = sEs(sj) }
           if(sE < Sentinel){
             while(pE < sE){ pj += 1; pE = pEs(pj) }
-            if(sE == pE){ // can synchronise
-              // println("Synchronisation: "+showEvent(sE)+": "+pNexts(pj)+"; "+
-              //   sNexts(sj)+"; "+otherPresent)
+            if(sE == pE && (activePrincipal || servers.isActiveServerEvent(sE))){ 
+              // can synchronise
+              assert(activePrincipal) // I think the other case can't happen
               if(otherIndices.nonEmpty){
                 if(verbose)
                   println("Synchronisation: "+cv+"; "+showEvent(sE)+": "+
@@ -367,13 +369,6 @@ class System(fname: String, checkDeadlock: Boolean,
                     transServerComponent(pf)(pi)
                 if(otherNexts != null){
                   val (otherEs, otherStates) = otherNexts
-                  // println(s"transitions($cv)")
-                  // println(showEvent(sE)+s"; otherIndices = $otherIndices")
-                  // println(s"otherState = $otherState")
-                  // println(otherEs.map(n => 
-                  //   if(n == Sentinel) n.toString else showEvent(n)).
-                  //   mkString(", "))
-                  // println(otherStates.mkString(", "))
                   var oj = 0;  while(otherEs(oj) < pE) oj += 1
                   if(otherEs(oj) == pE){
                     val pre = Concretization(cv)
@@ -405,9 +400,9 @@ class System(fname: String, checkDeadlock: Boolean,
                 }
               }
 
-            } // end of synchronisation case
+            } // end of if(sE == pE), synchronisation case
+            if(sE == pE){ pj += 1; assert(pE != pEs(pj)); pE = pEs(pj) }
             sj += 1; assert(sE != sEs(sj)); sE = sEs(sj)
-            pj += 1; assert(pE != pEs(pj)); pE = pEs(pj)
           }
         } // end of while(pE < Sentinel && sE < Sentinel)
       }

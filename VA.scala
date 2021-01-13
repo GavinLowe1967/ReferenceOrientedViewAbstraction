@@ -2,7 +2,7 @@ package ViewAbstraction
 
 // import ox.cads.util.{SamplingProfiler,ProfilerSummaryTree}
 import ox.gavin.profiling.{SamplingProfiler,ProfilerSummaryTree}
-
+import scala.collection.mutable.ArrayBuffer
 
 object VA{ 
   /** Model of the system. */
@@ -41,6 +41,7 @@ object VA{
     var significancePaths: List[SignificancePath] = List()
     // var k = -1; var aShapes = List[Shape]()
     var profiling = false; var profilingFlat = false; var interval = 20
+    var profilingBoth = false
     var verbose = false; var bound = Int.MaxValue; var timing = false
     var testing = false
 
@@ -56,6 +57,8 @@ object VA{
       case "--profile" => profiling = true; interval = args(i+1).toInt; i += 2
       case "--profileFlat" =>
         profilingFlat = true; interval = args(i+1).toInt; i += 2
+      case "--profileBoth" =>
+        profilingBoth = true; interval = args(i+1).toInt; i += 2
       case "--verbose" => verbose = true; i += 1
       case "--bound" => bound = args(i+1).toInt; i += 2
       case "--timing" => timing = true; i += 1
@@ -72,7 +75,8 @@ object VA{
     }
 
     println("numThreads = "+numThreads)
-    // Initialise Profiler.  FIXME
+    // println(s"profilingBoth = $profilingBoth")
+    // Initialise Profiler. 
     ox.gavin.profiling.Profiler.setWorkers(numThreads)
 
     // Profiler
@@ -81,7 +85,15 @@ object VA{
         !frame.getClassName.contains("jdk.internal") // &&
         // !frame.getClassName.contains("uk.ac.ox.cs.fdr")
     val printer =
-      if(!profilingFlat)
+      if(profilingBoth){
+        data: ArrayBuffer[SamplingProfiler.StackTrace] => {
+          SamplingProfiler.printTree(
+            filter = filter,
+            expand = ProfilerSummaryTree.expandToThreshold(0.05))(data) +
+          SamplingProfiler.print(filter = filter, length = 60)(data)
+        }
+      }
+      else if(!profilingFlat)
         SamplingProfiler.printTree(
           filter = filter,
           expand = ProfilerSummaryTree.expandToThreshold(0.05)) _
@@ -108,7 +120,8 @@ object VA{
         SystemP.SystemTest.test(system)
         val checkerTest = new CheckerTest(system); checkerTest.test
       }
-      else if(profiling || profilingFlat) profiler(run()) else run()
+      else if(profiling || profilingFlat || profilingBoth) profiler(run()) 
+      else run()
       // if(profiler != null) println(profiler.iters)
       val elapsed0 = (java.lang.System.nanoTime - start) // in ns
       if(timing) println(elapsed0)

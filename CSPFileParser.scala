@@ -70,9 +70,11 @@ class CSPFileParser(fname: String){
     }
     val numFamilies = componentProcessNames.length
     if(componentAlphabets.length != numFamilies ||
-         identityTypes.length != numFamilies){
+         identityTypes.length != numFamilies || 
+         componentActives.length != numFamilies){
       println("Inconsistent numbers of definitions for \"component process\",\n"+
-                "\"component alphabet\" and \"identity type\"")
+                "\"component alphabet\", \"identity type\", "+
+                "and \"component active\".")
       sys.exit
     }
     // Advance componentRenames

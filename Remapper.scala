@@ -65,10 +65,25 @@ object Remapper{
   }
 
   /** Is the mapping represtned by map injective? */
-  def isInjective(map: RemappingMap): Boolean =
-    (0 until numTypes).forall{f =>
-      val range = map(f).filter(!isDistinguished(_))
-      range.length == range.distinct.length
+  def isInjective(map: RemappingMap): Boolean = {
+    // (0 until numTypes).forall{f =>
+    //   val range = map(f).filter(!isDistinguished(_))
+    //   range.length == range.distinct.length
+    var ok = true; var f = 0
+    while(ok && f < numTypes){
+      var i = 0; val len = map(f).length
+      while(ok && i < len-1){
+        if(!isDistinguished(map(f)(i))){
+          // check map(f)(i) not in map(f)[i+1..len)
+          var j = i+1
+          while(j < len && map(f)(j) != map(f)(i)) j += 1
+          ok = j == len
+        }
+        i += 1
+      }
+      f += 1
+    }
+    ok
     }
 
   /** Produce a new RemappingMap, extending map0 so (f,id) maps to id1.
@@ -78,15 +93,33 @@ object Remapper{
     map0: RemappingMap, f: Family, id: Identity, id1: Identity)
       : RemappingMap = {
     // id1 should not appear in map0(f), except perhaps in position id
-    require((0 until map0(f).length).forall(i => i == id || map0(f)(i) != id1),
-      s"extendMap: value $id1 already appears in map: "+
-        map0(f).mkString("[",",","]")+"; "+(id,id1))
-    Array.tabulate(numTypes)(t =>
-      if(t != f) map0(t) 
-      else{ 
-        val newRow = map0(f).clone; newRow(id) = id1; newRow
+    if(false){ // This is quite costly
+      var i = 0
+      while(i < map0(f).length){
+        if(i != id)
+          require(map0(f)(i) != id1,
+            s"extendMap: value $id1 already appears in map: "+
+              map0(f).mkString("[",",","]")+"; "+(id,id1))
+        i += 1
       }
-    )
+    }
+    // require((0 until map0(f).length).forall(i => i == id || map0(f)(i) != id1),
+    //   s"extendMap: value $id1 already appears in map: "+
+    //     map0(f).mkString("[",",","]")+"; "+(id,id1))
+    val result = new Array[Array[Int]](numTypes)
+    var t = 0
+    while(t < numTypes){
+      if(t != f) result(t) = map0(t)
+      else{ result(t) = map0(f).clone; result(t)(id) = id1 }
+      t += 1
+    }
+    result
+    // Array.tabulate(numTypes)(t =>
+    //   if(t != f) map0(t) 
+    //   else{ 
+    //     val newRow = map0(f).clone; newRow(id) = id1; newRow
+    //   }
+    // )
   }
 
   // ------ NextArgMaps
@@ -360,18 +393,27 @@ object Remapper{
   def combine1(map0: RemappingMap, nextArg: NextArgMap,
     otherArgs: Array[List[Identity]], cpts1: Array[State], cpts2: Array[State]) 
       : ArrayBuffer[(RemappingMap, Unifications)] = {
-    for(f <- 0 until numTypes){
-      // otherArgs(f) disjoint from ran(map0(f))
-      require(otherArgs(f).forall(i => !map0(f).contains(i)),
-        s"combine1: otherArgs not disjoint from map0 for $f: "+
-          map0(f).mkString("[",",","]")+"; "+otherArgs(f).mkString("[",",","]"))
-      // nextArg(f) holds next fresh value
+    var f = 0
+    while(f < numTypes){
+      // Check otherArgs(f) disjoint from ran(map0(f))
+      var oa = otherArgs(f)
+      while(oa.nonEmpty){
+        require(!map0(f).contains(oa.head),
+          s"combine1: otherArgs not disjoint from map0 for $f: "+
+            map0(f).mkString("[",",","]")+"; "+otherArgs(f).mkString("[",",","]"))
+        oa = oa.tail
+      }
+      // Check nextArg(f) holds next fresh value
       require(nextArg(f) > (
         if(otherArgs(f).isEmpty) map0(f).max 
         else(map0(f).max max otherArgs(f).max)  ),
         s"combine1: nextArg($f) with incorrect value: "+nextArg(f)+"; "+
           map0(f).mkString("[",",","]")+"; "+otherArgs(f).mkString("[",",","]"))
+      f += 1
     }
+    // Check elements of cpts1 are distinct
+    // for(i <- 0 until cpts1.length; j <- i+1 until cpts1.length)
+    //   assert(cpts1(i) != cpts1(j), View.showStates(cpts1))
     // println("combine1: "+showRemappingMap(map0)+"; "+
     //   nextArg.mkString("[",",","]")+"; "+otherArgs.mkString("[",",","]")+"; "+
     //   cpts1.mkString("[",",","]")+"; "+cpts2.mkString("[",",","]"))
@@ -380,7 +422,7 @@ object Remapper{
     // Extend map to remap cpts2(j).ids[i..) and then cpts2[j+1..). 
     def combineRec(map: RemappingMap, i: Int, j: Int, unifs: Unifications)
         : Unit = {
-      require(isInjective(map), "combineRec: "+showRemappingMap(map))
+      //require(isInjective(map), "combineRec: "+showRemappingMap(map))//IMPROVE
       // println(s"combineRec(${showRemappingMap(map)}, $i, $j)")
       if(j == cpts2.length) result += ((map, unifs))  // base case
       else{
@@ -400,10 +442,12 @@ object Remapper{
               val map1 = extendMap(map, f, id, id1) 
               if(i == 0){ // Identity; see if any cpt of cpts1 matches (f, id1)
                 var matchedId = false // have we found a cpt with matching id?
-                for(k <- 0 until cpts1.length){ 
+                var k = 0
+                while(k < cpts1.length){
                   val c1 = cpts1(k)
                   if(c1.componentProcessIdentity == (f,id1)){
-                    assert(!matchedId); matchedId = true
+                    assert(!matchedId, View.showStates(cpts1)+": "+(f,id1))
+                    matchedId = true
                     // if(j != 0 || k != 0) // ??? I think this was an error
                     if(unify(map1, c1, c)){
                       //println("  Unified $c1 and $c: "+showRemappingMap(map))
@@ -411,12 +455,14 @@ object Remapper{
                     }
                     // else println("  Failed to unify $c1 and $c.")
                   }
+                  k += 1
                 } // end of for(k <- ...)
                 if(!matchedId) // No cpt of cpts1 matched; move on
                   combineRec(map1, i+1, j, unifs) 
               } // end of if(i == 0)
               else combineRec(map1, i+1, j, unifs) // Move on to next parameter
               otherArgs(f) = newIds // undo (*)
+// FIXME: is above right if idX >= 0 ?
             } // end of for(id1 <- newIds)
 
             // Case 2: map id to nextArg(f)
@@ -444,6 +490,10 @@ object Remapper{
     // println(s"combine($v1, $v2)")
     val servers = v1.servers; require(v2.servers == servers)
     val components1 = v1.components; val components2 = v2.components
+    View.checkDistinct(components2)
+    // Check elements of components1 are distinct
+    // for(i <- 0 until components1.length; j <- i+1 until components1.length)
+    //   assert(components1(i) != components1(j), View.showStates(components1))
     // The initial maps: map0 is the identity on the server parameters;
     // otherArgs gives parameters used in v1 but not the servers; nextArg
     // gives the next fresh parameters.
@@ -458,9 +508,11 @@ object Remapper{
     //   .mkString("\n"))
     maps.map{ 
       case (map, unifs) => 
+        val newCpts = applyRemapping(map, components2)
+        View.checkDistinct(newCpts)
         // println(showRemappingMap(map)+"; "+unifs)
         // components2.mkString("[",",","]"))
-        (applyRemapping(map, components2), unifs) 
+        (newCpts, unifs) 
     }.toList
   }
 

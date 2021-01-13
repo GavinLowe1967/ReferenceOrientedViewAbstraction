@@ -12,7 +12,7 @@ lockBasedStack0Err2.csp: version where push does not obtain lock.  Finds error.
 
 With three-way synchronisations:
 
-lockBasedStack.csp: correct version with three-way synchronisation.  209
+lockBasedStack.csp: correct version with three-way synchronisation.  274
 abstractions.
 
 lockBasedStackErr1.csp:  version where pop does not obtain lock.  Finds error.

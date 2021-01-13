@@ -10,6 +10,12 @@ first3_((x_, _, _)) = x_
 second3_((_, y_ ,_)) = y_
 third3_((_, _, z_)) = z_
 
+-- Extract components of a four-tuple
+first4_((w_, _, _, _)) = w_
+second4_((_, x_, _ ,_)) = x_
+third4_((_, _, y_, _)) = y_
+fourth4_((_, _, _, z_)) = z_
+
 -- Returns (take n xs, drop n xs)
 takeDrop_ :: (Int, <a>) -> (<a>, <a>)
 takeDrop_(n_, xs_) = 

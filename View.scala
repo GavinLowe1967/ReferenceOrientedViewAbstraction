@@ -32,7 +32,10 @@ class ComponentView(
     val princRefs = principal.processIdentities.tail.filter{
       case(f,id) => !isDistinguished(id)}
     val otherPids = others.map(_.componentProcessIdentity)
-    assert(princRefs.forall(otherPids.contains(_)) &&
+    assert(princRefs.forall(
+      pid => (
+        otherPids.contains(pid) || pid == principal.componentProcessIdentity)
+      ) &&
       otherPids.forall(princRefs.contains(_)),
     s"Not a correct ComponentView: $this")
   }
@@ -112,6 +115,11 @@ object View{
       !ids1.contains(st.componentProcessIdentity) || cpts1.contains(st)))
     cpts1 ++ cpts2.filter(st => !ids1.contains(st.componentProcessIdentity))
   }
+
+  /** Check components in cpts are distinct. */
+  def checkDistinct(cpts: Array[State], msg: => String = "") = 
+    for(i <- 0 until cpts.length; j <- i+1 until cpts.length)
+      assert(cpts(i) != cpts(j), showStates(cpts)+" "+msg)
 
 }
 

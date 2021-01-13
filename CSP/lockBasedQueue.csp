@@ -197,12 +197,13 @@ alphaWD = union(
 
 -------- Put servers together
 
-ServerSet :: <(Proc, <(Event,Event)>, {Event})>
+ServerSet :: <(Proc, <(Event,Event)>, {Event}, Bool)>
 ServerSet =
-  < (Lock, <>, alphaLock), (Header, <>, alphaHeader), (Tail, <>, alphaTail),
-    (Watchdog, seq(WDRename), alphaWD), (Constructor, <>, alphaConstr) >
+  < (Lock, <>, alphaLock, false), (Header, <>, alphaHeader, false), 
+    (Tail, <>, alphaTail, false), (Watchdog, seq(WDRename), alphaWD, false), 
+    (Constructor, <>, alphaConstr, true) >
 
-Servers = || (S, R_, Alpha) <- set(ServerSet) @ 
+Servers = || (S, R_, Alpha, _) <- set(ServerSet) @ 
   [Alpha] S[[ e1 <- e2 | (e1,e2) <- set(R_) ]]
 
 Components = Threads [| inter(alphaNodes, alphaThreads) |] Nodes 

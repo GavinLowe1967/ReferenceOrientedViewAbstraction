@@ -434,7 +434,7 @@ object LockFreeReadHashSet{
     while(nt > 1){ pow *= 2; nt = (nt-1)/2+1 }
     pow
   }
-  // FIXME: use powerOfTwoAtLeast
+  // IMPROVE: use powerOfTwoAtLeast
 
   val DefaultShards = powerOf2AboveNumThreads*16 
 }

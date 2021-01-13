@@ -155,10 +155,7 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
       // Second term below is the number of distinguished values of
       // the type of this identity, so gives an offset in each trie
       if(id < SplitFreshVal) id + theOffsets(index)
-      else{
-        // assert(id < SplitFreshVal+MaxFresh) // FIXME
-        id+theFreshOffsets(index)
-      }
+      else id+theFreshOffsets(index)
     }
 
     // Index into a trie corresponding to the parameters at positions idsIndex

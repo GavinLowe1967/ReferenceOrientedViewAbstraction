@@ -152,15 +152,15 @@ WDRename = Union({
 alphaWatchdog = {| popEmpty, error, initNode, setTop |}
 
 -------- Put servers together
-ServerSet :: <(Proc, <(Event,Event)>, {Event})>
+ServerSet :: <(Proc, <(Event,Event)>, {Event}, Bool)>
 ServerSet = 
-  < (Lock, <>, alphaLock), (Top(Null), <>, alphaTop), 
-    (WD0, seq(WDRename), alphaWatchdog) >
+  < (Lock, <>, alphaLock, false), (Top(Null), <>, alphaTop, false), 
+    (WD0, seq(WDRename), alphaWatchdog, false) >
 
 -- Checks using FDR directly
 
 Servers = 
-  || (S, R, Alpha) <- set(ServerSet) @ 
+  || (S, R, Alpha, _) <- set(ServerSet) @ 
        [Alpha] S[[ e1 <- e2 | (e1,e2) <- set(R) ]]
 
 SyncSet = {| setTop, getTop, lock, unlock, popEmpty, initNode |}  

@@ -25,8 +25,9 @@ few synchronisations with the watchdog.
 Lock-based queue
 ================
 
-lockBasedQueue.csp: at present finds only four states.  I think the initial
-synchronisation between the constructor and the header node is blocked.
+lockBasedQueue.csp: involves two synchronisations between thread and watchdog
+on each of enqueueing and dequeueing.  Also artificially keeps the tail
+node in an enqueueing thread's state. 538 abstractions
 
 Test files
 ==========
