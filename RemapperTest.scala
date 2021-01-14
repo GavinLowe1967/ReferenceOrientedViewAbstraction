@@ -75,6 +75,7 @@ object RemapperTest{
   }
 
   private def combine1Test = {
+    println("== combine1Test ==")
     def test1 = { // 6[0](N0), 6[0](N1), allowing N1 -> N0
       val buff = combine1(newRemappingMap, Array(1,0), Array(List(0), List()),
         Array(initNode(N0)), Array(initNode(N1)))
@@ -115,7 +116,8 @@ object RemapperTest{
     def test4 = { // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2)
       val buff = combine1(newRemappingMap, Array(2,1), Array(List(0), List(0)),
         components1, nodes)
-      assert(buff.length == 3)
+      // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
+      assert(buff.length == 4)
       assert(buff.exists{case(map1,unifs) => // N0 -> N0, N1 -> N1 with unif, N2 -> N2
         checkMap(map1(0), List((0,0), (1,1), (2,2))) &&
         map1(1).forall(_ == -1) && unifs == List((1,0))
@@ -126,6 +128,10 @@ object RemapperTest{
       })
       assert(buff.exists{case(map1,unifs) => // N0 -> N2, N1 -> N3, N2 -> N4, no unifs
         checkMap(map1(0), List((0,2), (1,3), (2,4))) &&
+        emptyMap(map1(1)) && unifs.isEmpty
+      })
+      assert(buff.exists{case(map1,unifs) => // N0 -> N2, N1 -> N3, N2 -> N0, no unifs
+        checkMap(map1(0), List((0,2), (1,3), (2,0))) &&
         emptyMap(map1(1)) && unifs.isEmpty
       })
     }
@@ -139,12 +145,28 @@ object RemapperTest{
       assert{val (map1,unifs) = buff.head; // N1 -> N0, N2 -> N1 with unif; N0 -> N2
         checkMap(map1(0), List((1,0), (2,1), (0,2))) &&
         emptyMap(map1(1)) && unifs == List((1,1)) }
-      // ......................
     }
-    test1; test2; test3; test4; test5
+    def test6 = {
+      // println("test6")
+      // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2) with N1 -> N0
+      val map = newRemappingMap; map(0)(1) = 0
+      val buff = combine1(map, Array(3,1), Array(List(2), List(0)), 
+        components1, nodes)
+      // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
+      // N0 maps to N2 or N3
+      assert(buff.length == 2)
+      assert(buff.forall{case(map1,unifs) =>
+        (checkMap(map1(0), List((0,2), (1,0), (2,1))) || 
+          checkMap(map1(0), List((0,3), (1,0), (2,1)))) &&
+        emptyMap(map1(1)) && unifs == List((1,1)) 
+      })
+    }
+    test1; test2; test3; test4; test5; test6
   } // end of combine1Test
 
+  /** Test of combine. */
   private def combineTest = {
+    println("== combineTest ==")
     def test1 = { // 6[0](N0), 6[0](N1)
       val v1 = new Concretization(servers1, Array(initNode(N0)))
       val v2 = new ComponentView(servers1, initNode(N1), Array())
@@ -188,25 +210,37 @@ object RemapperTest{
         (st == aNode(1,-1) || st == aNode(2,-1)) && unifs.isEmpty })
     }
     def test5 = { // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2)
+      // println("test5")
       val v1 = new Concretization(servers1, Array(pushSt(T0,N0), aNode(0,1)))
       val v2 = new ComponentView(servers1, aNode(0,1), Array(aNode(1,2)))
       val buff = combine(v1, v2)
+      // println(buff.map{case(states,unifs) =>
+      //   states.mkString(" || ")+"; "+unifs}.mkString("\n"))
+      // 7[0](N1,N2) || 7[0](N2,N0); List()
+      // 7[0](N1,N2) || 7[0](N2,N3); List()
       // 7[0](N0,N1) || 7[0](N1,N2); List((1,0))
-      // 7[0](N2,N0) || 7[0](N0,N1); List((1,1))
-      // 7[0](N1,N2) || 7[0](N2,N3); List().  
+      // 7[0](N2,N1) || 7[0](N1,N0); List()
       // 7[0](N2,N1) || 7[0](N1,N3); List()
+      // 7[0](N2,N0) || 7[0](N0,N1); List((1,1))
+      // 7[0](N2,N3) || 7[0](N3,N1); List()
+      // 7[0](N2,N3) || 7[0](N3,N0); List()
       // 7[0](N2,N3) || 7[0](N3,N4); List()
-      assert(buff.length == 5)
+      assert(buff.length == 9)
       assert(buff.forall{ case(Array(st1, st2), unifs) =>
         st1 == aNode(0,1) && st2 == aNode(1,2) && unifs == List((1,0)) || // N0->N0
         st1 == aNode(2,0) && st2 == aNode(0,1) && unifs == List((1,1)) || // N1->N0
-        st1 == aNode(1,2) && st2 == aNode(2,3) && unifs.isEmpty ||  // N0 -> N1
-        st1 == aNode(2,1) && st2 == aNode(1,3) && unifs.isEmpty|| // N1 -> N1
-        st1 == aNode(2,3) && st2 == aNode(3,4) && unifs.isEmpty // distinct nodes
+        st1 == aNode(1,2) && (st2 == aNode(2,3) || st2 == aNode(2,0)) && 
+          unifs.isEmpty ||  // N0 -> N1
+        st1 == aNode(2,1) && (st2 == aNode(1,3) || st2 == aNode(1,0)) && 
+          unifs.isEmpty || // N1 -> N1
+        st1 == aNode(2,3) && 
+          (st2 == aNode(3,4) || st2 == aNode(3,0) || st2 == aNode(3,1)) && 
+          unifs.isEmpty // distinct nodes
       })
     }
     def test6 = {// 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2)
                  // with Top = N0
+      // println("test6")
       val v1 = new Concretization(servers2, Array(pushSt(T0,N0), aNode(0,1)))
       val v2 = new ComponentView(servers2, aNode(0,1), Array(aNode(1,2)))
       // println(v1.toString+"\n"+v2)
@@ -221,7 +255,7 @@ object RemapperTest{
   }
 
   def remapToPrincipalTest = {
-    println("*** remapToPrincipalTest")
+    println("== remapToPrincipalTest ==")
     // Servers holding no IDs
     assert(remapToPrincipal(servers0, pushSt(T0,N0)) == pushSt(T0,N0))
     assert(remapToPrincipal(servers0, pushSt(T1,N1)) == pushSt(T0,N0))

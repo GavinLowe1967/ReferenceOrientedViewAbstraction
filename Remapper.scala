@@ -1,7 +1,7 @@
 package ViewAbstraction.RemapperP 
 
 import ViewAbstraction._
-// import ox.gavin.profiling.Profiler
+import ox.gavin.profiling.Profiler
 import scala.math.Ordering.Implicits._ // for sorting list of lists
 import scala.collection.mutable.ArrayBuffer
 
@@ -376,7 +376,8 @@ object Remapper{
     * cpts1), or a fresh value given by nextArg(f).  If the jth identity
     * parameter of cpts2 maps to the kth identity parameter of cpts1, then the
     * corresponding States much match, and the pair (k,j) is included in the
-    * Unifications returned.  Called by combine.  See combine1Test for examples.
+    * Unifications returned.  Called by combine.  See
+    * RemapperTest.combine1Test for examples.
     * 
     * @param map the RemappingMap that gets extended.  Cloned before being 
     * mutated.
@@ -393,6 +394,7 @@ object Remapper{
   def combine1(map0: RemappingMap, nextArg: NextArgMap,
     otherArgs: Array[List[Identity]], cpts1: Array[State], cpts2: Array[State]) 
       : ArrayBuffer[(RemappingMap, Unifications)] = {
+    Profiler.count("combine1")
     var f = 0
     while(f < numTypes){
       // Check otherArgs(f) disjoint from ran(map0(f))
@@ -422,6 +424,7 @@ object Remapper{
     // Extend map to remap cpts2(j).ids[i..) and then cpts2[j+1..). 
     def combineRec(map: RemappingMap, i: Int, j: Int, unifs: Unifications)
         : Unit = {
+      Profiler.count("combineRec")
       //require(isInjective(map), "combineRec: "+showRemappingMap(map))//IMPROVE
       // println(s"combineRec(${showRemappingMap(map)}, $i, $j)")
       if(j == cpts2.length) result += ((map, unifs))  // base case
@@ -436,9 +439,10 @@ object Remapper{
             // Case 1: map id to the corresponding value idX in map, if any;
             // otherwise to an element id1 of otherArgs(f)
             val idX = map(f)(id)
+            val oldIds = otherArgs(f)
             val newIds = if(idX < 0) otherArgs(f) else List(idX)
             for(id1 <- newIds){
-              otherArgs(f) = newIds.filter(_ != id1) // temporary update (*)
+              otherArgs(f) = oldIds.filter(_ != id1) // temporary update (*)
               val map1 = extendMap(map, f, id, id1) 
               if(i == 0){ // Identity; see if any cpt of cpts1 matches (f, id1)
                 var matchedId = false // have we found a cpt with matching id?
@@ -448,22 +452,16 @@ object Remapper{
                   if(c1.componentProcessIdentity == (f,id1)){
                     assert(!matchedId, View.showStates(cpts1)+": "+(f,id1))
                     matchedId = true
-                    // if(j != 0 || k != 0) // ??? I think this was an error
-                    if(unify(map1, c1, c)){
-                      //println("  Unified $c1 and $c: "+showRemappingMap(map))
-                      combineRec(map1, 0, j+1, (k,j) :: unifs)
-                    }
-                    // else println("  Failed to unify $c1 and $c.")
+                    if(unify(map1, c1, c)) combineRec(map1, 0, j+1, (k,j)::unifs)
                   }
                   k += 1
-                } // end of for(k <- ...)
+                } // end of while(k < ...)
                 if(!matchedId) // No cpt of cpts1 matched; move on
                   combineRec(map1, i+1, j, unifs) 
               } // end of if(i == 0)
               else combineRec(map1, i+1, j, unifs) // Move on to next parameter
-              otherArgs(f) = newIds // undo (*)
-// FIXME: is above right if idX >= 0 ?
             } // end of for(id1 <- newIds)
+            otherArgs(f) = oldIds  // undo (*)
 
             // Case 2: map id to nextArg(f)
             if(idX < 0){ 

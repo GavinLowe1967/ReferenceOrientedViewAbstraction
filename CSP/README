@@ -12,7 +12,7 @@ lockBasedStack0Err2.csp: version where push does not obtain lock.  Finds error.
 
 With three-way synchronisations:
 
-lockBasedStack.csp: correct version with three-way synchronisation.  274
+lockBasedStack.csp: correct version with three-way synchronisation.  274 -> 302
 abstractions.
 
 lockBasedStackErr1.csp:  version where pop does not obtain lock.  Finds error.
@@ -27,7 +27,7 @@ Lock-based queue
 
 lockBasedQueue.csp: involves two synchronisations between thread and watchdog
 on each of enqueueing and dequeueing.  Also artificially keeps the tail
-node in an enqueueing thread's state. 538 abstractions
+node in an enqueueing thread's state. 538 abstractions -> 556 ??
 
 Test files
 ==========
