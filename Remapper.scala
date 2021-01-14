@@ -424,6 +424,11 @@ object Remapper{
     // Extend map to remap cpts2(j).ids[i..) and then cpts2[j+1..). 
     def combineRec(map: RemappingMap, i: Int, j: Int, unifs: Unifications)
         : Unit = {
+      // for(f <- 0 until numTypes) // IMPROVE
+      //   require(otherArgs(f).forall(id => !map(f).contains(id)),
+      //     s"combineRec: otherArgs not disjoint from map for $f: "+
+      //       map(f).mkString("[",",","]")+"; "+otherArgs(f).mkString("[",",","]"))
+
       Profiler.count("combineRec")
       //require(isInjective(map), "combineRec: "+showRemappingMap(map))//IMPROVE
       // println(s"combineRec(${showRemappingMap(map)}, $i, $j)")
@@ -438,29 +443,49 @@ object Remapper{
           else{ // rename (f, id)
             // Case 1: map id to the corresponding value idX in map, if any;
             // otherwise to an element id1 of otherArgs(f)
-            val idX = map(f)(id)
             val oldIds = otherArgs(f)
-            val newIds = if(idX < 0) otherArgs(f) else List(idX)
-            for(id1 <- newIds){
+            // Rename id to id1
+            def renameX(id1: Identity) = {
               otherArgs(f) = oldIds.filter(_ != id1) // temporary update (*)
-              val map1 = extendMap(map, f, id, id1) 
+              // val map1 = extendMap(map, f, id, id1)
+// FIXME: shouldn't we be recreating map1 on each iteration for k, below?
+              // for(f <- 0 until numTypes) // IMPROVE
+              //   assert(otherArgs(f).forall(id => !map1(f).contains(id)))
               if(i == 0){ // Identity; see if any cpt of cpts1 matches (f, id1)
                 var matchedId = false // have we found a cpt with matching id?
                 var k = 0
                 while(k < cpts1.length){
+                  val map1 = extendMap(map, f, id, id1)
+                  // for(f <- 0 until numTypes) // IMPROVE
+                  //   assert(otherArgs(f).forall(id => !map1(f).contains(id)))
                   val c1 = cpts1(k)
                   if(c1.componentProcessIdentity == (f,id1)){
                     assert(!matchedId, View.showStates(cpts1)+": "+(f,id1))
                     matchedId = true
-                    if(unify(map1, c1, c)) combineRec(map1, 0, j+1, (k,j)::unifs)
+                    if(unify(map1, c1, c)){
+// FIXME: test below?
+                      // if((0 until numTypes).forall(f => 
+                      //   otherArgs(f).forall(id2 => !map1(f).contains(id2))))
+                      // for(f <- 0 until numTypes) // IMPROVE
+                      //   assert(otherArgs(f).forall(id => !map1(f).contains(id)))
+                        combineRec(map1, 0, j+1, (k,j)::unifs)
+                    }
                   }
                   k += 1
                 } // end of while(k < ...)
-                if(!matchedId) // No cpt of cpts1 matched; move on
-                  combineRec(map1, i+1, j, unifs) 
+                if(!matchedId) // No cpt of cpts1 matched; move on              
+                  combineRec(extendMap(map, f, id, id1), i+1, j, unifs) 
               } // end of if(i == 0)
-              else combineRec(map1, i+1, j, unifs) // Move on to next parameter
-            } // end of for(id1 <- newIds)
+              else combineRec(extendMap(map, f, id, id1), i+1, j, unifs) // Move on to next parameter
+            } // end of renameX
+
+            val idX = map(f)(id) 
+            if(idX < 0) for(id1 <- otherArgs(f)) renameX(id1) 
+            else{ 
+              // assert(!otherArgs(f).contains(idX), 
+              //   show(map)+"; "+f+"; "+otherArgs(f))
+              renameX(idX) 
+            }
             otherArgs(f) = oldIds  // undo (*)
 
             // Case 2: map id to nextArg(f)
