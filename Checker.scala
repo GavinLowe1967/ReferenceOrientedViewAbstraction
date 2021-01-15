@@ -361,20 +361,16 @@ class Checker(system: SystemP.System){
           while(j < cv1.components.length && !found){
             val cpt1 = cv1.components(j)
             if(cpt1.cs == cs1 && cpt1.id == stIdR){
-              // val map1 = Remapper.cloneMap(map) // IMPROVE: cloning needed?
               // test if cpt1 is a renaming of st under an extension of map
               var map2 = Remapper.unify(map, cpt1, st)
               if(map2 != null){
-              // if(Remapper.unify(map1, cpt1, st)){
                 // Check that all components referenced by pCpt in conc are
-                // matched by a corresponding component in cv1.
-                // found = true; 
+                // matched by a corresponding component in cv1.  map2 != null
+                // if true for all components so far.
                 var k = 1
                 while(k < pRefs.length && map2 != null){
                   if(pRefs(k) != null){
-                    // found = Remapper.unify(map1, cv1.components(k), pRefs(k))
                     map2 = Remapper.unify(map2, cv1.components(k), pRefs(k))
-                    // found = map2 != null // IMPROVE
                     if(veryVerbose)
                       println(s"Trying to unify ${cv1.components(k)} and "+
                         pRefs(k)+".  "+(if(found) "Succeeded." else "Failed."))

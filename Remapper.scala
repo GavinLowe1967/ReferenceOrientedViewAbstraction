@@ -355,9 +355,6 @@ object Remapper{
   /** Try to extend map to map' such that map'(st2) = st1.
     * Note: map is unchanged.
     * @return the new map, or null if unsuccessful. */
-// FIXME: comments
-  // private[RemapperP] 
-  // def unify(map: RemappingMap, st1: State, st2: State): Boolean = {
   def unify(map: RemappingMap, st1: State, st2: State): RemappingMap = {
     // println(s"unify(${showRemappingMap(map)}, $st1, $st2)")
     if(st1.cs != st2.cs) null // false
@@ -372,7 +369,6 @@ object Remapper{
       var i = 0; var ok = true
       while(i < len && ok){
         val id1 = ids1(i); val id2 = ids2(i); val t = typeMap(i)
-        // println((id1,id2))
         if(isDistinguished(id1) || isDistinguished(id2)) ok = id1 == id2
         else if(map1(t)(id2) < 0){
           if(map1(t).contains(id1)) ok = false // must preserve injectivity 
@@ -381,8 +377,7 @@ object Remapper{
         else ok = map1(t)(id2) == id1
         i += 1
       }
-      if(ok) map1 else null // for(f <- 0 until numFamilies) map(f) = map1(f)
-      // ok
+      if(ok) map1 else null 
     }
   }
 
@@ -471,15 +466,14 @@ object Remapper{
                 var matchedId = false // have we found a cpt with matching id?
                 var k = 0
                 while(k < cpts1.length){
-                  val map1 = extendMap(map, f, id, id1)
                   val c1 = cpts1(k)
                   if(c1.componentProcessIdentity == (f,id1)){
+                    // val map1 = extendMap(map, f, id, id1)
                     assert(!matchedId, View.showStates(cpts1)+": "+(f,id1))
                     matchedId = true
-                    val map2 = unify(map1, c1, c)
+                    val map2 = unify(extendMap(map, f, id, id1), c1, c)
                     if(map2 != null){
-                    // if(unify(map1, c1, c)){
-                      // Update otherArgs to be disjoint from ran map1.
+                      // Update otherArgs to be disjoint from ran map2.
                       val oldOtherArgs = otherArgs.clone
                       for(f <- 0 until numTypes)
                         otherArgs(f) = 
