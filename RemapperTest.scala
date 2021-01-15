@@ -50,28 +50,28 @@ object RemapperTest{
 
   private def unifyTest = {
     var map = newRemappingMap
-    assert(! unify(map, aNode(0,-1), aNode(0,1))) // 7[0](N0,Null), 7[0](N0,N1)
-    assert(! unify(map, aNode(1,-1), aNode(0,1))) // 7[0](N1,Null), 7[0](N0,N1)
+    assert(unify(map, aNode(0,-1), aNode(0,1)) == null) // 7[0](N0,Null), 7[0](N0,N1)
+    assert(unify(map, aNode(1,-1), aNode(0,1)) == null) // 7[0](N1,Null), 7[0](N0,N1)
 
-    var ok = unify(map, aNode(0,-1), aNode(1,-1)) // 7[0](N0,Null), 7[0](N1,Null),
+    var map1 = unify(map, aNode(0,-1), aNode(1,-1)) // 7[0](N0,Null), 7[0](N1,Null),
     // give N1->N0
-    assert(ok && checkMap(map(0), 1, 0) && map(1).forall(_ == -1))
+    assert(map1 != null && checkMap(map1(0), 1, 0) && emptyMap(map1(1)))
 
     // 7[0](N0,Null), 7[0](N1,Null), but fix N1 -> N2, so unification should fail
     map = newRemappingMap; map(0)(1) = 2; 
-    assert(!unify(map, aNode(0,-1), aNode(1,-1)))
+    assert(unify(map, aNode(0,-1), aNode(1,-1)) == null)
 
     // 7[0](N0,N1), 7[0](N1,N0)
-    map = newRemappingMap; ok = unify(map, aNode(0,1), aNode(1,0)) 
+    map = newRemappingMap; map1 = unify(map, aNode(0,1), aNode(1,0)) 
     // N0 -> N1, N1 -> N0
-    assert(ok && map(0)(1) == 0 && map(0)(0) == 1 &&
-      map(0).indices.forall(i => i<=1 || map(0)(i) == -1) && map(1).forall(_ == -1))
+    assert(map1 != null && map1(0)(1) == 0 && map1(0)(0) == 1 &&
+      map1(0).indices.forall(i => i<=1 || map1(0)(i) == -1) && emptyMap(map1(1)))
 
     // 7[0](N0,N1), 7[0](N1,N2) fixing N1 -> N0; adds N2 -> N1
-    map = newRemappingMap; map(0)(1) = 0; ok = unify(map, aNode(0,1), aNode(1,2))
-    assert(ok && map(0)(1) == 0 && map(0)(2) == 1 &&
-      map(0).indices.forall(i => i == 1 || i ==2 || map(0)(i) == -1) &&
-      map(1).forall(_ == -1))
+    map = newRemappingMap; map(0)(1) = 0; map1 = unify(map, aNode(0,1), aNode(1,2))
+    assert(map1 != null && map1(0)(1) == 0 && map1(0)(2) == 1 &&
+      map1(0).indices.forall(i => i == 1 || i ==2 || map1(0)(i) == -1) &&
+      emptyMap(map1(1)))
   }
 
   private def combine1Test = {

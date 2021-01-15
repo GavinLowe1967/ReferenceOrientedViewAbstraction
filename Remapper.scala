@@ -353,15 +353,16 @@ object Remapper{
   // ==================== Unification
 
   /** Try to extend map to map' such that map'(st2) = st1.
-    * If unsuccessful, map is unchanged.
-    * @return true if successful. */
+    * Note: map is unchanged.
+    * @return the new map, or null if unsuccessful. */
+// FIXME: comments
   // private[RemapperP] 
-  def unify(map: RemappingMap, st1: State, st2: State): Boolean = {
-    // Work with map1, and update map only if successful. 
+  // def unify(map: RemappingMap, st1: State, st2: State): Boolean = {
+  def unify(map: RemappingMap, st1: State, st2: State): RemappingMap = {
     // println(s"unify(${showRemappingMap(map)}, $st1, $st2)")
-    val map1 = cloneMap(map) 
-    if(st1.cs != st2.cs) false
+    if(st1.cs != st2.cs) null // false
     else{
+      val map1 = cloneMap(map)
       val ids1 = st1.ids; val ids2 = st2.ids
       val len = ids1.length; val typeMap = st1.typeMap
       assert(st1.family == st2.family && st2.typeMap == typeMap && 
@@ -380,8 +381,8 @@ object Remapper{
         else ok = map1(t)(id2) == id1
         i += 1
       }
-      if(ok) for(f <- 0 until numFamilies) map(f) = map1(f)
-      ok
+      if(ok) map1 else null // for(f <- 0 until numFamilies) map(f) = map1(f)
+      // ok
     }
   }
 
@@ -416,6 +417,7 @@ object Remapper{
       : ArrayBuffer[(Array[State], Unifications)] = {
     // Profiler.count("combine1")
     var f = 0
+    // IMPROVE: following checks are expensive
     while(f < numTypes){
       // Check otherArgs(f) disjoint from ran(map0(f))
       var oa = otherArgs(f)
@@ -474,13 +476,15 @@ object Remapper{
                   if(c1.componentProcessIdentity == (f,id1)){
                     assert(!matchedId, View.showStates(cpts1)+": "+(f,id1))
                     matchedId = true
-                    if(unify(map1, c1, c)){
+                    val map2 = unify(map1, c1, c)
+                    if(map2 != null){
+                    // if(unify(map1, c1, c)){
                       // Update otherArgs to be disjoint from ran map1.
                       val oldOtherArgs = otherArgs.clone
                       for(f <- 0 until numTypes)
                         otherArgs(f) = 
-                          otherArgs(f).filter(id => !map1(f).contains(id))
-                      combineRec(map1, 0, j+1, (k,j)::unifs)
+                          otherArgs(f).filter(id => !map2(f).contains(id))
+                      combineRec(map2, 0, j+1, (k,j)::unifs)
                       // Undo previous update
                       for(f <- 0 until numTypes) otherArgs(f) = oldOtherArgs(f)
                     }
