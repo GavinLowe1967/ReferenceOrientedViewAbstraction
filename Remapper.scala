@@ -408,11 +408,12 @@ object Remapper{
     * can be mapped to.  For each type, disjoint from the range of the
     * corresponding element of map0.  Used mutably, but each update is
     * backtracked.
-    * @return all resulting maps. */
+    * @return all resulting remappings of cpts2 together with the 
+    * unifications. */
   private[RemapperP] 
   def combine1(map0: RemappingMap, nextArg: NextArgMap,
     otherArgs: Array[List[Identity]], cpts1: Array[State], cpts2: Array[State]) 
-      : ArrayBuffer[(RemappingMap, Unifications)] = {
+      : ArrayBuffer[(Array[State], Unifications)] = {
     // Profiler.count("combine1")
     var f = 0
     while(f < numTypes){
@@ -438,20 +439,20 @@ object Remapper{
     // println("combine1: "+showRemappingMap(map0)+"; "+
     //   nextArg.mkString("[",",","]")+"; "+otherArgs.mkString("[",",","]")+"; "+
     //   cpts1.mkString("[",",","]")+"; "+cpts2.mkString("[",",","]"))
-    val result = new ArrayBuffer[(RemappingMap, Unifications)]
+    val result = new ArrayBuffer[(Array[State], Unifications)]
 
     // Extend map to remap cpts2(j).ids[i..) and then cpts2[j+1..). 
     def combineRec(map: RemappingMap, i: Int, j: Int, unifs: Unifications)
         : Unit = {
+      // Profiler.count("combineRec")
       // for(f <- 0 until numTypes) // IMPROVE
       //   require(otherArgs(f).forall(id => !map(f).contains(id)),
       //     s"combineRec: otherArgs not disjoint from map for $f: "+
-      //       map(f).mkString("[",",","]")+"; "+otherArgs(f).mkString("[",",","]"))
-
-      // Profiler.count("combineRec")
+      //  map(f).mkString("[",",","]")+"; "+otherArgs(f).mkString("[",",","]"))
       //require(isInjective(map), "combineRec: "+showRemappingMap(map))//IMPROVE
       // println(s"combineRec(${showRemappingMap(map)}, $i, $j)")
-      if(j == cpts2.length) result += ((map, unifs))  // base case
+      if(j == cpts2.length) 
+        result += ((applyRemapping(map, cpts2), unifs))  // base case
       else{
         val c = cpts2(j); val ids = c.ids; val typeMap = c.typeMap
         if(i == ids.length) // End of this component
@@ -536,34 +537,17 @@ object Remapper{
     * v1, then the corresponding States much match, and the pair (k,j) is
     * included in the Unifications returned. */
   def combine(v1: Concretization, v2: ComponentView)
-      : List[(Array[State], Unifications)] = {
+      : ArrayBuffer[(Array[State], Unifications)] = {
     // println(s"combine($v1, $v2)")
     val servers = v1.servers; require(v2.servers == servers)
     val components1 = v1.components; val components2 = v2.components
     View.checkDistinct(components2)
-    // Check elements of components1 are distinct
-    // for(i <- 0 until components1.length; j <- i+1 until components1.length)
-    //   assert(components1(i) != components1(j), View.showStates(components1))
     // The initial maps: map0 is the identity on the server parameters;
     // otherArgs gives parameters used in v1 but not the servers; nextArg
     // gives the next fresh parameters.
     val (map0, otherArgs, nextArg) = createCombiningMaps(servers, components1)
-    // println(s"map0 = "+showRemappingMap(map0))
-    // println(s"nextArg = "+nextArg.mkString(", "))
-    // println(s"otherArgs = "+otherArgs.mkString(", "))
-
-    val maps = combine1(map0, nextArg, otherArgs, components1, components2)
-    // println(s"combine: "+maps.size+" results")
-    // println(maps.map{case (map, unifs) => showRemappingMap(map)+"; "+unifs}
-    //   .mkString("\n"))
-    maps.map{ 
-      case (map, unifs) => 
-        val newCpts = applyRemapping(map, components2)
-        View.checkDistinct(newCpts)
-        // println(showRemappingMap(map)+"; "+unifs)
-        // components2.mkString("[",",","]"))
-        (newCpts, unifs) 
-    }.toList
+    // IMPROVE: inline combine1
+    combine1(map0, nextArg, otherArgs, components1, components2)
   }
 
 }

@@ -76,75 +76,67 @@ object RemapperTest{
 
   private def combine1Test = {
     println("== combine1Test ==")
+    def showBuff(buff: ArrayBuffer[(Array[State], Unifications)]) = 
+      buff.map{case(states,unifs) => View.showStates(states)+"; "+unifs }.
+        mkString("\n")
     def test1 = { // 6[0](N0), 6[0](N1), allowing N1 -> N0
       val buff = combine1(newRemappingMap, Array(1,0), Array(List(0), List()),
         Array(initNode(N0)), Array(initNode(N1)))
       assert(buff.length == 2)
-      assert(buff.exists{case(map1,unifs) => // mapping N1 -> N0 with unification
-        checkMap(map1(0), 1, 0) && map1(1).forall(_ == -1) && unifs == List((0,0))
-      })
-      assert(buff.exists{case(map1,unifs) => // mapping N1 -> N1
-        checkMap(map1(0), 1, 1) && map1(1).forall(_ == -1) && unifs == List()
-      })
+      // println("test1\n"+showBuff(buff))
+      assert(buff.exists{case(sts,unifs) => // mapping N1 -> N0 with unification
+        sts.sameElements(Array(initNode(N0))) && unifs == List((0,0)) })
+      assert(buff.exists{case(sts,unifs) => // mapping N1 -> N1
+        sts.sameElements(Array(initNode(N1))) && unifs == List() })
     }
     def test2 = { // Thread(T0) and InitNode(N0/N1)
       val buff = combine1(newRemappingMap, Array(1,1), Array(List(0), List()),
         Array(initSt(T0), initNode(N0)), Array(initSt(T0), initNode(N1)))
-      // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
       assert(buff.length == 2)
-      assert(buff.exists{case(map1,unifs) => // N1 -> N0, with unification, T0 -> T1
-        checkMap(map1(0), 1, 0) && checkMap(map1(1), 0, 1) && unifs == List((1,1))
-      })
-      assert(buff.exists{case(map1,unifs) => // N1 -> N1, no unification, T0 -> T1
-        checkMap(map1(0), 1, 1) && checkMap(map1(1), 0, 1) && unifs == List()
-      })
+      // println("test2\n"+showBuff(buff))
+      assert(buff.exists{case(sts,unifs) => // N1 -> N0, with unification, T0 -> T1
+        sts.sameElements(Array(initSt(T1), initNode(N0))) && unifs == List((1,1)) })
+      assert(buff.exists{case(sts,unifs) => // N1 -> N1, no unification, T0 -> T1
+        sts.sameElements(Array(initSt(T1), initNode(N1))) && unifs == List() })
     }
     def test3 = { // Thread(T0) and InitNode(N0/N1)
       val buff = combine1(newRemappingMap, Array(1,1), Array(List(0), List(0)),
         Array(initSt(T0), initNode(N0)), Array(initSt(T0), initNode(N1)))
       assert(buff.length == 4)
-      assert(buff.forall{case(map1,unifs) =>
+      // println("test3\n"+showBuff(buff))
+      assert(buff.forall{case(sts,unifs) =>
         // N1 -> N0 with unification; or N1 -> N1 without unification
-        ( checkMap(map1(0), 1, 0) && unifs.contains((1,1)) ||
-          checkMap(map1(0), 1, 1) && !unifs.contains((1,1)) ) &&
+        ( sts.contains(initNode(N0)) && unifs.contains((1,1)) ||
+          sts.contains(initNode(N1)) && !unifs.contains((1,1)) ) &&
         // T0 -> T0 with unification; or T0 -> T1 without unification
-        ( checkMap(map1(1), 0, 0) && unifs.contains((0,0)) ||
-          checkMap(map1(1), 0, 1) && !unifs.contains((0,0)) ) &&
+        ( sts.contains(initSt(T0)) && unifs.contains((0,0)) ||
+          sts.contains(initSt(T1)) && !unifs.contains((0,0)) ) &&
         unifs.forall(u => u == (0,0) || u == (1,1))
       })
     }
     def test4 = { // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2)
       val buff = combine1(newRemappingMap, Array(2,1), Array(List(0), List(0)),
         components1, nodes)
-      // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
       assert(buff.length == 4)
-      assert(buff.exists{case(map1,unifs) => // N0 -> N0, N1 -> N1 with unif, N2 -> N2
-        checkMap(map1(0), List((0,0), (1,1), (2,2))) &&
-        map1(1).forall(_ == -1) && unifs == List((1,0))
-      })
-      assert(buff.exists{case(map1,unifs) => // N1 -> N0, N2 -> N1 with unif; N0 -> N2
-        checkMap(map1(0), List((1,0), (2,1), (0,2))) &&
-        emptyMap(map1(1)) && unifs == List((1,1))
-      })
-      assert(buff.exists{case(map1,unifs) => // N0 -> N2, N1 -> N3, N2 -> N4, no unifs
-        checkMap(map1(0), List((0,2), (1,3), (2,4))) &&
-        emptyMap(map1(1)) && unifs.isEmpty
-      })
-      assert(buff.exists{case(map1,unifs) => // N0 -> N2, N1 -> N3, N2 -> N0, no unifs
-        checkMap(map1(0), List((0,2), (1,3), (2,0))) &&
-        emptyMap(map1(1)) && unifs.isEmpty
-      })
+      // println("test4\n"+showBuff(buff))
+      assert(buff.exists{case(sts,unifs) => // N0 -> N0, N1 -> N1 with unif, N2 -> N2
+        sts.sameElements(Array(aNode(N0,N1), aNode(N1,N2))) && unifs == List((1,0)) })
+      assert(buff.exists{case(sts,unifs) => // N1 -> N0, N2 -> N1 with unif; N0 -> N2
+        sts.sameElements(Array(aNode(N2,N0), aNode(N0,N1))) && unifs == List((1,1)) })
+      assert(buff.exists{case(sts,unifs) => // N0 -> N2, N1 -> N3, N2 -> N4, no unifs
+        sts.sameElements(Array(aNode(N2,N3), aNode(N3,N4))) && unifs.isEmpty })
+      assert(buff.exists{case(sts,unifs) => // N0 -> N2, N1 -> N3, N2 -> N0, no unifs
+        sts.sameElements(Array(aNode(N2,N3), aNode(N3,N0))) && unifs.isEmpty })
     }
     def test5 = { 
       // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2) with N1 -> N0
       val map = newRemappingMap; map(0)(1) = 0
       val buff = combine1(map, Array(2,1), Array(List(), List(0)), 
         components1, nodes)
-      // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
       assert(buff.length == 1) // just second case from previous test
-      assert{val (map1,unifs) = buff.head; // N1 -> N0, N2 -> N1 with unif; N0 -> N2
-        checkMap(map1(0), List((1,0), (2,1), (0,2))) &&
-        emptyMap(map1(1)) && unifs == List((1,1)) }
+      // println("test5\n"+showBuff(buff))
+      assert{val (sts,unifs) = buff.head; // N1 -> N0, N2 -> N1 with unif; N0 -> N2
+        sts.sameElements(Array(aNode(N2,N0), aNode(N0,N1))) && unifs == List((1,1)) }
     }
     def test6 = {
       // println("test6")
@@ -152,14 +144,14 @@ object RemapperTest{
       val map = newRemappingMap; map(0)(1) = 0
       val buff = combine1(map, Array(3,1), Array(List(2), List(0)), 
         components1, nodes)
+      // println("test6\n"+showBuff(buff))
       // println(buff.map{case(map1,unifs) => show(map1)+"; "+unifs}.mkString("\n"))
       // N0 maps to N2 or N3
       assert(buff.length == 2)
-      assert(buff.forall{case(map1,unifs) =>
-        (checkMap(map1(0), List((0,2), (1,0), (2,1))) || 
-          checkMap(map1(0), List((0,3), (1,0), (2,1)))) &&
-        emptyMap(map1(1)) && unifs == List((1,1)) 
-      })
+      assert(buff.forall{case(sts,unifs) =>
+        (sts.sameElements(Array(aNode(N2,N0), aNode(N0,N1))) || 
+          sts.sameElements(Array(aNode(N3,N0), aNode(N0,N1)))) &&
+        unifs == List((1,1)) })
     }
     test1; test2; test3; test4; test5; test6
   } // end of combine1Test
