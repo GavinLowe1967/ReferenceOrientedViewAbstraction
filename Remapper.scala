@@ -38,12 +38,21 @@ object Remapper{
 
   // IMPROVE: reinstate pools
 
+  /** Template from which to create RemappingMap. */
+  private val remappingMapTemplate =
+    Array.tabulate(numTypes)(t => Array.fill(rowSizes(t))(-1))
+
   /** A clear RemappingMap, representing the empty mapping, i.e. mapping all
     * entries to -1.  Different calls to this will use the same arrays, so two
     * RemappingMaps created by the same thread should not be in use at the
     * same time. */
-  @inline def newRemappingMap: RemappingMap = 
-    Array.tabulate(numTypes)(t => Array.fill(rowSizes(t))(-1))
+  @inline def newRemappingMap: RemappingMap = {
+    // Deep clone of remappingMapTemplate
+    val res = new Array[Array[Int]](numTypes); var t = 0
+    while(t < numTypes){ res(t) = remappingMapTemplate(t).clone; t += 1 }
+    res
+    // Array.tabulate(numTypes)(t => Array.fill(rowSizes(t))(-1))
+  }
 
   /** Create a RemappingMap corresponding to rho, i.e. the identity map
     * on (t,i) for i <- [0..rho(t), for each t. */
@@ -58,9 +67,11 @@ object Remapper{
 
   /** Produce a (deep) clone of map. */
   def cloneMap(map: RemappingMap): RemappingMap = {
-    val map1 = Array.tabulate(numTypes)(t => new Array[Int](rowSizes(t)))
-    for(t <- 0 until numTypes; i <- 0 until rowSizes(t)) 
-      map1(t)(i) = map(t)(i)
+    val map1 = new Array[Array[Int]](numTypes); var t = 0
+    while(t < numTypes){ map1(t) = map(t).clone; t += 1 }
+    // val map1 = Array.tabulate(numTypes)(t => new Array[Int](rowSizes(t)))
+    // for(t <- 0 until numTypes; i <- 0 until rowSizes(t)) 
+    //   map1(t)(i) = map(t)(i)
     map1
   }
 
@@ -103,23 +114,22 @@ object Remapper{
         i += 1
       }
     }
-    // require((0 until map0(f).length).forall(i => i == id || map0(f)(i) != id1),
-    //   s"extendMap: value $id1 already appears in map: "+
-    //     map0(f).mkString("[",",","]")+"; "+(id,id1))
     val result = new Array[Array[Int]](numTypes)
     var t = 0
     while(t < numTypes){
       if(t != f) result(t) = map0(t)
+      // Following seems slower
+      // else{ 
+      //   val len = map0(f).length; result(t) = new Array[Int](len); var i = 0
+      //   while(i < len){
+      //     if(i == id) result(t)(i) = id1 else result(t)(i) = map0(t)(i)
+      //     i += 1
+      //   }
+      // }
       else{ result(t) = map0(f).clone; result(t)(id) = id1 }
       t += 1
     }
     result
-    // Array.tabulate(numTypes)(t =>
-    //   if(t != f) map0(t) 
-    //   else{ 
-    //     val newRow = map0(f).clone; newRow(id) = id1; newRow
-    //   }
-    // )
   }
 
   // ------ NextArgMaps
@@ -305,24 +315,33 @@ object Remapper{
   /** Apply map to cpt. 
     * Pre: map is defined on all parameters of cpt. */
   def applyRemappingToState(map: RemappingMap, cpt: State): State = {
-    val typeMap = cpt.typeMap; val ids = cpt.ids
-    val newIds = Array.tabulate(ids.length){i =>
-      val id = ids(i); 
-      if(isDistinguished(id)) id 
+    val typeMap = cpt.typeMap; val ids = cpt.ids; val len = ids.length
+    val newIds = new Array[Identity](len); var i = 0
+    // val newIds = Array.tabulate(ids.length){i =>
+    while(i < len){
+      val id = ids(i)
+      if(isDistinguished(id)) newIds(i) = id 
       else{ 
-        val newId = map(typeMap(i))(id); 
-        assert(newId >= 0, 
+        newIds(i) = map(typeMap(i))(id)
+        assert(newIds(i) >= 0, 
           "applyMappingToState: map"+show(map)+" undefined at "+(i, id)+
             " for "+cpt)
-        newId }
+      }
+      i += 1
     }
     MyStateMap(cpt.family, cpt.cs, newIds)
   }  
 
   /** Apply map to cpts. 
     * Pre: map is defined on all parameters of cpts. */
-  def applyRemapping(map: RemappingMap, cpts: Array[State]): Array[State] =
-    cpts.map(cpt => applyRemappingToState(map, cpt))
+  def applyRemapping(map: RemappingMap, cpts: Array[State]): Array[State] = {
+    // cpts.map(cpt => applyRemappingToState(map, cpt))
+    val len = cpts.length; val result = new Array[State](len); var i = 0
+    while(i < len){
+      result(i) = applyRemappingToState(map, cpts(i)); i += 1
+    }
+    result
+  }
 
   /** Remap st so that it can be the principal component in a view with
     * servers. */
@@ -394,7 +413,7 @@ object Remapper{
   def combine1(map0: RemappingMap, nextArg: NextArgMap,
     otherArgs: Array[List[Identity]], cpts1: Array[State], cpts2: Array[State]) 
       : ArrayBuffer[(RemappingMap, Unifications)] = {
-    Profiler.count("combine1")
+    // Profiler.count("combine1")
     var f = 0
     while(f < numTypes){
       // Check otherArgs(f) disjoint from ran(map0(f))
@@ -429,7 +448,7 @@ object Remapper{
       //     s"combineRec: otherArgs not disjoint from map for $f: "+
       //       map(f).mkString("[",",","]")+"; "+otherArgs(f).mkString("[",",","]"))
 
-      Profiler.count("combineRec")
+      // Profiler.count("combineRec")
       //require(isInjective(map), "combineRec: "+showRemappingMap(map))//IMPROVE
       // println(s"combineRec(${showRemappingMap(map)}, $i, $j)")
       if(j == cpts2.length) result += ((map, unifs))  // base case
@@ -442,33 +461,27 @@ object Remapper{
           if(isDistinguished(id)) combineRec(map, i+1, j, unifs) // just move on
           else{ // rename (f, id)
             // Case 1: map id to the corresponding value idX in map, if any;
-            // otherwise to an element id1 of otherArgs(f)
-            val oldIds = otherArgs(f)
+            // otherwise to an element id1 of otherArgs(f).
             // Rename id to id1
             def renameX(id1: Identity) = {
-              otherArgs(f) = oldIds.filter(_ != id1) // temporary update (*)
-              // val map1 = extendMap(map, f, id, id1)
-// FIXME: shouldn't we be recreating map1 on each iteration for k, below?
-              // for(f <- 0 until numTypes) // IMPROVE
-              //   assert(otherArgs(f).forall(id => !map1(f).contains(id)))
               if(i == 0){ // Identity; see if any cpt of cpts1 matches (f, id1)
                 var matchedId = false // have we found a cpt with matching id?
                 var k = 0
                 while(k < cpts1.length){
                   val map1 = extendMap(map, f, id, id1)
-                  // for(f <- 0 until numTypes) // IMPROVE
-                  //   assert(otherArgs(f).forall(id => !map1(f).contains(id)))
                   val c1 = cpts1(k)
                   if(c1.componentProcessIdentity == (f,id1)){
                     assert(!matchedId, View.showStates(cpts1)+": "+(f,id1))
                     matchedId = true
                     if(unify(map1, c1, c)){
-// FIXME: test below?
-                      // if((0 until numTypes).forall(f => 
-                      //   otherArgs(f).forall(id2 => !map1(f).contains(id2))))
-                      // for(f <- 0 until numTypes) // IMPROVE
-                      //   assert(otherArgs(f).forall(id => !map1(f).contains(id)))
-                        combineRec(map1, 0, j+1, (k,j)::unifs)
+                      // Update otherArgs to be disjoint from ran map1.
+                      val oldOtherArgs = otherArgs.clone
+                      for(f <- 0 until numTypes)
+                        otherArgs(f) = 
+                          otherArgs(f).filter(id => !map1(f).contains(id))
+                      combineRec(map1, 0, j+1, (k,j)::unifs)
+                      // Undo previous update
+                      for(f <- 0 until numTypes) otherArgs(f) = oldOtherArgs(f)
                     }
                   }
                   k += 1
@@ -476,24 +489,38 @@ object Remapper{
                 if(!matchedId) // No cpt of cpts1 matched; move on              
                   combineRec(extendMap(map, f, id, id1), i+1, j, unifs) 
               } // end of if(i == 0)
-              else combineRec(extendMap(map, f, id, id1), i+1, j, unifs) // Move on to next parameter
+              else  // Move on to next parameter
+                combineRec(extendMap(map, f, id, id1), i+1, j, unifs)
             } // end of renameX
 
             val idX = map(f)(id) 
-            if(idX < 0) for(id1 <- otherArgs(f)) renameX(id1) 
+            if(idX < 0){
+              // Call renameX for each id1 in otherArgs(f), with id1 removed
+              // from otherArgs(f).  toDoIds represents the identities still
+              // to deal with; doneIds is those already done.
+              var toDoIds = otherArgs(f); var doneIds = List[Identity]()
+              // Profiler.count("combineRec"+toDoIds.length)
+              // 0: 5%; 1: 60%; 2: 30%; 3: 5%
+              while(toDoIds.nonEmpty){
+                val id1 = toDoIds.head; toDoIds = toDoIds.tail
+                otherArgs(f) = doneIds++toDoIds // temporary update (*)
+                renameX(id1)
+                doneIds = id1::doneIds // doneIds:+id1 -- order doesn't matter
+              }
+              otherArgs(f) = doneIds // undo (*)
+            }
             else{ 
               // assert(!otherArgs(f).contains(idX), 
               //   show(map)+"; "+f+"; "+otherArgs(f))
               renameX(idX) 
             }
-            otherArgs(f) = oldIds  // undo (*)
 
             // Case 2: map id to nextArg(f)
             if(idX < 0){ 
               val id1 = nextArg(f); nextArg(f) += 1 // temporary update (+)
               val map1 = extendMap(map, f, id, id1) 
               combineRec(map1, i+1, j, unifs) // Move on to next parameter
-              nextArg(f) -= 1 // undo (+)
+              nextArg(f) -= 1  // undo (+)
             }
           }
         }

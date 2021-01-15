@@ -27,18 +27,33 @@ class ComponentView(
   /** All the components in this view, with the principal component first. */
   val components = principal +: others // IMPROVE
 
-  // Check all components referenced by principal are included
-  { 
-    val princRefs = principal.processIdentities.tail.filter{
-      case(f,id) => !isDistinguished(id)}
-    val otherPids = others.map(_.componentProcessIdentity)
-    assert(princRefs.forall(
-      pid => (
-        otherPids.contains(pid) || pid == principal.componentProcessIdentity)
-      ) &&
-      otherPids.forall(princRefs.contains(_)),
-    s"Not a correct ComponentView: $this")
+  /** Check all components referenced by principal are included, and no more. */
+  // IMRPOVE: this is moderately expensive
+  @noinline private def checkValid = { 
+    val len = principal.ids.length; val othersLen = others.length; var i = 1
+    while(i < len){
+      val pid = principal.processIdentity(i)
+      if(!isDistinguished(pid._2)){
+        // Test if otherPids.contains(pid)
+        var j = 0
+        while(j < othersLen && others(j).componentProcessIdentity != pid) j += 1
+        assert(j < othersLen || pid == principal.componentProcessIdentity,
+          s"Not a correct ComponentView: $this")
+      }
+      i += 1
+    }
+    // Check all of others referenced by principal
+    var j = 0
+    while(j < others.length){
+      val otherId = others(j).componentProcessIdentity 
+      var i = 0
+      while(i < len && principal.processIdentity(i) != otherId) i += 1
+      assert(i < len, s"Not a correct ComponentView: $this")
+      j += 1
+    }
   }
+
+  checkValid
 
   override def toString = 
     s"$servers || $principal"+
@@ -117,10 +132,17 @@ object View{
   }
 
   /** Check components in cpts are distinct. */
-  def checkDistinct(cpts: Array[State], msg: => String = "") = 
-    for(i <- 0 until cpts.length; j <- i+1 until cpts.length)
-      assert(cpts(i) != cpts(j), showStates(cpts)+" "+msg)
-
+  def checkDistinct(cpts: Array[State], msg: => String = "") = {
+    val len = cpts.length; var i = 0
+    while(i < len-1){
+      var j = i+1
+      while(j < len && cpts(i) != cpts(j)) j += 1
+      assert(j == len, showStates(cpts)+" "+msg)
+      i += 1
+    }
+    // for(i <- 0 until cpts.length; j <- i+1 until cpts.length)
+    //   assert(cpts(i) != cpts(j), showStates(cpts)+" "+msg)
+  }
 }
 
 // =======================================================

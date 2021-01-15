@@ -456,10 +456,12 @@ class Checker(system: SystemP.System){
       // Find other processes referenced by newPrinc
       // val others = newPrinc.processIdentities.tail.distinct.
       //   filter{case(f,id) => !isDistinguished(id)}.map(find(_))
-      var others = new ArrayBuffer[State]; val pids = newPrinc.processIdentities
-      var i = 1; val princId = pids(0)
-      while(i < pids.length){
-        val pid = pids(i)
+      var others = new ArrayBuffer[State]; val len = newPrinc.ids.length
+      // var k = 0 // # entries in others
+      val pids = newPrinc.processIdentities
+      var i = 1; val princId = newPrinc.componentProcessIdentity // pids(0)
+      while(i < len){
+        val pid = newPrinc.processIdentity(i) // pids(i)
         if(!isDistinguished(pid._2) && pid != princId){
           // check this is first occurrence of pid
           var j = 1; while(j < i && pids(j) != pid) j += 1

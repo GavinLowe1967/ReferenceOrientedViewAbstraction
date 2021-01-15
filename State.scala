@@ -15,16 +15,24 @@ class State(val family: Family, val cs: ControlState,
             val ids: Array[Identity], isNew: Boolean = false){
 
   /** The component process identity. */
-  def componentProcessIdentity: ProcessIdentity = {
+  val componentProcessIdentity: ProcessIdentity = {
     // assert(family >= 0)
-    (family, ids.head)
+    if(family >= 0) (family, ids.head) else null
   }
 
   /** The types of parameters. */
-  def typeMap: Array[Type] = State.stateTypeMap(cs)
+  @inline def typeMap: Array[Type] = State.stateTypeMap(cs)
+  // Note: can't be set at the point of object creation.
 
-  def processIdentities: Array[ProcessIdentity] = 
-    Array.tabulate(ids.length)(i => (typeMap(i), ids(i)))
+  def processIdentity(i: Int): ProcessIdentity = (typeMap(i), ids(i))
+
+  /** The process identities corresponding to ids. */
+  private var pIds: Array[ProcessIdentity] = null
+
+  def processIdentities: Array[ProcessIdentity] = {
+    if(pIds == null) pIds = Array.tabulate(ids.length)(i => (typeMap(i), ids(i)))
+    pIds
+  }
 
   /** Check the type sizes from the script are large enough for all the
     * parameters in this State.  This is not done during compilation, because
