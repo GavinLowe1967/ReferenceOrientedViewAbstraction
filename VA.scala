@@ -139,6 +139,27 @@ object VA{
  
     if(!timing) println("goodbye")
     ox.gavin.profiling.Profiler.report 
+    println(s"Remapper.renameXCount = "+
+      printLong(RemapperP.Remapper.renameXCount))
+    println(s"Remapper.combineRecCount = "+
+      printLong(RemapperP.Remapper.combineRecCount))
+    println(s"Remapper.combine1Count = "+
+      printLong(RemapperP.Remapper.combine1Count))
+    println(s"Remapper.combineCount = "+
+      printLong(RemapperP.Remapper.combineCount))
+    if(!testing){ // checker is null when testing
+      println(s"checker.effectOnCount = "+printLong(checker.effectOnCount))
+      println(s"checker.effectOnViaOthersCount = "+
+        checker.effectOnViaOthersCount)
+      println(s"checker.effectOnViaTransCount = "+checker.effectOnViaTransCount)
+      println(s"checker.effectOnOthersCount = "+checker.effectOnOthersCount)
+      println(s"checker.effectOfPreviousTransitionsCount = "+
+        checker.effectOfPreviousTransitionsCount)
+      println(s"checker.newViewCount = "+printLong(checker.newViewCount))
+      println("checker.addedViewCount = "+printLong(checker.addedViewCount))
+      println("checker.changedServersCount = "+
+        printLong(checker.changedServersCount))
+    }
   }
 
 }

@@ -385,6 +385,11 @@ object Remapper{
     * components that are unified with one another. */
   type Unifications = List[(Int, Int)]
 
+  @volatile var renameXCount = 0L
+  @volatile var combineRecCount = 0L
+  @volatile var combine1Count = 0L
+  @volatile var combineCount = 0L
+
   /** Extend map, in all possible ways, to remap cpts2 so as to be compatible
     * with cpts1.  Each parameter (f,p), not in the domain of map, can be
     * mapped to an element of otherArgs(f) (a subset of the parameters of
@@ -410,6 +415,7 @@ object Remapper{
   def combine1(map0: RemappingMap, nextArg: NextArgMap,
     otherArgs: Array[List[Identity]], cpts1: Array[State], cpts2: Array[State]) 
       : ArrayBuffer[(Array[State], Unifications)] = {
+    combine1Count += 1
     // Profiler.count("combine1")
     var f = 0
     // IMPROVE: following checks are expensive
@@ -441,6 +447,7 @@ object Remapper{
     // Extend map to remap cpts2(j).ids[i..) and then cpts2[j+1..). 
     def combineRec(map: RemappingMap, i: Int, j: Int, unifs: Unifications)
         : Unit = {
+      combineRecCount += 1
       // Profiler.count("combineRec")
       // for(f <- 0 until numTypes) // IMPROVE
       //   require(otherArgs(f).forall(id => !map(f).contains(id)),
@@ -460,8 +467,11 @@ object Remapper{
           else{ // rename (f, id)
             // Case 1: map id to the corresponding value idX in map, if any;
             // otherwise to an element id1 of otherArgs(f).
+            val idX = map(f)(id) 
             // Rename id to id1
             def renameX(id1: Identity) = {
+              // Profiler.count("renameX"); 
+              renameXCount += 1
               if(i == 0){ // Identity; see if any cpt of cpts1 matches (f, id1)
                 var matchedId = false // have we found a cpt with matching id?
                 var k = 0
@@ -471,28 +481,43 @@ object Remapper{
                     // val map1 = extendMap(map, f, id, id1)
                     assert(!matchedId, View.showStates(cpts1)+": "+(f,id1))
                     matchedId = true
-                    val map2 = unify(extendMap(map, f, id, id1), c1, c)
+                    // val map1 = extendMap(map, f, id, id1)
+                    map(f)(id) = id1 // temporary update (*)
+                    val map2 = unify(map, c1, c)
                     if(map2 != null){
                       // Update otherArgs to be disjoint from ran map2.
-                      val oldOtherArgs = otherArgs.clone
-                      for(f <- 0 until numTypes)
-                        otherArgs(f) = 
-                          otherArgs(f).filter(id => !map2(f).contains(id))
+                      val oldOtherArgs = otherArgs.clone; var f1 = 0
+                      while(f1 < numTypes){
+                        // @noinline def XX = {
+                        otherArgs(f1) = 
+                          otherArgs(f1).filter(id => !map2(f1).contains(id)) // }
+                        // XX
+                        f1 += 1
+                      }
                       combineRec(map2, 0, j+1, (k,j)::unifs)
                       // Undo previous update
-                      for(f <- 0 until numTypes) otherArgs(f) = oldOtherArgs(f)
+                      f1 = 0
+                      while(f1 < numTypes){
+                        otherArgs(f1) = oldOtherArgs(f1); f1 += 1
+                      }
                     }
+                    map(f)(id) = idX // backtrack (*)
                   }
                   k += 1
                 } // end of while(k < ...)
-                if(!matchedId) // No cpt of cpts1 matched; move on              
-                  combineRec(extendMap(map, f, id, id1), i+1, j, unifs) 
+                if(!matchedId){ // No cpt of cpts1 matched; move on   
+                  map(f)(id) = id1 // temporary update (*)
+                  combineRec(map, i+1, j, unifs) 
+                  map(f)(id) = idX // backtrack (*)
+                }
               } // end of if(i == 0)
-              else  // Move on to next parameter
-                combineRec(extendMap(map, f, id, id1), i+1, j, unifs)
+              else{  // Move on to next parameter
+                map(f)(id) = id1  // temporary update (*)
+                combineRec(map, i+1, j, unifs)
+                map(f)(id) = idX // backtrack (*)
+              }
             } // end of renameX
 
-            val idX = map(f)(id) 
             if(idX < 0){
               // Call renameX for each id1 in otherArgs(f), with id1 removed
               // from otherArgs(f).  toDoIds represents the identities still
@@ -517,9 +542,9 @@ object Remapper{
             // Case 2: map id to nextArg(f)
             if(idX < 0){ 
               val id1 = nextArg(f); nextArg(f) += 1 // temporary update (+)
-              val map1 = extendMap(map, f, id, id1) 
-              combineRec(map1, i+1, j, unifs) // Move on to next parameter
-              nextArg(f) -= 1  // undo (+)
+              map(f)(id) = id1 // (+)  // val map1 = extendMap(map, f, id, id1) 
+              combineRec(map, i+1, j, unifs) // Move on to next parameter
+              nextArg(f) -= 1; map(f)(id) = idX  // undo (+)
             }
           }
         }
@@ -536,6 +561,7 @@ object Remapper{
     * included in the Unifications returned. */
   def combine(v1: Concretization, v2: ComponentView)
       : ArrayBuffer[(Array[State], Unifications)] = {
+    combineCount += 1
     // println(s"combine($v1, $v2)")
     val servers = v1.servers; require(v2.servers == servers)
     val components1 = v1.components; val components2 = v2.components

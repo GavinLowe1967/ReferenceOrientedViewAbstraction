@@ -202,6 +202,12 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     case cv: ComponentView =>
       servers == cv.servers && components.sameElements(cv.components)
   }
+
+  override def hashCode = {
+    var h = servers.hashCode
+    for(st <- components) h = h*73 + st.hashCode
+    h
+  }
 }
 
 // =======================================================

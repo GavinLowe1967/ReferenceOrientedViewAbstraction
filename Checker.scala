@@ -400,6 +400,7 @@ class Checker(system: SystemP.System){
     * transition. */
   private 
   def effectOnOthers(pre: Concretization, e: EventInt, post: Concretization) = {
+    effectOnOthersCount += 1
     // println(s"effectOnOthers($pre, $post)")
     val vs = sysAbsViews.toArray; var i = 0
     while(i < vs.length){
@@ -409,6 +410,7 @@ class Checker(system: SystemP.System){
           if(cv.servers == pre.servers){
             // println(s"Effect on $cv");
             // IMPROVE if nothing changed state.
+            effectOnViaOthersCount += 1
             effectOn(pre, e, post, cv)
           }
       } // end of match
@@ -416,6 +418,15 @@ class Checker(system: SystemP.System){
     }
   }
   // IMPROVE: need better way of iterating over ViewSet
+
+  var effectOnCount = 0
+  var effectOnViaOthersCount = 0
+  var effectOnViaTransCount = 0
+  var effectOfPreviousTransitionsCount = 0
+  var effectOnOthersCount = 0
+  var newViewCount = 0L
+  var addedViewCount = 0L
+  var changedServersCount = 0L
 
   /** The effect of the transition pre -e-> post on cv.  If cv is consistent with
     * pre (i.e. unifiable), and contains at least one process that changes
@@ -425,13 +436,18 @@ class Checker(system: SystemP.System){
   protected def effectOn(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
   = {
+    effectOnCount += 1
     if(veryVerbose) 
       println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers)
+    val changedServers = pre.servers != post.servers
+    if(changedServers) changedServersCount += 1
     // Check elements of cv.components are distinct
     View.checkDistinct(cv.components)
     val newCpts = Remapper.combine(pre, cv)
-    for((cpts, unifs) <- newCpts){
+    // Note: if pre.servers = post.servers and unifs is empty, then this
+    // transition will have no effect upon cv.
+    for((cpts, unifs) <- newCpts; if changedServers || unifs.nonEmpty){
       View.checkDistinct(cpts)
       // println("cpts = "+cpts.mkString("[",",","]")+s"; unifs = $unifs")
       // pre U cpts is a consistent view.  
@@ -488,7 +504,10 @@ class Checker(system: SystemP.System){
       val nv = Remapper.remapComponentView(
         new ComponentView(post.servers, newPrinc, othersA) )
       // View.checkDistinct(nv.components, View.showStates(others))
+      newViewCount += 1
       if(addView(nv)){
+        assert(pre.servers != post.servers || unifs.nonEmpty)
+        addedViewCount += 1
         // if(verbose) 
         //   println(s" from effectOn($pre, ${system.showEvent(e)}, $post, $cv)")
         val extendedPre = new Concretization(pre.servers, 
@@ -507,10 +526,14 @@ class Checker(system: SystemP.System){
 
   /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
+    effectOfPreviousTransitionsCount += 1
     // println(s"effectOfPreviousTransitions($cv)")
     for((pre, e, post) <- transitions.iterator){
       // println(s"considering transition $pre -> $post")
-      if(pre.servers == cv.servers) effectOn(pre, e, post, cv) 
+      if(pre.servers == cv.servers){
+        effectOnViaTransCount += 1
+        effectOn(pre, e, post, cv)
+      }
     }
   }
 
