@@ -1,6 +1,6 @@
 package ViewAbstraction
 
-import ViewAbstraction.RemapperP.Remapper
+import ViewAbstraction.RemapperP.{Remapper,Unification}
 import ViewAbstraction.CombinerP.Combiner
 import scala.collection.mutable.ArrayBuffer
 import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
@@ -362,7 +362,7 @@ class Checker(system: SystemP.System){
             val cpt1 = cv1.components(j)
             if(cpt1.cs == cs1 && cpt1.id == stIdR){
               // test if cpt1 is a renaming of st under an extension of map
-              var map2 = Remapper.unify(map, cpt1, st)
+              var map2 = Unification.unify(map, cpt1, st)
               if(map2 != null){
                 // Check that all components referenced by pCpt in conc are
                 // matched by a corresponding component in cv1.  map2 != null
@@ -370,7 +370,7 @@ class Checker(system: SystemP.System){
                 var k = 1
                 while(k < pRefs.length && map2 != null){
                   if(pRefs(k) != null){
-                    map2 = Remapper.unify(map2, cv1.components(k), pRefs(k))
+                    map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
                     if(veryVerbose)
                       println(s"Trying to unify ${cv1.components(k)} and "+
                         pRefs(k)+".  "+(if(found) "Succeeded." else "Failed."))
@@ -444,7 +444,7 @@ class Checker(system: SystemP.System){
     if(changedServers) changedServersCount += 1
     // Check elements of cv.components are distinct
     View.checkDistinct(cv.components)
-    val newCpts = Remapper.combine(pre, cv)
+    val newCpts = Unification.combine(pre, cv)
     // Note: if pre.servers = post.servers and unifs is empty, then this
     // transition will have no effect upon cv.
     for((cpts, unifs) <- newCpts; if changedServers || unifs.nonEmpty){

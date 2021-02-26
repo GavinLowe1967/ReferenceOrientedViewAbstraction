@@ -7,6 +7,7 @@ import scala.collection.mutable.ArrayBuffer
   * loaded. */
 object RemapperTest{
   import RemapperP.Remapper._
+  import RemapperP.Unification._
   import TestStates._
   import View.showStates
 

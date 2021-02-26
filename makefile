@@ -13,6 +13,7 @@ CP = .:$(UTIL):$(FDRHOME)/lib/fdr.jar
 DIR = ViewAbstraction
 
 COMBINERP = $(DIR)/CombinerP
+REMAPPERP = $(DIR)/RemapperP
 
 FSC = fsc -deprecation -cp $(CP)
 
@@ -53,7 +54,10 @@ $(DIR)/RemapperP/RemapperTest.class: $(DIR)/TestStates.class $(DIR)/RemapperP/Re
 
 $(COMBINERP)/Combiner.class: $(DIR)/RemapperP/Remapper.class
 
+$(REMAPPERP)/Unification.class: $(REMAPPERP)/Remapper.class
+
 $(COMBINERP)/CombinerTest.class:  $(DIR)/TestStates.class $(COMBINERP)/Combiner.class 
+
 
 $(DIR)/TransitionSet.class: $(DIR)/View.class
 
@@ -79,7 +83,7 @@ $(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.c
 
 $(DIR)/Debugger.class: $(DIR)/SystemP/System.class
 
-$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/Debugger.class
+$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/RemapperP/Unification.class  $(DIR)/Debugger.class
 
 $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 

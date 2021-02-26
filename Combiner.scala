@@ -9,7 +9,6 @@ import scala.collection.mutable.ArrayBuffer
 object Combiner{
   import Remapper.{RemappingMap,OtherArgMap,NextArgMap,show}
 
-
   /** All ways of remapping certain states of states, consistent with map0,
     * otherArgs and nextArg.  If selector = Left(i) then just the non-identity
     * parameters of states(i) are renamed.  If selector = Right(i) then every
