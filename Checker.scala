@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
   * @param cShapes the shapes of concretizations. */
 class Checker(system: SystemP.System){
   // Are we adding views, etc. only at the end of plys? 
-  private var newVersion = true // FIXME: remove
+  // private var newVersion = true // FIXME: remove
 
   private var verbose = false 
   private var veryVerbose = false
@@ -21,9 +21,10 @@ class Checker(system: SystemP.System){
   // adding new views to the set while that is going on.
 
   /** The new views to be considered on the next ply. */
-  protected var nextNewViews: ArrayBuffer[View] = null
+  //protected var nextNewViews: ArrayBuffer[View] = null
 
   private var nextNewViews1: ArrayBuffer[View] = null
+
 // FIXME: don't need both
 
   private def showTransition(
@@ -55,28 +56,28 @@ class Checker(system: SystemP.System){
     new SimpleTransitionTemplateSet
 
   /** Add v to  sysAbsViews, and nextNewViews if new. */
-  @inline private def addView(v: View): Boolean = {
-    View.checkDistinct(v.asInstanceOf[ComponentView].components)
-    if(sysAbsViews.add(v)){ 
-      if(verbose) println(s"$v.  ***Added***") 
-      nextNewViews += v; true 
-    }
-    else false
-  }
+  // @inline private def addView(v: View): Boolean = {
+  //   View.checkDistinct(v.asInstanceOf[ComponentView].components)
+  //   if(sysAbsViews.add(v)){ 
+  //     if(verbose) println(s"$v.  ***Added***") 
+  //     nextNewViews += v; true 
+  //   }
+  //   else false
+  // }
 
-  /** Add the principal component view of pre to sysAbsViews, and nextNewViews
-    * if new, based on the extended transition pre -e-> post. 
-    * 
-    * Note: this is called only at the end of each ply, to avoid adding to
-    * sysAbsViews while iterating over it.*/
-  @inline private 
-  def addViewFromConc(pre: Concretization, e: EventInt, post: Concretization) = {
-    val v = Remapper.remapComponentView(post.toComponentView)
-    if(addView(v)){
-      if(verbose) println(s"  from ${showTransition(pre,e,post)}")
-      v.setCreationInfo(pre, e, post)
-    }
-  }
+  // /** Add the principal component view of pre to sysAbsViews, and nextNewViews
+  //   * if new, based on the extended transition pre -e-> post. 
+  //   * 
+  //   * Note: this is called only at the end of each ply, to avoid adding to
+  //   * sysAbsViews while iterating over it.*/
+  // @inline private 
+  // def addViewFromConc(pre: Concretization, e: EventInt, post: Concretization) = {
+  //   val v = Remapper.remapComponentView(post.toComponentView)
+  //   if(addView(v)){
+  //     if(verbose) println(s"  from ${showTransition(pre,e,post)}")
+  //     v.setCreationInfo(pre, e, post)
+  //   }
+  // }
 
   private var newTransitions
       : ArrayBuffer[(Concretization, EventInt, Concretization)] = null
@@ -167,7 +168,7 @@ class Checker(system: SystemP.System){
       // Case 1: no new nondistinguished parameter
       assert(outsidePids.isEmpty) // IMPROVE (simplifying assumption)
       if(e == system.Error) return true
-      if(!newVersion) addViewFromConc(pre, e, post)
+      // if(!newVersion) addViewFromConc(pre, e, post)
       // Store this transition, and calculate effect on other views.
       addTransition(pre, e, post)
     }
@@ -238,7 +239,7 @@ class Checker(system: SystemP.System){
             println(s"Extended transition from template $extendedPre -"+
               system.showEvent(e)+s"-> $extendedPost")
           assert(e != system.Error) // FIXME
-          if(!newVersion) addViewFromConc(extendedPre, e, extendedPost) 
+          // if(!newVersion) addViewFromConc(extendedPre, e, extendedPost) 
           // Store this transition, and calculate effect on other views.
           addTransition(extendedPre, e, extendedPost)
         }
@@ -572,7 +573,7 @@ class Checker(system: SystemP.System){
       // View.checkDistinct(nv.components, View.showStates(others))
       newViewCount += 1
       // Common code in the new and old versions, below
-      def common = {
+      def common = { // IMPROVE: unfactor
         assert(pre.servers != post.servers || unifs.nonEmpty)// IMPROVE?
         addedViewCount += 1
         // if(verbose) 
@@ -588,12 +589,12 @@ class Checker(system: SystemP.System){
             s" on $cv:  -> $nv.  ***Added***")
         nv.setCreationInfo(extendedPre, e, extendedPost)
       }
-      if(newVersion){
-        if(!sysAbsViews.contains(nv)){ // TODO: test if this helps
-          nextNewViews1 += nv; common
-        }
+      // if(newVersion){
+      if(!sysAbsViews.contains(nv)){ // TODO: test if this helps
+        nextNewViews1 += nv; common
       }
-      else if(addView(nv)) common
+      // }
+      // else if(addView(nv)) common
     }
   }
 
@@ -625,7 +626,8 @@ class Checker(system: SystemP.System){
       println("\nSTEP "+ply) 
       println("#abstractions = "+printLong(sysAbsViews.size))
       println("#new active abstract views = "+printInt(newViews.size))
-      nextNewViews = new ArrayBuffer[View]; nextNewViews1 = new ArrayBuffer[View]
+      // nextNewViews = new ArrayBuffer[View]; 
+      nextNewViews1 = new ArrayBuffer[View]
       newTransitions = 
         new ArrayBuffer[(Concretization, EventInt, Concretization)]
       var i = 0
@@ -638,10 +640,17 @@ class Checker(system: SystemP.System){
         }
         i += 1
       }
-      if(newVersion){
-        for((pre,e,post) <- newTransitions) addViewFromConc(pre,e,post)
-        for(v <- nextNewViews1) addView(v)
+      //if(newVersion){
+        // Add views found on this ply into the main set. 
+      val nextNewViews = new ArrayBuffer[View]
+      def addView(v: View): Boolean = 
+        if(sysAbsViews.add(v)){ nextNewViews += v; true } else false
+      for((pre,e,post) <- newTransitions){
+        val v = Remapper.remapComponentView(post.toComponentView)
+        if(addView(v)) v.setCreationInfo(pre, e, post)
       }
+      for(v <- nextNewViews1) addView(v)
+      //}
       ply += 1; newViews = nextNewViews.toArray; 
       if(newViews.isEmpty) done.set(true)
     }
