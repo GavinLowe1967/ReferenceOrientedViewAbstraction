@@ -427,6 +427,21 @@ class Checker(system: SystemP.System){
   var newViewCount = 0L
   var addedViewCount = 0L
   var changedServersCount = 0L
+  var effectOnRepetition = 0
+
+  /** Find the component of cpts with process identity pid, or return null if no
+    * such.  IMPROVE: move elsewhere, combine with Unification.find */
+  @inline private def find0(pid: ProcessIdentity, cpts: Array[State]): State = {
+    var i = 0
+    while(i < cpts.length && cpts(i).componentProcessIdentity != pid)
+      i += 1
+    if(i < cpts.length) cpts(i) else null
+  }
+
+  /** Show the result of a call to Unifications.combine. */
+  private def showUnifs(
+      us: ArrayBuffer[(Array[State], Unification.Unifications)]) =
+    us.map{ case(sts,us) => "("+View.showStates(sts)+", "+us+")" }.mkString("; ")
 
   /** The effect of the transition pre -e-> post on cv.  If cv is consistent with
     * pre (i.e. unifiable), and contains at least one process that changes
@@ -439,28 +454,52 @@ class Checker(system: SystemP.System){
     effectOnCount += 1
     if(veryVerbose) 
       println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
-    require(pre.servers == cv.servers)
+    require(pre.servers == cv.servers &&
+      pre.components.length == post.components.length)
     val changedServers = pre.servers != post.servers
     if(changedServers) changedServersCount += 1
     // Check elements of cv.components are distinct
     View.checkDistinct(cv.components)
-    val newCpts = Unification.combine(pre, cv)
-    // Note: if pre.servers = post.servers and unifs is empty, then this
-    // transition will have no effect upon cv.
-    for((cpts, unifs) <- newCpts; if changedServers || unifs.nonEmpty){
+    // All ways of merging cv and pre
+    val newCpts = 
+// IMPROVE: do we have duplicates? 
+      if(changedServers) Unification.combine(pre, cv)
+      else{
+        // Only look for cases where a component of cv unifies with a
+        // component of pre that changes state.
+        val preC = pre.components; val postC = post.components
+        val flags = Array.tabulate(preC.length)(i => preC(i) != postC(i))
+        val newCpts2 = Unification.combineWithUnification(pre, flags, cv)
+        if(false){
+          // Compare with newCptsX; find those elements of newCpts such that at
+          // last one component of pre that changes is unified.
+          val newCptsX = Unification.combine(pre, cv)
+          val newCptsF =
+            newCptsX.filter{ case(_,u) =>
+              u.filter{ case(k,j) => flags(k) }.nonEmpty }
+          assert(// newCptsF.length == newCpts2.length &&
+            newCptsF.forall{case(sts,us) => newCpts2.exists{case(sts1,us1) =>
+              sts.sameElements(sts1) && us==us1}} &&
+              newCpts2.forall{case(sts,us) => newCptsF.exists{case(sts1,us1) =>
+                sts.sameElements(sts1) && us==us1}},
+            "newCptsX = "+showUnifs(newCptsX)+"\n"+
+              "newCpts2 = "+showUnifs(newCpts2))
+        }
+        newCpts2
+    }
+    // val hasReps = !newCpts.forall{ case(sts,unifs) =>
+    //   newCpts.forall{ case(sts1,unifs1) =>
+    //     sts == sts1 || unifs != unifs1 || !sts.sameElements(sts1) } }
+    // // Check newCpts is distinct
+    // if(hasReps) effectOnRepetition += 1
+    // assert(true || !hasReps,
+    //   s"changedServers = $changedServers\npre = $pre\ncv = $cv"+
+    //     "\nnewCpts = "+showUnifs(newCpts))
+    for((cpts, unifs) <- newCpts){
+      assert(changedServers || unifs.nonEmpty)
       View.checkDistinct(cpts)
-      // println("cpts = "+cpts.mkString("[",",","]")+s"; unifs = $unifs")
       // pre U cpts is a consistent view.  
-      // pre.components(i) = cpts(j)  iff  (i,j) in unifs
-
-      // Find the component of cpts with process identity pid, or return
-      // null if no such.
-      @inline def find0(pid: ProcessIdentity, cpts: Array[State]): State = {
-        var i = 0
-        while(i < cpts.length && cpts(i).componentProcessIdentity != pid)
-          i += 1
-        if(i < cpts.length) cpts(i) else null
-      }
+      // pre.components(i) = cpts(j)  iff  (i,j) in unifs.
       // Find what cpts(0) gets mapped to by unifs
       val matches = unifs.filter(_._2 == 0)
       val newPrinc =
@@ -484,7 +523,6 @@ class Checker(system: SystemP.System){
           // check this is first occurrence of pid
           var j = 1; while(j < i && pids(j) != pid) j += 1
           if(j == i){
-            // others += find(pid)
             // Find the component of post or cpts with process identity pid, 
             // and add to others
             val st1 = find0(pid, post.components)

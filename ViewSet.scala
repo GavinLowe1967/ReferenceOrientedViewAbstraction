@@ -7,11 +7,11 @@ trait ViewSet{
   /** Add sv to this. */
   def add(sv: View) : Boolean
 
-  /** Add a sequence of elements to the set. */
-  def add (ss: Seq[View]) : Unit = for(s <- ss) add(s)
+  // /** Add a sequence of elements to the set. */
+  // def add (ss: Seq[View]) : Unit = for(s <- ss) add(s)
 
-  /** Add elements of iterator to the set. */
-  def add (ss: Iterator[View]) : Unit = for(s <- ss) add(s)
+  // /** Add elements of iterator to the set. */
+  // def add (ss: Iterator[View]) : Unit = for(s <- ss) add(s)
 
   /** Does this contain sv? */
   def contains(sv: View): Boolean
@@ -19,25 +19,25 @@ trait ViewSet{
   /** The number of elements in the set. */
   def size: Long 
 
-  def reportSizes = Array(size)
+  // def reportSizes = Array(size)
 
   /** Iterator over the set.  Not thread safe. */
   protected def iterator : Iterator[View] 
 
   /** List of the elements of the set.  Not thread safe. */
-  def toList : List[View] = iterator.toList 
+  // def toList : List[View] = iterator.toList 
 
   def toArray: Array[View] = iterator.toArray
 
   /** Make a string representing the set, separating elements using seq. */
-  def mkString(sep: String) = toList.mkString(sep)
+  // def mkString(sep: String) = toList.mkString(sep)
 
   /** Get the representative of sv.  Used in debugging only.
     * Pre: this includes such a representative. */
   def getRepresentative(sv: View): View
 
-  /** Add inc to the current count. */
-  def addCount(inc: Int): Unit
+  // /** Add inc to the current count. */
+  // def addCount(inc: Int): Unit
 
   override def toString = toArray.map(_.toString).sorted.mkString("\n")
 }
@@ -82,7 +82,7 @@ class CanonicalViewSet(sizeEstimate: Int = -1) extends ViewSet{
 
   override def size = underlying.size
 
-  override def reportSizes = underlying.reportSizes
+  def reportSizes = underlying.reportSizes
 
   /** Iterator over the set. */
   protected def iterator: Iterator[View] = underlying.iterator 

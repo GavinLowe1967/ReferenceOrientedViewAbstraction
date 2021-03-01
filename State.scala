@@ -20,6 +20,9 @@ class State(val family: Family, val cs: ControlState,
     if(family >= 0) (family, ids.head) else null
   }
 
+  /** Does this have a process identity matching (f,id)? */
+  def hasPID(f: Family, id: Identity) = f == family && id == ids(0)
+
   /** The types of parameters. */
   @inline def typeMap: Array[Type] = State.stateTypeMap(cs)
   // Note: can't be set at the point of object creation.

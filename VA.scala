@@ -141,10 +141,8 @@ object VA{
     ox.gavin.profiling.Profiler.report 
     println(s"Unification.renameXCount = "+
       printLong(RemapperP.Unification.renameXCount))
-    println(s"Remapper.combineRecCount = "+
-      printLong(RemapperP.Unification.combineRecCount))
-    println(s"Remapper.combine1Count = "+
-      printLong(RemapperP.Unification.combine1Count))
+    println(s"Remapper.combine2Count = "+
+      printLong(RemapperP.Unification.combine2Count))
     println(s"Unification.combineCount = "+
       printLong(RemapperP.Unification.combineCount))
     if(!testing){ // checker is null when testing
@@ -159,6 +157,7 @@ object VA{
       println("checker.addedViewCount = "+printLong(checker.addedViewCount))
       println("checker.changedServersCount = "+
         printLong(checker.changedServersCount))
+      // println("checker.effectOnRepetition = "+checker.effectOnRepetition)
     }
   }
 

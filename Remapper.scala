@@ -163,12 +163,18 @@ object Remapper{
     val nextArg: NextArgMap = createNextArgMap(rhoS)
     // Parameters used in v1 but not the servers
     val otherArgs = Array.fill(numTypes)(List[Identity]())
-    for(c <- components; i <- 0 until c.ids.length){
-      val f = c.typeMap(i); val id = c.ids(i)
-      if(!isDistinguished(id) && !serverIds(f).contains(id) && 
+    var cix = 0
+    while(cix < components.length){
+      val c = components(cix); val ids = c.ids; var i = 0
+      while(i < ids.length){
+        val f = c.typeMap(i); val id = ids(i)
+        if(!isDistinguished(id) && !serverIds(f).contains(id) &&
           !otherArgs(f).contains(id)){ //IMPROVE
-        otherArgs(f) ::= id; nextArg(f) = nextArg(f) max (id+1)
+          otherArgs(f) ::= id; nextArg(f) = nextArg(f) max (id+1)
+        }
+        i += 1
       }
+      cix += 1
     }
     (map0, otherArgs, nextArg)
   }
