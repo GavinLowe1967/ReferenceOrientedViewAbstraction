@@ -22,7 +22,7 @@ trait ViewSet{
   // def reportSizes = Array(size)
 
   /** Iterator over the set.  Not thread safe. */
-  protected def iterator : Iterator[View] 
+  def iterator : Iterator[View] 
 
   /** List of the elements of the set.  Not thread safe. */
   // def toList : List[View] = iterator.toList 
@@ -39,7 +39,7 @@ trait ViewSet{
   // /** Add inc to the current count. */
   // def addCount(inc: Int): Unit
 
-  override def toString = toArray.map(_.toString).sorted.mkString("\n")
+  override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 }
 
 // =======================================================
@@ -85,7 +85,7 @@ class CanonicalViewSet(sizeEstimate: Int = -1) extends ViewSet{
   def reportSizes = underlying.reportSizes
 
   /** Iterator over the set. */
-  protected def iterator: Iterator[View] = underlying.iterator 
+  def iterator: Iterator[View] = underlying.iterator 
 
   /** Get the representative of sv.  Used in debugging.
     * Pre: this includes such a representative; and this operation is not 
@@ -145,7 +145,7 @@ extends ViewSet{
 
   def getRepresentative(sv: View): View = ???
 
-  protected def iterator: Iterator[View] = ???
+  def iterator: Iterator[View] = ???
 
   def contains(sv: View): Boolean = ???
 }
@@ -210,7 +210,7 @@ class SeqViewSet(initLength: Int = 16) extends ViewSet{
   def addCount(inc: Int): Unit = ???
   def contains(sv: View): Boolean = ???
   def getRepresentative(sv: View): View = ???
-  protected def iterator: Iterator[View] = ???
+  def iterator: Iterator[View] = ???
 
   def shadowSize = ???
   def size: Long = theSize.toLong
