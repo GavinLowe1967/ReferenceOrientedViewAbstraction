@@ -18,7 +18,7 @@ class Checker(system: SystemP.System){
   // adding new views to the set while that is going on.
 
   /** The new views to be considered on the next ply. */
-  protected var nextNewViews: ArrayBuffer[View] = null
+  protected var nextNewViews: ArrayBuffer[ComponentView] = null
 
   private def showTransition(
     pre: Concretization, e: EventInt, post: Concretization) =
@@ -48,30 +48,6 @@ class Checker(system: SystemP.System){
   private val transitionTemplates: TransitionTemplateSet = 
     new SimpleTransitionTemplateSet
 
-  /** Add v to  sysAbsViews, and nextNewViews if new. */
-  // @inline private def addView(v: View): Boolean = {
-  //   View.checkDistinct(v.asInstanceOf[ComponentView].components)
-  //   if(sysAbsViews.add(v)){ 
-  //     if(verbose) println(s"$v.  ***Added***") 
-  //     nextNewViews += v; true 
-  //   }
-  //   else false
-  // }
-
-  // /** Add the principal component view of pre to sysAbsViews, and nextNewViews
-  //   * if new, based on the extended transition pre -e-> post. 
-  //   * 
-  //   * Note: this is called only at the end of each ply, to avoid adding to
-  //   * sysAbsViews while iterating over it.*/
-  // @inline private 
-  // def addViewFromConc(pre: Concretization, e: EventInt, post: Concretization) = {
-  //   val v = Remapper.remapComponentView(post.toComponentView)
-  //   if(addView(v)){
-  //     if(verbose) println(s"  from ${showTransition(pre,e,post)}")
-  //     v.setCreationInfo(pre, e, post)
-  //   }
-  // }
-
   private var newTransitions
       : ArrayBuffer[(Concretization, EventInt, Concretization)] = null
 
@@ -82,22 +58,6 @@ class Checker(system: SystemP.System){
     newTransitions += ((pre, e, post))
     transitions.add(pre, e, post); effectOnOthers(pre, e, post)
   }
-
-
-  // private def addView1(v: ComponentView, pre: Concretization, cpts: Array[State],
-  //   post: Concretization, e: EventInt, cv: ComponentView) 
-  // = {
-  //     if(addView(v)){
-  //       addedViewCount += 1
-  //       val extendedPre = new Concretization(pre.servers, 
-  //           View.union(pre.components, cpts))
-  //       extendedPre.setSecondaryView(cv) 
-  //       val extendedPost = new Concretization(post.servers, 
-  //         View.union(post.components, v.components)) // newPrinc +: othersA))
-  //       v.setCreationInfo(extendedPre, e, extendedPost)
-  //     }
-  // }
-
 
   // ========= Processing a single view
 
@@ -187,20 +147,14 @@ class Checker(system: SystemP.System){
   private def instantiateTransitionTemplate(
     pre: Concretization, post: Concretization, 
     newPid: ProcessIdentity, e: EventInt, include: Boolean) 
-  = {
-    val servers = pre.servers
-    // for(v1 <- sysAbsViews.toArray) v1 match{ // IMPROVE iteration
-    sysAbsViews.iterator.foreach{
-      case cv: ComponentView =>
-        if(cv.servers == servers)
-          instantiateTransitionTemplateBy(pre, post, newPid, e, include, cv)
-    } // end of for ... match
-    // result
+  = sysAbsViews.iterator(pre.servers).foreach{ cv =>
+      instantiateTransitionTemplateBy(pre, post, newPid, e, include, cv)
   }
 
   /** The effect of view cv on previous TransitionTemplates.
     *  Called from process. */
   private def effectOfPreviousTransitionTemplates(cv: ComponentView) = {
+    // IMPROVE iteration
     for((pre, post, id, e, include) <- transitionTemplates.iterator){
       if(pre.servers == cv.servers)
         instantiateTransitionTemplateBy(pre, post, id, e, include, cv)
@@ -313,18 +267,17 @@ class Checker(system: SystemP.System){
 
     // Test whether there is an existing view with a renaming of st as
     // principal component, and the same servers as conc.  
-    var found = false; val iter = sysAbsViews.iterator
-    while(iter.hasNext && !found) iter.next match{
-      case cv1: ComponentView =>
-        if(cv1.servers == servers && cv1.principal == st1){
-          // Does a renaming of the other components of cv1 (consistent with
-          // servers and st1) also agree with components on common components?
-          found = Combiner.areUnifiable(
-            cv1.components, components, map1, 0, otherArgs)
-          // IMPROVE: use cv1.others here? 
-        }
+    var found = false; val iter = sysAbsViews.iterator(servers)
+    while(iter.hasNext && !found){
+      // IMPROVE: use restricted iterator
+      val cv1 = iter.next 
+      if(cv1.principal == st1){
+        // Does a renaming of the other components of cv1 (consistent with
+        // servers and st1) also agree with components on common components?
+        found = 
+          Combiner.areUnifiable(cv1.components, components, map1, 0, otherArgs)
+      }
     } // end of while ... match
-
     found
   }
 
@@ -372,43 +325,41 @@ class Checker(system: SystemP.System){
     // identity idR in control state cs1.  map (and map1) tries to map conc
     // onto cv1.  
     // val viewsArray = sysAbsViews.toArray; var i = 0; 
-    val iter = sysAbsViews.iterator; var found = false
-    while(iter.hasNext && !found) iter.next match{
-      case cv1: ComponentView =>
-        if(cv1.servers == servers && cv1.principal == pCptR){
-          // Test if cv1 contains a component that is a renaming of st under
-          // an extension of map
-          var j = 1
-          while(j < cv1.components.length && !found){
-            val cpt1 = cv1.components(j)
-            if(cpt1.cs == cs1 && cpt1.id == stIdR){
-              // test if cpt1 is a renaming of st under an extension of map
-              var map2 = Unification.unify(map, cpt1, st)
-              if(map2 != null){
-                // Check that all components referenced by pCpt in conc are
-                // matched by a corresponding component in cv1.  map2 != null
-                // if true for all components so far.
-                var k = 1
-                while(k < pRefs.length && map2 != null){
-                  if(pRefs(k) != null){
-                    map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
-                    if(veryVerbose)
-                      println(s"Trying to unify ${cv1.components(k)} and "+
-                        pRefs(k)+".  "+(if(found) "Succeeded." else "Failed."))
-                  }
-                  k += 1
-                } // end of inner while
-                found = map2 != null
-              } // end of if(map2 != null)
-              else if(veryVerbose) println(s"failed to unify $cpt1 and $st") 
-            }
-            j += 1
+    val iter = sysAbsViews.iterator(servers); var found = false
+    while(iter.hasNext && !found){
+      val cv1 = iter.next
+      if(cv1.principal == pCptR){
+        // Test if cv1 contains a component that is a renaming of st under
+        // an extension of map
+        var j = 1
+        while(j < cv1.components.length && !found){
+          val cpt1 = cv1.components(j)
+          if(cpt1.cs == cs1 && cpt1.id == stIdR){
+            // test if cpt1 is a renaming of st under an extension of map
+            var map2 = Unification.unify(map, cpt1, st)
+            if(map2 != null){
+              // Check that all components referenced by pCpt in conc are
+              // matched by a corresponding component in cv1.  map2 != null
+              // if true for all components so far.
+              var k = 1
+              while(k < pRefs.length && map2 != null){
+                if(pRefs(k) != null){
+                  map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
+                  if(veryVerbose)
+                    println(s"Trying to unify ${cv1.components(k)} and "+
+                      pRefs(k)+".  "+(if(found) "Succeeded." else "Failed."))
+                }
+                k += 1
+              } // end of inner while
+              found = map2 != null
+            } // end of if(map2 != null)
+            else if(veryVerbose) println(s"failed to unify $cpt1 and $st")
           }
-          if(found && veryVerbose) println(s"found match with $cv1")
-          // else println(s"did not  match with $cv1")
+          j += 1
         }
-        // i += 1
-    }
+        if(found && veryVerbose) println(s"found match with $cv1")
+      }
+    } // end of while(iter.hasNext && !found)
     found
   }
 
@@ -422,16 +373,13 @@ class Checker(system: SystemP.System){
   private 
   def effectOnOthers(pre: Concretization, e: EventInt, post: Concretization) = {
     effectOnOthersCount += 1
-    sysAbsViews.iterator.foreach{
-      case cv: ComponentView  =>
-        // View.checkDistinct(cv.components)
-        if(cv.servers == pre.servers){
-          // println(s"Effect on $cv");
-          // IMPROVE if nothing changed state.
-          effectOnViaOthersCount += 1
-          effectOn(pre, e, post, cv)
-        }
-    } // end of match
+    val iter = sysAbsViews.iterator(pre.servers)
+    while(iter.hasNext){
+      val cv = iter.next
+      // IMPROVE if nothing changed state.
+      // effectOnViaOthersCount += 1
+      effectOn(pre, e, post, cv)
+    }
   }
 
 
@@ -467,8 +415,8 @@ class Checker(system: SystemP.System){
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
   = {
     effectOnCount += 1
-    if(veryVerbose) 
-      println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
+    // if(veryVerbose) 
+    //   println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers &&
       pre.components.length == post.components.length)
     val changedServers = pre.servers != post.servers
@@ -480,24 +428,10 @@ class Checker(system: SystemP.System){
         // Only look for cases where a component of cv unifies with a
         // component of pre that changes state.
         val preC = pre.components; val postC = post.components
-        val flags = Array.tabulate(preC.length)(i => preC(i) != postC(i))
+        val flags = new Array[Boolean](preC.length); var i = 0
+        while(i < preC.length){ flags(i) = preC(i) != postC(i); i += 1 }
+        // val flags = Array.tabulate(preC.length)(i => preC(i) != postC(i))
         Unification.combineWithUnification(pre, flags, cv)
-        // if(false){
-        //   // Compare with newCptsX; find those elements of newCpts such that at
-        //   // last one component of pre that changes is unified.
-        //   val newCptsX = Unification.combine(pre, cv)
-        //   val newCptsF =
-        //     newCptsX.filter{ case(_,u) =>
-        //       u.filter{ case(k,j) => flags(k) }.nonEmpty }
-        //   assert(// newCptsF.length == newCpts2.length &&
-        //     newCptsF.forall{case(sts,us) => newCpts2.exists{case(sts1,us1) =>
-        //       sts.sameElements(sts1) && us==us1}} &&
-        //       newCpts2.forall{case(sts,us) => newCptsF.exists{case(sts1,us1) =>
-        //         sts.sameElements(sts1) && us==us1}},
-        //     "newCptsX = "+showUnifs(newCptsX)+"\n"+
-        //       "newCpts2 = "+showUnifs(newCpts2))
-        // }
-        // newCpts2
     }
     var cptIx = 0
     while(cptIx < newCpts.length){
@@ -513,8 +447,8 @@ class Checker(system: SystemP.System){
         if(us.isEmpty) cpts(0)
         else{
           val ix = us.head._1           
-          assert(cpts(0) == pre.components(ix), 
-            s"${cpts(0)}, ${pre.components(ix)}")
+          // assert(cpts(0) == pre.components(ix), 
+          //   s"${cpts(0)}, ${pre.components(ix)}")
           post.components(ix)
         }
       var others = new ArrayBuffer[State]; val len = newPrinc.ids.length
@@ -532,8 +466,8 @@ class Checker(system: SystemP.System){
             if(st1 != null) others += st1
             else{
               val st2 = find0(pid, cpts)
-              assert(st2 != null, s"Not found identity $pid in $post or "+
-                cpts.mkString("[",",","]"))
+              // assert(st2 != null, s"Not found identity $pid in $post or "+
+              //   cpts.mkString("[",",","]"))
               others += st2
             }
           }
@@ -586,7 +520,7 @@ class Checker(system: SystemP.System){
       println("\nSTEP "+ply) 
       println("#abstractions = "+printLong(sysAbsViews.size))
       println("#new active abstract views = "+printInt(newViews.size))
-      nextNewViews = new ArrayBuffer[View];
+      nextNewViews = new ArrayBuffer[ComponentView];
       //nextNewViews1 = new ArrayBuffer[View]
       newTransitions = 
         new ArrayBuffer[(Concretization, EventInt, Concretization)]
@@ -602,8 +536,8 @@ class Checker(system: SystemP.System){
       }
       //if(newVersion){
         // Add views found on this ply into the main set. 
-      val newViewsAB = new ArrayBuffer[View]
-      def addView(v: View): Boolean = 
+      val newViewsAB = new ArrayBuffer[ComponentView]
+      def addView(v: ComponentView): Boolean = 
         if(sysAbsViews.add(v)){ newViewsAB += v; true } else false
       for((pre,e,post) <- newTransitions){
         val v = Remapper.remapComponentView(post.toComponentView)

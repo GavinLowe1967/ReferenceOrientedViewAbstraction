@@ -7,7 +7,7 @@ import scala.collection.mutable.ArrayBuffer
 /** Utility object to combine Views, Concretizations, etc. */
 
 object Combiner{
-  import Remapper.{RemappingMap,OtherArgMap,NextArgMap,show}
+  import Remapper.{show}
 
   /** All ways of remapping certain states of states, consistent with map0,
     * otherArgs and nextArg.  If selector = Left(i) then just the non-identity

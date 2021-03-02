@@ -7,7 +7,7 @@ import scala.collection.mutable.ArrayBuffer
 
 /** Operations concerned with unifying states or views. */
 object Unification{
-  import Remapper.{RemappingMap,NextArgMap,OtherArgMap}
+  // import Remapper.{RemappingMap,NextArgMap}
 
   var combineCount = 0L
   var renameXCount = 0L
@@ -114,7 +114,7 @@ object Unification{
   private[RemapperP]
   def combine2(map: RemappingMap, nextArg: NextArgMap,
     otherArgs: OtherArgMap, cpts1: Array[State], cpts2: Array[State],
-    result: CombineResult, i: Int, j: Int, unifs: Unifications): Unit 
+    result: CombineResult, i: Int = 0, j: Int = 0, unifs: Unifications = List()): Unit 
   = {
     /* Rename (f,id) to id1; if this is the identity parameter, then
      * unify with corresponding component in cpts1 if there is one. */
@@ -203,8 +203,8 @@ object Unification{
     // The initial maps: map0 is the identity on the server parameters;
     // otherArgs gives parameters used in v1 but not the servers; nextArg
     // gives the next fresh parameters.
-    val (map0, otherArgs, nextArg) = 
-      Remapper.createCombiningMaps(servers, components1)
+    val (map0, otherArgs, nextArg) =  v1.getCombiningMaps
+      // Remapper.createCombiningMaps(servers, components1)
 
     if(false){      // IMPROVE: following checks are expensive
       var f = 0
@@ -245,37 +245,41 @@ object Unification{
     // View.checkDistinct(components2); 
     require(components1.length == flags.length)
     val result = new ArrayBuffer[(Array[State], Unifications)]
-    val (map0, otherArgs0, nextArg0) = 
-      Remapper.createCombiningMaps(servers, components1)
+    val (map0, otherArgs0, nextArg0) = v1.getCombiningMapsImmutable
+      // Remapper.createCombiningMaps(servers, components1)
     val otherArgs1 = new Array[List[Identity]](numTypes)
     val nextArg1 = new Array[Int](numTypes)
 
     var i = 0
     while(i < components1.length){
       if(flags(i)){
-        val st1 = components1(i)
+        val st1 = components1(i); var j = 0
         // Try to unify st1 with a state of v2
-        var j = 0
         while(j < components2.length){
           val st2 = components2(j)
           if(st1.cs == st2.cs){
             val map1 = unify(map0, st1, st2)
             if(map1 != null){
               //  make otherArgs1 and nextArg1 consistent with map1
-              for(f <- 0 until numTypes){
-                otherArgs1(f) = otherArgs0(f).filter(id => !map1(f).contains(id))
+              var f = 0
+              while(f < numTypes){
+                // otherArgs1(f) = otherArgs0(f).filter(id => !map1(f).contains(id))
+                var xs = otherArgs0(f); var ys = List[Identity]()
+                while(xs.nonEmpty){
+                  val id = xs.head; xs = xs.tail; 
+                  // Test if map1(f) contains id
+                  var i = 0; val len = map1(f).length
+                  while(i < len && map1(f)(i) != id) i += 1
+                  if(i == len) ys = id::ys
+                }
+                otherArgs1(f) = ys
                 nextArg1(f) = nextArg0(f) max (map1(f).max+1)
+                f += 1
               }
               // IMPROVE:  don't remap st1?
-              val res =
-                combine1(map1, nextArg1, otherArgs1, components1, components2)
-              assert(res.forall{case (_,unifs) => unifs.contains(i,j)})
-              // Check no repetitions in res
-              assert(res.forall{ case(sts,unifs) =>
-                res.forall{ case(sts1,unifs1) =>
-                  sts == sts1 || unifs != unifs1 || !sts.sameElements(sts1) } })
-              result ++= res // IMPROVE
-              // Note: result may contain repetitions, even though res doesn't.
+              combine2(map1, nextArg1, otherArgs1, components1, components2, result)
+              // assert(res.forall{case (_,unifs) => unifs.contains(i,j)})
+
             }
           }
           j += 1

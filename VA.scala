@@ -62,7 +62,7 @@ object VA{
       case "--verbose" => verbose = true; i += 1
       case "--bound" => bound = args(i+1).toInt; i += 2
       case "--timing" => timing = true; i += 1
-      case "--memoryless" => memoryless = true; i += 1
+      // case "--memoryless" => memoryless = true; i += 1
       case "--noDebug" => debuggable = false; i += 1
       case "--test" => testing = true; i += 1
       case "-p" => numThreads = args(i+1).toInt; i += 2

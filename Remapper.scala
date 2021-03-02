@@ -27,7 +27,7 @@ object Remapper{
     *  {(t,arg) -> (t, map(t)(arg)) |
     *       0 <= t < numTypes, 0 <= arg < size(t), map(t)(arg) != -1}.
     */
-  type RemappingMap = Array[Array[Identity]]
+  // type RemappingMap = Array[Array[Identity]]
 
   /** Show a remapping map. */
   def show(map: RemappingMap) = map.map(_.mkString("[",",","]")).mkString("; ") 
@@ -120,7 +120,7 @@ object Remapper{
   /** The type of maps giving the next argument to map a parameter of
     * type t.  The corresponding RemappingMap has domain all
     * parameters (t,i) for i <- [0..nextArg(t)), for each t. */
-  type NextArgMap = Array[Int]
+  // type NextArgMap = Array[Int]
 
   def show(nexts: NextArgMap) = nexts.mkString("[", ", ", "]")
 
@@ -144,7 +144,7 @@ object Remapper{
 
   /** A list, for each type, of non-fresh values that a particular parameter can
     * be mapped to. */
-  type OtherArgMap = Array[List[Identity]]
+  // type OtherArgMap = Array[List[Identity]]
 
   def newOtherArgMap: OtherArgMap = Array.fill(numTypes)(List[Identity]())
 
@@ -158,10 +158,14 @@ object Remapper{
     * Example:
     * [21[-1](T0) || 22[-1](Null) || 23[-1]()] || [12[1](T0,N0) || 7[0](N0,N1)]
     * gives [-1,-1,-1,-1,-1,-1,-1,-1]; [0,-1,-1,-1]; [List(1, 0);List()]; [2, 1]
+    * 
+    *  Note: now inlined in Concretization.getCombiningMaps; only used in
+    *  RemapperTest.
     */
   private [RemapperP]
   def createCombiningMaps(servers: ServerStates, components: Array[State])
       : (RemappingMap, OtherArgMap, NextArgMap) = {
+    Profiler.count("createCombiningMaps")
     val map0 = servers.remappingMap // identity map on server ids
     val nextArg: NextArgMap = servers.nextArgMap  // The next fresh parameters
     // Parameters used in components but not the servers

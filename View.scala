@@ -1,5 +1,7 @@
 package ViewAbstraction
 
+import ox.gavin.profiling.Profiler
+
 /** Superclass of views of a system state. */
 abstract class View{
   /** This view was created by the extended transition pre -e-> post. */
@@ -185,6 +187,56 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   }
 
   def getSecondaryView = secondaryView
+
+  /** Maps used in combining with this.  */
+  private var map: RemappingMap = servers.remappingMap
+  private var nextArg: NextArgMap = null 
+  private var otherArgs: OtherArgMap = null
+
+  /** Initialise the above maps. */
+  @inline private def initMaps() = {
+    nextArg = servers.nextArgMap  // The next fresh parameters
+    // Parameters used in components but not the servers
+    otherArgs = Array.fill(numTypes)(List[Identity]()); var cix = 0
+    // Iterate through params of components
+    while(cix < components.length){
+      val c = components(cix); val ids = c.ids; val typeMap = c.typeMap
+      var i = 0
+      while(i < ids.length){
+        val f = typeMap(i); val id = ids(i); assert(id <= nextArg(f))
+        if(id == nextArg(f)){ otherArgs(f) ::= id; nextArg(f) += 1 }
+        i += 1
+      }
+      cix += 1
+    }
+  }
+
+  /** Create maps suitable for remapping: (1) a RemappingMap that is the
+    * identity on servers; (2) the identities of components that are not
+    * shared with the servers, indexed by types; (3) a NextArgMap giving the
+    * next fresh values not used in servers or components. 
+    * 
+    * Example:
+    * [21[-1](T0) || 22[-1](Null) || 23[-1]()] || [12[1](T0,N0) || 7[0](N0,N1)]
+    * gives [-1,-1,-1,-1,-1,-1,-1,-1]; [0,-1,-1,-1]; [List(1, 0);List()]; [2, 1]
+    * 
+    * Note: these are cloned on each call. 
+    */
+  def getCombiningMaps: (RemappingMap, OtherArgMap, NextArgMap) = {
+    // Profiler.count("getCombiningMaps"+(otherArgs == null))
+    if(otherArgs == null) initMaps()
+    val map1 = new Array[Array[Int]](numTypes); var t = 0
+    while(t < numTypes){ map1(t) = map(t).clone; t += 1 }
+    (map1, otherArgs.clone, nextArg.clone)
+  }
+
+  /** As getCombiningMaps, except client code must not change the maps
+    * returned. */
+  def getCombiningMapsImmutable: (RemappingMap, OtherArgMap, NextArgMap) = {
+    // Profiler.count("getCombiningMaps"+(otherArgs == null))
+    if(otherArgs == null) initMaps()
+    (map, otherArgs, nextArg)
+  }
 
   override def toString = 
     s"$servers || ${components.mkString("[", " || ", "]")}"

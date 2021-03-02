@@ -5,39 +5,24 @@ import scala.collection.mutable.{HashMap,HashSet}
 /** A set of system views. */
 trait ViewSet{
   /** Add sv to this. */
-  def add(sv: View) : Boolean
-
-  // /** Add a sequence of elements to the set. */
-  // def add (ss: Seq[View]) : Unit = for(s <- ss) add(s)
-
-  // /** Add elements of iterator to the set. */
-  // def add (ss: Iterator[View]) : Unit = for(s <- ss) add(s)
+  def add(sv: ComponentView) : Boolean
 
   /** Does this contain sv? */
-  def contains(sv: View): Boolean
+  def contains(sv: ComponentView): Boolean
 
   /** The number of elements in the set. */
   def size: Long 
 
-  // def reportSizes = Array(size)
-
   /** Iterator over the set.  Not thread safe. */
-  def iterator : Iterator[View] 
+  def iterator : Iterator[ComponentView] 
 
-  /** List of the elements of the set.  Not thread safe. */
-  // def toList : List[View] = iterator.toList 
-
-  // def toArray: Array[View] = iterator.toArray
-
-  /** Make a string representing the set, separating elements using seq. */
-  // def mkString(sep: String) = toList.mkString(sep)
+  /** Iterator over all views matching servers. */
+  def iterator(servers: ServerStates) : Iterator[ComponentView] =
+    iterator.filter(cv => cv.servers == servers)
 
   /** Get the representative of sv.  Used in debugging only.
     * Pre: this includes such a representative. */
-  def getRepresentative(sv: View): View
-
-  // /** Add inc to the current count. */
-  // def addCount(inc: Int): Unit
+  def getRepresentative(sv: ComponentView): ComponentView
 
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 }
@@ -45,174 +30,176 @@ trait ViewSet{
 // =======================================================
 
 object ViewSet{
-  def apply(): ViewSet = new CanonicalViewSet
+  def apply(): ViewSet = new ServerBasedViewSet(16) // new CanonicalViewSet
 
-  def apply(sizeEstimate: Int): ViewSet = 
-    new CanonicalViewSet(sizeEstimate)
+  def apply(sizeEstimate: Int): ViewSet = new ServerBasedViewSet(sizeEstimate)
+    // new CanonicalViewSet(sizeEstimate)
 }
-
-
 
 // =======================================================
 
 /** An implementation based on canonical forms.
-  * @param sizeEstimate an estimate of the number of elements this will contain, if 
-  * positive. */
+  * @param sizeEstimate an estimate of the number of elements this will 
+  * contain, if positive. */
 class CanonicalViewSet(sizeEstimate: Int = -1) extends ViewSet{
   /** The set of system views.  
     * Invariant: all members of underlying are in canonical form. */
-  private val underlying: MyHashSet[View] =
-    if(sizeEstimate <= 0) new LockFreeReadHashSet[View](shards = 2, MaxLoad = 0.7) 
+  private val underlying: MyHashSet[ComponentView] =
+    if(sizeEstimate <= 0) 
+      new LockFreeReadHashSet[ComponentView](shards = 2, MaxLoad = 0.7)
       // (powerOf2AboveNumThreads*8)
-    // new MyShardedHashSet[View]
     else{
       val shards = LockFreeReadHashSet.DefaultShards
       val initLength = powerOfTwoAtLeast(sizeEstimate/shards) max 16
       println("initLength = "+initLength)
-      new LockFreeReadHashSet[View](shards, initLength, 0.7)
+      new LockFreeReadHashSet[ComponentView](shards, initLength, 0.7)
     }
 
   /** Add sv to this. */
-  @inline def add(sv: View): Boolean = {
+  @inline def add(sv: ComponentView): Boolean = {
     // println(s"add($sv)")
     underlying.add(sv)
   }
 
-  @inline def contains(sv: View): Boolean = underlying.contains(sv)
+  @inline def contains(sv: ComponentView): Boolean = underlying.contains(sv)
 
   override def size = underlying.size
 
-  def reportSizes = underlying.reportSizes
+  // def reportSizes = underlying.reportSizes
 
   /** Iterator over the set. */
-  def iterator: Iterator[View] = underlying.iterator 
+  def iterator: Iterator[ComponentView] = underlying.iterator 
 
   /** Get the representative of sv.  Used in debugging.
     * Pre: this includes such a representative; and this operation is not 
     * concurrent with any add operation. */
-  def getRepresentative(sv: View): View =  underlying.get(sv)
+  def getRepresentative(sv: ComponentView): ComponentView =  underlying.get(sv)
 
-  def addCount(inc: Int) = ???
+  // def addCount(inc: Int) = ???
 
 }
 
-// =======================================================
+// ==================================================================
 
-/** A ViewSet corresponding to gamma_aShapes(absViews), i.e. all views
-  * that are abstractions of absViews. */
-class ImplicitViewSet(absViews: ViewSet, aShapes: List[Shape]) 
-extends ViewSet{
-  /** Are we currently testing the implementation, using an explicit shadow set?
-    * Note, in order to use this, it is necessary to disable recycling of
-    * Views (View.returnView), and ensure
-    * NewViewExtender.extensions always calls this.add.  Calls to shadowSize
-    * should then give the expected number of states. */  
-  // private val Testing = true // false
+import scala.collection.mutable.Set
 
-  // private val shadow = 
-  //   if(Testing)  new scala.collection.mutable.HashSet[View]
-  //   else null
+/** An implementation of a ViewSet where views are stored by server. */
+class ServerBasedViewSet(initSize: Int = 16) extends ViewSet{
+  checkPow2(initSize)
 
-  /** The number of views implicitly in this set. */
-  private val count = new java.util.concurrent.atomic.AtomicLong
+  private val sbvs = this // For reference in the iterator
 
-  /** Add sv to this. */
-  def add(sv: View): Boolean = { ???
-    // // Iterate over all elements of alpha(sv)
-    // // IMPROVE: replace vs by an iterator, so as to be lazier
-    // val cpts = sv.componentView; val vs = Views.alpha(aShapes, cpts)
-    // Views.returnView(cpts)
-    // // done is true if we have found a member of alpha(sv) not in absViews
-    // var i = 0; var done = false
-    // while(i < vs.length){
-    //   val v1 = vs(i)
-    //   if(!done){
-    //     val abs = View.mkView(sv.servers, v1)
-    //     done = !absViews.contains(abs)
-    //     View.returnView(abs)
-    //   }
-    //   i += 1; Views.returnView(v1) 
-    // }
-    // if(done){ count.getAndIncrement; true }
-    // else false
-  }
+  /* At the top level, the ViewSet stores a mapping from ServerStates to sets of
+   * Views, implemented as a hash map. */
 
-  // def shadowSize = shadow.size
+  /** The number of distinct ServerStates. */
+  private var count = 0
 
-  def addCount(inc: Int) = count.getAndAdd(inc)
-
-  def size: Long = count.get
-
-  def getRepresentative(sv: View): View = ???
-
-  def iterator: Iterator[View] = ???
-
-  def contains(sv: View): Boolean = ???
-}
-
-
-// =======================================================
-
-/** A Sequential implementation, using open addressing. */
-class SeqViewSet(initLength: Int = 16) extends ViewSet{
-  checkPow2(initLength)
+  /** The number of ComponentViews. */
+  private var theSize = 0L
 
   /** The number of slots in the hash table. */
-  private var length = initLength
+  private var length = initSize
 
-  private var hashes = new Array[Int](length)
-
-  private var elements = new Array[View](length)
-
-  /** The number of elements in the hash table. */
-  private var theSize = 0
-
-  private val MaxLoad = 0.7
-
-  /** Bitmask for item in [0..length). */
+  /** A bitmask to produce a value in [0..length). */
   private var mask = length-1
 
-  /** Threshold for resizing. */
-  private var threshold = (length*MaxLoad).toInt
+  /** The threshold ratio at which resizing happens. */
+  private val ThresholdRatio = 0.7
 
-  def add(sv: View) = {
-    val h = hashOf(sv)
-    if(theSize >= threshold) resize
-    var i = h&mask
-    while(hashes(i) != 0 && (hashes(i) != h || elements(i) != sv))
-      i = (i+1)&mask
-    if(hashes(i) == h) false // { assert(elements(i) == sv); false } 
-    else{
-      // assert(hashes(i) == 0 && elements(i) == null)
-      hashes(i) = h; elements(i) = sv; theSize += 1; true
-    }
+  /** The threshold at which the next resizing will happen. */
+  private var threshold = initSize * ThresholdRatio
+
+  /** The array holding the servers. */
+  private var keys = new Array[ServerStates](initSize)
+
+  /** The array holding the corresponding ComponentViews. */
+  private var views = new Array[Set[ComponentView]](initSize)
+  // IMPROVE: replace the Set[ComponentView] by something more efficient
+
+  /** Find the index in the arrays corresponding to servers. */
+  private def find(ss: ServerStates): Int = {
+    var i = ss.hashCode & mask
+    while(keys(i) != ss && keys(i) != null) i = (i+1)&mask
+    i
   }
 
-  private def resize = {
-    val oldLength = length; length = 2*length
-    val oldHashes = hashes; hashes = new Array[Int](length)
-    val oldElements = elements; elements = new Array[View](length)
-    mask = length-1; threshold = (length*MaxLoad).toInt
+  /** Add sv to this. */
+  def add(sv: ComponentView) : Boolean = {
+    val servers = sv.servers; val i = find(servers)
+    if(keys(i) == null){
+      if(count >= threshold){ resize(); return add(sv) }
+      keys(i) = servers; views(i) = Set[ComponentView](); count += 1
+    }
+    if(views(i).add(sv)){ theSize += 1; true } else false
+  }
+
+  /** Resize the hash table. */
+  private def resize(): Unit = {
+    println("resizing")
+    val oldKeys = keys; val oldViews = views; val oldLength = length
+    length += length; threshold = length * ThresholdRatio; mask = length-1
+    keys = new Array[ServerStates](length)
+    views = new Array[Set[ComponentView]](length)
     var i = 0
     while(i < oldLength){
-      val h = oldHashes(i)
-      if(h != 0){
-        var j = h&mask
-        while(hashes(j) != 0) j = (j+1)&mask
-        hashes(j) = h; elements(j) = oldElements(i)
+      val ss = oldKeys(i)
+      if(ss != null){ // copy across
+        val j = find(ss); keys(j) = ss; views(j) = oldViews(i)
       }
-      // else assert(oldElements(i) == null)
       i += 1
     }
-
   }
 
-  def addCount(inc: Int): Unit = ???
-  def contains(sv: View): Boolean = ???
-  def getRepresentative(sv: View): View = ???
-  def iterator: Iterator[View] = ???
+  /** Does this contain sv? */
+  def contains(sv: ComponentView): Boolean = {
+    val i = find(sv.servers); val set = views(i)
+    set !=  null && set.contains(sv)
+  }
 
-  def shadowSize = ???
-  def size: Long = theSize.toLong
+  /** The number of elements in the set. */
+  def size: Long = theSize
 
+  /** Iterator over the set.  */
+  def iterator : Iterator[ComponentView] = new Iterator[ComponentView]{
+    private val n = sbvs.length 
+
+    /** Index of the next set to iterate over. */
+    private var ix = 0
+
+    /** The current iterator, corresponding to views(i). */
+    private var current: Iterator[ComponentView] = null
+
+    /** Advance ix to the next set, and set current. */
+    def advance = {
+      while(ix < n && views(ix) == null) ix += 1
+      if(ix < n) current = views(ix).iterator
+    }
+
+    advance
+
+    def hasNext = 
+      if(current == null) false
+      else if(current.hasNext) true 
+      else{ ix += 1; advance; ix < sbvs.length }
+
+    def next = { assert(hasNext); current.next }
+  } // end of iterator
+
+  /** Iterator over all views matching servers. */
+  override def iterator(servers: ServerStates) : Iterator[ComponentView] = {
+    val i = find(servers); val set = views(i)
+    if(set == null) Iterator.empty[ComponentView] else set.iterator
+  }
+
+  /** Get the representative of sv.  Used in debugging only.
+    * Pre: this includes such a representative. */
+  def getRepresentative(sv: ComponentView): ComponentView = {
+    // IMPROVE: using find is inefficient
+    val i = find(sv.servers); views(i).find(_ == sv).get
+  }
+
+  override def toString = 
+    iterator.toArray.map(_.toString).sorted.mkString("\n")+
+      s"\nNumber of ServerStates = $count"
 }

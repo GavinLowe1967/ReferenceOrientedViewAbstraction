@@ -58,6 +58,27 @@ package object ViewAbstraction{
   /** The representation of tau. */
   val Tau: EventInt = 1
 
+  /** The type of maps recording the values that parameters get remapped to.  
+    * map(t)(arg) records the value that arg of type t gets remapped to,
+    * or -1 if no value has been allocated yet.  I.e., it represents the
+    * mapping
+    *  {(t,arg) -> (t, map(t)(arg)) |
+    *       0 <= t < numTypes, 0 <= arg < size(t), map(t)(arg) != -1}.
+    */
+  type RemappingMap = Array[Array[Identity]]
+
+
+  /** The type of maps giving the next argument to map a parameter of
+    * type t.  The corresponding RemappingMap has domain all
+    * parameters (t,i) for i <- [0..nextArg(t)), for each t. */
+  type NextArgMap = Array[Int]
+
+  /** A list, for each type, of non-fresh values that a particular parameter can
+    * be mapped to. */
+  type OtherArgMap = Array[List[Identity]]
+
+
+
   /** Append two lists together: more efficient than API version. */
   def append(xs: List[Int], ys: List[Int]): List[Int] =
     if(xs.isEmpty) ys else xs.head :: append(xs.tail, ys)
@@ -141,7 +162,7 @@ package object ViewAbstraction{
   // var newStyle = !oldStyle
 
   /** Are we performing memoryless checking? */
-  var memoryless = false 
+  // var memoryless = false 
 
   /** Are we supporting debugging? */ 
   var debuggable = true
