@@ -29,6 +29,12 @@ lockBasedQueue.csp: involves two synchronisations between thread and watchdog
 on each of enqueueing and dequeueing.  Also artificially keeps the tail
 node in an enqueueing thread's state. 538 abstractions -> 556 ??
 
+Treiber Stack
+=============
+
+TreiberStack0.csp: finds a false positive.  It's not capturing the invariant
+that at most one thread has created a new node.
+
 Test files
 ==========
 

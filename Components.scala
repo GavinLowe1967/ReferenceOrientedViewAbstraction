@@ -261,7 +261,8 @@ class Components(
         val es = transComponent(f)(i)._1
         if(es.nonEmpty) es += Sentinel else transComponent(f)(i) = null
         val es1 = transServerComponent(f)(i)._1
-        if(es1.nonEmpty) es1 += Sentinel else transServerComponent(f)(i) = null
+        es1 += Sentinel
+        // if(es1.nonEmpty) es1 += Sentinel else transServerComponent(f)(i) = null
       }
     }
     // IMPROVE: use Arrays instead of ArrayBuffers?  Compress more?
@@ -274,6 +275,9 @@ class Components(
         val (es, ns) = ens; binSearch(e, es, ns)
       }
       else{
+        // assert(transServerComponent(f) != null, f)
+        // assert(transServerComponent(f)(id) != null, 
+        //   s"e = ${showEvent(e)}, f = $f, id = $id")
         val (es, ns) = transServerComponent(f)(id); binSearch(e, es, ns)
       }
     }

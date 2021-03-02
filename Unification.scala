@@ -199,7 +199,7 @@ object Unification{
     // println(s"combine($v1, $v2)")
     val servers = v1.servers; require(v2.servers == servers)
     val components1 = v1.components; val components2 = v2.components
-    View.checkDistinct(components2)
+    // View.checkDistinct(components2)
     // The initial maps: map0 is the identity on the server parameters;
     // otherArgs gives parameters used in v1 but not the servers; nextArg
     // gives the next fresh parameters.
@@ -242,7 +242,8 @@ object Unification{
       : ArrayBuffer[(Array[State], Unifications)] = {
     val servers = v1.servers; require(v2.servers == servers)
     val components1 = v1.components; val components2 = v2.components
-    View.checkDistinct(components2); require(components1.length == flags.length)
+    // View.checkDistinct(components2); 
+    require(components1.length == flags.length)
     val result = new ArrayBuffer[(Array[State], Unifications)]
     val (map0, otherArgs0, nextArg0) = 
       Remapper.createCombiningMaps(servers, components1)

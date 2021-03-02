@@ -16,9 +16,9 @@ object Remapper{
 
   /** Max number of values of each type that we need to keep track of in any
     * remapping. */
-  val rowSizes = Array.tabulate(numTypes)( t => 
-    typeSizes(t) + State.maxParamsOfType(t))
-  println("Remapper.rowSizes = "+rowSizes.mkString(", "))
+  // val rowSizes = Array.tabulate(numTypes)( t => 
+  //   typeSizes(t) + State.maxParamsOfType(t))
+  // println("Remapper.rowSizes = "+rowSizes.mkString(", "))
 
   /** The type of maps recording the values that parameters get remapped to.  
     * map(t)(arg) records the value that arg of type t gets remapped to,
@@ -34,7 +34,7 @@ object Remapper{
 
   /** Template from which to create RemappingMap. */
   private val remappingMapTemplate =
-    Array.tabulate(numTypes)(t => Array.fill(rowSizes(t))(-1))
+    Array.tabulate(numTypes)(t => Array.fill(State.rowSizes(t))(-1))
 
 
   /** Produce a (deep) clone of map. */
@@ -56,7 +56,10 @@ object Remapper{
   // }
 
   /** Create a RemappingMap corresponding to rho, i.e. the identity map
-    * on (t,i) for i <- [0..rho(t), for each t. */
+    * on (t,i) for i <- [0..rho(t), for each t. 
+    * 
+    * IMPROVE: calling remappingMap on the ServerStates might be more
+    * efficient. */
   def createMap(rho: ParamMap): RemappingMap = {
     val map = newRemappingMap
     for(t <- 0 until numTypes){
@@ -130,7 +133,9 @@ object Remapper{
     // map
   }
 
-  /** Create a new NextArgMap corresponding to rho. */
+  /** Create a new NextArgMap corresponding to rho. 
+    * 
+    * IMPROVE: calling nextArgMap on the ServerStates might be more efficient. */
   @inline def createNextArgMap(rho: ParamMap): NextArgMap = {
     val naMap = new Array[Int](numTypes)
     for(i <- 0 until numTypes) naMap(i) = rho(i).length
@@ -157,21 +162,16 @@ object Remapper{
   private [RemapperP]
   def createCombiningMaps(servers: ServerStates, components: Array[State])
       : (RemappingMap, OtherArgMap, NextArgMap) = {
-    val rhoS = servers.rhoS; val map0 = createMap(rhoS)
-    val serverIds = servers.serverIds
-    // The next fresh parameters
-    val nextArg: NextArgMap = createNextArgMap(rhoS)
-    // Parameters used in v1 but not the servers
-    val otherArgs = Array.fill(numTypes)(List[Identity]())
-    var cix = 0
+    val map0 = servers.remappingMap // identity map on server ids
+    val nextArg: NextArgMap = servers.nextArgMap  // The next fresh parameters
+    // Parameters used in components but not the servers
+    val otherArgs = Array.fill(numTypes)(List[Identity]()); var cix = 0
+    // Iterate through params of components
     while(cix < components.length){
       val c = components(cix); val ids = c.ids; var i = 0
       while(i < ids.length){
-        val f = c.typeMap(i); val id = ids(i)
-        if(!isDistinguished(id) && !serverIds(f).contains(id) &&
-          !otherArgs(f).contains(id)){ //IMPROVE
-          otherArgs(f) ::= id; nextArg(f) = nextArg(f) max (id+1)
-        }
+        val f = c.typeMap(i); val id = ids(i); assert(id <= nextArg(f))
+        if(id == nextArg(f)){ otherArgs(f) ::= id; nextArg(f) += 1 }
         i += 1
       }
       cix += 1

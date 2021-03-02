@@ -141,6 +141,7 @@ class Debugger(
     * view. */
   private def expandConc(conc: Concretization) = {
     val cv = conc.getSecondaryView
+    println(s"Secondary view = $cv")
     if(cv == null) println(s"No secondary components found in $conc")
     else apply1(cv, conc)
   }

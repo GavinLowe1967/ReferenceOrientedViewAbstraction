@@ -27,7 +27,7 @@ trait ViewSet{
   /** List of the elements of the set.  Not thread safe. */
   // def toList : List[View] = iterator.toList 
 
-  def toArray: Array[View] = iterator.toArray
+  // def toArray: Array[View] = iterator.toArray
 
   /** Make a string representing the set, separating elements using seq. */
   // def mkString(sep: String) = toList.mkString(sep)
@@ -62,7 +62,7 @@ class CanonicalViewSet(sizeEstimate: Int = -1) extends ViewSet{
   /** The set of system views.  
     * Invariant: all members of underlying are in canonical form. */
   private val underlying: MyHashSet[View] =
-    if(sizeEstimate <= 0) new LockFreeReadHashSet[View](MaxLoad = 0.7) 
+    if(sizeEstimate <= 0) new LockFreeReadHashSet[View](shards = 2, MaxLoad = 0.7) 
       // (powerOf2AboveNumThreads*8)
     // new MyShardedHashSet[View]
     else{

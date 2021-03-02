@@ -18,14 +18,21 @@ class ServerStates(val servers: List[State]){
   /** For each type t, the list of identities of type t used within servers. */
   val serverIds: Array[List[Identity]] = mkServerIds
 
+  /** Is this normalised? */
+  private var normalised = true
+
+  /** Initialise serverIds */
   private def mkServerIds = {
     val result = Array.fill(numTypes)(List[Identity]())
     for(st <- servers){
       var index = 0
       for(id <- st.ids){
         val t = State.stateTypeMap(st.cs)(index); index += 1
-        if(!isDistinguished(id) && !result(t).contains(id))
+        if(!isDistinguished(id) && !result(t).contains(id)){
+          if(result(t).isEmpty) normalised &&= id == 0
+          else normalised &&= id == result(t).head+1
           result(t) ::= id
+        }
       }
     }
     result
@@ -33,6 +40,27 @@ class ServerStates(val servers: List[State]){
 
   /** Number of parameters of each type. */
   val numParams = serverIds.map(_.length)
+
+  /** Bitmap showing which identities are included in this. */
+  // val serverIdsBitMap = 
+  //   if(normalised)
+  //     Array.tabulate(numTypes)(t =>
+  //       Array.tabulate(State.rowSizes(t))(i => i < numParams(t)))
+  //   else null
+
+  /** A template Remapper.RemappingMap */
+  private val remappingMapTemplate = Array.tabulate(numTypes)(t => 
+    Array.tabulate(State.rowSizes(t))(i => if(i < numParams(t)) i else -1))
+
+  def remappingMap: Array[Array[Identity]] = {
+    assert(normalised)
+    val result = new Array[Array[Identity]](numTypes); var t = 0
+    while(t < numTypes){ result(t) = remappingMapTemplate(t).clone; t += 1 }
+    result
+    // Array.tabulate(numTypes)(t => remappingMapTemplate(t))
+  }
+
+  def nextArgMap = { assert(normalised); numParams.clone }
 
   /** Identity mapping on identities held by servers, for each type. */
   val rhoS: ParamMap = 

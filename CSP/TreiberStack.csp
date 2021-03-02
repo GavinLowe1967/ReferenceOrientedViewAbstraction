@@ -32,14 +32,14 @@ include "definitions.csp"
 
 
 -- Identities of nodes
-datatype NodeIDType = Null | N0 | N1 | N2 | N3 | N4 | N5 | N6 | N7 | N8 
+datatype NodeIDType = Null | N0 | N1 | N2  | N3 | N4 | N5 | N6 | N7 | N8 
 NodeID =  diff(NodeIDType, {Null})               -- real nodes
 
 -- Data values
 datatype T = A | B | C
 
 -- Thread identities
-datatype ThreadID = T0 | T1 | T2 -- | T3
+datatype ThreadID = T0 | T1 | T2 | T3
 -- 3 threads enough with --shape 1 2 --shape 2 1 --shape 3 0; 
 -- 4 necessary for -k 3
 
@@ -55,9 +55,18 @@ channel getNext : ThreadID . NodeID . NodeIDType
 -- set the next field
 channel setNext: ThreadID . NodeID . NodeIDType
 
+-- Signal to node that it has been added
+channel joined: ThreadID . NodeID
+
 -- A node process, with identity me, currently free
 FreeNode :: (NodeIDType) -> Proc
-FreeNode(me) = initNode?_!me?value -> Node(me, value, Null)
+FreeNode(me) = 
+  initNode?t!me?value -> setNext.t.me?next -> InitNode(me, t, value, next)
+
+InitNode(me, t, value, next) =  
+  joined.t.me -> Node(me, value, next)
+  []
+  setNext.t.me?next' -> InitNode(me, t, value, next')
 
 -- A node process, identity me, holding datum value and next pointer next
 Node :: (NodeIDType, T, NodeIDType) -> Proc
@@ -65,11 +74,12 @@ Node(me, value, next) =
   getValue?_!me.value -> Node(me, value, next)
   []
   getNext?_!me.next -> Node(me, value, next)
-  []
-  setNext?_!me?newNext -> Node(me, value, newNext)
+--  []
+--  setNext?_!me?newNext -> Node(me, value, newNext)
 
 alphaNode(me) = 
-  {| initNode.t.me, getValue.t.me, getNext.t.me, setNext.t.me | t <- ThreadID |}
+  {| initNode.t.me, getValue.t.me, getNext.t.me, setNext.t.me, joined.t.me | 
+       t <- ThreadID |}
 
 AllNodes = || id : NodeID @ [alphaNode(id)] FreeNode(id)
 
@@ -82,7 +92,7 @@ Push(me, value) = initNode.me?node!value -> Push'(me, value, node)
 Push'(me, value, node) =
   getTop.me?top -> setNext.me.node.top ->
   CASTop.me.top.node?result!PushOp!value -> -- lin point for push of value
-  if result then Thread(me) else Push'(me, value, node)
+  if result then joined.me.node -> Thread(me) else Push'(me, value, node)
 
 -------- A popping thread
 
@@ -97,12 +107,11 @@ Pop(me) =
 -------- A thread
 
 Thread(me) = ([] v : T @ Push(me, v)) [] Pop(me)
--- Replacing the outer |~| by [] gives a factor of three increase in states and
--- time!  Only to a given bound (this is a red herring).
 
 alphaThread(me) =
   union(
-    {| setNext.me.n, initNode.me.n, getValue.me.n, getNext.me.n | n <- NodeID |},
+    {| setNext.me.n, initNode.me.n, getValue.me.n, getNext.me.n, joined.me.n |
+          n <- NodeID |},
     {| getTop.me, CASTop.me |}
   )
   
@@ -227,14 +236,20 @@ Servers = || (S, Alpha, _) <- set(ServerSet) @ [Alpha] S
 
 -------- Complete system
 
-syncSet = union(alphaTop, diff(alphaWD, {error}))
 
-AllComponents = AllThreads ||| AllNodes -- FIXME: wrong alphabets
+AllComponents = 
+  let sync = {|initNode,getValue,getNext,setNext,joined|}  within
+  AllThreads [| sync |] AllNodes
+
+syncSet = union(alphaTop, diff(alphaWD, {error}))
 
 System = AllComponents [| syncSet |] Servers
 
+assert System :[deadlock free]
+
+
 assert STOP [T= System \ diff(Events, {error})
 
-assert STOP [T= STOP :[symmetry reduce]:
+assert STOP [T= STOP  :[symmetry reduce]:
 
 

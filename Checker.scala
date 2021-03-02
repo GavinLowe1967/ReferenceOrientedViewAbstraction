@@ -9,9 +9,6 @@ import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
   * @param aShapes the shapes of abstractions.
   * @param cShapes the shapes of concretizations. */
 class Checker(system: SystemP.System){
-  // Are we adding views, etc. only at the end of plys? 
-  // private var newVersion = true // FIXME: remove
-
   private var verbose = false 
   private var veryVerbose = false
 
@@ -21,11 +18,7 @@ class Checker(system: SystemP.System){
   // adding new views to the set while that is going on.
 
   /** The new views to be considered on the next ply. */
-  //protected var nextNewViews: ArrayBuffer[View] = null
-
-  private var nextNewViews1: ArrayBuffer[View] = null
-
-// FIXME: don't need both
+  protected var nextNewViews: ArrayBuffer[View] = null
 
   private def showTransition(
     pre: Concretization, e: EventInt, post: Concretization) =
@@ -196,7 +189,8 @@ class Checker(system: SystemP.System){
     newPid: ProcessIdentity, e: EventInt, include: Boolean) 
   = {
     val servers = pre.servers
-    for(v1 <- sysAbsViews.toArray) v1 match{ // IMPROVE iteration
+    // for(v1 <- sysAbsViews.toArray) v1 match{ // IMPROVE iteration
+    sysAbsViews.iterator.foreach{
       case cv: ComponentView =>
         if(cv.servers == servers)
           instantiateTransitionTemplateBy(pre, post, newPid, e, include, cv)
@@ -318,11 +312,9 @@ class Checker(system: SystemP.System){
     }
 
     // Test whether there is an existing view with a renaming of st as
-    // principal component, and the same servers as conc.  IMPROVE: iteration
-    val viewsArray = sysAbsViews.toArray
-    var i = 0; var found = false
-    // println(st1)
-    while(i < viewsArray.length && !found) viewsArray(i) match{
+    // principal component, and the same servers as conc.  
+    var found = false; val iter = sysAbsViews.iterator
+    while(iter.hasNext && !found) iter.next match{
       case cv1: ComponentView =>
         if(cv1.servers == servers && cv1.principal == st1){
           // Does a renaming of the other components of cv1 (consistent with
@@ -331,7 +323,6 @@ class Checker(system: SystemP.System){
             cv1.components, components, map1, 0, otherArgs)
           // IMPROVE: use cv1.others here? 
         }
-        i += 1
     } // end of while ... match
 
     found
@@ -380,8 +371,9 @@ class Checker(system: SystemP.System){
     // cptR as the principal component, and containing a component with
     // identity idR in control state cs1.  map (and map1) tries to map conc
     // onto cv1.  
-    val viewsArray = sysAbsViews.toArray; var i = 0; var found = false
-    while(i < viewsArray.length && !found) viewsArray(i) match{
+    // val viewsArray = sysAbsViews.toArray; var i = 0; 
+    val iter = sysAbsViews.iterator; var found = false
+    while(iter.hasNext && !found) iter.next match{
       case cv1: ComponentView =>
         if(cv1.servers == servers && cv1.principal == pCptR){
           // Test if cv1 contains a component that is a renaming of st under
@@ -415,7 +407,7 @@ class Checker(system: SystemP.System){
           if(found && veryVerbose) println(s"found match with $cv1")
           // else println(s"did not  match with $cv1")
         }
-        i += 1
+        // i += 1
     }
     found
   }
@@ -430,23 +422,18 @@ class Checker(system: SystemP.System){
   private 
   def effectOnOthers(pre: Concretization, e: EventInt, post: Concretization) = {
     effectOnOthersCount += 1
-    // println(s"effectOnOthers($pre, $post)")
-    val vs = sysAbsViews.toArray; var i = 0
-    while(i < vs.length){
-      vs(i) match{ // IMPROVE iteration
-        case cv: ComponentView  =>
-          View.checkDistinct(cv.components)
-          if(cv.servers == pre.servers){
-            // println(s"Effect on $cv");
-            // IMPROVE if nothing changed state.
-            effectOnViaOthersCount += 1
-            effectOn(pre, e, post, cv)
-          }
-      } // end of match
-      i += 1
-    }
+    sysAbsViews.iterator.foreach{
+      case cv: ComponentView  =>
+        // View.checkDistinct(cv.components)
+        if(cv.servers == pre.servers){
+          // println(s"Effect on $cv");
+          // IMPROVE if nothing changed state.
+          effectOnViaOthersCount += 1
+          effectOn(pre, e, post, cv)
+        }
+    } // end of match
   }
-  // IMPROVE: need better way of iterating over ViewSet
+
 
   var effectOnCount = 0
   var effectOnViaOthersCount = 0
@@ -455,7 +442,6 @@ class Checker(system: SystemP.System){
   var effectOnOthersCount = 0
   var newViewCount = 0L
   var addedViewCount = 0L
-  var changedServersCount = 0L
   var effectOnRepetition = 0
 
   /** Find the component of cpts with process identity pid, or return null if no
@@ -486,68 +472,56 @@ class Checker(system: SystemP.System){
     require(pre.servers == cv.servers &&
       pre.components.length == post.components.length)
     val changedServers = pre.servers != post.servers
-    if(changedServers) changedServersCount += 1
-    // Check elements of cv.components are distinct
-    View.checkDistinct(cv.components)
+    // View.checkDistinct(cv.components)
     // All ways of merging cv and pre
-    val newCpts = 
+    val newCpts: ArrayBuffer[(Array[State], Unification.Unifications)] = 
       if(changedServers) Unification.combine(pre, cv)
       else{
         // Only look for cases where a component of cv unifies with a
         // component of pre that changes state.
         val preC = pre.components; val postC = post.components
         val flags = Array.tabulate(preC.length)(i => preC(i) != postC(i))
-        val newCpts2 = Unification.combineWithUnification(pre, flags, cv)
-        if(false){
-          // Compare with newCptsX; find those elements of newCpts such that at
-          // last one component of pre that changes is unified.
-          val newCptsX = Unification.combine(pre, cv)
-          val newCptsF =
-            newCptsX.filter{ case(_,u) =>
-              u.filter{ case(k,j) => flags(k) }.nonEmpty }
-          assert(// newCptsF.length == newCpts2.length &&
-            newCptsF.forall{case(sts,us) => newCpts2.exists{case(sts1,us1) =>
-              sts.sameElements(sts1) && us==us1}} &&
-              newCpts2.forall{case(sts,us) => newCptsF.exists{case(sts1,us1) =>
-                sts.sameElements(sts1) && us==us1}},
-            "newCptsX = "+showUnifs(newCptsX)+"\n"+
-              "newCpts2 = "+showUnifs(newCpts2))
-        }
-        newCpts2
+        Unification.combineWithUnification(pre, flags, cv)
+        // if(false){
+        //   // Compare with newCptsX; find those elements of newCpts such that at
+        //   // last one component of pre that changes is unified.
+        //   val newCptsX = Unification.combine(pre, cv)
+        //   val newCptsF =
+        //     newCptsX.filter{ case(_,u) =>
+        //       u.filter{ case(k,j) => flags(k) }.nonEmpty }
+        //   assert(// newCptsF.length == newCpts2.length &&
+        //     newCptsF.forall{case(sts,us) => newCpts2.exists{case(sts1,us1) =>
+        //       sts.sameElements(sts1) && us==us1}} &&
+        //       newCpts2.forall{case(sts,us) => newCptsF.exists{case(sts1,us1) =>
+        //         sts.sameElements(sts1) && us==us1}},
+        //     "newCptsX = "+showUnifs(newCptsX)+"\n"+
+        //       "newCpts2 = "+showUnifs(newCpts2))
+        // }
+        // newCpts2
     }
-    // Do we have repetitions?  We might. 
-    // val hasReps = !newCpts.forall{ case(sts,unifs) =>
-    //   newCpts.forall{ case(sts1,unifs1) =>
-    //     sts == sts1 || unifs != unifs1 || !sts.sameElements(sts1) } }
-    // // Check newCpts is distinct
-    // if(hasReps) effectOnRepetition += 1
-    // assert(true || !hasReps,
-    //   s"changedServers = $changedServers\npre = $pre\ncv = $cv"+
-    //     "\nnewCpts = "+showUnifs(newCpts))
-    for((cpts, unifs) <- newCpts){
+    var cptIx = 0
+    while(cptIx < newCpts.length){
+      val (cpts, unifs) = newCpts(cptIx); cptIx += 1
       assert(changedServers || unifs.nonEmpty)
-      View.checkDistinct(cpts)
+      // View.checkDistinct(cpts)
       // pre U cpts is a consistent view.  
       // pre.components(i) = cpts(j)  iff  (i,j) in unifs.
       // Find what cpts(0) gets mapped to by unifs
-      val matches = unifs.filter(_._2 == 0)
+      var us = unifs
+      while(us.nonEmpty && us.head._2 != 0) us = us.tail
       val newPrinc =
-        if(matches.isEmpty) cpts(0)
+        if(us.isEmpty) cpts(0)
         else{
-          assert(matches.length == 1)
-          assert(cpts(0) == pre.components(matches.head._1), 
-            s"${cpts(0)}, ${pre.components(matches.head._1)}")
-          post.components(matches.head._1)
+          val ix = us.head._1           
+          assert(cpts(0) == pre.components(ix), 
+            s"${cpts(0)}, ${pre.components(ix)}")
+          post.components(ix)
         }
-      // Find other processes referenced by newPrinc
-      // val others = newPrinc.processIdentities.tail.distinct.
-      //   filter{case(f,id) => !isDistinguished(id)}.map(find(_))
       var others = new ArrayBuffer[State]; val len = newPrinc.ids.length
-      // var k = 0 // # entries in others
       val pids = newPrinc.processIdentities
       var i = 1; val princId = newPrinc.componentProcessIdentity // pids(0)
       while(i < len){
-        val pid = newPrinc.processIdentity(i) // pids(i)
+        val pid = pids(i) // newPrinc.processIdentity(i) // pids(i)
         if(!isDistinguished(pid._2) && pid != princId){
           // check this is first occurrence of pid
           var j = 1; while(j < i && pids(j) != pid) j += 1
@@ -572,29 +546,15 @@ class Checker(system: SystemP.System){
         new ComponentView(post.servers, newPrinc, othersA) )
       // View.checkDistinct(nv.components, View.showStates(others))
       newViewCount += 1
-      // Common code in the new and old versions, below
-      def common = { // IMPROVE: unfactor
-        assert(pre.servers != post.servers || unifs.nonEmpty)// IMPROVE?
-        addedViewCount += 1
-        // if(verbose) 
-        //   println(s" from effectOn($pre, ${system.showEvent(e)}, $post, $cv)")
+      if(!sysAbsViews.contains(nv)){ // TODO: test if this helps
+        nextNewViews += nv; addedViewCount += 1
         val extendedPre = new Concretization(pre.servers, 
             View.union(pre.components, cpts))
         extendedPre.setSecondaryView(cv) 
         val extendedPost = new Concretization(post.servers, 
           View.union(post.components, newPrinc +: othersA))
-        if(veryVerbose)
-          println(s"Effect of "+showTransition(pre,e,post)+
-            // "\n"+showTransition(extendedPre, e, extendedPost)+
-            s" on $cv:  -> $nv.  ***Added***")
         nv.setCreationInfo(extendedPre, e, extendedPost)
       }
-      // if(newVersion){
-      if(!sysAbsViews.contains(nv)){ // TODO: test if this helps
-        nextNewViews1 += nv; common
-      }
-      // }
-      // else if(addView(nv)) common
     }
   }
 
@@ -626,8 +586,8 @@ class Checker(system: SystemP.System){
       println("\nSTEP "+ply) 
       println("#abstractions = "+printLong(sysAbsViews.size))
       println("#new active abstract views = "+printInt(newViews.size))
-      // nextNewViews = new ArrayBuffer[View]; 
-      nextNewViews1 = new ArrayBuffer[View]
+      nextNewViews = new ArrayBuffer[View];
+      //nextNewViews1 = new ArrayBuffer[View]
       newTransitions = 
         new ArrayBuffer[(Concretization, EventInt, Concretization)]
       var i = 0
@@ -642,16 +602,15 @@ class Checker(system: SystemP.System){
       }
       //if(newVersion){
         // Add views found on this ply into the main set. 
-      val nextNewViews = new ArrayBuffer[View]
+      val newViewsAB = new ArrayBuffer[View]
       def addView(v: View): Boolean = 
-        if(sysAbsViews.add(v)){ nextNewViews += v; true } else false
+        if(sysAbsViews.add(v)){ newViewsAB += v; true } else false
       for((pre,e,post) <- newTransitions){
         val v = Remapper.remapComponentView(post.toComponentView)
         if(addView(v)) v.setCreationInfo(pre, e, post)
       }
-      for(v <- nextNewViews1) addView(v)
-      //}
-      ply += 1; newViews = nextNewViews.toArray; 
+      for(v <- nextNewViews) addView(v)
+      ply += 1; newViews = newViewsAB.toArray; 
       if(newViews.isEmpty) done.set(true)
     }
     println("\nSTEP "+ply)

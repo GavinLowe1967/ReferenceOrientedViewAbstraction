@@ -267,6 +267,10 @@ object State{
   /** Array giving the maximum number of parameters of any type in a state. */
   var maxParamsOfType: Array[Int] = null
 
+  /** Max number of values of each type that we need to keep track of in any
+    * remapping. */
+  var rowSizes: Array[Int] = null
+
   /** Array giving the type of the identity for control states.
     * idTypeArray(cs-minCS) gives the type of processes with control state cs,
     * or -1 for server processes with no identity.  */
@@ -285,8 +289,7 @@ object State{
     maxParamsOfType = Array.tabulate(numTypes)( t =>
       stma.filter(_ != null).map(_.count(_ == t)).max )
     println("maxParamsOfType = "+maxParamsOfType.mkString(", "))
-
-
+    rowSizes = Array.tabulate(numTypes)( t => typeSizes(t) + maxParamsOfType(t))
     // MyStateMap.renewStateStore(stma.length, minCS)
   }
 
