@@ -32,8 +32,14 @@ node in an enqueueing thread's state. 538 abstractions -> 556 ??
 Treiber Stack
 =============
 
+TreiberStack.csp: 2,780 states, ~7 sec.  This has a POR to force joined
+events immediately after the corresponding CAS.
+
 TreiberStack0.csp: finds a false positive.  It's not capturing the invariant
 that at most one thread has created a new node.
+
+TreiberStack1.csp: this works, but is less efficient, as it doesn't have the
+POR.  7408 states, ~28 sec (with profiling)
 
 Test files
 ==========

@@ -1,3 +1,72 @@
+Implementation notes.
+
+Main state:
+
+- sysAbsViews: ViewSet: all views found.
+
+- nextNewViews: ArrayBuffer[ComponentView]: all new views found on the current
+  ply, to be considered on the next ply.
+
+- transitions: TransitionSet: the extended transitions found so far.  An
+  extended transition represents the pre- and post-states and the event, and
+  includes (1) all states referenced by the initial state of the principal
+  component, (2) all other components synchronising on the transition, (3) all
+  components to which a process gains a reference.
+
+- transitionTemplates: TransitionTemplateSet: the transition templates found
+  so far.  A transition template can be thought of as a transition with a
+  "hole" for a component to be slotted into.  Formally it's a tuple (pre,
+  post, id, oe) representing all transitions pre \union st --> post \union st'
+  such that (1) st and st' have identity id; (2) pre is compatible with pre;
+  (3) if oe = Some(e) then st -e-> st', otherwise st = st'.
+
+- newTransitions: ArrayBuffer[Transition]: the new transitions found on the
+  current ply.
+
+??? Why not new transitionTemplates ???
+
+
+In the first half of each ply, new views are added to nextNewViews; in the
+secondhalf, they are added to sysAbsViews.  Likewise with Transitions.
+
+The function process acts on a single view found on the previous ply. It
+calculates all the transitions from the view, together with the identities of
+other components relevant to the view.  It then calls processTransition on
+each such transition.  It also calls effectOfPreviousTransitions and
+effectOfPreviousTransitionTemplates on the view.
+
+processTransition: if the transition is complete, requires no outside
+processes, it is added to newTransitions (via addTransition).  Otherwise, it
+is added to transitionTemplates ???, and instantiateTransitionTemplate is
+called. 
+
+addTransition adds a transition to newtransitions, and calls effectOnOthers
+
+effectOnOthers considers the effect of a new transition on views found on
+previous plys (what about this ply???).  For each such view matching the pre
+servers, it calls effectOn.
+
+effectOn considers the effect of a transition pre -e-> post on another view
+cv.  It forms all ways of combining pre and cv, calculates the corresponding
+post-view for cv.princ, and adds it to nextNewViews. 
+
+instantiateTransitionTemplate considers all ways of instantiating a transition
+template, by considering all ways of instantiating the extra component.  For
+each view in sysAbsViews, it calls instantiateTransitionTemplateBy.
+
+instantiateTransitionTemplateBy finds all transitions of the extra component
+that match the transition template.  For each, it forms the extended
+transition, and calls addTransition. 
+
+effectOfPreviousTransitions considers the effect of all previous transitions
+on a view cv found on the previous ply.  For each, it calls effectOn. 
+
+effectOfPreviousTransitionTemplates, given a view cv found on the previous
+ply, iterates over all previous transition templates, and tries to use cv to
+instantiate the extra component, calling instantiateTransitionTemplateBy.
+
+======================================================
+
 With lockBasedStack.csp, debugger gives error when selecting "6".  The
 concretization does not include the node N1 referenced by N0.  Need to store
 the contributing view(s) for each concretization.  Done: used in

@@ -52,7 +52,7 @@ class ServerStates(val servers: List[State]){
   private val remappingMapTemplate = Array.tabulate(numTypes)(t => 
     Array.tabulate(State.rowSizes(t))(i => if(i < numParams(t)) i else -1))
 
-  def remappingMap: Array[Array[Identity]] = {
+  def remappingMap: RemappingMap = {
     assert(normalised)
     val result = new Array[Array[Identity]](numTypes); var t = 0
     while(t < numTypes){ result(t) = remappingMapTemplate(t).clone; t += 1 }

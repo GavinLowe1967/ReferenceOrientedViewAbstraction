@@ -28,15 +28,19 @@ class Checker(system: SystemP.System){
 
   private var done = new AtomicBoolean(false); private var ply = 1
 
-  /** An extended transition represents the pre- and post-states of a
-    * transition, and extends a View by adding in the states of any additional
-    * components that synchronise on the transition, and any components to
-    * which the principal component obtains a reference. */
-  private type ExtendedTransition = (Concretization, Concretization)
+  import TransitionSet.Transition
+
+  /* A Transition is a tuple (pre, e, post): (Concretization, EventInt,
+   * Concretization), representing the transition pre -e-> post. */
 
   /** The extended transitions found so far.  Abstractly, a set of
-    * ExtendedTransitions. */
-  private val transitions: TransitionSet = new SimpleTransitionSet
+    * TransitionSet.Transition, which are tuples (pre, e, post), representing
+    * the transition pre -e-> post.  The pre state extends a View by adding
+    * all relevant components: components that synchronise on the transition,
+    * and any components to which the principal component obtains a
+    * reference. */
+  private val transitions: TransitionSet = new ServerBasedTransitionSet(16)
+  // SimpleTransitionSet
 
   /** A TransitionTemplate (pre, post, id, oe) represents an extended transition
     * pre U st --> post U st' for every state st and st' such that (1) st and
@@ -46,17 +50,18 @@ class Checker(system: SystemP.System){
   // (Concretization, Concretization, ProcessIdentity, Option[EventInt])
 
   private val transitionTemplates: TransitionTemplateSet = 
-    new SimpleTransitionTemplateSet
+    new ServerBasedTransitionTemplateSet
+  // new SimpleTransitionTemplateSet
 
-  private var newTransitions
-      : ArrayBuffer[(Concretization, EventInt, Concretization)] = null
+  private var newTransitions: ArrayBuffer[Transition] = null
 
   /** Store the ExtendedTransition pre -> post, and calculate its effect on
     * previously found views. */
   @inline private 
   def addTransition(pre: Concretization, e: EventInt, post: Concretization) = {
     newTransitions += ((pre, e, post))
-    transitions.add(pre, e, post); effectOnOthers(pre, e, post)
+    //transitions.add(pre, e, post); // Only at end of ply
+    effectOnOthers(pre, e, post)
   }
 
   // ========= Processing a single view
@@ -94,6 +99,7 @@ class Checker(system: SystemP.System){
     * transitions, respectively.
     * @param outsidePids the identities of components outside pre that 
     * synchronise on the transition. 
+// FIXME: At most one? 
     * @return true if a concrete transition on error is generated. */
   @inline private def processTransition(
     pre: Concretization, e: EventInt, post: Concretization, 
@@ -131,6 +137,7 @@ class Checker(system: SystemP.System){
       val newPid = newPids.head
       // Store transition template
       transitionTemplates.add(pre, post, newPid, e, outsidePids.nonEmpty)
+// FIXME: is above correct?
       // Get extended transitions based on this
       instantiateTransitionTemplate(pre, post, newPid, e, outsidePids.nonEmpty)
     } // end of else
@@ -154,16 +161,18 @@ class Checker(system: SystemP.System){
   /** The effect of view cv on previous TransitionTemplates.
     *  Called from process. */
   private def effectOfPreviousTransitionTemplates(cv: ComponentView) = {
-    // IMPROVE iteration
-    for((pre, post, id, e, include) <- transitionTemplates.iterator){
-      if(pre.servers == cv.servers)
-        instantiateTransitionTemplateBy(pre, post, id, e, include, cv)
+    val iter = transitionTemplates.iterator(cv.servers)
+    while(iter.hasNext){
+      val (pre, post, id, e, include) = iter.next
+      // assert(pre.servers == cv.servers)
+      instantiateTransitionTemplateBy(pre, post, id, e, include, cv)
     }
   }
 
   /** Produce ExtendedTransitions from the TransitionTemplate (pre, post,
     * newPid, e, include) and the view cv.  That is, find each renaming of cv
     * compatible with pre, and that includes a component with identity newPid
+// Principal component? 
     * that optionally can perform oe.  For each, store the transition
     * (extending pre -> post with the transition of the component with
     * identity newPid), the post-state, and calculate the effect on other
@@ -245,8 +254,7 @@ class Checker(system: SystemP.System){
     servers: ServerStates, components: Array[State], st: State)
       : Boolean = {
     // Remap st so it can be the principal component with servers.
-    val map = Remapper.createMap(servers.rhoS)
-    val nextArgs = Remapper.createNextArgMap(servers.rhoS)
+    val map = servers.remappingMap; val nextArgs = servers.nextArgMap
     var st1 = Remapper.remapState(map, nextArgs, st)
     // IMPROVE: compare with Remapper.remapToPrincipal(servers, st)
 
@@ -256,13 +264,15 @@ class Checker(system: SystemP.System){
     // `sysAbsViews`, to try to produce a view that matches `servers`, has
     // `st` as principal component, and agrees with `components` on common
     // components
-    val map1 = Remapper.createMap(servers.rhoS); val typeMap = st1.typeMap
-    for(j <- 0 until st1.ids.length){
-      val id = st1.ids(j); 
+    val map1 = servers.remappingMap; val typeMap = st1.typeMap
+    val ids1 = st1.ids; var j = 0
+    while(j < ids1.length){
+      val id = ids1(j)
       if(id >= 0){ 
         assert{val id1 = map1(typeMap(j))(id); id1 < 0 || id1 == st.ids(j)}
         map1(typeMap(j))(id) = st.ids(j)
       }
+      j += 1
     }
 
     // Test whether there is an existing view with a renaming of st as
@@ -476,8 +486,7 @@ class Checker(system: SystemP.System){
       }
       val othersA = others.toArray
       // View.checkDistinct(others, newPrinc.toString)
-      val nv = Remapper.remapComponentView(
-        new ComponentView(post.servers, newPrinc, othersA) )
+      val nv = Remapper.mkComponentView(post.servers, newPrinc, othersA)
       // View.checkDistinct(nv.components, View.showStates(others))
       newViewCount += 1
       if(!sysAbsViews.contains(nv)){ // TODO: test if this helps
@@ -495,13 +504,13 @@ class Checker(system: SystemP.System){
   /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
     effectOfPreviousTransitionsCount += 1
-    // println(s"effectOfPreviousTransitions($cv)")
-    for((pre, e, post) <- transitions.iterator){
+    val iter = transitions.iterator(cv.servers)
+    while(iter.hasNext){
+      val (pre, e, post) = iter.next
       // println(s"considering transition $pre -> $post")
-      if(pre.servers == cv.servers){
-        effectOnViaTransCount += 1
-        effectOn(pre, e, post, cv)
-      }
+      // assert(pre.servers == cv.servers)
+      effectOnViaTransCount += 1
+      effectOn(pre, e, post, cv)
     }
   }
 
@@ -525,6 +534,7 @@ class Checker(system: SystemP.System){
       newTransitions = 
         new ArrayBuffer[(Concretization, EventInt, Concretization)]
       var i = 0
+      // Process all views from newViews.
       while(i < newViews.length && !done.get){
         if(process(newViews(i))){
           done.set(true)
@@ -534,12 +544,12 @@ class Checker(system: SystemP.System){
         }
         i += 1
       }
-      //if(newVersion){
-        // Add views found on this ply into the main set. 
+      // Add views and transitions found on this ply into the main set.
       val newViewsAB = new ArrayBuffer[ComponentView]
       def addView(v: ComponentView): Boolean = 
         if(sysAbsViews.add(v)){ newViewsAB += v; true } else false
       for((pre,e,post) <- newTransitions){
+        transitions.add(pre, e, post)
         val v = Remapper.remapComponentView(post.toComponentView)
         if(addView(v)) v.setCreationInfo(pre, e, post)
       }
@@ -548,7 +558,7 @@ class Checker(system: SystemP.System){
       if(newViews.isEmpty) done.set(true)
     }
     println("\nSTEP "+ply)
-    if(true || verbose) println(sysAbsViews)
+    if(verbose) println(sysAbsViews)
     println("#abstractions = "+printLong(sysAbsViews.size))
   }
 

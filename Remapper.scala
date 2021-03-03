@@ -290,6 +290,17 @@ object Remapper{
     new ComponentView(servers1, principal1, others1)
   }
 
+  /** Make a ComponentView from servers, principal and others, remapping to
+    * canonical form. */
+  @inline def mkComponentView(
+     servers: ServerStates, principal: State, others: Array[State]) = {
+    val map = newRemappingMap; var nextArg = newNextArgMap
+    val servers1 = remapServerStates(map, nextArg, servers)
+    val principal1 = remapState(map, nextArg, principal)
+    val others1 = remapStates(map, nextArg, others)
+    new ComponentView(servers1, principal1, others1)
+  }
+
   def remapView(v: View) = v match{
     case cv: ComponentView => remapComponentView(cv)
   }

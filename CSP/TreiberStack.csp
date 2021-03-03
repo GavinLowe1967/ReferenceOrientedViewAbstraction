@@ -6,7 +6,7 @@
 -- @VA component alphabet = alphaThread
 -- @VA component identity type = ThreadID
 -- @VA component active = true
--- @VA servers = ServerSet
+-- @VA serversRename = ServerSet
 
 include "definitions.csp"
 
@@ -32,14 +32,14 @@ include "definitions.csp"
 
 
 -- Identities of nodes
-datatype NodeIDType = Null | N0 | N1 | N2  | N3 | N4 | N5 | N6 | N7 | N8 
+datatype NodeIDType = Null | N0 | N1 | N2 | N3 | N4 | N5 | N6 | N7 | N8 
 NodeID =  diff(NodeIDType, {Null})               -- real nodes
 
 -- Data values
 datatype T = A | B | C
 
 -- Thread identities
-datatype ThreadID = T0 | T1 | T2 | T3
+datatype ThreadID = T0 | T1 -- | T2 -- | T3
 -- 3 threads enough with --shape 1 2 --shape 2 1 --shape 3 0; 
 -- 4 necessary for -k 3
 
@@ -189,12 +189,21 @@ WD2 =
 
 WDErr = error -> STOP
 
-WatchDog =
-  WD0[[ push.x <- CASTop.t.n1.n2.true.PushOp.x |
-          t <- ThreadID, n1 <- NodeIDType, n2 <- NodeIDType, x <- T ]]
-     [[ pop.x <- CASTop.t.n1.n2.true.PopOp.x |
-          t <- ThreadID, n1 <- NodeIDType, n2 <- NodeIDType, x <- T ]]
-     [[ popEmpty <- getTop.t.Null | t <- ThreadID ]]
+WDRename = Union({
+  { (push.x, CASTop.t.n1.n2.true.PushOp.x) |
+      t <- ThreadID, n1 <- NodeIDType, n2 <- NodeIDType, x <- T },
+  { (pop.x, CASTop.t.n1.n2.true.PopOp.x) |
+      t <- ThreadID, n1 <- NodeIDType, n2 <- NodeIDType, x <- T },
+  { (popEmpty, getTop.t.Null) | t <- ThreadID }
+})
+
+WatchDog = WD0[[ e1 <- e2 | (e1,e2) <- WDRename ]]
+
+-- [[ push.x <- CASTop.t.n1.n2.true.PushOp.x |
+     --      t <- ThreadID, n1 <- NodeIDType, n2 <- NodeIDType, x <- T ]]
+     -- [[ pop.x <- CASTop.t.n1.n2.true.PopOp.x |
+     --      t <- ThreadID, n1 <- NodeIDType, n2 <- NodeIDType, x <- T ]]
+     -- [[ popEmpty <- getTop.t.Null | t <- ThreadID ]]
 
 alphaWD = Union({
   {| CASTop.t.n1.n2.true | t <- ThreadID, n1 <- NodeIDType, n2 <- NodeIDType |},
@@ -227,12 +236,40 @@ assert WatchDog [T= WatchDog'
 
 assert WatchDog' [T= WatchDog
 
+-------- A regulator that forces a joined event immediately after the
+-------- corresponding CAS
+
+channel joinCAS, joined1, other
+
+Reg = joinCAS -> joined1 -> Reg [] other -> Reg
+
+PushCAS = 
+  { CASTop.t.n1.n2.true.PushOp.v | 
+     t <- ThreadID, n1 <- NodeIDType, n2 <- NodeID, v <- T }
+
+RegRename = Union({
+  { (joinCAS, e) | e <- PushCAS },
+  { (joined1, e) | e <- {| joined |} },
+  let otherEs = 
+    diff(Events, Union({PushCAS, {| joined |}, {error,joined1,joinCAS,other}}))
+  within { (other, e) | e <- otherEs }
+})
+
+alphaReg = diff(Events, {error,joined1,joinCAS,other})
+
+
 -------- All the Servers
 
-ServerSet :: <(Proc, {Event}, Bool)>
-ServerSet =  < (Top, alphaTop, false), (WatchDog', alphaWD, false) >
+ServerSet :: <(Proc, <(Event,Event)>, {Event}, Bool)>
+ServerSet =  < 
+  (Top, <>, alphaTop, false),
+  (WD0, seq(WDRename), alphaWD, false), 
+  (Reg, seq(RegRename), alphaReg, false)
+>
 
-Servers = || (S, Alpha, _) <- set(ServerSet) @ [Alpha] S
+Servers = 
+  || (S, R_, Alpha, _) <- set(ServerSet) @
+        [Alpha] S[[ e1 <- e2 | (e1,e2) <- set(R_) ]]
 
 -------- Complete system
 
@@ -241,7 +278,7 @@ AllComponents =
   let sync = {|initNode,getValue,getNext,setNext,joined|}  within
   AllThreads [| sync |] AllNodes
 
-syncSet = union(alphaTop, diff(alphaWD, {error}))
+syncSet = diff(Events, {error}) -- union(alphaTop, diff(alphaWD, {error}))
 
 System = AllComponents [| syncSet |] Servers
 
@@ -250,6 +287,6 @@ assert System :[deadlock free]
 
 assert STOP [T= System \ diff(Events, {error})
 
-assert STOP [T= STOP  :[symmetry reduce]:
+assert STOP [T= STOP   :[symmetry reduce]:
 
 

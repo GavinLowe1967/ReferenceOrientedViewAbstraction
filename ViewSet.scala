@@ -136,7 +136,7 @@ class ServerBasedViewSet(initSize: Int = 16) extends ViewSet{
 
   /** Resize the hash table. */
   private def resize(): Unit = {
-    println("resizing")
+    // println("resizing")
     val oldKeys = keys; val oldViews = views; val oldLength = length
     length += length; threshold = length * ThresholdRatio; mask = length-1
     keys = new Array[ServerStates](length)
