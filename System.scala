@@ -261,8 +261,10 @@ class System(fname: String, checkDeadlock: Boolean,
     // Case 3: events synchronising principal component and one component.
     if(activePrincipal) for(f <- passiveFamilies; id <- 0 until idSizes(f)){
       val theseTrans = princTrans.transComponent(f)(id)
-      val componentIsPresent = 
-        cv.others.exists(st => st.componentProcessIdentity == (f,id))
+      // val componentIsPresent = 
+      //   cv.others.exists(st => st.componentProcessIdentity == (f,id))
+      val componentIx = // component of (f,id) in others, or -1
+        cv.others.indexWhere(_.componentProcessIdentity == (f,id))
       if(theseTrans != null){ 
         val (oEs, oNs): (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = 
           theseTrans
@@ -275,15 +277,17 @@ class System(fname: String, checkDeadlock: Boolean,
           assert(passives.length == 1) // IMPROVE (simplifying assumption).
           assert(passives.head == (f,id)) // IMPROVE: use this to simplify  
           // Other components of cv in this synchronisation
-          val presentIndices = (0 until cv.others.length).filter(i =>
-            passives.contains(cv.others(i).componentProcessIdentity))
+          // val presentIndices = (0 until cv.others.length).filter(i =>
+          //   passives.contains(cv.others(i).componentProcessIdentity))
           // Ids of components in the synchronisation but not in cv
-          val absentPassives = passives.filterNot( pId => 
-            cv.others.exists(_.componentProcessIdentity == pId) )
-          if(presentIndices.nonEmpty){
-            assert(absentPassives.isEmpty) // IMPROVE (simplifying assumption)
-            val passiveIx = presentIndices.head
-            val passiveSt = cv.others(passiveIx) // presentPassives.head
+          // val absentPassives = passives.filterNot( pId => 
+          //   cv.others.exists(_.componentProcessIdentity == pId) )
+          // assert(presentIndices.nonEmpty == componentIsPresent)
+          if(componentIx >= 0 /* presentIndices.nonEmpty */){
+            // assert(absentPassives.isEmpty) // IMPROVE (simplifying assumption)
+            // val passiveIx = presentIndices.head
+            // assert(passiveIx == componentIx)
+            val passiveSt = cv.others(componentIx) // presentPassives.head
             // Next states for the present passives
             val pNexts = components.getTransComponent(passiveSt).nexts(e, pf, pi)
             if(verbose)
@@ -292,7 +296,7 @@ class System(fname: String, checkDeadlock: Boolean,
             for(pNext <- pNexts){
               // NOTE: not tested for pNext != passiveSt
               // Post-state of others: insert pNext into cv.others
-              val othersPost = cv.others.clone; othersPost(passiveIx) = pNext
+              val othersPost = cv.others.clone; othersPost(componentIx) = pNext
               for(st1 <- oNs(i)){
                 val post = Concretization(cv.servers, st1, othersPost)
                 // println(post)
@@ -301,11 +305,12 @@ class System(fname: String, checkDeadlock: Boolean,
             }
           }
           else{ // presentIndices.isEmpty
-            val cPid = absentPassives.head // the absent component
+            // val cPid = absentPassives.head // the absent component
+            // assert(cPid == (f,id))
             val conc0 = Concretization(cv)
             for(st1 <- oNs(i)){ // the post state of the principal cpt
               val post = Concretization(cv.servers, st1, cv.others)
-              maybeAdd(conc0, e, post, List(cPid))
+              maybeAdd(conc0, e, post, List((f,id)))
             }
           }
         } // end of for(i <- 0 until oEs.length-1)
