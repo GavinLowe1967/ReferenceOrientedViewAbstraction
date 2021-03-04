@@ -261,6 +261,8 @@ class System(fname: String, checkDeadlock: Boolean,
     // Case 3: events synchronising principal component and one component.
     if(activePrincipal) for(f <- passiveFamilies; id <- 0 until idSizes(f)){
       val theseTrans = princTrans.transComponent(f)(id)
+      val componentIsPresent = 
+        cv.others.exists(st => st.componentProcessIdentity == (f,id))
       if(theseTrans != null){ 
         val (oEs, oNs): (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = 
           theseTrans
@@ -275,10 +277,6 @@ class System(fname: String, checkDeadlock: Boolean,
           // Other components of cv in this synchronisation
           val presentIndices = (0 until cv.others.length).filter(i =>
             passives.contains(cv.others(i).componentProcessIdentity))
-          // val presentPassives = presentIndices.map(i => cv.others(i))
-          // val presentPassives1 = cv.others.filter(st => 
-          //   passives.contains(st.componentProcessIdentity))
-          // assert(presentPassives sameElements presentPassives1) // IMPROVE
           // Ids of components in the synchronisation but not in cv
           val absentPassives = passives.filterNot( pId => 
             cv.others.exists(_.componentProcessIdentity == pId) )

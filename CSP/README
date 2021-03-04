@@ -32,7 +32,10 @@ node in an enqueueing thread's state. 538 abstractions -> 556 ??
 Treiber Stack
 =============
 
-TreiberStack.csp: 2,780 states, ~7 sec.  This has a POR to force joined
+TreiberStack.csp: make node synchronise on the joining CAS.  1,770 states,
+~4s.
+
+TreiberStack2.csp: 2,780 states, ~7 sec.  This has a POR to force joined
 events immediately after the corresponding CAS.
 
 TreiberStack0.csp: finds a false positive.  It's not capturing the invariant

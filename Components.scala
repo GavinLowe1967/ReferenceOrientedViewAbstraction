@@ -145,6 +145,9 @@ class Components(
     eventMap = new Array[List[Parameter]](eventsSize)
     // alphaBitmap shows which events are in alphabet
     alphaBitMap = new Array[Boolean](eventsSize)
+    // passiveCptsOfEvent show the passive component (if any) involved in each
+    // event.
+    passiveCptsOfEvent = new Array[List[Parameter]](eventsSize)
     for(e <- (0 until eventsSize)/*.par*/){ // IMPROVE: par?
       eventMap(e) = 
         (for(f <- 0 until numFamilies;
@@ -153,9 +156,12 @@ class Components(
       assert(eventMap(e).length <= 2,
              "Event "+showEvent(e)+" synchronised on by "+
                eventMap(e).length+" components.")
+      passiveCptsOfEvent(e) = eventMap(e).filter{ case(f,_) => !actives(f)}
+      assert(passiveCptsOfEvent(e).length <= 1, 
+        s"Event ${showEvent(e)} synchronised on by more than one passive component.")
       alphaBitMap(e) = allEvents.contains(e)
     }
-    passiveCptsOfEvent = eventMap.map(_.filter{ case(f,_) => !actives(f) })
+    //passiveCptsOfEvent = eventMap.map(_.filter{ case(f,_) => !actives(f) })
   }
 
   /** Initialise model of the transition systems: inits and transMap. */

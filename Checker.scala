@@ -28,32 +28,40 @@ class Checker(system: SystemP.System){
 
   private var done = new AtomicBoolean(false); private var ply = 1
 
-  import TransitionSet.Transition
+  import TransitionSet.Transition // (Concretization, EventInt, Concretization)
 
   /* A Transition is a tuple (pre, e, post): (Concretization, EventInt,
-   * Concretization), representing the transition pre -e-> post. */
+   * Concretization), representing the transition pre -e-> post.  The pre
+   * state extends a View by adding all relevant components: components that
+   * synchronise on the transition, and any components to which the principal
+   * component obtains a reference.*/
 
-  /** The extended transitions found so far.  Abstractly, a set of
-    * TransitionSet.Transition, which are tuples (pre, e, post), representing
-    * the transition pre -e-> post.  The pre state extends a View by adding
-    * all relevant components: components that synchronise on the transition,
-    * and any components to which the principal component obtains a
-    * reference. */
+  /** The extended transitions found on previous plies.  Abstractly, a set of
+    * Transitions.  */
   private val transitions: TransitionSet = new ServerBasedTransitionSet(16)
-  // SimpleTransitionSet
 
-  /** A TransitionTemplate (pre, post, id, oe) represents an extended transition
-    * pre U st --> post U st' for every state st and st' such that (1) st and
-    * st' have identity id; (2) st is compatible with pre; (3) if oe = Some(e)
-    * then st -e-> st', otherwise st = st'.  */
-  private type TransitionTemplate = TransitionTemplateSet.TransitionTemplate
-  // (Concretization, Concretization, ProcessIdentity, Option[EventInt])
+  /** Transitions found on this ply.  Transitions are initially added to
+    * newTransitions, but transferred to transitions at the end of the ply. */
+  private var newTransitions: ArrayBuffer[Transition] = null
 
+  import TransitionTemplateSet.TransitionTemplate
+  // = (Concretization, Concretization, ProcessIdentity, EventInt, Boolean)
+
+  /* A TransitionTemplate (pre, post, id, e, include): (Concretization,
+   * Concretization, ProcessIdentity, EventInt, Boolean) represents an
+   * extended transition pre U st -e-> post U st' for every state st and st'
+   * such that (1) st and st' have identity id; (2) st is compatible with pre;
+   * (3) if include then st -e-> st', otherwise st = st'.  */
+
+  /** The transition templates found on previous plies.  Abstractly, a set of
+    * TransitionTemplates. */
   private val transitionTemplates: TransitionTemplateSet = 
     new ServerBasedTransitionTemplateSet
-  // new SimpleTransitionTemplateSet
 
-  private var newTransitions: ArrayBuffer[Transition] = null
+  /** Transition templates found on this ply.  Transition templates are
+    * initially added to newTransitionTemplates, but transferred to
+    * transitionsTemplates at the end of the ply. */
+  private var newTransitionTemplates: ArrayBuffer[TransitionTemplate] = null
 
   /** Store the ExtendedTransition pre -> post, and calculate its effect on
     * previously found views. */
@@ -136,8 +144,8 @@ class Checker(system: SystemP.System){
       // IMPROVE (simplification)
       val newPid = newPids.head
       // Store transition template
-      transitionTemplates.add(pre, post, newPid, e, outsidePids.nonEmpty)
-// FIXME: is above correct?
+      newTransitionTemplates += ((pre, post, newPid, e, outsidePids.nonEmpty))
+      // transitionTemplates.add(pre, post, newPid, e, outsidePids.nonEmpty) NO
       // Get extended transitions based on this
       instantiateTransitionTemplate(pre, post, newPid, e, outsidePids.nonEmpty)
     } // end of else
@@ -529,10 +537,10 @@ class Checker(system: SystemP.System){
       println("\nSTEP "+ply) 
       println("#abstractions = "+printLong(sysAbsViews.size))
       println("#new active abstract views = "+printInt(newViews.size))
-      nextNewViews = new ArrayBuffer[ComponentView];
+      nextNewViews = new ArrayBuffer[ComponentView]
       //nextNewViews1 = new ArrayBuffer[View]
-      newTransitions = 
-        new ArrayBuffer[(Concretization, EventInt, Concretization)]
+      newTransitions = new ArrayBuffer[Transition]
+      newTransitionTemplates = new ArrayBuffer[TransitionTemplate]
       var i = 0
       // Process all views from newViews.
       while(i < newViews.length && !done.get){
@@ -553,10 +561,13 @@ class Checker(system: SystemP.System){
         val v = Remapper.remapComponentView(post.toComponentView)
         if(addView(v)) v.setCreationInfo(pre, e, post)
       }
+      for((pre, post, id, e, inc) <- newTransitionTemplates)
+        transitionTemplates.add(pre, post, id, e, inc)
       for(v <- nextNewViews) addView(v)
       ply += 1; newViews = newViewsAB.toArray; 
       if(newViews.isEmpty) done.set(true)
-    }
+    } // end of main loop
+
     println("\nSTEP "+ply)
     if(verbose) println(sysAbsViews)
     println("#abstractions = "+printLong(sysAbsViews.size))
