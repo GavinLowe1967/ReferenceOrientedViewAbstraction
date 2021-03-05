@@ -68,7 +68,6 @@ class Checker(system: SystemP.System){
   @inline private 
   def addTransition(pre: Concretization, e: EventInt, post: Concretization) = {
     newTransitions += ((pre, e, post))
-    //transitions.add(pre, e, post); // Only at end of ply
     effectOnOthers(pre, e, post)
   }
 
@@ -82,13 +81,14 @@ class Checker(system: SystemP.System){
     if(verbose) println(s"\n**** Processing $v")
     v match{
       case cv: ComponentView =>
-        for((pre, e, post, outsidePids) <- system.transitions(cv)){ 
+        for((pre, e, post, outsidePid) <- system.transitions(cv)){ 
           if(verbose)
             println(s"$pre -${system.showEvent(e)}-> $post ["+
-              outsidePids.map(State.showProcessId)+"]")
+              (if(outsidePid != null) State.showProcessId(outsidePid) else "")+
+              "]")
           assert(pre.components(0) == cv.principal)
           // Find new views as a result of this transition
-          if(processTransition(pre, e, post, outsidePids)){
+          if(processTransition(pre, e, post, outsidePid)){
             assert(e == system.Error); return true
           }
         } // end of for((pre, e, post, outsidePids) <- trans)
@@ -105,13 +105,12 @@ class Checker(system: SystemP.System){
     * and adding them to sysAbsViews and nextNewViews.  Add appropriate
     * TransitionTemplates and ExtendedTransitions to transitionTemplates and
     * transitions, respectively.
-    * @param outsidePids the identities of components outside pre that 
-    * synchronise on the transition. 
-// FIXME: At most one? 
+    * @param outsidePid if non-null, the identity of a component outside pre
+    * that synchronises on the transition.  // FIXME: At most one?
     * @return true if a concrete transition on error is generated. */
   @inline private def processTransition(
     pre: Concretization, e: EventInt, post: Concretization, 
-    outsidePids: List[ProcessIdentity])
+    outsidePid: ProcessIdentity)
       : Boolean = {
     val princ1 = post.components(0)
     // Process ids of other components
@@ -123,35 +122,31 @@ class Checker(system: SystemP.System){
     val newPids: Array[ProcessIdentity] =
       princ1.processIdentities.tail.filter(p =>
         !isDistinguished(p._2) && !otherIds.contains(p))
-    // The following assertion (outsidePids subset of newPids) captures an
-    // assumption that the principal component cannot acquire a reference from
-    // nowhere: the reference must be acquired either from another process in
-    // the view or by synchronising with that other component.
-    assert(outsidePids.forall(pid => newPids.contains(pid)))
-    // if(newPids.nonEmpty)
-    //   println(s"newPids = "+newPids.map(State.showProcessId).mkString(","))
+    assert(newPids.length <= 1) // simplifying assumption
+    // The following assertion (outsidePid in newPids) captures an assumption
+    // that the principal component cannot acquire a reference from nowhere:
+    // the reference must be acquired either from another process in the view
+    // or by synchronising with that other component.
+    if(outsidePid != null) assert(newPids.head == outsidePid)
 
     if(newPids.isEmpty){
       // Case 1: no new nondistinguished parameter
-      assert(outsidePids.isEmpty) // IMPROVE (simplifying assumption)
       if(e == system.Error) return true
       // if(!newVersion) addViewFromConc(pre, e, post)
       // Store this transition, and calculate effect on other views.
       addTransition(pre, e, post)
     }
     else{ // Case 2: one new parameter from outside the view
-      assert(newPids.length == 1 && outsidePids.length <= 1)
-      // IMPROVE (simplification)
+      // assert(newPids.length == 1) // simplifying assumption
       val newPid = newPids.head
       // Store transition template
-      newTransitionTemplates += ((pre, post, newPid, e, outsidePids.nonEmpty))
+      newTransitionTemplates += ((pre, post, newPid, e, outsidePid != null))
       // transitionTemplates.add(pre, post, newPid, e, outsidePids.nonEmpty) NO
       // Get extended transitions based on this
-      instantiateTransitionTemplate(pre, post, newPid, e, outsidePids.nonEmpty)
+      instantiateTransitionTemplate(pre, post, newPid, e, outsidePid != null)
     } // end of else
     false
   }
-
 
   // ========= Extending TransitionTemplates 
 
@@ -192,7 +187,7 @@ class Checker(system: SystemP.System){
   = {
     require(pre.servers == cv.servers)
     val extenders = // IMPROVE: avoid Option value
-      system.consistentStates(newPid, pre, if(include) Some(e) else None, cv)
+      system.consistentStates(newPid, pre, if(include) e else -1, cv)
     for((outsideSt, outsidePosts) <- extenders){
       assert(outsidePosts.nonEmpty)
       if(isExtendable(pre, outsideSt)){
@@ -314,8 +309,8 @@ class Checker(system: SystemP.System){
     val servers = conc.servers; val pCpt = conc.components(j)
     val (stF, stId) = st.componentProcessIdentity
     // Rename pCpt to be principal component
-    val map = Remapper.createMap(servers.rhoS)
-    val nextArgs = Remapper.createNextArgMap(servers.rhoS)
+    val map = servers.remappingMap // Remapper.createMap(servers.rhoS)
+    val nextArgs = servers.nextArgMap // Remapper.createNextArgMap(servers.rhoS)
     val pCptR = Remapper.remapState(map, nextArgs, pCpt)
     // Remapper.remapToPrincipal(servers, pCpt) - IMPROVE?
     if(veryVerbose /* || pCpt != pCptR */) println(s"$pCpt renamed to $pCptR")
@@ -389,17 +384,17 @@ class Checker(system: SystemP.System){
     * at least one process that changes state, then update as per this
     * transition. */
   private 
-  def effectOnOthers(pre: Concretization, e: EventInt, post: Concretization) = {
+  def effectOnOthers(pre: Concretization, e: EventInt, post: Concretization) = 
+  if(pre != post){
     effectOnOthersCount += 1
     val iter = sysAbsViews.iterator(pre.servers)
     while(iter.hasNext){
       val cv = iter.next
       // IMPROVE if nothing changed state.
-      // effectOnViaOthersCount += 1
+      effectOnViaOthersCount += 1
       effectOn(pre, e, post, cv)
     }
   }
-
 
   var effectOnCount = 0
   var effectOnViaOthersCount = 0
@@ -538,10 +533,10 @@ class Checker(system: SystemP.System){
       println("#abstractions = "+printLong(sysAbsViews.size))
       println("#new active abstract views = "+printInt(newViews.size))
       nextNewViews = new ArrayBuffer[ComponentView]
-      //nextNewViews1 = new ArrayBuffer[View]
       newTransitions = new ArrayBuffer[Transition]
       newTransitionTemplates = new ArrayBuffer[TransitionTemplate]
       var i = 0
+
       // Process all views from newViews.
       while(i < newViews.length && !done.get){
         if(process(newViews(i))){
@@ -551,8 +546,11 @@ class Checker(system: SystemP.System){
           ??? 
         }
         i += 1
+        if(i%20 == 0){ print("."); if(i%500 == 0) print(i) }
       }
+
       // Add views and transitions found on this ply into the main set.
+      println("Copying")
       val newViewsAB = new ArrayBuffer[ComponentView]
       def addView(v: ComponentView): Boolean = 
         if(sysAbsViews.add(v)){ newViewsAB += v; true } else false

@@ -48,10 +48,15 @@ class ServerStates(val servers: List[State]){
   //       Array.tabulate(State.rowSizes(t))(i => i < numParams(t)))
   //   else null
 
+
+
   /** A template Remapper.RemappingMap */
   private val remappingMapTemplate = Array.tabulate(numTypes)(t => 
-    Array.tabulate(State.rowSizes(t))(i => if(i < numParams(t)) i else -1))
+    Array.tabulate(typeSizes(t))(i => if(i < numParams(t)) i else -1))
+    // Array.tabulate(State.rowSizes(t))(i => if(i < numParams(t)) i else -1))
 
+  /** A (fresh) RemappingMap, representing the identity on the parameters of 
+    * this. */
   def remappingMap: RemappingMap = {
     assert(normalised)
     val result = new Array[Array[Identity]](numTypes); var t = 0
@@ -63,8 +68,8 @@ class ServerStates(val servers: List[State]){
   def nextArgMap = { assert(normalised); numParams.clone }
 
   /** Identity mapping on identities held by servers, for each type. */
-  val rhoS: ParamMap = 
-    Array.tabulate(numTypes){t => val ids = serverIds(t); ids.zip(ids) }
+  // val rhoS: ParamMap = 
+  //   Array.tabulate(numTypes){t => val ids = serverIds(t); ids.zip(ids) }
 
   override def toString = servers.mkString("[", " || ", "]")
 }

@@ -1,3 +1,17 @@
+Thoughts on adding concurrency.
+
+In Checker:
+
+- In first stage of each ply, need to protect nextNewViews, newTransitions,
+newTransitionTemplates.  CAS on done before debugging.
+
+- In second stage, need to protect sysAbsViews, transitions,
+  transitiontemplates (if done concurrently).
+
+
+
+=======================================
+
 Implementation notes.
 
 Main state:

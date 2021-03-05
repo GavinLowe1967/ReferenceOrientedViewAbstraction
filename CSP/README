@@ -44,6 +44,27 @@ that at most one thread has created a new node.
 TreiberStack1.csp: this works, but is less efficient, as it doesn't have the
 POR.  7408 states, ~28 sec (with profiling)
 
+Lock-Free Queue
+===============
+
+lockFreeQueue.csp: 2272 states, ~16 s (mostly compilation). 
+
+Lazy Set
+========
+
+lazySet.csp: Each node has reference to locking thread.  Finds false error on
+step 29, 31,364 abstractions.  There seem to be two nodes containing B.  Added
+BTracker.
+
+lazySet0.csp: Merging states produces a concretization where *two* threads are
+in the state AddTest (or thereabouts), with the same next and current
+references.  This state is not reachable in concrete models, because not both
+threads can have these nodes locked.
+
+lazySetBug.csp: this seems to display a bug in FDR.  When a node is locked, it
+ought to store the identity of the locking thread, but doesn't.
+
+
 Test files
 ==========
 

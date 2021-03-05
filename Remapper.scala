@@ -34,7 +34,8 @@ object Remapper{
 
   /** Template from which to create RemappingMap. */
   private val remappingMapTemplate =
-    Array.tabulate(numTypes)(t => Array.fill(State.rowSizes(t))(-1))
+    // Array.tabulate(numTypes)(t => Array.fill(State.rowSizes(t))(-1))
+    Array.tabulate(numTypes)(t => Array.fill(typeSizes(t))(-1))
 
 
   /** Produce a (deep) clone of map. */
@@ -60,14 +61,14 @@ object Remapper{
     * 
     * IMPROVE: calling remappingMap on the ServerStates might be more
     * efficient. */
-  def createMap(rho: ParamMap): RemappingMap = {
-    val map = newRemappingMap
-    for(t <- 0 until numTypes){
-      val len = rho(t).length; var i = 0
-      while(i < len){ map(t)(i) = i; i += 1 }
-    }
-    map
-  }
+  // @deprecated def createMap(rho: ParamMap): RemappingMap = {
+  //   val map = newRemappingMap
+  //   for(t <- 0 until numTypes){
+  //     val len = rho(t).length; var i = 0
+  //     while(i < len){ map(t)(i) = i; i += 1 }
+  //   }
+  //   map
+  // }
 
   /** Is the mapping represented by map injective? */
   def isInjective(map: RemappingMap): Boolean = {
@@ -136,11 +137,11 @@ object Remapper{
   /** Create a new NextArgMap corresponding to rho. 
     * 
     * IMPROVE: calling nextArgMap on the ServerStates might be more efficient. */
-  @inline def createNextArgMap(rho: ParamMap): NextArgMap = {
-    val naMap = new Array[Int](numTypes)
-    for(i <- 0 until numTypes) naMap(i) = rho(i).length
-    naMap
-  }
+  // @inline @deprecated def createNextArgMap(rho: ParamMap): NextArgMap = {
+  //   val naMap = new Array[Int](numTypes)
+  //   for(i <- 0 until numTypes) naMap(i) = rho(i).length
+  //   naMap
+  // }
 
   /** A list, for each type, of non-fresh values that a particular parameter can
     * be mapped to. */
@@ -337,7 +338,8 @@ object Remapper{
   /** Remap st so that it can be the principal component in a view with
     * servers. */
   def remapToPrincipal(servers: ServerStates, st: State): State = {
-    remapState(createMap(servers.rhoS), createNextArgMap(servers.rhoS), st)
+    remapState(servers.remappingMap, servers.nextArgMap, st)
+    // remapState(createMap(servers.rhoS), createNextArgMap(servers.rhoS), st)
   }
 
 

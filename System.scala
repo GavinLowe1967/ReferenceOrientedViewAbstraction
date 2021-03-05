@@ -185,15 +185,16 @@ class System(fname: String, checkDeadlock: Boolean,
   }
   
   /** We represent sets of transitions corresponding to a ComponentView cv using
-    * lists of tuples of type TransitionRep.  Each tuple (pre, e, post, pids)
+    * lists of tuples of type TransitionRep.  Each tuple (pre, e, post, pid)
     * represents concrete transitions pre U new U cpts -e-> post U new' U
-    * cpts, for each set new and new', cpts such that: (1) new, new' have
-    * component identities pIds and transition new -e-> new'; (2) the three
-    * parts have disjoint identities.  The concretizations pre and post
-    * contain the same component identities, namely those identities in cv.
+    * cpts, for each set new and new', cpts such that: (1) if pid is non-null,
+    * then new, new' have component identity pid and transition new -e-> new';
+    * otherwise new and new' are absent; (2) the three parts have disjoint
+    * identities.  The concretizations pre and post contain the same component
+    * identities, namely those identities in cv.
     */
   type TransitionRep = 
-    (Concretization, EventInt, Concretization, List[ProcessIdentity])
+    (Concretization, EventInt, Concretization, ProcessIdentity)
 
   /** The transitions caused by the principal component of cv. 
     * @return a list of tuples (pre, e, post, pids) representing concrete 
@@ -207,8 +208,8 @@ class System(fname: String, checkDeadlock: Boolean,
     var result = List[TransitionRep]()
     // Add an element to result if it's canonical
     def maybeAdd(pre: Concretization, e: EventInt, post: Concretization, 
-        pids: List[ProcessIdentity]) =
-      if(isCanonicalTransition(pre, post)) result ::= ((pre, e, post, pids)) 
+        pid: ProcessIdentity) =
+      if(isCanonicalTransition(pre, post)) result ::= ((pre, e, post, pid)) 
       else if(verbose) println(s"Not cannonical $pre -${showEvent(e)}-> $post")
 
     val princTrans = components.getTransComponent(cv.principal)
@@ -226,7 +227,7 @@ class System(fname: String, checkDeadlock: Boolean,
       for(i <- 0 until princTrans.eventsSolo.length-1;
         st1 <- princTrans.nextsSolo(i)){
         val post = Concretization(cv.servers, st1, cv.others)
-        maybeAdd(conc0, princTrans.eventsSolo(i), post, List())
+        maybeAdd(conc0, princTrans.eventsSolo(i), post, null)
       }
 
     // Case 2: synchronisation between principal component and server (only)
@@ -248,7 +249,7 @@ class System(fname: String, checkDeadlock: Boolean,
               // println(s"Server-principal sync on ${showEvent(pE)}")
               for(pNext <- pNexts(cptIndex); sNext <- sNexts(serverIndex)){
                 val post = Concretization(ServerStates(sNext), pNext, cv.others)
-                maybeAdd(conc0, sE, post, List())
+                maybeAdd(conc0, sE, post, null)
               }
             }
             serverIndex += 1; sE = sEs(serverIndex)
@@ -280,7 +281,7 @@ class System(fname: String, checkDeadlock: Boolean,
               val othersPost = cv.others.clone; othersPost(componentIx) = pNext
               for(st1 <- oNs(i)){
                 val post = Concretization(cv.servers, st1, othersPost)
-                maybeAdd(conc0, e, post, List())
+                maybeAdd(conc0, e, post, null)
               }
             }
           }
@@ -288,7 +289,7 @@ class System(fname: String, checkDeadlock: Boolean,
             val conc0 = Concretization(cv)
             for(st1 <- oNs(i)){ // the post state of the principal cpt
               val post = Concretization(cv.servers, st1, cv.others)
-              maybeAdd(conc0, e, post, List((f,id)))
+              maybeAdd(conc0, e, post, (f,id))
             }
           }
         } // end of for(i <- 0 until oEs.length-1)
@@ -302,7 +303,7 @@ class System(fname: String, checkDeadlock: Boolean,
       for(newServers <- sNsSolo(index)){
         val post = 
           Concretization(ServerStates(newServers), cv.principal, cv.others)
-        maybeAdd(conc0, e, post, List())
+        maybeAdd(conc0, e, post, null)
       }
       // println("sEsSolo = "+sEsSolo.init.map(showEvent).mkString("; "))
       index += 1; e = sEsSolo(index)
@@ -364,7 +365,7 @@ class System(fname: String, checkDeadlock: Boolean,
                         println(s"Three-way synchronisation: "+
                           s"$pre -${showEvent(sE)}-> $post "+
                           "with present other ${(of,oi)}")
-                      maybeAdd(pre, sE, post, List())
+                      maybeAdd(pre, sE, post, null)
                     }
                   }
                 }
@@ -377,7 +378,7 @@ class System(fname: String, checkDeadlock: Boolean,
                   if(verbose)
                     println(s"Three-way synchronisation: "+
                       s"$pre -${showEvent(sE)}-> $post with ${(of,oi)}")
-                  maybeAdd(pre, sE, post, List((of,oi)))
+                  maybeAdd(pre, sE, post, (of,oi))
                 }
               }
 
@@ -433,12 +434,12 @@ class System(fname: String, checkDeadlock: Boolean,
   }
 
   /** Get all renamings of cv that: (1) include a component with identity pid;
-    * (2) agree with conc on the states of all common components; and (3) if
-    * oe = Some(e) can perform e with conc.principal. 
+    * (2) agree with conc on the states of all common components; and (3) can
+    * perform e with conc.principal if e >= 0.
     * @return the renaming of the component with identity pid, and all
     * post-states of that component optionally after oe.  */
   def consistentStates(pid: ProcessIdentity, conc: Concretization, 
-    oe: Option[EventInt], cv: ComponentView)
+    e: EventInt, cv: ComponentView)
       : ArrayBuffer[(State, List[State])] = {
     val buffer = new ArrayBuffer[(State, List[State])]()
     val (f,id) = pid; val servers = conc.servers; require(cv.servers == servers)
@@ -460,7 +461,8 @@ class System(fname: String, checkDeadlock: Boolean,
         // servers) so that: (1) its identity maps to id; (2) other parameters
         // are injectively mapped either to a parameter in conc.components,
         // but not the servers; or the next fresh parameter.
-        val map0 = Remapper.createMap(servers.rhoS)  // newRemappingMap
+        val map0 = servers.remappingMap 
+        // Remapper.createMap(servers.rhoS)  // newRemappingMap
         val (otherArgs, nextArg) = Remapper.createMaps1(servers, cpts)
         // println("nextArg = "+nextArg.mkString("; "))
         otherArgs(f) = otherArgs(f).filter(_ != id)
@@ -485,11 +487,13 @@ class System(fname: String, checkDeadlock: Boolean,
           }
           else{ // Renamed state consistent with cpts
             // Test whether e is possible, and get next states
-            val nexts = oe match{
-              case Some(e) =>
+            val nexts = (
+              if(e >= 0) // oe match{
+              // case Some(e) =>
                 components.getTransComponent(renamedState).nexts(e, fp, idp)
-              case None => List(renamedState)
-            }
+              // case None => 
+              else List(renamedState)
+            )
             if(nexts.nonEmpty && !buffer.contains((renamedState, nexts))){
               // Check a corresponding renaming of the rest of cpts1 agrees
               // with cpts on common components.  Trivially true if singleton

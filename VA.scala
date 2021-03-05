@@ -148,9 +148,10 @@ object VA{
     if(!testing){ // checker is null when testing
       println(s"checker.effectOnCount = "+printLong(checker.effectOnCount))
       println(s"checker.effectOnViaOthersCount = "+
-        checker.effectOnViaOthersCount)
+        printLong(checker.effectOnViaOthersCount))
       println(s"checker.effectOnViaTransCount = "+checker.effectOnViaTransCount)
-      println(s"checker.effectOnOthersCount = "+checker.effectOnOthersCount)
+      println(s"checker.effectOnOthersCount = "+
+        printLong(checker.effectOnOthersCount))
       println(s"checker.effectOfPreviousTransitionsCount = "+
         checker.effectOfPreviousTransitionsCount)
       println(s"checker.newViewCount = "+printLong(checker.newViewCount))

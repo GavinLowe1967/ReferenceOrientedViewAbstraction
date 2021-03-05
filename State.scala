@@ -49,7 +49,7 @@ class State(val family: Family, val cs: ControlState,
           val t = tm(i)
           println("Not enough identities of type "+typeNames(t)+" in script ("+
                     typeSizes(t)+") to represent system view\n"+toString0)
-          assert(false) // sys.exit // IMPROVE
+          sys.exit // IMPROVE
         }
     }
   }
@@ -269,7 +269,7 @@ object State{
 
   /** Max number of values of each type that we need to keep track of in any
     * remapping. */
-  var rowSizes: Array[Int] = null
+  //var rowSizes: Array[Int] = null
 
   /** Array giving the type of the identity for control states.
     * idTypeArray(cs-minCS) gives the type of processes with control state cs,
@@ -289,7 +289,7 @@ object State{
     maxParamsOfType = Array.tabulate(numTypes)( t =>
       stma.filter(_ != null).map(_.count(_ == t)).max )
     println("maxParamsOfType = "+maxParamsOfType.mkString(", "))
-    rowSizes = Array.tabulate(numTypes)( t => typeSizes(t) + maxParamsOfType(t))
+    //rowSizes = Array.tabulate(numTypes)( t => typeSizes(t) /* + maxParamsOfType(t) */ )
     // MyStateMap.renewStateStore(stma.length, minCS)
   }
 
