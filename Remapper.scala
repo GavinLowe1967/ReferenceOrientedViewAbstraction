@@ -14,19 +14,14 @@ import scala.collection.mutable.ArrayBuffer
 object Remapper{
   // ----- RemappingMaps
 
-  /** Max number of values of each type that we need to keep track of in any
-    * remapping. */
-  // val rowSizes = Array.tabulate(numTypes)( t => 
-  //   typeSizes(t) + State.maxParamsOfType(t))
-  // println("Remapper.rowSizes = "+rowSizes.mkString(", "))
 
-  /** The type of maps recording the values that parameters get remapped to.  
-    * map(t)(arg) records the value that arg of type t gets remapped to,
-    * or -1 if no value has been allocated yet.  I.e., it represents the
-    * mapping
-    *  {(t,arg) -> (t, map(t)(arg)) |
-    *       0 <= t < numTypes, 0 <= arg < size(t), map(t)(arg) != -1}.
-    */
+  /* The type of maps recording the values that parameters get remapped to.  
+   * map(t)(arg) records the value that arg of type t gets remapped to,
+   * or -1 if no value has been allocated yet.  I.e., it represents the
+   * mapping
+   *  {(t,arg) -> (t, map(t)(arg)) |
+   *       0 <= t < numTypes, 0 <= arg < size(t), map(t)(arg) != -1}.
+   */
   // type RemappingMap = Array[Array[Identity]]
 
   /** Show a remapping map. */
@@ -34,9 +29,7 @@ object Remapper{
 
   /** Template from which to create RemappingMap. */
   private val remappingMapTemplate =
-    // Array.tabulate(numTypes)(t => Array.fill(State.rowSizes(t))(-1))
     Array.tabulate(numTypes)(t => Array.fill(typeSizes(t))(-1))
-
 
   /** Produce a (deep) clone of map. */
   @inline def cloneMap(map: RemappingMap): RemappingMap = {
@@ -50,25 +43,6 @@ object Remapper{
     * RemappingMaps created by the same thread should not be in use at the
     * same time. */
   @inline def newRemappingMap: RemappingMap = cloneMap(remappingMapTemplate)
-    // Deep clone of remappingMapTemplate
-  //   val res = new Array[Array[Int]](numTypes); var t = 0
-  //   while(t < numTypes){ res(t) = remappingMapTemplate(t).clone; t += 1 }
-  //   res
-  // }
-
-  /** Create a RemappingMap corresponding to rho, i.e. the identity map
-    * on (t,i) for i <- [0..rho(t), for each t. 
-    * 
-    * IMPROVE: calling remappingMap on the ServerStates might be more
-    * efficient. */
-  // @deprecated def createMap(rho: ParamMap): RemappingMap = {
-  //   val map = newRemappingMap
-  //   for(t <- 0 until numTypes){
-  //     val len = rho(t).length; var i = 0
-  //     while(i < len){ map(t)(i) = i; i += 1 }
-  //   }
-  //   map
-  // }
 
   /** Is the mapping represented by map injective? */
   def isInjective(map: RemappingMap): Boolean = {
@@ -127,24 +101,10 @@ object Remapper{
 
   /** Create a new NextArgMap, corresponding to the empty mapping.  Equivalent
     * to new Array[Int](numTypes) */
-  @inline private def newNextArgMap: NextArgMap = {
-    new Array[Int](numTypes)
-    // val map = new Array[Int](numTypes)
-    // for(t <- 0 until numTypes) map(t) = 0
-    // map
-  }
+  @inline private def newNextArgMap: NextArgMap = new Array[Int](numTypes)
 
-  /** Create a new NextArgMap corresponding to rho. 
-    * 
-    * IMPROVE: calling nextArgMap on the ServerStates might be more efficient. */
-  // @inline @deprecated def createNextArgMap(rho: ParamMap): NextArgMap = {
-  //   val naMap = new Array[Int](numTypes)
-  //   for(i <- 0 until numTypes) naMap(i) = rho(i).length
-  //   naMap
-  // }
-
-  /** A list, for each type, of non-fresh values that a particular parameter can
-    * be mapped to. */
+  /* A list, for each type, of non-fresh values that a particular parameter can
+   * be mapped to. */
   // type OtherArgMap = Array[List[Identity]]
 
   def newOtherArgMap: OtherArgMap = Array.fill(numTypes)(List[Identity]())
@@ -339,7 +299,6 @@ object Remapper{
     * servers. */
   def remapToPrincipal(servers: ServerStates, st: State): State = {
     remapState(servers.remappingMap, servers.nextArgMap, st)
-    // remapState(createMap(servers.rhoS), createNextArgMap(servers.rhoS), st)
   }
 
 

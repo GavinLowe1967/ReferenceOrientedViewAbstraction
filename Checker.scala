@@ -2,7 +2,7 @@ package ViewAbstraction
 
 import ViewAbstraction.RemapperP.{Remapper,Unification}
 import ViewAbstraction.CombinerP.Combiner
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer,HashSet}
 import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
 
 /** A checker for the view abstraction algorithm, applied to system.
@@ -18,7 +18,7 @@ class Checker(system: SystemP.System){
   // adding new views to the set while that is going on.
 
   /** The new views to be considered on the next ply. */
-  protected var nextNewViews: ArrayBuffer[ComponentView] = null
+  protected var nextNewViews: HashSet[ComponentView] = null
 
   private def showTransition(
     pre: Concretization, e: EventInt, post: Concretization) =
@@ -42,7 +42,7 @@ class Checker(system: SystemP.System){
 
   /** Transitions found on this ply.  Transitions are initially added to
     * newTransitions, but transferred to transitions at the end of the ply. */
-  private var newTransitions: ArrayBuffer[Transition] = null
+  private var newTransitions: HashSet[Transition] = null
 
   import TransitionTemplateSet.TransitionTemplate
   // = (Concretization, Concretization, ProcessIdentity, EventInt, Boolean)
@@ -63,12 +63,27 @@ class Checker(system: SystemP.System){
     * transitionsTemplates at the end of the ply. */
   private var newTransitionTemplates: ArrayBuffer[TransitionTemplate] = null
 
+
+  var addTransitionCount = 0L
+  var effectOnCount = 0
+  var effectOnViaOthersCount = 0
+  var effectOnViaTransCount = 0
+  var effectOfPreviousTransitionsCount = 0
+  var effectOnOthersCount = 0
+  var newViewCount = 0L
+  var addedViewCount = 0L
+  var effectOnRepetition = 0
+  var instantiateTransitionTemplateCount = 0L
+
   /** Store the ExtendedTransition pre -> post, and calculate its effect on
     * previously found views. */
   @inline private 
   def addTransition(pre: Concretization, e: EventInt, post: Concretization) = {
-    newTransitions += ((pre, e, post))
-    effectOnOthers(pre, e, post)
+    addTransitionCount += 1
+    val newTrans = ((pre, e, post))
+    if(!transitions.contains(newTrans)){
+      if(newTransitions.add(newTrans)) effectOnOthers(pre, e, post)
+    }
   }
 
   // ========= Processing a single view
@@ -140,9 +155,11 @@ class Checker(system: SystemP.System){
       // assert(newPids.length == 1) // simplifying assumption
       val newPid = newPids.head
       // Store transition template
-      newTransitionTemplates += ((pre, post, newPid, e, outsidePid != null))
-      // transitionTemplates.add(pre, post, newPid, e, outsidePids.nonEmpty) NO
-      // Get extended transitions based on this
+      val newTransTemp = (pre, post, newPid, e, outsidePid != null)
+      assert(!transitionTemplates.contains(newTransTemp)) // IMPROVE
+      newTransitionTemplates += (newTransTemp)
+        // transitionTemplates.add(pre, post, newPid, e, outsidePids.nonEmpty) NO
+        // Get extended transitions based on this
       instantiateTransitionTemplate(pre, post, newPid, e, outsidePid != null)
     } // end of else
     false
@@ -157,8 +174,11 @@ class Checker(system: SystemP.System){
   private def instantiateTransitionTemplate(
     pre: Concretization, post: Concretization, 
     newPid: ProcessIdentity, e: EventInt, include: Boolean) 
-  = sysAbsViews.iterator(pre.servers).foreach{ cv =>
+  = {
+    instantiateTransitionTemplateCount += 1
+    sysAbsViews.iterator(pre.servers).foreach{ cv =>
       instantiateTransitionTemplateBy(pre, post, newPid, e, include, cv)
+    }
   }
 
   /** The effect of view cv on previous TransitionTemplates.
@@ -186,7 +206,7 @@ class Checker(system: SystemP.System){
     newPid: ProcessIdentity, e: EventInt, include: Boolean, cv: ComponentView)
   = {
     require(pre.servers == cv.servers)
-    val extenders = // IMPROVE: avoid Option value
+    val extenders = 
       system.consistentStates(newPid, pre, if(include) e else -1, cv)
     for((outsideSt, outsidePosts) <- extenders){
       assert(outsidePosts.nonEmpty)
@@ -309,39 +329,37 @@ class Checker(system: SystemP.System){
     val servers = conc.servers; val pCpt = conc.components(j)
     val (stF, stId) = st.componentProcessIdentity
     // Rename pCpt to be principal component
-    val map = servers.remappingMap // Remapper.createMap(servers.rhoS)
-    val nextArgs = servers.nextArgMap // Remapper.createNextArgMap(servers.rhoS)
+    val map = servers.remappingMap; val nextArgs = servers.nextArgMap
     val pCptR = Remapper.remapState(map, nextArgs, pCpt)
-    // Remapper.remapToPrincipal(servers, pCpt) - IMPROVE?
-    if(veryVerbose /* || pCpt != pCptR */) println(s"$pCpt renamed to $pCptR")
     // what st.id gets renamed to
     val stIdR = map(stF)(stId)
     // Following fails if pCpt does not reference st, i.e. precondition false.
     assert({ val ix = pCpt.processIdentities.indexOf((stF,stId)); 
       ix >= 0 && pCptR.ids(ix) == stIdR},
       s"pCptR = $pCptR; st = $st")
-    if(veryVerbose) 
-      println(s"$st identity renamed to "+
-        State.showProcessId((st.family, stIdR)))
     val cs1 = st.cs    
     // Find other components of conc that are referenced by pCpt
-    val pRefs = new Array[State](pCpt.ids.length)
+    val pLen = pCpt.ids.length; val pRefs = new Array[State](pLen)
+    val pIds = pCpt.processIdentities
     for(i <- 0 until conc.components.length; if i != j){
-      val cpt = conc.components(i)
-      val ix = pCpt.processIdentities.indexOf(cpt.componentProcessIdentity)
-      if(ix >= 0){ assert(ix != 0); pRefs(ix) = cpt } 
+      val cpt = conc.components(i); var ix = 0
+      // Find index of cpt.componentProcessIdentity in pIds 
+      while(ix < pLen && pIds(ix) != cpt.componentProcessIdentity) ix += 1
+      assert(ix != 0)
+      if(ix < pLen) pRefs(ix) = cpt
+      // val ix = pIds.indexOf(cpt.componentProcessIdentity)
+      // if(ix >= 0){ assert(ix != 0); pRefs(ix) = cpt } 
     }
-    // println(s"pRefs = "+pRefs.mkString("; "))
 
     // Test whether sysAbsViews contains a view cv1 matching servers, with
     // cptR as the principal component, and containing a component with
     // identity idR in control state cs1.  map (and map1) tries to map conc
     // onto cv1.  
-    // val viewsArray = sysAbsViews.toArray; var i = 0; 
     val iter = sysAbsViews.iterator(servers); var found = false
     while(iter.hasNext && !found){
       val cv1 = iter.next
       if(cv1.principal == pCptR){
+// IMPROVE: provide better iteration
         // Test if cv1 contains a component that is a renaming of st under
         // an extension of map
         var j = 1
@@ -358,9 +376,6 @@ class Checker(system: SystemP.System){
               while(k < pRefs.length && map2 != null){
                 if(pRefs(k) != null){
                   map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
-                  if(veryVerbose)
-                    println(s"Trying to unify ${cv1.components(k)} and "+
-                      pRefs(k)+".  "+(if(found) "Succeeded." else "Failed."))
                 }
                 k += 1
               } // end of inner while
@@ -396,14 +411,6 @@ class Checker(system: SystemP.System){
     }
   }
 
-  var effectOnCount = 0
-  var effectOnViaOthersCount = 0
-  var effectOnViaTransCount = 0
-  var effectOfPreviousTransitionsCount = 0
-  var effectOnOthersCount = 0
-  var newViewCount = 0L
-  var addedViewCount = 0L
-  var effectOnRepetition = 0
 
   /** Find the component of cpts with process identity pid, or return null if no
     * such.  IMPROVE: move elsewhere, combine with Unification.find */
@@ -531,9 +538,10 @@ class Checker(system: SystemP.System){
     while(!done.get && ply <= bound){
       println("\nSTEP "+ply) 
       println("#abstractions = "+printLong(sysAbsViews.size))
+      println(s"#transitions = ${printLong(transitions.size)}")
       println("#new active abstract views = "+printInt(newViews.size))
-      nextNewViews = new ArrayBuffer[ComponentView]
-      newTransitions = new ArrayBuffer[Transition]
+      nextNewViews = new HashSet[ComponentView]
+      newTransitions = new HashSet[Transition]
       newTransitionTemplates = new ArrayBuffer[TransitionTemplate]
       var i = 0
 
@@ -550,7 +558,9 @@ class Checker(system: SystemP.System){
       }
 
       // Add views and transitions found on this ply into the main set.
-      println("Copying")
+      println(s"\nCopying: nextNewViews, ${nextNewViews.size}; "+
+        s"newTransitions, ${newTransitions.size}; "+
+        s"newTransitionTemplates, ${newTransitionTemplates.length}")
       val newViewsAB = new ArrayBuffer[ComponentView]
       def addView(v: ComponentView): Boolean = 
         if(sysAbsViews.add(v)){ newViewsAB += v; true } else false

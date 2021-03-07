@@ -471,27 +471,21 @@ class System(fname: String, checkDeadlock: Boolean,
         val maps = Combiner.remapToId(map0, otherArgs, nextArg, cpts1, i, id)
         for(map <- maps){
           val renamedState = Remapper.applyRemappingToState(map, st1)
-          // should have renamedState.ids in ran map
-          assert({ 
-            val ids1 = renamedState.ids; val typeMap = renamedState.typeMap
-              (0 until ids1.length).forall(j =>
-                ids1(j) < 0 || map(typeMap(j)).contains(ids1(j))
-              )},
-            "\nmap = "+Remapper.show(map)+"undefined on = "+renamedState)
-          // println(s"map = ${Remapper.showRemappingMap(map)}; "+
-          //   s"renamedState = $renamedState}")
-          if(!View.agreesWithCommonComponent(renamedState, cpts)){
-            // println(s"consistentStates($pid, $conc, $cv): \n"+
-            //   s"  renaming $st1 to $renamedState failed to match other "+
-            //   "components (case 1).")
+          // should have renamedState.ids in ran map.  IMPROVE
+          val ids1 = renamedState.ids; val typeMap = renamedState.typeMap
+          var j = 0
+          while(j < ids1.length){
+             // (0 until ids1.length).forall(j =>
+            assert( ids1(j) < 0 || map(typeMap(j)).contains(ids1(j)) ,
+              "\nmap = "+Remapper.show(map)+"undefined on = "+renamedState)
+            j += 1
           }
-          else{ // Renamed state consistent with cpts
+          if(View.agreesWithCommonComponent(renamedState, cpts)){
+            // Renamed state consistent with cpts
             // Test whether e is possible, and get next states
             val nexts = (
-              if(e >= 0) // oe match{
-              // case Some(e) =>
+              if(e >= 0) 
                 components.getTransComponent(renamedState).nexts(e, fp, idp)
-              // case None => 
               else List(renamedState)
             )
             if(nexts.nonEmpty && !buffer.contains((renamedState, nexts))){

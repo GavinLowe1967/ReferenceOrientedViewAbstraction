@@ -25,6 +25,9 @@ trait TransitionTemplateSet{
   // /** An iterator over the set. */
   // def iterator: Iterator[TransitionTemplate]
 
+  /** Does this contain temp? */
+  def contains(temp: TransitionTemplate): Boolean
+
   /** An iterator giving just extended transitions where the pre-state matches
     * servers. */
   def iterator(servers: ServerStates) : Iterator[TransitionTemplate] // =
@@ -42,6 +45,8 @@ class SimpleTransitionTemplateSet extends TransitionTemplateSet{
   def add(pre: Concretization, post: Concretization, 
       id: ProcessIdentity, e: EventInt, include: Boolean) =
     set.add((pre, post, id, e, include))
+
+  def contains(temp: TransitionTemplate) = set.contains(temp)
 
   /** An iterator over the set. */
   def iterator(servers: ServerStates): Iterator[TransitionTemplate] = 
@@ -117,6 +122,12 @@ class ServerBasedTransitionTemplateSet(initSize: Int = 16)
       }
       i += 1
     }
+  }
+
+  /** Does this contain temp? */
+  def contains(temp: TransitionTemplate): Boolean = {
+    val servers = temp._1.servers; val i = find(servers)
+    keys(i) != null && transitions(i).contains(temp)
   }
 
 

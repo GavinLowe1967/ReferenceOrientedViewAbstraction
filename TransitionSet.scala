@@ -21,6 +21,10 @@ trait TransitionSet{
   /** An iterator over the transitions. */
   def iterator(servers: ServerStates): Iterator[Transition]//  = 
      // iterator.filter{ case (pre,_,_) => pre.servers == servers }
+
+  def size: Long
+
+  def contains(trans: Transition): Boolean
 }
 
 
@@ -28,6 +32,7 @@ trait TransitionSet{
 
 /** A very simple (prototype) implementation of TransitionSet. */
 class SimpleTransitionSet extends TransitionSet{
+
   /** A HashSet containing the transitions. */
   private val set = new HashSet[Transition]()
 
@@ -41,6 +46,10 @@ class SimpleTransitionSet extends TransitionSet{
   /** An iterator over the transitions. */
   def iterator(servers: ServerStates): Iterator[Transition] = 
      set.iterator.filter{ case (pre,_,_) => pre.servers == servers }
+
+  def size = set.size
+
+  def contains(trans: Transition) = set.contains(trans)
 }
  
 
@@ -121,5 +130,12 @@ class ServerBasedTransitionSet(initSize: Int = 16) extends TransitionSet{
   override def iterator(servers: ServerStates) : Iterator[Transition] = {
     val i = find(servers); val set = transitions(i)
     if(set == null) Iterator.empty[Transition] else set.iterator
+  }
+
+  def size = theSize
+
+  def contains(trans: Transition) = {
+    val servers = trans._1.servers; val i = find(servers)
+    keys(i) != null && transitions(i).contains(trans)
   }
 }

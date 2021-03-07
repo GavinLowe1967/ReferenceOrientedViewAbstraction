@@ -41,19 +41,9 @@ class ServerStates(val servers: List[State]){
   /** Number of parameters of each type. */
   val numParams = serverIds.map(_.length)
 
-  /** Bitmap showing which identities are included in this. */
-  // val serverIdsBitMap = 
-  //   if(normalised)
-  //     Array.tabulate(numTypes)(t =>
-  //       Array.tabulate(State.rowSizes(t))(i => i < numParams(t)))
-  //   else null
-
-
-
   /** A template Remapper.RemappingMap */
   private val remappingMapTemplate = Array.tabulate(numTypes)(t => 
     Array.tabulate(typeSizes(t))(i => if(i < numParams(t)) i else -1))
-    // Array.tabulate(State.rowSizes(t))(i => if(i < numParams(t)) i else -1))
 
   /** A (fresh) RemappingMap, representing the identity on the parameters of 
     * this. */
@@ -66,10 +56,6 @@ class ServerStates(val servers: List[State]){
   }
 
   def nextArgMap = { assert(normalised); numParams.clone }
-
-  /** Identity mapping on identities held by servers, for each type. */
-  // val rhoS: ParamMap = 
-  //   Array.tabulate(numTypes){t => val ids = serverIds(t); ids.zip(ids) }
 
   override def toString = servers.mkString("[", " || ", "]")
 }
