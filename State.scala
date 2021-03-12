@@ -4,6 +4,8 @@ import ox.gavin.profiling.Profiler
 
 import scala.collection.mutable.ArrayBuffer
 
+class InsufficientIdentitiesException extends Exception
+
 /** States of processes. 
   * @param family the family of components that this belongs to, or -1 for a 
   * server.
@@ -44,17 +46,24 @@ class State(val family: Family, val cs: ControlState,
   @inline private def checkTypeSizes() = {
     val tm = typeMap
     for(i <- 0 until ids.length){
-      if(ids(i) < State.SplitFreshVal && ids(i) >= typeSizes(tm(i))) 
+      if(/*ids(i) < State.SplitFreshVal && */ ids(i) >= typeSizes(tm(i))) 
         synchronized{
           val t = tm(i)
           println("Not enough identities of type "+typeNames(t)+" in script ("+
                     typeSizes(t)+") to represent system view\n"+toString0)
-          sys.exit // IMPROVE
+          throw new InsufficientIdentitiesException // assert(false) // sys.exit // IMPROVE
         }
     }
   }
 
-  if(!isNew) checkTypeSizes()
+  /** Is this State representable using the values defined in the input
+    * script?  I.e. is every identity less than the size of the corresponding
+    * type? */
+  val representableInScript = 
+    isNew || (0 until ids.length).forall(i => ids(i) < typeSizes(typeMap(i)))
+
+// FIXME: include following
+  // if(!isNew) checkTypeSizes()
 
   // Equality test.
   // Equality is now reference equality, as we avoid creating duplicate states.
@@ -83,7 +92,7 @@ class State(val family: Family, val cs: ControlState,
   override def toString = {
     val paramsString = (0 until ids.length).map{ j =>
       val t = State.stateTypeMap(cs)(j); scriptNames(t)(ids(j)) }
-    s"$cs[$family]"+paramsString.mkString("(", ",", ")")
+    cs.toString+paramsString.mkString("(", ",", ")") // [$family]
   }
 
   /** Convert this to a String.  If this uses a parameter not in the script, it
@@ -251,7 +260,7 @@ object State{
 
   /** Minimum value that new identities are mapped to, when splitting
     * views in Remapper.remapSplitCanonical. */
-  val SplitFreshVal = 1 << 30
+  // val SplitFreshVal = 1 << 30
 
   /** Array storing information about types of parameters.
     * stateTypeMapArray(cs-minCS) stores information about the types of

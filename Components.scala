@@ -396,9 +396,9 @@ class Components(
     try{ transComponentStore(st) }
     catch {
       case e: NoSuchElementException =>
-        println("Impossible state "+st+" of type "+familyNames(st.family)+
-                  " encountered.\n"+
-                  "This probably means that the state spaces are not symmetric.")
+        println(s"Impossible state ${st.toString0} of type "+
+          familyNames(st.family)+" encountered.\n"+
+          "This probably means that the state spaces are not symmetric.")
         sys.exit
     }
 }

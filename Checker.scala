@@ -1,5 +1,6 @@
 package ViewAbstraction
 
+import ox.gavin.profiling.Profiler
 import ViewAbstraction.RemapperP.{Remapper,Unification}
 import ViewAbstraction.CombinerP.Combiner
 import scala.collection.mutable.{ArrayBuffer,HashSet}
@@ -61,7 +62,7 @@ class Checker(system: SystemP.System){
   /** Transition templates found on this ply.  Transition templates are
     * initially added to newTransitionTemplates, but transferred to
     * transitionsTemplates at the end of the ply. */
-  private var newTransitionTemplates: ArrayBuffer[TransitionTemplate] = null
+  private var newTransitionTemplates: HashSet[TransitionTemplate] = null
 
 
   var addTransitionCount = 0L
@@ -74,11 +75,14 @@ class Checker(system: SystemP.System){
   var addedViewCount = 0L
   var effectOnRepetition = 0
   var instantiateTransitionTemplateCount = 0L
+  // Counts on transition templates
+
 
   /** Store the ExtendedTransition pre -> post, and calculate its effect on
     * previously found views. */
   @inline private 
-  def addTransition(pre: Concretization, e: EventInt, post: Concretization) = {
+  def addTransition(pre: Concretization, e: EventInt, post: Concretization)
+  = {
     addTransitionCount += 1
     val newTrans = ((pre, e, post))
     if(!transitions.contains(newTrans)){
@@ -157,9 +161,23 @@ class Checker(system: SystemP.System){
       // Store transition template
       val newTransTemp = (pre, post, newPid, e, outsidePid != null)
       assert(!transitionTemplates.contains(newTransTemp)) // IMPROVE
-      newTransitionTemplates += (newTransTemp)
-        // transitionTemplates.add(pre, post, newPid, e, outsidePids.nonEmpty) NO
-        // Get extended transitions based on this
+      newTransitionTemplates.add(newTransTemp)
+      // Counting of different types of TransitionTemplates; IMPROVE
+      if(outsidePid != null){
+        // println("Sync: "+system.showEvent(e))
+        Profiler.count("TransitionTemplate sync")
+      }
+      else if(pre.components.exists(_.processIdentities.contains(newPid))){
+        // println("From component: "+system.showEvent(e))
+        Profiler.count("TransitionTemplate component")
+      }
+      else{
+        // println("From server: "+system.showEvent(e))
+        assert(pre.servers.servers.exists(_.processIdentities.contains(newPid)),
+          s"pre = $pre; newPid = $newPid")
+        Profiler.count("TransitionTemplate server")
+      }
+      // Get extended transitions based on this
       instantiateTransitionTemplate(pre, post, newPid, e, outsidePid != null)
     } // end of else
     false
@@ -205,21 +223,28 @@ class Checker(system: SystemP.System){
     pre: Concretization, post: Concretization, 
     newPid: ProcessIdentity, e: EventInt, include: Boolean, cv: ComponentView)
   = {
+    Profiler.count("instantiateTransitionTemplateBy")
     require(pre.servers == cv.servers)
+    if(false) println(s"instantiateTransitionTemplateBy($pre,\n"+
+        s"  ..., ${system.showEvent(e)}+, ..., $cv)")
     val extenders = 
-      system.consistentStates(newPid, pre, if(include) e else -1, cv)
+      system.consistentStates(pre, newPid, if(include) e else -1, cv)
     for((outsideSt, outsidePosts) <- extenders){
       assert(outsidePosts.nonEmpty)
+      Profiler.count("instantiateTT1")
       if(isExtendable(pre, outsideSt)){
+        Profiler.count("instantiateTT2")
         val extendedPre = pre.extend(outsideSt)
         extendedPre.setSecondaryView(cv) // for debugging purposes
-        for(postSt <- outsidePosts){
+        var op = outsidePosts
+        while(op.nonEmpty){
+          val postSt = op.head; op = op.tail
           val extendedPost = post.extend(postSt)
-          if(verbose)
-            println(s"Extended transition from template $extendedPre -"+
+          if(verbose && !transitions.contains((extendedPre, e, extendedPost)) && 
+            !newTransitions.contains((extendedPre, e, extendedPost)))
+            println(s"Extended transition from template $extendedPre\n   -"+
               system.showEvent(e)+s"-> $extendedPost")
-          assert(e != system.Error) // FIXME
-          // if(!newVersion) addViewFromConc(extendedPre, e, extendedPost) 
+          assert(e != system.Error) // FIXME 
           // Store this transition, and calculate effect on other views.
           addTransition(extendedPre, e, extendedPost)
         }
@@ -229,37 +254,37 @@ class Checker(system: SystemP.System){
     } // end of for((outsideSt, outsidePosts) <- ...)
   }
 
-  /** Is conc extendable by state st, given the current set of views?  For each
-    * component cpt of conc U st, is there a view in SysAbsViews with cpt as
+  /** Is pre extendable by state st, given the current set of views?  For each
+    * component cpt of pre U st, is there a view in SysAbsViews with cpt as
     * the principal component and agreeing on all common processes (up to
     * renaming).
     * 
-    * PRE: conc is compatible with SysAbsViews, and conc does not include
+    * PRE: pre is compatible with SysAbsViews, and pre does not include
     * st.identity.  This means it is enough to check the condition for cpt =
-    * st or a non-principal component of conc that references st. ??????
+    * st or a non-principal component of pre that references st. ??????
     */
   @inline protected 
-  def isExtendable(conc: Concretization, st: State): Boolean = {
-    require(sysAbsViews.contains(conc.toComponentView))
+  def isExtendable(pre: Concretization, st: State): Boolean = {
+    require(sysAbsViews.contains(pre.toComponentView))
     // Also every other state in conc is compatible FIXME CHECK ???
-    require(conc.components.forall(
+    require(pre.components.forall(
       _.componentProcessIdentity != st.componentProcessIdentity))
-    val servers = conc.servers; val components = conc.components
+    val servers = pre.servers; val components = pre.components
 
-    // Does SysAbsViews contain a view consistent with conc and with a
+    // Does SysAbsViews contain a view consistent with pre and with a
     // renaming of st as principal component?
     var found = compatibleWith(servers, components, st)
 
     if(found){
-      // If any component cpt of conc references st, then search for a
+      // If any component cpt of pre references st, then search for a
       // suitable view with a renaming of cpt and st. 
       val id = st.componentProcessIdentity
-      // Test whether any component of conc references st
+      // Test whether any component of pre references st
       var j = 0; val length = components.length
       while(j < length && found){
         if(components(j).processIdentities.contains(id)){
-          if(veryVerbose) println(s"isExtendable($conc) with reference to $st")
-          found = containsReferencingView(conc, st, j)
+          if(veryVerbose) println(s"isExtendable($pre) with reference to $st")
+          found = containsReferencingView(pre, st, j)
         }
         j += 1
       }
@@ -302,7 +327,7 @@ class Checker(system: SystemP.System){
     // principal component, and the same servers as conc.  
     var found = false; val iter = sysAbsViews.iterator(servers)
     while(iter.hasNext && !found){
-      // IMPROVE: use restricted iterator
+// IMPROVE: use restricted iterator
       val cv1 = iter.next 
       if(cv1.principal == st1){
         // Does a renaming of the other components of cv1 (consistent with
@@ -311,49 +336,46 @@ class Checker(system: SystemP.System){
           Combiner.areUnifiable(cv1.components, components, map1, 0, otherArgs)
       }
     } // end of while ... match
+    // Profiler.count("compatibleWith"+found)  
     found
   }
 
-  /** Does `sysAbsViews` contain a view with `conc.servers`,
-    * `conc.components(j)` as principal component, and including a renaming of
-    * `st`?  FIXME: should also include any other component of `conc`
-    * referenced by `conc.components(j)`.
+  /** Does `sysAbsViews` contain a view with `pre.servers`,
+    * `pre.components(j)` as principal component, and including a renaming of
+    * `st`?  FIXME: should also include any other component of `pre`
+    * referenced by `pre.components(j)`.
     * 
-    * Pre: `conc.components(j)` references `st`.
-    * Test case: conc.components = initNodeSt(T0,N0) || aNode(N0,N1), st =
+    * Pre: `pre.components(j)` references `st`.
+    * Test case: pre.components = initNodeSt(T0,N0) || aNode(N0,N1), st =
     * initNode(N1), would need a view aNode(N0,N1) || initNode(N1). */
   protected[Checker] 
-  def containsReferencingView(conc: Concretization, st: State, j : Int)
+  def containsReferencingView(pre: Concretization, st: State, j : Int)
       : Boolean = {
-    if(veryVerbose) println(s"containsReferencingView($conc, $st, $j)")
-    val servers = conc.servers; val pCpt = conc.components(j)
-    val (stF, stId) = st.componentProcessIdentity
+    if(veryVerbose) println(s"containsReferencingView($pre, $st, $j)")
+    val servers = pre.servers; val pCpt = pre.components(j)
+    assert(pCpt.processIdentities.contains(st.componentProcessIdentity))//precond
     // Rename pCpt to be principal component
     val map = servers.remappingMap; val nextArgs = servers.nextArgMap
     val pCptR = Remapper.remapState(map, nextArgs, pCpt)
-    // what st.id gets renamed to
-    val stIdR = map(stF)(stId)
-    // Following fails if pCpt does not reference st, i.e. precondition false.
-    assert({ val ix = pCpt.processIdentities.indexOf((stF,stId)); 
-      ix >= 0 && pCptR.ids(ix) == stIdR},
-      s"pCptR = $pCptR; st = $st")
+    // st.id gets renamed to stIdR
+    val (stF, stId) = st.componentProcessIdentity; val stIdR = map(stF)(stId)
+    // Check pCpt references st, i.e.  precondition.
+    assert(pCptR.processIdentities.contains((stF,stIdR)))
     val cs1 = st.cs    
-    // Find other components of conc that are referenced by pCpt
+    // Find other components of pre that are referenced by pCpt
     val pLen = pCpt.ids.length; val pRefs = new Array[State](pLen)
     val pIds = pCpt.processIdentities
-    for(i <- 0 until conc.components.length; if i != j){
-      val cpt = conc.components(i); var ix = 0
+    for(i <- 0 until pre.components.length; if i != j){
+      val cpt = pre.components(i); var ix = 0
       // Find index of cpt.componentProcessIdentity in pIds 
       while(ix < pLen && pIds(ix) != cpt.componentProcessIdentity) ix += 1
       assert(ix != 0)
       if(ix < pLen) pRefs(ix) = cpt
-      // val ix = pIds.indexOf(cpt.componentProcessIdentity)
-      // if(ix >= 0){ assert(ix != 0); pRefs(ix) = cpt } 
     }
 
     // Test whether sysAbsViews contains a view cv1 matching servers, with
     // cptR as the principal component, and containing a component with
-    // identity idR in control state cs1.  map (and map1) tries to map conc
+    // identity idR in control state cs1.  map (and map1) tries to map pre
     // onto cv1.  
     val iter = sysAbsViews.iterator(servers); var found = false
     while(iter.hasNext && !found){
@@ -369,19 +391,18 @@ class Checker(system: SystemP.System){
             // test if cpt1 is a renaming of st under an extension of map
             var map2 = Unification.unify(map, cpt1, st)
             if(map2 != null){
-              // Check that all components referenced by pCpt in conc are
+              // Check that all components referenced by pCpt in pre are
               // matched by a corresponding component in cv1.  map2 != null
               // if true for all components so far.
               var k = 1
               while(k < pRefs.length && map2 != null){
-                if(pRefs(k) != null){
+                if(pRefs(k) != null)
                   map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
-                }
                 k += 1
               } // end of inner while
               found = map2 != null
             } // end of if(map2 != null)
-            else if(veryVerbose) println(s"failed to unify $cpt1 and $st")
+            //else if(veryVerbose) println(s"failed to unify $cpt1 and $st")
           }
           j += 1
         }
@@ -499,6 +520,11 @@ class Checker(system: SystemP.System){
       val nv = Remapper.mkComponentView(post.servers, newPrinc, othersA)
       // View.checkDistinct(nv.components, View.showStates(others))
       newViewCount += 1
+      if(!nv.representableInScript){
+        println("Not enough identities in script to combine transition\n"+
+          s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+        sys.exit
+      }
       if(!sysAbsViews.contains(nv)){ // TODO: test if this helps
         nextNewViews += nv; addedViewCount += 1
         val extendedPre = new Concretization(pre.servers, 
@@ -539,10 +565,11 @@ class Checker(system: SystemP.System){
       println("\nSTEP "+ply) 
       println("#abstractions = "+printLong(sysAbsViews.size))
       println(s"#transitions = ${printLong(transitions.size)}")
+      println(s"#transition templates = ${printLong(transitionTemplates.size)}")
       println("#new active abstract views = "+printInt(newViews.size))
       nextNewViews = new HashSet[ComponentView]
       newTransitions = new HashSet[Transition]
-      newTransitionTemplates = new ArrayBuffer[TransitionTemplate]
+      newTransitionTemplates = new HashSet[TransitionTemplate]
       var i = 0
 
       // Process all views from newViews.
@@ -560,19 +587,30 @@ class Checker(system: SystemP.System){
       // Add views and transitions found on this ply into the main set.
       println(s"\nCopying: nextNewViews, ${nextNewViews.size}; "+
         s"newTransitions, ${newTransitions.size}; "+
-        s"newTransitionTemplates, ${newTransitionTemplates.length}")
+        s"newTransitionTemplates, ${newTransitionTemplates.size}")
       val newViewsAB = new ArrayBuffer[ComponentView]
       def addView(v: ComponentView): Boolean = 
-        if(sysAbsViews.add(v)){ newViewsAB += v; true } else false
+        if(sysAbsViews.add(v)){ 
+          if(false) println(v)
+          newViewsAB += v; true 
+        } 
+        else false
       for((pre,e,post) <- newTransitions){
-        transitions.add(pre, e, post)
+        assert(transitions.add(pre, e, post)) // IMPROVE: assert this worked
         val v = Remapper.remapComponentView(post.toComponentView)
         if(addView(v)) v.setCreationInfo(pre, e, post)
       }
+      if(false) // print newTransitions
+        println(
+          (for((pre,e,post) <- newTransitions.toArray)
+          yield s"$pre -${system.showEvent(e)}->\n  $post"
+          ).sorted.mkString("\n") )
       for((pre, post, id, e, inc) <- newTransitionTemplates)
         transitionTemplates.add(pre, post, id, e, inc)
       for(v <- nextNewViews) addView(v)
       ply += 1; newViews = newViewsAB.toArray; 
+      if(false) 
+        println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
       if(newViews.isEmpty) done.set(true)
     } // end of main loop
 

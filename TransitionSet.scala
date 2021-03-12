@@ -13,7 +13,7 @@ import TransitionSet.Transition
 /** A set recording the transitions seen so far. */
 trait TransitionSet{
   /** Add the transition pre -e-> post. */
-  def add(pre: Concretization, e: EventInt, post: Concretization): Unit
+  def add(pre: Concretization, e: EventInt, post: Concretization): Boolean
 
   // /** An iterator over the transitions. */
   // def iterator: Iterator[Transition]
@@ -96,13 +96,14 @@ class ServerBasedTransitionSet(initSize: Int = 16) extends TransitionSet{
   }
 
   /** Add the tuple (pre, post, id, e, include) to the set. */
-  def add(pre: Concretization, e: EventInt, post: Concretization): Unit = {
+  def add(pre: Concretization, e: EventInt, post: Concretization): Boolean = {
     val servers = pre.servers; val i = find(servers)
     if(keys(i) == null){
       if(count >= threshold){ resize(); return add(pre,e,post) }
       keys(i) = servers; transitions(i) = Set[Transition](); count += 1
     }
-    if(transitions(i).add((pre, e, post))) theSize += 1
+    if(transitions(i).add((pre, e, post))){ theSize += 1; true }
+    else false
   }
 
   /** Resize the hash table. */

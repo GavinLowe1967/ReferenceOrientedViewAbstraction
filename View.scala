@@ -57,9 +57,20 @@ class ComponentView(
 
   checkValid
 
+  /** Is this representable using the values defined in the script? */
+  def representableInScript = 
+    servers.representableInScript && principal.representableInScript &&
+      others.forall(_.representableInScript)
+
   override def toString = 
     s"$servers || $principal"+
     (if(others.nonEmpty) " || "+others.mkString("[", " || ", "]") else "")
+
+  def toString0 = 
+    s"${servers.toString0} || ${principal.toString0}"+
+    (if(others.nonEmpty) 
+      " || "+others.map(_.toString0).mkString("[", " || ", "]") 
+    else "")
 
   override def equals(that: Any) = that match{
     case cv: ComponentView => 

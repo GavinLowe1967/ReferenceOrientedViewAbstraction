@@ -31,7 +31,7 @@ include "definitions.csp"
 -- }
 
 -- Identities of nodes
-datatype NodeIDType = Null | N0 | N1 | N2 | N3 | N4 | N5 | N6 
+datatype NodeIDType = Null | N0 | N1 | N2 | N3 | N4
 NodeID =  diff(NodeIDType, {Null})               -- real nodes
 
 -- Data values

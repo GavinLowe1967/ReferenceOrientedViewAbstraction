@@ -5,7 +5,7 @@ import ViewAbstraction.RemapperP.Remapper
 import ViewAbstraction.CombinerP.Combiner
 import uk.ac.ox.cs.fdr.{Option => _, _}
 import scala.collection.JavaConverters._
-import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer}
+import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer,HashMap}
 import ox.gavin.profiling.Profiler
 
 /** An object that creates the System corresponding to the CSP file fname.
@@ -390,14 +390,6 @@ class System(fname: String, checkDeadlock: Boolean,
       }
     } // end of for
     
-    // Use serverTrans/transSync2
-
-
-    // These cases represent the assumptions that: at most two components are
-    // involved in any transition; and if a component is involved, it can be
-    // as a principal component.
-
-    // for((pre, e, post) <- result) println(s"$pre -${showEvent(e)}-> $post")
     result
   }
 
@@ -433,24 +425,33 @@ class System(fname: String, checkDeadlock: Boolean,
     ok
   }
 
+  // private val consistentStatesCache = 
+  //   new HashMap[(ProcessIdentity, Concretization, EventInt, ComponentView),
+  //     ArrayBuffer[(State, List[State])] ]()
+
+  // IMPROVE: store mapping from (pre, pid, st1) to the maps that map st1's
+  // identity to pid.  Avoid recalculating.
+
+
   /** Get all renamings of cv that: (1) include a component with identity pid;
-    * (2) agree with conc on the states of all common components; and (3) can
-    * perform e with conc.principal if e >= 0.
+    * (2) agree with pre on the states of all common components; and (3) can
+    * perform e with pre.principal if e >= 0.
     * @return the renaming of the component with identity pid, and all
     * post-states of that component optionally after oe.  */
-  def consistentStates(pid: ProcessIdentity, conc: Concretization, 
+  def consistentStates(pre: Concretization, pid: ProcessIdentity, 
     e: EventInt, cv: ComponentView)
       : ArrayBuffer[(State, List[State])] = {
     val buffer = new ArrayBuffer[(State, List[State])]()
-    val (f,id) = pid; val servers = conc.servers; require(cv.servers == servers)
-    val cpts = conc.components; val cpts1 = cv.components
+    val (f,id) = pid; val servers = pre.servers; require(cv.servers == servers)
+    val cpts = pre.components; val cpts1 = cv.components
     val serverRefs = id < servers.numParams(f) // do servers reference pid?
-    val (fp, idp) = cpts(0).componentProcessIdentity// id of principal of conc
-    // println(s"consistentStates(${State.showProcessId(pid)}, $conc, $cv)")
+    val (fp, idp) = cpts(0).componentProcessIdentity// id of principal of pre
+    //println(s"consistentStates(${State.showProcessId(pid)}, $pre, $cv)")
     // Find all components of cv that can be renamed to a state of pid
     // that can perform e.
-    for(i <- 0 until cpts1.length){
+    for(i <- 0 until cpts1.length){ 
       val st1 = cpts1(i)
+// Profiler.count(pre.toString+pid+st1)
       // Try to make st1 the component that gets renamed.  Need st1 of family
       // f, and its identity either equal to id, or neither of those
       // identities in the server identities (so the renaming doesn't change
@@ -459,23 +460,27 @@ class System(fname: String, checkDeadlock: Boolean,
         (st1.id == id || !serverRefs && st1.id >= servers.numParams(f))){
         // Calculate (in maps) all ways of remapping st1 (consistent with the
         // servers) so that: (1) its identity maps to id; (2) other parameters
-        // are injectively mapped either to a parameter in conc.components,
+        // are injectively mapped either to a parameter in pre.components,
         // but not the servers; or the next fresh parameter.
         val map0 = servers.remappingMap 
-        // Remapper.createMap(servers.rhoS)  // newRemappingMap
         val (otherArgs, nextArg) = Remapper.createMaps1(servers, cpts)
-        // println("nextArg = "+nextArg.mkString("; "))
         otherArgs(f) = otherArgs(f).filter(_ != id)
         nextArg(f) = nextArg(f) max (id+1)
-        // println(s"Remapping $st1")
         val maps = Combiner.remapToId(map0, otherArgs, nextArg, cpts1, i, id)
         for(map <- maps){
           val renamedState = Remapper.applyRemappingToState(map, st1)
-          // should have renamedState.ids in ran map.  IMPROVE
+          // Profiler.count(buffer.exists{case (rst,_) =>
+          //     rst == renamedState}.toString) // < 1%
+          if(!renamedState.representableInScript){
+            println("Not enough identities in script to make\n"+
+              s"$pre and\n$cv consistent.\n"+
+              s"Renaming of $st1 gives ${renamedState.toString0}")
+            sys.exit
+          }
+          // should have renamedState.ids in ran map.  IMPROVE: assertion only
           val ids1 = renamedState.ids; val typeMap = renamedState.typeMap
           var j = 0
           while(j < ids1.length){
-             // (0 until ids1.length).forall(j =>
             assert( ids1(j) < 0 || map(typeMap(j)).contains(ids1(j)) ,
               "\nmap = "+Remapper.show(map)+"undefined on = "+renamedState)
             j += 1
@@ -492,8 +497,10 @@ class System(fname: String, checkDeadlock: Boolean,
               // Check a corresponding renaming of the rest of cpts1 agrees
               // with cpts on common components.  Trivially true if singleton
               val otherArgs1 = Remapper.removeParamsOf(otherArgs, renamedState)
-              if(Combiner.areUnifiable(cpts1, cpts, map, i, otherArgs1))
+              if(Combiner.areUnifiable(cpts1, cpts, map, i, otherArgs1)){
+                if(false) println((renamedState, nexts.mkString("[",",","]")))
                 buffer += ((renamedState, nexts))
+              }
             } // end of if(nexts.nonEmpty && !buffer.contains(...))
           } // end of else (Renamed state consistent with cpts)
         } // end of for(map <- maps)
@@ -506,353 +513,3 @@ class System(fname: String, checkDeadlock: Boolean,
 
 
 }
-
-
-// =======================================================
-// =======================================================
-// dead code below here
-
-
-
-  /** Check that there are enough values of each type to capture all the
-    * Views in svs. */
-  // def checkTypeSizes(svs: Array[View]) = {
-  //   for(sv <- svs){
-  //     // sv.checkInvariant
-  //     val numParams = sv.numParams
-  //     for(i <- 0 until numTypes; if(numParams(i) > idSizes(i))){
-  //       println("Not enough identities of type "+typeNames(i)+" in script ("+
-  //                 idSizes(i)+") to represent system view\n"+sv.toString0)
-  //       sys.exit
-  //     }
-  //   }
-  // }
-
-  // /** Check that there are enough values of each type to capture sv. */
-  // def checkTypeSizes(sv: View) = {
-  //   // sv.checkInvariant
-  //   val numParams = sv.numParams
-  //   for(i <- 0 until numTypes; if(numParams(i) > idSizes(i))) synchronized{
-  //     println("Not enough identities of type "+typeNames(i)+" in script ("+
-  //               idSizes(i)+") to represent system view\n"+sv.toString0)
-  //     sys.exit
-  //   }
-  // }
-
-  /** Is the system view sv significant according to significancePaths? */
-  // private def significant(sv: View): Boolean = { ??? }
-  //   // Check sv is significant according to sp
-  //   def significant1(sp: SignificancePath): Boolean = {
-  //     // assert(sp.length >= 1)
-  //     val componentsA = sv.componentView
-  //     val components = componentsA.toList; Views.returnView(componentsA)
-  //     // Next family, and its indexing type.
-  //     var f = sp(0); val t = indexingTypes(f)
-  //     // Identities of family f to check present
-  //     var ids =  sv.serverIds(t)
-  //     // Have any identities been found to be missing, making sv not
-  //     // significant?
-  //     var missingId = false
-  //     // Those families for which identities were missing
-  //     var missingFamilies = List[Family]()
-  //     // Components that are "spare", in the sense that they have not
-  //     // been necessary to show the significance of sv.
-  //     var spare = components
-  //     var sp1 = sp // .tail // remainder of sp
-
-  //     // Check every identity in ids of family f = sp1.head is present
-  //     // in sv; and continue.
-  //     while(sp1.nonEmpty){
-  //       // Processes of current family
-  //       val fProcs = components.filter(_.family == f)
-  //       // Identities of family f in sv
-  //       val fIds = fProcs.map(_.ids.head)
-  //       // Check whether ids is a subset of fIds
-  //       if(!ids.forall(id => fIds.contains(id))){
-  //         missingId = true; missingFamilies ::= f
-  //       }
-  //       // Update spare: remove those of family f with identity in ids
-  //       spare = spare.filter(st => st.family != f || !ids.contains(st.ids.head))
-  //       sp1 = sp1.tail
-  //       if(sp1.nonEmpty){
-  //         // Next family and its indexing type
-  //         f = sp1.head; assert(f != -1); val t = indexingTypes(f)
-  //         // Identities of type t referenced by fProcs
-  //         ids = (for(st <- fProcs; i <- 0 until st.ids.length;
-  //                    if State.stateTypeMap(st.cs)(i) == t)
-  //                yield st.ids(i) ).distinct
-  //       }
-  //     }
-
-  //     if(missingId)
-  //       // Check whether this was not significant because views are not
-  //       // large enough.
-  //       checkLargeEnough(sv, sp, components, spare, missingFamilies)
-  //     !missingId
-  //   } // end of significant1
-
-  //   significancePaths.forall(significant1)
-  // }
-
-  /** Are concretizations large enough to capture components, with spare
-    * removed, plus each element of missingFamilies added?  If not,
-    * give an error and exit. */
-  // @inline private def checkLargeEnough(
-  //   sv: View, sp: SignificancePath, 
-  //   components: List[State], spare: List[State], missingFamilies: List[Family])
-  //   = { ??? }
-    // // shape of sv ...
-    // val thisShape = new Array[Int](numFamilies)
-    // for(st <- components) thisShape(st.family) += 1
-    // // ... less the spare states ...
-    // for(st <- spare) thisShape(st.family) -= 1
-    // for(f <- missingFamilies.distinct){
-    //   // ... plus each missing family
-    //   thisShape(f) += 1 // (*)
-    //   // test if it's included in a member of cShapes
-    //   if(!cShapes.exists(shape =>
-    //        (0 until numFamilies).forall(f1 => thisShape(f1) <= shape(f1)))){
-    //     println("Concretizations are not large enough to include the "+
-    //               "significant extension of ")
-    //     println(s"$sv,")
-    //     println("adding a state of family "+f+
-    //               ", corresponding to significance path "+sp)
-    //     sys.exit
-    //   }
-    //   thisShape(f) -= 1 // undo (*)
-    // }
-
-
-  /** Count of new concretizations found by post on this ply. */
-  //private val postCount = new java.util.concurrent.atomic.AtomicInteger
-
-  /** Sets of Views are passed around using the following type. */
-  // private type SVBuffer = ArrayBuffer[View]
-
-  /** New version of post, calculating the post image from sysViews.
-    * @param sysConcViews the set of system views seen so far.  
-    * @return (1) An array holding the new post-states; (2) the list of states
-    * from which error is possible; (3) the list of deadlocked states. */
-  // def post(sysViews: ArrayBuffer[View], sysConcViews: ViewSet)
-  //     : (SVBuffer, SVBuffer, SVBuffer) = {
-  //   val posts = new SVBuffer // the post-image
-  //   val postsSVS = // Views seen on this call to post, if memoryless
-  //     if(memoryless) new SeqViewSet else null   
-  //   val errors = new SVBuffer; val deadlocks = new SVBuffer
-  //   for(sv <- sysViews) 
-  //     post1(sv, sysConcViews, errors, deadlocks, posts, postsSVS)
-  //   (posts, errors, deadlocks)
-  // }
-
-  /** Calculate the post-image of sv, and add to posts; add error states and
-    * deadlock states to errors and deadlocks, respectively.
-    * @param sysConcViews the set of system views seen so far.
-    * @param posts SVBuffer holding the posts found on this ply.
-    * @param thisPly posts found on this ply: if memoryless, this is used to 
-    * remove repeats.  */
-  // @inline private def post1(
-  //   sv: View, sysConcViews: ViewSet, errors: SVBuffer,
-  //   deadlocks: SVBuffer, posts: SVBuffer, thisPly: ViewSet) = { ??? }
-    // assert((thisPly != null) == memoryless)
-    // var deadlock = true // Has no transition from this state been found?
-    // val sStates = sv.servers; val cptView: View = sv.componentView
-    // val l = cptView.length
-    // // Process identities for components
-    // val cptIds: Array[Parameter] = cptView.map(_.componentProcessIdentity)
-    // val serverTrans: servers.ServerTransitions = servers.transitions(sStates)
-    // val cptTrans: Array[components.ComponentTransitions] =
-    //   cptView.map(components.getTransComponent)
-
-    // // Record the transition from sv with event e to (ss,v).
-    // @inline def addTrans(e: EventInt, ss: List[State], v: View) = {
-    //   // assert(v.length == l, Views.show(v)+" "+l)
-    //   deadlock = false
-    //   val sv1 = View.mkView(ss, v) // don't recycle v here
-    //   // if(verbose) println(sv+" -"+showEvent(e)+"->\n  "+sv1)
-    //   if(e == Error) synchronized{ errors += sv }
-    //     // The order below ensures that we add to thisPly only if sv1 is a new
-    //     // View
-    //   if(sysConcViews.add(sv1)){
-    //     if(!memoryless || thisPly.add(sv1)){ 
-    //       if(debuggable) sv1.setPred(sv, e)
-    //       posts += sv1  // IMPROVE: seems unnecessary if memoryless
-    //     }
-    //     else{
-    //       // If we get here, sv1 has been double-counted within the tally of
-    //       // Views in sysConcViews.  IMPROVE
-    //       // assert(memoryless)
-    //       sysConcViews.addCount(-1)
-    //       View.returnView(sv1)
-    //     }
-    //   }
-    //   else View.returnView(sv1)
-    // }
-
-    // // Case 1: events of only the servers
-    // val sEventsSolo = serverTrans.eventsSolo
-    // val sNextsSolo = serverTrans.nextsSolo
-    // var i = 0; var e = sEventsSolo(0) // inv: e = sEventsSolo(i)
-    // while(e < Sentinel){
-    //   val sss = sNextsSolo(i); var j = 0
-    //   while(j < sss.length){ addTrans(e, sss(j), cptView); j += 1 }
-    //   // don't recycle cptView!
-    //   i += 1; e = sEventsSolo(i)
-    // }
-
-    // // Case 2: Synchronization between servers and one component
-    // val sTransSync = serverTrans.transSync
-    // for(j <- 0 until l){
-    //   // Transitions of jth component, with process identity (f,id)
-    //   val (f,id) = cptIds(j)
-    //   val sTrans0 = sTransSync(f)(id) // corresponding server transitions
-    //   if(sTrans0 != null){
-    //     val (sEs, sNexts) = sTrans0 // transitions of servers
-    //     // transitions of cpts
-    //     val cTrans1: components.ComponentTransitions = cptTrans(j)
-    //     val cEs = cTrans1.eventsServer; val cNexts = cTrans1.nextsServer
-    //     var serverIndex = 0; var cptIndex = 0 // indexes for servers, cpt
-    //     var sE = sEs(0); var cE = cEs(0) // next events of servers, cpt
-    //     // inv: sE = sEs(serverIndex); cE = cEs(cptIndex)
-    //     while(sE < Sentinel && cE < Sentinel){
-    //       while(sE < cE){ serverIndex += 1; sE = sEs(serverIndex) }
-    //       if(sE < Sentinel){
-    //         while(cE < sE){ cptIndex += 1; cE = cEs(cptIndex) }
-    //         if(sE == cE){ // can synchronise
-    //           val sNexts0 = sNexts(serverIndex) // next states of servers
-    //           for(cNext <- cNexts(cptIndex)){
-    //             val newView = Views.insert(cptView, j, cNext)
-    //             for(sNext <- sNexts0) addTrans(sE, sNext, newView)
-    //             Views.returnView(newView) // recycle
-    //           }
-    //           serverIndex += 1; sE = sEs(serverIndex)
-    //           cptIndex += 1; cE = cEs(cptIndex)
-    //         }
-    //       }
-    //     } // end of while (sE < Sentinel && cE < Sentinel)
-    //   }
-    // }
-
-    // // Case 3: Single component (not the server)
-    // for(j <- 0 until l){
-    //   // Transitions of jth component
-    //   val trans1: components.ComponentTransitions = cptTrans(j)
-    //   val es = trans1.eventsSolo; val nexts = trans1.nextsSolo
-    //   var i = 0; var e = es(0) // inv: e = es(i)
-    //   while(e < Sentinel){
-    //     for(st1 <- nexts(i)){
-    //       val newView = Views.insert(cptView, j, st1)
-    //       addTrans(e, sStates, newView)
-    //       Views.returnView(newView) // recycle
-    //     }
-    //     i += 1; e = es(i)
-    //   }
-    // }
-
-    // // Case 4: Two components, but not the server
-    // for(j1 <- 0 until l-1){
-    //   // Transitions of j1th component with process identity (f1,id1)
-    //   val (f1,id1) = cptIds(j1)
-    //   val syncTrans1 = cptTrans(j1).transComponent
-    //   for(j2 <- j1+1 until l){
-    //     val (f2,id2) = cptIds(j2)
-    //     val cptTrans1 = syncTrans1(f2)(id2) // tran's of (f1,id1) with (f2,id2)
-    //     if(cptTrans1 != null){
-    //       // tran's of (f2,id2) with (f1,id1)
-    //       val cptTrans2 = cptTrans(j2).transComponent(f1)(id1)
-    //       if(cptTrans2 != null){ // possibility of synchronisation
-    //         val (es1,nexts1) = cptTrans1; val (es2,nexts2) = cptTrans2
-    //         var index1 = 0; var e1 = es1(0); var index2 = 0; var e2 = es2(0)
-    //         // Inv: e1 = es1(index1) && e2 = es2(index2)
-    //         while(e1 < Sentinel && e2 < Sentinel){
-    //           while(e1 < e2){ index1 += 1; e1 = es1(index1) }
-    //           if(e1 < Sentinel){
-    //             while(e2 < e1){ index2 += 1; e2 = es2(index2) }
-    //             if(e1 == e2){ // can synchronise
-    //               val theNexts1 = nexts1(index1)
-    //               val theNexts2 = nexts2(index2)
-    //               val newViews =
-    //                 Views.insert2States(cptView, j1, theNexts1, j2, theNexts2)
-    //               for(newView <- newViews){
-    //                 addTrans(e1, sStates, newView)
-    //                 Views.returnView(newView) // recycle
-    //               }
-    //               index1 += 1; e1 = es1(index1); index2 += 1; e2 = es2(index2)
-    //             }
-    //           }
-    //         } // end of while(e1 < Sentinel && e2 < Sentinel)
-    //       }
-    //     }
-    //   } // end of inner for
-    // } // end of outer for; end of Case 4
-
-    // // Case 5: Two components and the server
-    // // Improve: avoid this if there are no three-way syncs
-    // for(j1 <- 0 until l-1){
-    //   // Three-way transitions of j1th component with process identity (f1,id1)
-    //   val (f1,id1) = cptIds(j1)
-    //   val syncTrans1 = cptTrans(j1).transServerComponent
-    //   for(j2 <- j1+1 until l){
-    //     val (f2,id2) = cptIds(j2)
-    //     val cptTrans1 = syncTrans1(f2)(id2) // tran's of (f1,id1) with (f2,id2)
-    //     if(cptTrans1 != null){
-    //       // tran's of (f2,id2) with (f1,id1)
-    //       val cptTrans2 = cptTrans(j2).transServerComponent(f1)(id1)
-    //       if(cptTrans2 != null){
-    //         val syncServerTrans = serverTrans.transSync2((f1,id1), (f2,id2))
-    //         if(syncServerTrans != null){ // possibility of synchronisation
-    //           val (esc1,nextsc1) = cptTrans1; val (esc2,nextsc2) = cptTrans2
-    //           val (esS, nextsS) = syncServerTrans
-    //           var index1 = 0; var e1 = esc1(0)
-    //           var index2 = 0; var e2 = esc2(0)
-    //           var indexS = 0; var eS = esS(0)
-    //           // Inv: e1 = esc1(index1) && e2 = esc2(index2) &&
-    //           // eS = esS(indexS)
-    //           while(e1 < Sentinel && e2 < Sentinel && eS < Sentinel){
-    //             while(e1 < (e2 max eS)){ index1 += 1; e1 = esc1(index1) }
-    //             if(e1 < Sentinel){
-    //               while(e2 < e1){ index2 += 1; e2 = esc2(index2) }
-    //               if(e2 < Sentinel){
-    //                 while(eS < e2){ indexS += 1; eS = esS(indexS) }
-    //                 // eS >= e2 >= e1
-    //                 if(e1 == eS){ // can synchronise
-    //                   assert(e1 == e2)
-    //                   // println("Three-way synchronisation on "+showEvent(e1))
-    //                   val theNexts1 = nextsc1(index1)
-    //                   val theNexts2 = nextsc2(index2)
-    //                   val theNextsS = nextsS(indexS)
-    //                   val newViews = Views.insert2States(
-    //                     cptView, j1, theNexts1, j2, theNexts2)
-    //                   for(newView <- newViews){
-    //                     for(newSStates <- theNextsS){
-    //                       addTrans(e1, newSStates, newView)
-    //                       // println(sv+" -"+showEvent(e1)+"->\n  [ "+
-    //                       //           showView(newSStates)+"] || ["+
-    //                       //           showView(newView)+" ]")
-    //                     }
-    //                     Views.returnView(newView) // recycle
-    //                   }
-    //                   index1 += 1; e1 = esc1(index1)
-    //                   index2 += 1; e2 = esc2(index2)
-    //                   indexS += 1; eS = esS(indexS)
-    //                 } // end of if(...) can synchronise
-    //               }
-    //             }
-    //           } // end of outer while
-    //         } // end of if(serverTrans != null)
-    //       }
-    //     }
-    //   } // end of inner for
-    // } // end of Case 5
-
-    // if(checkDeadlock && deadlock){
-    //   if(significant(sv)){
-    //     println("Deadlock in "+sv); synchronized{ deadlocks += sv }
-    //   }
-    //   // else println("Insignificant deadlock in "+sv)
-    // }
-
-    // Views.returnView(cptView)
- 
-
-
-

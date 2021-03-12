@@ -30,8 +30,9 @@ trait TransitionTemplateSet{
 
   /** An iterator giving just extended transitions where the pre-state matches
     * servers. */
-  def iterator(servers: ServerStates) : Iterator[TransitionTemplate] // =
-    // iterator.filter{ case (pre,_,_,_,_) => pre.servers == servers }
+  def iterator(servers: ServerStates) : Iterator[TransitionTemplate]
+
+  def size: Long 
 }
 
 // ==================================================================
@@ -51,6 +52,8 @@ class SimpleTransitionTemplateSet extends TransitionTemplateSet{
   /** An iterator over the set. */
   def iterator(servers: ServerStates): Iterator[TransitionTemplate] = 
     set.iterator.filter{ case (pre,_,_,_,_) => pre.servers == servers }
+
+  def size = set.size
 }
 
 // =====================================================================
@@ -67,7 +70,7 @@ class ServerBasedTransitionTemplateSet(initSize: Int = 16)
   /** The number of distinct ServerStates. */
   private var count = 0
 
-  /** The number of ComponentViews. */
+  /** The number of TransitionTemplates. */
   private var theSize = 0L
 
   /** The number of slots in the hash table. */
@@ -137,4 +140,6 @@ class ServerBasedTransitionTemplateSet(initSize: Int = 16)
     val i = find(servers); val set = transitions(i)
     if(set == null) Iterator.empty[TransitionTemplate] else set.iterator
   }
+
+  def size = theSize
 }

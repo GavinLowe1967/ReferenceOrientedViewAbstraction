@@ -30,11 +30,11 @@ include "definitions.csp"
 
 -------- Basic types
 -- the type of nodes
-datatype NodeIDType = Null | N0 | N1 | N2 | N3 | N4 | N5 | N6 
+datatype NodeIDType = Null | N0 | N1 | N2 | N3 | N4
 NodeID = diff(NodeIDType, {Null})               -- real nodes
 datatype Data = A | B | C                       -- the type of data
 -- threads, including the constructor
-datatype ThreadIDType = Constr | T0 | T1 | T2 
+datatype ThreadIDType = Constr | T0 | T1 
 ThreadID = diff(ThreadIDType, {Constr})         -- real threads
 
 -------------------- Component processes

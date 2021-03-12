@@ -33,10 +33,10 @@ include "definitions.csp"
 -------- Basic types
 -- the type of nodes; the former is for use with FDR; the latter with the
 -- view abstraction program.
-datatype NodeIDType =  Null | N0 | N1 | N2 | N3 | N4 | N5 | N6 
+datatype NodeIDType =  Null | N0 | N1 | N2 | N3 -- | N4 -- | N5 -- | N6 
 NodeID =  diff(NodeIDType, {Null})             -- real nodes
 datatype Data = A | B | C                      -- the type of data
-datatype ThreadID = T0 | T1 | T2               -- the type of thread IDs
+datatype ThreadID = T0 | T1 --| T2               -- the type of thread IDs
 
 ------------------------ Nodes ----------------------
 
@@ -175,10 +175,10 @@ assert STOP [T= System \ diff(Events, {error})
 
 assert System :[deadlock free]
 
-assert System :[has trace [T]]: < 
-  lock.T0, getTop.T0.Null, initNode.T0.N0.A.Null, 
-  setTop.T0.N0.PushOp.A, unlock.T0,
-  lock.T1, getTop.T1.N0, getNext.T1.N0.Null, unlock.T1 
->
+-- assert System :[has trace [T]]: < 
+--   lock.T0, getTop.T0.Null, initNode.T0.N0.A.Null, 
+--   setTop.T0.N0.PushOp.A, unlock.T0,
+--   lock.T1, getTop.T1.N0, getNext.T1.N0.Null, unlock.T1 
+-- >
 
 assert STOP [T= STOP :[symmetry reduce]: 

@@ -21,7 +21,7 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
   /** The index in tries to use for control state cs. */
   @inline private def indexForCS(cs: ControlState) = cs-minCS
 
-  private val SplitFreshVal = State.SplitFreshVal
+  // private val SplitFreshVal = State.SplitFreshVal
 
   /* Each element of tries might be a StateTrie, corresponding to a
    * state with no parameters.  Otherwise, it is a tree of Tries, with
@@ -127,12 +127,12 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
 
   /** offSets(cs-minCS)(index) holds, for control state cs, for each index, the
     * size of the supertype - SplitFreshVal. */
-  private val freshOffsets = 
-    Array.tabulate(numCS){ cs =>
-      val types = State.stateTypeMap(cs+minCS)
-      if(types != null) types.map(superTypeSizes(_)-SplitFreshVal)
-      else null 
-    }
+  // private val freshOffsets = 
+  //   Array.tabulate(numCS){ cs =>
+  //     val types = State.stateTypeMap(cs+minCS)
+  //     if(types != null) types.map(superTypeSizes(_)-SplitFreshVal)
+  //     else null 
+  //   }
 
   /** Get the state corresponding to cs and ids, and its index; if none is
     * stored, set it to addState if non-null, or create a new state. */
@@ -144,7 +144,7 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
     // offset into tries for normal values
     val theOffsets = offSets(csIndex)
     // offset into tries for fresh parameters
-    val theFreshOffsets = freshOffsets(csIndex)
+    // val theFreshOffsets = freshOffsets(csIndex)
     // sizes of ranges for parameters
     val theSizes = sizeFor0(csIndex)
 
@@ -154,8 +154,9 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
       val id = ids(index)
       // Second term below is the number of distinguished values of
       // the type of this identity, so gives an offset in each trie
-      if(id < SplitFreshVal) id + theOffsets(index)
-      else id+theFreshOffsets(index)
+      // assert(id < SplitFreshVal); 
+      id + theOffsets(index)
+      // else{ assert(false); id+theFreshOffsets(index) }
     }
 
     // Index into a trie corresponding to the parameters at positions idsIndex

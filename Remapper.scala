@@ -29,7 +29,8 @@ object Remapper{
 
   /** Template from which to create RemappingMap. */
   private val remappingMapTemplate =
-    Array.tabulate(numTypes)(t => Array.fill(typeSizes(t))(-1))
+// FIXME: temporary 2*
+    Array.tabulate(numTypes)(t => Array.fill(2*typeSizes(t))(-1))
 
   /** Produce a (deep) clone of map. */
   @inline def cloneMap(map: RemappingMap): RemappingMap = {

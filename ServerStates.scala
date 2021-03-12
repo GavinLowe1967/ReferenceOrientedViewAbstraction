@@ -57,7 +57,13 @@ class ServerStates(val servers: List[State]){
 
   def nextArgMap = { assert(normalised); numParams.clone }
 
+  /** Is this representable using the values defined in the script? */
+  val representableInScript = servers.forall(_.representableInScript)
+
   override def toString = servers.mkString("[", " || ", "]")
+
+  /** Convert to string, safe version. */
+  def toString0 = servers.map(_.toString0).mkString("[", " || ", "]")
 }
 
 // =======================================================
