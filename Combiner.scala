@@ -8,6 +8,49 @@ import scala.collection.mutable.ArrayBuffer
 object Combiner{
   import Remapper.{show,extendMap}
 
+  /** All ways of remapping st, consistent with map0, otherArgs and nextArg.
+    * Each parameter (f,id) not in the domain of map0 can be mapped to an
+    * element of otherArgs(f), or a fresh value given by nextArg(f).  map0 is
+    * treated immutably, but cloned.  otherArgs and nextArg are treated
+    * mutably, but all updates are backtracked. */
+  private[CombinerP] def remapState(
+    map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap, st: State)
+      : ArrayBuffer[RemappingMap] = {
+    require(Remapper.isInjective(map0), show(map0))
+    // Elements of otherArgs should not appear in the range of the
+    // corresponding part of map.
+    for(f <- 0 until numTypes)
+      require(otherArgs(f).forall(id => !map0(f).contains(id)))
+    val ids = st.ids; val typeMap = st.typeMap
+    val result = ArrayBuffer[RemappingMap]()
+
+    /* Extend map to remap st.ids[j..).  Add each resulting map to result.  */
+    def rec(map: RemappingMap, j: Int): Unit = {
+      if(j == ids.length) result += map // base case
+      else{
+        val f = typeMap(j); val id = ids(j) // remap (f,id)
+        if(isDistinguished(id) || map(f)(id) >= 0)
+          rec(map, j+1) // just move on; value of (f,id) fixed.
+        else{
+          // Case 1: map id to an element id1 of otherArgs(f)
+          val newIds = otherArgs(f)
+          for(id1 <- newIds){
+            otherArgs(f) = newIds.filter(_ != id1) // temporary update (*)
+            rec(extendMap(map, f, id, id1), j+1) // extend map and continue
+          }
+          otherArgs(f) = newIds                    // undo (*)
+
+          // Case 2: map id to nextArg(f)
+          val id1 = nextArg(f); nextArg(f) += 1   // temporary update (+)
+          rec(extendMap(map, f, id, id1), j+1) // extend map and continue
+          nextArg(f) -= 1                         // undo (+)
+        }
+      }
+    }
+
+    rec(map0, 0); result
+  }
+
   /** All ways of remapping certain states of states, consistent with map0,
     * otherArgs and nextArg.  If selector = Left(i) then just the non-identity
     * parameters of states(i) are renamed.  If selector = Right(i) then every
@@ -77,16 +120,16 @@ object Combiner{
     * Pre: extending map0 with so cpts(i).id -> id gives an injective map, and 
     * id is not in otherArgs(f).  Also otherArgs(f) is disjoint from ran(f). */
   def remapToId(map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap,
-    cpts: Array[State], i: Int, id: Identity)
+    /*cpts: Array[State], i: Int,*/ st: State, id: Identity)
       : ArrayBuffer[RemappingMap] = {
     assert(Remapper.isInjective(map0), show(map0))
     // Map identity of cpts(i) to id
-    val st = cpts(i); val f = st.family; val id0 = st.ids(0)
+    /* val st = cpts(i); */ val f = st.family; val id0 = st.ids(0)
     // Check id not already in ran map0(f) other than at id0
     assert(map0(f).indices.forall(j => j == id0 || map0(f)(j) != id))
-    assert(map0(f)(id0) < 0 || map0(f)(id0) == id,
-      s"cpts = "+cpts.mkString("[",";","]")+s"; f = $f; id0 = $id0 -> "+
-        map0(f)(id0)+s"; id = $id")
+    assert(map0(f)(id0) < 0 || map0(f)(id0) == id, st)
+      // s"cpts = "+cpts.mkString("[",";","]")+s"; f = $f; id0 = $id0 -> "+
+      //   map0(f)(id0)+s"; id = $id")
     assert(!otherArgs(f).contains(id))
     for(f <- 0 until numTypes)
       require(otherArgs(f).forall(id1 => !map0(f).contains(id1)))
@@ -95,7 +138,8 @@ object Combiner{
     //   (id0,id))
     map0(f)(id0) = id
     // Now remap the remaining components.
-    remapSelectedStates(map0, otherArgs, nextArg, cpts, Left(i))
+    remapState(map0, otherArgs, nextArg, st)
+    // remapSelectedStates(map0, otherArgs, nextArg, cpts, Left(i))
   }
 
 

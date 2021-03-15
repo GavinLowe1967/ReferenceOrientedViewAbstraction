@@ -462,11 +462,12 @@ class System(fname: String, checkDeadlock: Boolean,
         // servers) so that: (1) its identity maps to id; (2) other parameters
         // are injectively mapped either to a parameter in pre.components,
         // but not the servers; or the next fresh parameter.
-        val map0 = servers.remappingMap 
-        val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
-        otherArgs(f) = otherArgs(f).filter(_ != id)
-        nextArg(f) = nextArg(f) max (id+1)
-        val maps = Combiner.remapToId(map0, otherArgs, nextArg, cpts, i, id)
+        val (maps, otherArgs) = getMaps(st1, pid, servers, preCpts)
+        // val map0 = servers.remappingMap 
+        // val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
+        // otherArgs(f) = otherArgs(f).filter(_ != id)
+        // nextArg(f) = nextArg(f) max (id+1)
+        // val maps = Combiner.remapToId(map0, otherArgs, nextArg, cpts, i, id)
         for(map <- maps){
           val renamedState = Remapper.applyRemappingToState(map, st1)
           if(!renamedState.representableInScript){
@@ -489,28 +490,9 @@ class System(fname: String, checkDeadlock: Boolean,
             else List(renamedState)
           )
           if(nexts.nonEmpty && !buffer.contains((renamedState, nexts))){
-            if(checkCompatible(
-              map, renamedState, cpts, i, preCpts, otherArgs))
+            if(checkCompatible(map, renamedState, cpts, i, preCpts, otherArgs))
               buffer += ((renamedState, nexts))
           }
-          // if(View.agreesWithCommonComponent(renamedState, preCpts)){
-          //   // Renamed state consistent with preCpts
-          //   // Test whether e is possible, and get next states
-          //   val nexts = (
-          //     if(e >= 0) 
-          //       components.getTransComponent(renamedState).nexts(e, fp, idp)
-          //     else List(renamedState)
-          //   )
-          //   if(nexts.nonEmpty && !buffer.contains((renamedState, nexts))){
-          //     // Check a corresponding renaming of the rest of cpts agrees
-          //     // with cpts on common components.  Trivially true if singleton
-          //     val otherArgs1 = Remapper.removeParamsOf(otherArgs, renamedState)
-          //     if(Combiner.areUnifiable(cpts, preCpts, map, i, otherArgs1)){
-          //       if(false) println((renamedState, nexts.mkString("[",",","]")))
-          //       buffer += ((renamedState, nexts))
-          //     }
-          //   } // end of if(nexts.nonEmpty && !buffer.contains(...))
-          // } // end of else (Renamed state consistent with preCpts)
         } // end of for(map <- maps)
       }
     } // end of for(i <- ...)
@@ -518,29 +500,36 @@ class System(fname: String, checkDeadlock: Boolean,
   } // end of consistentStates
 
 
+  /** Calculate all ways of remapping st (consistent with the servers) so
+    * that: (1) its identity maps to pid; (2) other parameters are injectively
+    * mapped either to a parameter in preCpts, but not the servers; or the
+    * next fresh parameter.  Also return an OtherArgMap corresponding to
+    * servers with pid removed.  IMPROVE: do we need this? */
+  private def getMaps(st: State, pid: ProcessIdentity,
+    servers: ServerStates, preCpts: Array[State])
+      : (Array[RemappingMap], OtherArgMap) = {
+    val (f,id) = pid; val map0 = servers.remappingMap
+    val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
+    otherArgs(f) = otherArgs(f).filter(_ != id)
+    nextArg(f) = nextArg(f) max (id+1)
+    val maps = Combiner.remapToId(map0, otherArgs, nextArg, st, id)
+    (maps.toArray, otherArgs)
+  }
+
+  /** Check that renamedState agrees with preCpts on common components, and test
+    * whether the remainder of cpts (excluding component i) can be unified
+    * with preCpts (based on map and otherArgs1). */
   private def checkCompatible(
     map: RemappingMap, renamedState: State, cpts: Array[State], i: Int,
-    preCpts: Array[State], otherArgs: OtherArgMap): Boolean
-  = {
-    // val (fp, idp) = preCpts(0).componentProcessIdentity
+    preCpts: Array[State], otherArgs: OtherArgMap)
+      : Boolean = {
     if(View.agreesWithCommonComponent(renamedState, preCpts)){
-      // Renamed state consistent with preCpts
-      // Test whether e is possible, and get next states
-      // val nexts = (
-      //   if(e >= 0) components.getTransComponent(renamedState).nexts(e, fp, idp)
-      //   else List(renamedState)
-      // )
-      // if(nexts.nonEmpty && !buffer.contains((renamedState, nexts))){
-        // Check a corresponding renaming of the rest of cpts agrees
-        // with cpts on common components.  Trivially true if singleton
-        val otherArgs1 = Remapper.removeParamsOf(otherArgs, renamedState)
-        if(Combiner.areUnifiable(cpts, preCpts, map, i, otherArgs1)){
-          // if(false) println((renamedState, nexts.mkString("[",",","]")))
-          true // buffer += ((renamedState, nexts))
-        }
-        else false
-      //} // end of if(nexts.nonEmpty && !buffer.contains(...))
-    } // end of else (Renamed state consistent with preCpts)
+      // Renamed state consistent with preCpts. Check a corresponding renaming
+      // of the rest of cpts agrees with cpts on common components.  IMPROVE:
+      // Trivially true if singleton.
+      val otherArgs1 = Remapper.removeParamsOf(otherArgs, renamedState)
+      Combiner.areUnifiable(cpts, preCpts, map, i, otherArgs1)
+    }
     else false
   }
 

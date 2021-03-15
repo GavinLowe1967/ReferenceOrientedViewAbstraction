@@ -76,12 +76,12 @@ object CombinerTest{
     test1; test2; test3; test11; test12; test13
   }
 
-  /** Test of remapToId. */
+  // /** Test of remapToId. */
   private def remapToIdTest = {
     println("== remapToIdTest ==")
     def test1 = {
       val buff = remapToId(newRemappingMap, Array(List(N2), List(T0)), Array(N3,T1),
-        Array(aNode(N0,N1)), 0, N1)
+        aNode(N0,N1), N1)
       // Maps N0 -> N1 and N1 -> N2 or N3
       assert(buff.length == 2)
       assert(buff.forall(map =>
@@ -92,7 +92,7 @@ object CombinerTest{
     def test2 = {
       val map = newRemappingMap; map(0)(N1) = N2
       val buff = remapToId(map, Array(List(N0,N3), List(T0)), Array(N4,T1),
-        Array(pushSt(T0,N0), aNode(N0,N1)), 1, N1)
+        aNode(N0,N1), N1)
       // N0 -> N1 and N1 -> N2, as in map
       assert(buff.length == 1 && checkMap(buff.head(0), List((N0,N1), (N1,N2))) &&
         emptyMap(buff.head(1)))
@@ -100,7 +100,7 @@ object CombinerTest{
     def test3 = { 
       val map = newRemappingMap; map(1)(T0) = T1
       val buff = remapToId(map, Array(List(N0,N3), List(T0)), Array(N4,T2),
-        Array(pushSt(T0,N0), aNode(N0,N1)), 0, T1)
+        pushSt(T0,N0), T1)
       // println(buff.map(showRemappingMap).mkString("\n"))
       // T0 -> T1 and N0 -> N0, N3 or N4
       assert(buff.length == 3)
