@@ -106,7 +106,7 @@ object Combiner{
     * Pre: cpts.length > 1. */
   protected[CombinerP] def remapRest(
     map0: RemappingMap, otherArgs: OtherArgMap, cpts: Array[State], i: Int)
-      : ArrayBuffer[Array[State]] = {
+      : Array[Array[State]] = {
     assert(cpts.length > 1)
     // The following tests fail.
     // If coming via Checker.compatibleWith, parameters of cpts(i) are in the
@@ -118,19 +118,31 @@ object Combiner{
     //   "\nmap = "+show(map0)+"undefined on cpts(i) = "+cpts(i) )
     // If coming via System.consistentStates, cpts(i) are in the domain of map0;
     // but not if coming via Checker.compatibleWith.
-    assert({ val ids1 = cpts(i).ids; val typeMap = cpts(i).typeMap
+    if(false) assert({ val ids1 = cpts(i).ids; val typeMap = cpts(i).typeMap
       (0 until ids1.length).forall(j => 
         ids1(j) < 0 || map0(typeMap(j))(ids1(j)) >= 0
       )}, 
       "\nmap = "+show(map0)+"undefined on cpts(i) = "+cpts(i) )
     // But we potentialy need this property within applyRenaming, below.
     val nextArg = new Array[Int](numTypes)
-    for(f <- 0 until numFamilies){
-      for(id <- map0(f)) nextArg(f) = nextArg(f) max (id+1)
-      if(otherArgs(f).nonEmpty) nextArg(f) = nextArg(f) max (otherArgs(f).max+1)
+    var f = 0
+    while(f < numFamilies){
+      // Set nextArg(f) > ran map0(f), otherArgs(f)
+      var i = 0; var maxId = nextArg(f)
+      while(i < map0(f).length){ maxId = maxId max (map0(f)(i)+1); i += 1 }
+      // for(id <- map0(f)) nextArg(f) = nextArg(f) max (id+1)
+      // if(otherArgs(f).nonEmpty) nextArg(f) = nextArg(f) max (otherArgs(f).max+1)
+      var oa = otherArgs(f)
+      while(oa.nonEmpty){ maxId = maxId max (oa.head+1); oa = oa.tail }
+      nextArg(f) = maxId; f += 1
     }
     val maps = remapSelectedStates(map0, otherArgs, nextArg, cpts, Right(i))
-    for(map <- maps) yield Remapper.applyRemapping(map, cpts)
+    var result = new Array[Array[State]](maps.length); var j = 0
+    while(j < maps.length){
+      result(j) = Remapper.applyRemapping(maps(j), cpts); j += 1
+    }
+    result
+    // for(map <- maps) yield Remapper.applyRemapping(map, cpts)
   }
 
   /** Is there some renaming of cpts1, excluding cpts1(i) that agrees with cpts2

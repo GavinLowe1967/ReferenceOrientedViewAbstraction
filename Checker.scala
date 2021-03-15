@@ -325,16 +325,13 @@ class Checker(system: SystemP.System){
 
     // Test whether there is an existing view with a renaming of st as
     // principal component, and the same servers as conc.  
-    var found = false; val iter = sysAbsViews.iterator(servers)
+    var found = false; val iter = sysAbsViews.iterator(servers, st1)
     while(iter.hasNext && !found){
-// IMPROVE: use restricted iterator
-      val cv1 = iter.next 
-      if(cv1.principal == st1){
-        // Does a renaming of the other components of cv1 (consistent with
-        // servers and st1) also agree with components on common components?
-        found = 
-          Combiner.areUnifiable(cv1.components, components, map1, 0, otherArgs)
-      }
+      val cv1 = iter.next; assert(cv1.principal == st1)
+      // Does a renaming of the other components of cv1 (consistent with
+      // servers and st1) also agree with components on common components?
+      found =
+        Combiner.areUnifiable(cv1.components, components, map1, 0, otherArgs)
     } // end of while ... match
     // Profiler.count("compatibleWith"+found)  
     found
@@ -377,37 +374,32 @@ class Checker(system: SystemP.System){
     // cptR as the principal component, and containing a component with
     // identity idR in control state cs1.  map (and map1) tries to map pre
     // onto cv1.  
-    val iter = sysAbsViews.iterator(servers); var found = false
+    val iter = sysAbsViews.iterator(servers, pCptR); var found = false
     while(iter.hasNext && !found){
-      val cv1 = iter.next
-      if(cv1.principal == pCptR){
-// IMPROVE: provide better iteration
-        // Test if cv1 contains a component that is a renaming of st under
-        // an extension of map
-        var j = 1
-        while(j < cv1.components.length && !found){
-          val cpt1 = cv1.components(j)
-          if(cpt1.cs == cs1 && cpt1.id == stIdR){
-            // test if cpt1 is a renaming of st under an extension of map
-            var map2 = Unification.unify(map, cpt1, st)
-            if(map2 != null){
-              // Check that all components referenced by pCpt in pre are
-              // matched by a corresponding component in cv1.  map2 != null
-              // if true for all components so far.
-              var k = 1
-              while(k < pRefs.length && map2 != null){
-                if(pRefs(k) != null)
-                  map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
-                k += 1
-              } // end of inner while
-              found = map2 != null
-            } // end of if(map2 != null)
-            //else if(veryVerbose) println(s"failed to unify $cpt1 and $st")
-          }
-          j += 1
+      val cv1 = iter.next; assert(cv1.principal == pCptR); var j = 1
+      // Test if cv1 contains a component that is a renaming of st under
+      // an extension of map
+      while(j < cv1.components.length && !found){
+        val cpt1 = cv1.components(j)
+        if(cpt1.cs == cs1 && cpt1.id == stIdR){
+          // test if cpt1 is a renaming of st under an extension of map
+          var map2 = Unification.unify(map, cpt1, st)
+          if(map2 != null){
+            // Check that all components referenced by pCpt in pre are matched
+            // by a corresponding component in cv1.  map2 != null if true for
+            // all components so far.
+            var k = 1
+            while(k < pRefs.length && map2 != null){
+              if(pRefs(k) != null)
+                map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
+              k += 1
+            } // end of inner while
+            found = map2 != null
+          } // end of if(map2 != null)
         }
-        if(found && veryVerbose) println(s"found match with $cv1")
+        j += 1
       }
+      if(found && veryVerbose) println(s"found match with $cv1")
     } // end of while(iter.hasNext && !found)
     found
   }
