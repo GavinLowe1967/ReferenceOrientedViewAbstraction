@@ -5,9 +5,8 @@ import ViewAbstraction.RemapperP.Remapper
 import scala.collection.mutable.ArrayBuffer
 
 /** Utility object to combine Views, Concretizations, etc. */
-
 object Combiner{
-  import Remapper.{show}
+  import Remapper.{show,extendMap}
 
   /** All ways of remapping certain states of states, consistent with map0,
     * otherArgs and nextArg.  If selector = Left(i) then just the non-identity
@@ -52,13 +51,13 @@ object Combiner{
             val newIds = otherArgs(f)
             for(id1 <- newIds){
               otherArgs(f) = newIds.filter(_ != id1) // temporary update (*)
-              rec(Remapper.extendMap(map, f, id, id1), i, j+1) // extend map and continue
+              rec(extendMap(map, f, id, id1), i, j+1) // extend map and continue
             }
             otherArgs(f) = newIds                    // undo (*)
 
             // Case 2: map id to nextArg(f)
             val id1 = nextArg(f); nextArg(f) += 1   // temporary update (+)
-            rec(Remapper.extendMap(map, f, id, id1), i, j+1) // extend map and continue
+            rec(extendMap(map, f, id, id1), i, j+1) // extend map and continue
             nextArg(f) -= 1                         // undo (+)
           }
         }
