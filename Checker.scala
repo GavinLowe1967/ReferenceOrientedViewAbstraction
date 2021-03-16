@@ -3,7 +3,7 @@ package ViewAbstraction
 import ox.gavin.profiling.Profiler
 import ViewAbstraction.RemapperP.{Remapper,Unification}
 import ViewAbstraction.CombinerP.Combiner
-import scala.collection.mutable.{ArrayBuffer,HashSet}
+import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap}
 import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
 
 /** A checker for the view abstraction algorithm, applied to system.
@@ -66,9 +66,9 @@ class Checker(system: SystemP.System){
 
 
   var addTransitionCount = 0L
-  var effectOnCount = 0
-  var effectOnViaOthersCount = 0
-  var effectOnViaTransCount = 0
+  // var effectOnCount = 0
+  // var effectOnViaOthersCount = 0
+  // var effectOnViaTransCount = 0
   var effectOfPreviousTransitionsCount = 0
   var effectOnOthersCount = 0
   var newViewCount = 0L
@@ -232,6 +232,7 @@ class Checker(system: SystemP.System){
     for((outsideSt, outsidePosts) <- extenders){
       assert(outsidePosts.nonEmpty)
       Profiler.count("instantiateTT1")
+// Following is bottleneck
       if(isExtendable(pre, outsideSt)){
         Profiler.count("instantiateTT2")
         val extendedPre = pre.extend(outsideSt)
@@ -254,6 +255,13 @@ class Checker(system: SystemP.System){
     } // end of for((outsideSt, outsidePosts) <- ...)
   }
 
+  /** A cache of results of previous calls to isExtendable.  If a value isn't in
+    * the mapping, then that indicates that compatibleWith previously gave
+    * only false.  A result of k >= 0 indicates that compatibleWith gave true,
+    * and that calls to containsReferencingView gave true for all relevant j
+    * in [0..k). */
+  private val isExtendableCache = new HashMap[(Concretization, State), Int]
+
   /** Is pre extendable by state st, given the current set of views?  For each
     * component cpt of pre U st, is there a view in SysAbsViews with cpt as
     * the principal component and agreeing on all common processes (up to
@@ -270,17 +278,20 @@ class Checker(system: SystemP.System){
     require(pre.components.forall(
       _.componentProcessIdentity != st.componentProcessIdentity))
     val servers = pre.servers; val components = pre.components
+    val k = isExtendableCache.getOrElse((pre, st), -1)
+    Profiler.count("isExtendable"+k)
 
     // Does SysAbsViews contain a view consistent with pre and with a
     // renaming of st as principal component?
-    var found = compatibleWith(servers, components, st)
+    var found = k >= 0 || compatibleWith(pre, st)
 
     if(found){
       // If any component cpt of pre references st, then search for a
       // suitable view with a renaming of cpt and st. 
       val id = st.componentProcessIdentity
       // Test whether any component of pre references st
-      var j = 0; val length = components.length
+      var j = k max 0; val length = components.length
+// IMPROVE: does this always hold for j = 0, i.e. is this a preconditon? 
       while(j < length && found){
         if(components(j).processIdentities.contains(id)){
           if(veryVerbose) println(s"isExtendable($pre) with reference to $st")
@@ -288,19 +299,25 @@ class Checker(system: SystemP.System){
         }
         j += 1
       }
+      isExtendableCache += (pre,st) -> (if(found) j else j-1)
     }
     found    
   }
 
-  /** Is `st` compatible with `servers` and `components` given the current
-    * views?  Does some renaming of an existing view match `servers`, have
-    * `st` as principal component, and agree with `components` on common
-    * components?  Equivalently, is there a view containing `servers`, with a
-    * renaming of `st` as principal component, and such that some renaming of
-    * the other components agrees with `components` on common components? */ 
-  @inline protected def compatibleWith(
-    servers: ServerStates, components: Array[State], st: State)
-      : Boolean = {
+  /** Cached results of calls to Combiner.areUnifiable.  Effectively a map
+    * (List[State], List[List[Identity]], List[List[Identity]]) =>
+    *  Array[State] => Boolean.   */
+  private val compatibleWithCache = new CompatibleWithCache
+
+  /** Is `st` compatible with `pre` given the current views?  Does some renaming
+    * of an existing view match `pre.servers`, have `st` as principal
+    * component, and agree with `pre.components` on common components?
+    * Equivalently, is there a view containing `pre.servers`, with a renaming
+    * of `st` as principal component, and such that some renaming of the other
+    * components agrees with `pre.components` on common components? */ 
+  @inline protected 
+  def compatibleWith(pre: Concretization, st: State): Boolean = {
+    val servers = pre.servers; val components = pre.components
     // Remap st so it can be the principal component with servers.
     val map = servers.remappingMap; val nextArgs = servers.nextArgMap
     var st1 = Remapper.remapState(map, nextArgs, st)
@@ -317,12 +334,15 @@ class Checker(system: SystemP.System){
     while(j < ids1.length){
       val id = ids1(j)
       if(id >= 0){ 
-        assert{val id1 = map1(typeMap(j))(id); id1 < 0 || id1 == st.ids(j)}
+        val id1 = map1(typeMap(j))(id); assert(id1 < 0 || id1 == st.ids(j))
         map1(typeMap(j))(id) = st.ids(j)
       }
       j += 1
     }
 
+    // Get cache corresponding to components, map1 and otherArgs.
+    val cache = compatibleWithCache.get( 
+      (pre.componentsList, map1.map(_.toList).toList, otherArgs.toList)) 
     // Test whether there is an existing view with a renaming of st as
     // principal component, and the same servers as conc.  
     var found = false; val iter = sysAbsViews.iterator(servers, st1)
@@ -330,8 +350,17 @@ class Checker(system: SystemP.System){
       val cv1 = iter.next; assert(cv1.principal == st1)
       // Does a renaming of the other components of cv1 (consistent with
       // servers and st1) also agree with components on common components?
-      found =
-        Combiner.areUnifiable(cv1.components, components, map1, 0, otherArgs)
+      // Try to get cached result.
+      val cpts1 = cv1.components // List
+      cache.get(cpts1) match{
+        case Some(b) => // Profiler.count("compatibleWith"+b); 
+          found = b
+        case None =>
+          Profiler.count("compatibleWith-null")
+          found =
+            Combiner.areUnifiable(cv1.components, components, map1, 0, otherArgs)
+          cache.add(cpts1,found)
+      } // end of match
     } // end of while ... match
     // Profiler.count("compatibleWith"+found)  
     found
@@ -414,12 +443,12 @@ class Checker(system: SystemP.System){
   private 
   def effectOnOthers(pre: Concretization, e: EventInt, post: Concretization) = 
   if(pre != post){
-    effectOnOthersCount += 1
+    // effectOnOthersCount += 1
     val iter = sysAbsViews.iterator(pre.servers)
     while(iter.hasNext){
       val cv = iter.next
       // IMPROVE if nothing changed state.
-      effectOnViaOthersCount += 1
+      // effectOnViaOthersCount += 1
       effectOn(pre, e, post, cv)
     }
   }
@@ -447,7 +476,7 @@ class Checker(system: SystemP.System){
   protected def effectOn(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
   = {
-    effectOnCount += 1
+    // effectOnCount += 1
     // if(veryVerbose) 
     //   println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers &&
@@ -531,13 +560,13 @@ class Checker(system: SystemP.System){
 
   /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
-    effectOfPreviousTransitionsCount += 1
+    // effectOfPreviousTransitionsCount += 1
     val iter = transitions.iterator(cv.servers)
     while(iter.hasNext){
       val (pre, e, post) = iter.next
       // println(s"considering transition $pre -> $post")
       // assert(pre.servers == cv.servers)
-      effectOnViaTransCount += 1
+      // effectOnViaTransCount += 1
       effectOn(pre, e, post, cv)
     }
   }

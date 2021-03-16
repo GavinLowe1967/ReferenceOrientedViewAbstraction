@@ -6,7 +6,7 @@ import scala.collection.mutable.ArrayBuffer
 /** Testing functions on Combiner.  These assume that test-file.csp is
   * loaded. */
 object CombinerTest{
-  import RemapperP.Remapper.{newRemappingMap,newOtherArgMap}
+  import RemapperP.Remapper.{newRemappingMap,newOtherArgMap,show}
   import RemapperP.RemapperTest.{checkMap,emptyMap}
   import CombinerP.Combiner._
   import TestStates._
@@ -15,44 +15,50 @@ object CombinerTest{
   def remapSelectedStatesTest = {
     println("== remapSelectedStatesTest ==")
     def test1 = {
-      val buff = remapSelectedStates(
-        newRemappingMap, Array(List(1), List(0)), Array(2,1),
-        Array(aNode(0,1)), Left(0))
-      // N1 -> N1 or N2
-      assert(buff.length == 2)
-      assert(buff.forall(map => 
-        (checkMap(map(0), List((1,1))) || checkMap(map(0), List((1,2)))) && 
+      val buff = remapState(
+        newRemappingMap, Array(List(1), List(0)), Array(2,1), aNode(0,1), 0)
+        // Array(aNode(0,1)), Left(0))
+      // println(buff.map(show).mkString("\n"))
+      // N0 -> N1, N1 -> N2 or N0 -> N2, N1 -> N1 or N0 -> N2, N1 -> N3
+      assert(buff.length == 3)
+      assert(buff.forall(map =>
+        (checkMap(map(0), List((0,1), (1,2))) || checkMap(map(0), List((0,2),(1,1))) ||
+          checkMap(map(0), List((0,2), (1,3)))) &&
           emptyMap(map(1)) ))
     }
     def test2 = {
-      val buff = remapSelectedStates(
-        newRemappingMap, Array(List(0), List(0)), Array(1,1),
-        Array(pushSt(T0,N0), aNode(0,1)), Left(0))
-      // N0 -> N0 or N1
-      assert(buff.length == 2)
+      val buff = remapState(
+        newRemappingMap, Array(List(0), List(0)), Array(1,1), pushSt(T0,N0), 0)
+        // Array(pushSt(T0,N0), aNode(0,1)), Left(0))
+      // N0 -> N0 or N1; T0 -> T0 or T1
+      //println(buff.map(show).mkString("\n"))
+      assert(buff.length == 4)
       assert(buff.forall(map => 
         (checkMap(map(0), List((0,0))) || checkMap(map(0), List((0,1)))) && 
-          emptyMap(map(1)) ))
+          (checkMap(map(1), List((0,0))) || checkMap(map(1), List((0,1)))) ))
     }   
     def test3 = {
       val map = newRemappingMap; map(0)(0) = 0
-      val buff = remapSelectedStates(map, Array(List(1), List(0)), Array(2,1),
-        Array(pushSt(T0,N0), aNode(0,1)), Left(0))
-      // Must respect map
-      assert(buff.length == 1 && buff.head == map)
+      val buff = remapState(map, Array(List(1), List(0)), Array(2,1), pushSt(T0,N0), 0)
+        //Array(pushSt(T0,N0), aNode(0,1)), Left(0))
+      // println(buff.map(show).mkString("\n"))
+      // Must respect map on N0; T0 -> T0 or T1
+      assert(buff.length == 2)
+      assert(buff.forall(map => checkMap(map(0), List((0,0))) &&
+        (checkMap(map(1), List((0,0))) || checkMap(map(1), List((0,1)))) ))
     }
 
     // Now tests with selector Right(i)
     def test11 = {
       val buff = remapSelectedStates(
         newRemappingMap, Array(List(1), List(0)), Array(2,1),
-        Array(aNode(0,1)), Right(0)) 
+        Array(aNode(0,1)), 0) 
       assert(buff.length == 1 && buff.head.forall(m => emptyMap(m)))
     }
     def test12 = {
       val map = newRemappingMap; map(0)(0) = 0
       val buff = remapSelectedStates(map, Array(List(1), List(0)), Array(2,1),
-        Array(pushSt(T0,N0), aNode(0,1)), Right(0))
+        Array(pushSt(T0,N0), aNode(0,1)), 0)
       // N0 -> N0 and N1 -> N1 or N2
       assert(buff.length == 2)
       assert(buff.forall(map => 
@@ -63,7 +69,7 @@ object CombinerTest{
     def test13 = {
       val map = newRemappingMap; map(0)(0) = 0
       val buff = remapSelectedStates(map, Array(List(1), List(1)), Array(2,2),
-        Array(pushSt(T0,N0), aNode(0,1)), Right(1))
+        Array(pushSt(T0,N0), aNode(0,1)), 1)
       // println(buff.map(showRemappingMap).mkString("\n"))
       // N0 -> N1 or N2; T0 -> T1 or T2
       assert(buff.length == 2)

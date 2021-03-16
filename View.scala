@@ -29,6 +29,8 @@ class ComponentView(
   /** All the components in this view, with the principal component first. */
   val components = principal +: others // IMPROVE
 
+  val componentsList = components.toList
+
   /** Check all components referenced by principal are included, and no more. */
   // IMRPOVE: this is moderately expensive
   @noinline private def checkValid = { 
@@ -189,6 +191,8 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     new ComponentView(servers, princ, components1)
   }
 
+  def componentsList = components.toList
+
   /** In the case that this was created by extending one view with a component
     * from a secondary view, that secondary view. */
   private var secondaryView: ComponentView = null
@@ -214,7 +218,8 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       val c = components(cix); val ids = c.ids; val typeMap = c.typeMap
       var i = 0
       while(i < ids.length){
-        val f = typeMap(i); val id = ids(i); assert(id <= nextArg(f))
+        val f = typeMap(i); val id = ids(i); 
+        assert(id <= nextArg(f), this)
         if(id == nextArg(f)){ otherArgs(f) ::= id; nextArg(f) += 1 }
         i += 1
       }

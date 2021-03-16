@@ -79,49 +79,67 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
     reset()
     def test1 = {
       // Views with servers0 and initSt(T0) or initNode(N0) are in sysAbsViews
-      assert(compatibleWith(servers0, Array(), initSt(T0)))
-      assert(compatibleWith(servers0, Array(), initSt(T1)))
-      assert(compatibleWith(servers0, Array(), initNode(N0)))
-      assert(compatibleWith(servers0, Array(), initNode(N1)))
+      assert(compatibleWith(new Concretization(servers0, Array()), initSt(T0)))
+      assert(compatibleWith(new Concretization(servers0, Array()), initSt(T1)))
+      assert(compatibleWith(new Concretization(servers0, Array()), initNode(N0)))
+      assert(compatibleWith(new Concretization(servers0, Array()), initNode(N1)))
       // But not other views
-      assert(!compatibleWith(servers0, Array(), pushSt(T0, N0)))
-      assert(!compatibleWith(servers0, Array(), aNode(N0, Null)))
+      assert(!compatibleWith(
+        new Concretization(servers0, Array()), pushSt(T0, N0)))
+      assert(!compatibleWith(
+        new Concretization(servers0, Array()), aNode(N0, Null)))
       // Add another view, and check compatibility
       sysAbsViews.add(new ComponentView(servers0, aNode(N0, Null), Array()))
-      assert(compatibleWith(servers0, Array(), aNode(N0, Null)))
-      assert(compatibleWith(servers0, Array(), aNode(N1, Null)))
-      assert(!compatibleWith(servers0, Array(), aNode(N0, N1)))
+      assert(compatibleWith(
+        new Concretization(servers0, Array()), aNode(N0, Null)))
+      assert(compatibleWith(
+        new Concretization(servers0, Array()), aNode(N1, Null)))
+      assert(!compatibleWith(
+        new Concretization(servers0, Array()), aNode(N0, N1)))
       // Add a view where Top has reference to N0.
       sysAbsViews.add(new ComponentView(servers2, aNode(N0, Null), Array()))
-      assert(compatibleWith(servers2, Array(), aNode(N0, Null)))
-      assert(!compatibleWith(servers2, Array(), aNode(N1, Null)))
+      assert(compatibleWith(
+        new Concretization(servers2, Array()), aNode(N0, Null)))
+      assert(!compatibleWith(
+        new Concretization(servers2, Array()), aNode(N1, Null)))
     }
 
     def test2 = {
       reset()
       // println("= test2= ")
-      assert(! compatibleWith(servers2, Array(aNode(N0,Null)), aNode(N1,N0)))
+      assert(! compatibleWith(
+        new Concretization(servers2, Array(aNode(N0,Null))), aNode(N1,N0)))
       sysAbsViews.add(
         new ComponentView(servers2, aNode(N1,N0), Array(bNode(N0,Null))))
-      assert(compatibleWith(servers2, Array(), aNode(N1,N0)))
-      assert(compatibleWith(servers2, Array(bNode(N0,Null)), aNode(N1,N0)))
+      assert(compatibleWith(
+        new Concretization(servers2, Array()), aNode(N1,N0)))
+      assert(compatibleWith(
+        new Concretization(servers2, Array(bNode(N0,Null))), aNode(N1,N0)))
       // Following should give false: aNode(N0,Null) || aNode(N1,N0) isn't
       // compatible with the view just added, because that has N0 as a bNode.
-      assert(! compatibleWith(servers2, Array(aNode(N0,Null)), aNode(N1,N0)))
+      assert(! compatibleWith(
+        new Concretization(servers2, Array(aNode(N0,Null))), aNode(N1,N0)))
       // Similarly for following
-      assert(! compatibleWith(servers2, Array(bNode(N0,Null)), bNode(N1,N0)))
+      assert(! compatibleWith(
+        new Concretization(servers2, Array(bNode(N0,Null))), bNode(N1,N0)))
       // The following should make aNode(N0,Null) || aNode(N1,N0) compatible
       sysAbsViews.add(
         new ComponentView(servers2, aNode(N1,N0), Array(aNode(N0,Null))))
-      assert(compatibleWith(servers2, Array(bNode(N0,Null)), aNode(N1,N0)))
-      assert( compatibleWith(servers2, Array(aNode(N0,Null)), aNode(N1,N0)))
-      assert(! compatibleWith(servers2, Array(bNode(N0,Null)), bNode(N1,N0)))
+      assert(compatibleWith(
+        new Concretization(servers2, Array(bNode(N0,Null))), aNode(N1,N0)))
+      assert( compatibleWith(
+        new Concretization(servers2, Array(aNode(N0,Null))), aNode(N1,N0)))
+      assert(! compatibleWith(
+        new Concretization(servers2, Array(bNode(N0,Null))), bNode(N1,N0)))
       // And the following should make bNode(N0,Null) || bNode(N1,N0) compatible.
       sysAbsViews.add(
         new ComponentView(servers2, bNode(N1,N0), Array(bNode(N0,Null))))
-      assert(compatibleWith(servers2, Array(bNode(N0,Null)), aNode(N1,N0)))
-      assert( compatibleWith(servers2, Array(aNode(N0,Null)), aNode(N1,N0)))
-      assert(compatibleWith(servers2, Array(bNode(N0,Null)), bNode(N1,N0)))
+      assert(compatibleWith(
+        new Concretization(servers2, Array(bNode(N0,Null))), aNode(N1,N0)))
+      assert(compatibleWith(
+        new Concretization(servers2, Array(aNode(N0,Null))), aNode(N1,N0)))
+      assert(compatibleWith(
+        new Concretization(servers2, Array(bNode(N0,Null))), bNode(N1,N0)))
     }
 
     test1; test2

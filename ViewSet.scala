@@ -80,6 +80,7 @@ object ViewSet{
 // ==================================================================
 
 /** A mapping K => D, implemented using a hash map. 
+  * The implementation assumes that keys cannot be null.
   * @param initSize the initial size of the hash table.
   * @param init code to initialise a new data value. */
 class BasicHashMap[K: scala.reflect.ClassTag, D: scala.reflect.ClassTag]
@@ -124,8 +125,23 @@ class BasicHashMap[K: scala.reflect.ClassTag, D: scala.reflect.ClassTag]
     data(i)
   }
 
+  /** Add the mapping k -> d. */
+  def add(k: K, d: D): Unit = {
+    val i = find(k)
+    if(keys(i) == null){
+      if(count >= threshold){ resize(); return add(k,d) }
+      keys(i) = k
+    }
+    data(i) = d; count += 1
+  }
+
   /** Get the value associated with k, or null if there is no such. */
   def get(k: K): D = { val i = find(k); data(i) }
+
+  /** Optionally get the value associated with k. */
+  def optGet(k: K): Option[D] = { 
+    val i = find(k); if(keys(i) != null) Some(data(i)) else None 
+  }
 
   /** Resize the hash table. */
   private def resize(): Unit = {

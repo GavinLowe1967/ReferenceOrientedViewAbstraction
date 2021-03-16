@@ -462,28 +462,15 @@ class System(fname: String, checkDeadlock: Boolean,
         // servers) so that: (1) its identity maps to id; (2) other parameters
         // are injectively mapped either to a parameter in pre.components,
         // but not the servers; or the next fresh parameter.
-        val (maps, otherArgs) = getMaps(st1, pid, servers, preCpts)
-        // val map0 = servers.remappingMap 
-        // val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
-        // otherArgs(f) = otherArgs(f).filter(_ != id)
-        // nextArg(f) = nextArg(f) max (id+1)
-        // val maps = Combiner.remapToId(map0, otherArgs, nextArg, cpts, i, id)
-        for(map <- maps){
-          val renamedState = Remapper.applyRemappingToState(map, st1)
-          if(!renamedState.representableInScript){
+        val (maps, otherArgs) = 
+          try{ getMaps(st1, pid, servers, preCpts) }
+          catch{ case UnrepresentableException(renamedState) => 
             println("Not enough identities in script to make\n"+
               s"$pre and\n$cv consistent.\n"+
               s"Renaming of $st1 gives ${renamedState.toString0}")
-            sys.exit
+            sys.exit 
           }
-          // should have renamedState.ids in ran map.  IMPROVE: assertion only
-          val ids1 = renamedState.ids; val typeMap = renamedState.typeMap
-          var j = 0
-          while(j < ids1.length){
-            assert( ids1(j) < 0 || map(typeMap(j)).contains(ids1(j)) ,
-              "\nmap = "+Remapper.show(map)+"undefined on = "+renamedState)
-            j += 1
-          }
+        for((map, renamedState) <- maps){
           val nexts = (
             if(e >= 0) 
               components.getTransComponent(renamedState).nexts(e, fp, idp)
@@ -500,20 +487,65 @@ class System(fname: String, checkDeadlock: Boolean,
   } // end of consistentStates
 
 
+  /** Exception showing renamedState is not representable using values in the
+    * script. */
+  private case class UnrepresentableException(renamedState: State) 
+      extends Exception
+
+  /** Part of the result of getMaps.  Each tuple represents a map, and the
+    * renamed states. */
+  private type RenamingTuples = Array[(RemappingMap, State)]
+
+  /** Cache of previous results of getMaps. */
+  private val mapCache = 
+    new HashMap[(State, ProcessIdentity, ServerStates, List[State]), 
+      (RenamingTuples, OtherArgMap)]
+
   /** Calculate all ways of remapping st (consistent with the servers) so
     * that: (1) its identity maps to pid; (2) other parameters are injectively
     * mapped either to a parameter in preCpts, but not the servers; or the
-    * next fresh parameter.  Also return an OtherArgMap corresponding to
-    * servers with pid removed.  IMPROVE: do we need this? */
+    * next fresh parameter.  
+// .....
+    * @return (1) an Array of (RemappingMap, State) pairs, giving the map and 
+    * remapped state; and (2) an OtherArgMap corresponding to servers with pid
+    * removed.  
+    * @throw  UnrepresentableException if a renamed state is not representable 
+    * in the script. */
   private def getMaps(st: State, pid: ProcessIdentity,
     servers: ServerStates, preCpts: Array[State])
-      : (Array[RemappingMap], OtherArgMap) = {
-    val (f,id) = pid; val map0 = servers.remappingMap
-    val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
-    otherArgs(f) = otherArgs(f).filter(_ != id)
-    nextArg(f) = nextArg(f) max (id+1)
-    val maps = Combiner.remapToId(map0, otherArgs, nextArg, st, id)
-    (maps.toArray, otherArgs)
+      : (RenamingTuples, OtherArgMap) = {
+    val preCptsL = preCpts.toList
+    mapCache.get(st, pid, servers, preCptsL) match{
+      case Some(tuple) => Profiler.count("getMaps: retrieved"); tuple
+      case  None =>
+        Profiler.count("getMaps: new")
+        val (f,id) = pid; val map0 = servers.remappingMap
+        val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
+        otherArgs(f) = otherArgs(f).filter(_ != id)
+        nextArg(f) = nextArg(f) max (id+1)
+        val maps = Combiner.remapToId(map0, otherArgs, nextArg, st, id)
+        // Create corresponding renamed States, and pair with maps
+        val mapStates = new RenamingTuples(maps.length); var i = 0
+        while(i < maps.length){
+          val map = maps(i)
+          val renamedState = Remapper.applyRemappingToState(map, st)
+          if(!renamedState.representableInScript)
+            throw UnrepresentableException(renamedState)
+          // should have renamedState.ids in ran map.  IMPROVE: assertion only
+          if(false){
+            val ids1 = renamedState.ids; val typeMap = renamedState.typeMap
+            var j = 0
+            while(j < ids1.length){
+              assert( ids1(j) < 0 || map(typeMap(j)).contains(ids1(j)) ,
+                "\nmap = "+Remapper.show(map)+"undefined on = "+renamedState)
+              j += 1
+            }
+          }
+          mapStates(i) = (map, renamedState); i += 1
+        }
+        mapCache += (st, pid, servers, preCptsL) -> (mapStates, otherArgs)
+        (mapStates, otherArgs)
+    }
   }
 
   /** Check that renamedState agrees with preCpts on common components, and test

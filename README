@@ -8,6 +8,7 @@ newTransitionTemplates.  CAS on done before debugging.
 - In second stage, need to protect sysAbsViews, transitions,
   transitiontemplates (if done concurrently).
 
+- Need to protect System.mapCache and Checker.isExtendableCache
 
 
 =======================================
