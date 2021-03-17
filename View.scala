@@ -81,12 +81,21 @@ class ComponentView(
       others.sameElements(cv.others)
   }
 
-  override val hashCode = {
+  /** Create hash code. */
+  @inline private def mkHashCode = {
     var h = servers.hashCode*71+principal.hashCode
     var i = 0; var n = others.length
     while(i < n){ h = h*71+others(i).hashCode; i += 1 }    
     h 
   }
+
+  override val hashCode = mkHashCode
+
+  // override def hashCode = {
+  //   if(theHashCode == 0) theHashCode = mkHashCode
+  //   theHashCode
+  // }
+
 }
 
 
@@ -140,10 +149,31 @@ object View{
   /** The union of cpts1 and cpts2.  Pre: they agree on components with common
     * identities. */
   def union(cpts1: Array[State], cpts2: Array[State]): Array[State] = {
-    val ids1 = cpts1.map(_.componentProcessIdentity)
-    require(cpts2.forall(st => 
-      !ids1.contains(st.componentProcessIdentity) || cpts1.contains(st)))
-    cpts1 ++ cpts2.filter(st => !ids1.contains(st.componentProcessIdentity))
+    val len1 = cpts1.length; val len2 = cpts2.length
+    // identities of cpts1
+    // val ids1 = new Array[ProcessIdentity](len1); var i = 0
+    // while(i < len1){ ids1(i) = cpts1(i).componentProcessIdentity; i += 1 }
+    // val ids1 = cpts1.map(_.componentProcessIdentity)
+    // require(cpts2.forall(st => 
+    //   !ids1.contains(st.componentProcessIdentity) || cpts1.contains(st)))
+    // Iterate through cpts2; count the number disjoint from cpts1, recording
+    // those disjoint in newC, and check the two agree on common components.
+    var i = 0; var count = 0; val newC = new Array[Boolean](len2)
+    while(i < len2){
+      val cpt2 = cpts2(i); val pid2 = cpt2.componentProcessIdentity; var j = 0
+      // search for cpt2 in cpts1
+      while(j < len1 && cpts1(j).componentProcessIdentity != pid2) j += 1
+      if(j < len1) require(cpts1(j) == cpt2) else{ newC(i) = true; count += 1 }
+      i += 1
+    }
+    // Copy cpts1 and distinct components of cpts2 (s.t. newC(_)) into result.
+    val result = new Array[State](len1+count); i = 0
+    while(i < len1){ result(i) = cpts1(i); i += 1}
+    var j = 0
+    while(j < len2){ if(newC(j)){ result(i) = cpts2(j); i += 1 }; j += 1 }
+    assert(i == len1+count)
+    result
+    // cpts1 ++ cpts2.filter(st => !ids1.contains(st.componentProcessIdentity))
   }
 
   /** Check components in cpts are distinct. */
@@ -197,11 +227,23 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     * from a secondary view, that secondary view. */
   private var secondaryView: ComponentView = null
 
-  def setSecondaryView(sv: ComponentView) = {
-    assert(secondaryView == null); secondaryView = sv
+  /** In the case that this was created by extending one view with a component
+    * from a secondary view, the additional referencing views found in
+    * isExtendable. */
+  private var referencingViews: Array[ComponentView] = null
+  // IMPROVE: would it be enough to store just the non-null elements, to use
+  // less memory?
+
+  /** Set the secondary view. */
+  def setSecondaryView(sv: ComponentView, rv: Array[ComponentView]) = {
+    assert(secondaryView == null); secondaryView = sv; referencingViews = rv
   }
 
+  /** Get the secondary view. */
   def getSecondaryView = secondaryView
+
+  /** Get the referencing views. */
+  def getReferencingViews = referencingViews
 
   /** Maps used in combining with this.  */
   private var map: RemappingMap = servers.remappingMap

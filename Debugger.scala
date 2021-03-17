@@ -140,10 +140,35 @@ class Debugger(
   /** Expand the concretization conc, giving the trace leading to the secondary
     * view. */
   private def expandConc(conc: Concretization) = {
-    val cv = conc.getSecondaryView
+    val cv = conc.getSecondaryView; val rv = conc.getReferencingViews
     println(s"Secondary view = $cv")
-    if(cv == null) println(s"No secondary components found in $conc")
-    else apply1(cv, conc)
+    println(s"Referencing views = "+
+      (if(rv == null) "null" 
+      else rv.filter(_ != null).map(_.toString).mkString("; ")))
+    // Get the options for expanding
+    val options = new ArrayBuffer[ComponentView]
+    if(cv != null) options += cv
+    if(rv != null) for(v <- rv; if v != null) options += v
+    val len = options.length
+    if(len == 0) println(s"No secondary components found in $conc")
+    else{
+      for(i <- 0 until len) println(s"$i. ${options(i)}")
+      var done = false
+      def help = 
+        println(s"Type a number from 0 to ${len-1} to expand that view, "+
+          "or 'u' to go up a level.")
+      while(!done){
+        val input = scala.io.StdIn.readLine("> ")
+        if(input.nonEmpty && input.forall(_.isDigit)){
+          val n = input.toInt
+          if(0 <= n && n < len){ apply1(options(n), conc); done = true }
+          else help
+        }
+        else if(input == "u") done = true
+        else help
+      }
+    }
+    // apply1(cv, conc)
   }
 
   /** Print the server names. */

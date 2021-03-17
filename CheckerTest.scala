@@ -153,23 +153,25 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
       val conc = 
         new Concretization(servers1, Array(initNodeSt(T0,N0), aNode(N0,N1)))
       val st = initNode(N1)
-      assert(! containsReferencingView(conc, st, 1))
-      sysAbsViews.add(new ComponentView(servers1, aNode(N0,N1), Array(st)))
-      assert(containsReferencingView(conc, st, 1))
+      assert(findReferencingView(conc, st, 1) == null)
+      val cv = new ComponentView(servers1, aNode(N0,N1), Array(st))
+      sysAbsViews.add(cv)
+      assert(findReferencingView(conc, st, 1) == cv)
     }
     def test2 = {
       reset()
       val conc = 
         new Concretization(servers1, Array(initNodeSt(T0,N0), aNode(N0,N1)))
       val st = bNode(N1,N2)
-      assert(! containsReferencingView(conc, st, 1))
+      assert(findReferencingView(conc, st, 1) == null)
       // Following matches control state of st, but not its next ref
       sysAbsViews.add(
         new ComponentView(servers1, aNode(N0,N1), Array(bNode(N1,Null))) )
-      assert(! containsReferencingView(conc, st, 1))
+      assert(findReferencingView(conc, st, 1) == null)
       // Following should match
-      sysAbsViews.add(new ComponentView(servers1, aNode(N0,N1), Array(st)) )
-      assert(containsReferencingView(conc, st, 1))
+      val cv = new ComponentView(servers1, aNode(N0,N1), Array(st))
+      sysAbsViews.add(cv)
+      assert(findReferencingView(conc, st, 1) == cv)
     }
     def test3 = {
       reset()
@@ -177,9 +179,9 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
         new Concretization(servers1, Array(initNodeSt(T0,N0), aNode(N0,N1)))
       val st = bNode(N1,N2)
       // Test renaming of the "next" component of st
-      sysAbsViews.add(
-        new ComponentView(servers1, aNode(N0,N1), Array(bNode(N1,N3))))
-      assert(containsReferencingView(conc, st, 1))
+      val cv = new ComponentView(servers1, aNode(N0,N1), Array(bNode(N1,N3)))
+      sysAbsViews.add(cv)
+      assert(findReferencingView(conc, st, 1) == cv)
     }
     // Need to find tests where views contain more than two states
 
@@ -189,23 +191,23 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
       val conc = new Concretization(servers2, 
         Array(getDatumSt(T0,N0,N1), aNode(N0,N1), bNode(N1,Null), cNode(N2, N1)))
       val st = cNode(N1,Null)
-      assert(! containsReferencingView(conc, st, 3))
+      assert(findReferencingView(conc, st, 3) == null)
       // With following, cNode(N2, N1) gets renamed to cNode(N1,N2), but
       // doesn't include a renaming of st.
       sysAbsViews.add(
         new ComponentView(servers2, cNode(N1,N2), Array(aNode(N2,Null))))
-      assert(! containsReferencingView(conc, st, 3))
+      assert(findReferencingView(conc, st, 3) == null)
       // With following, cNode(N2, N1) gets renamed to cNode(N1,N2), and st
       // gets renamed to cNode(N2,Null).  However, in conc, N2 points to a
       // B-node, so this should fail.
       sysAbsViews.add(
         new ComponentView(servers2, cNode(N1,N2), Array(cNode(N2,Null))))
-      assert(! containsReferencingView(conc, st, 3))
+      assert(findReferencingView(conc, st, 3) == null)
       // With following, cNode(N2, N1) gets renamed to cNode(N1,N2), and
       // bNode(N1,Null) gets renamed to bNode(N1,Null), giving a match.
-      sysAbsViews.add(
-        new ComponentView(servers2, cNode(N1,N2), Array(bNode(N2,Null))))
-      assert(containsReferencingView(conc, bNode(N1,Null), 3))
+      val cv = new ComponentView(servers2, cNode(N1,N2), Array(bNode(N2,Null)))
+      sysAbsViews.add(cv)
+      assert(findReferencingView(conc, bNode(N1,Null), 3) == cv)
     }
     def test5 = {
       // println("= test5 =")
@@ -214,23 +216,23 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
         Array(getDatumSt(T0,N1,N2), aNode(N1,N2), bNode(N2,Null), 
           getDatumSt(T1,N2,N3)))
       val st = cNode(N3, Null)
-      assert(! containsReferencingView(conc, st, 3))
+      assert(findReferencingView(conc, st, 3) == null)
       // Following fails, since T1's first reference should be to a B-node
       sysAbsViews.add(
         new ComponentView(servers2, getDatumSt(T1,N1,N2), 
           Array(cNode(N1,Null), cNode(N2, Null)) ))
-      assert(!containsReferencingView(conc, st, 3))
+      assert(findReferencingView(conc, st, 3) == null)
       // Following fails, since T1's first reference should be to a B-node
       // with null next reference.
       sysAbsViews.add(
         new ComponentView(servers2, getDatumSt(T1,N1,N2), 
           Array(bNode(N1,N3), cNode(N2, Null)) ))
-      assert(!containsReferencingView(conc, st, 3))
+      assert(findReferencingView(conc, st, 3) == null)
       // following succeeds, mapping T1->T1, N2->N1, N3->N2
-      sysAbsViews.add(
-        new ComponentView(servers2, getDatumSt(T1,N1,N2), 
-          Array(bNode(N1,Null), cNode(N2, Null)) ))
-      assert(containsReferencingView(conc, st, 3))
+      val cv = new ComponentView(servers2, getDatumSt(T1,N1,N2), 
+          Array(bNode(N1,Null), cNode(N2, Null)) )
+      sysAbsViews.add(cv)
+      assert(findReferencingView(conc, st, 3) == cv)
     }
     def test6 = {
       // println("= test6 =")
@@ -239,29 +241,29 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
         Array(getDatumSt(T0,N1,N2), aNode(N1,N2), bNode(N2,N3), 
           getDatumSt(T1,N2,N4)))
       val st = cNode(N4, Null)
-      assert(! containsReferencingView(conc, st, 3))
+      assert(findReferencingView(conc, st, 3) == null)
       // Following fails, since T1's first reference should be to a B-node
       sysAbsViews.add(
         new ComponentView(servers2, getDatumSt(T1,N1,N2), 
           Array(cNode(N1,N3), cNode(N2, Null)) ))
-      assert(!containsReferencingView(conc, st, 3))
+      assert(findReferencingView(conc, st, 3) == null)
       // Following fails, since T1's first reference should be to a B-node
       // with non-null next reference.
       sysAbsViews.add(
         new ComponentView(servers2, getDatumSt(T1,N1,N2), 
           Array(bNode(N1,Null), cNode(N2, Null)) ))
-      assert(!containsReferencingView(conc, st, 3))
+      assert(findReferencingView(conc, st, 3) == null)
       // Following fails, since T1's first reference should not point to T1's
       // second reference.
       sysAbsViews.add(
         new ComponentView(servers2, getDatumSt(T1,N1,N2), 
           Array(bNode(N1,N2), cNode(N2, Null)) ))
-      assert(!containsReferencingView(conc, st, 3))
+      assert(findReferencingView(conc, st, 3) == null)
       // following succeeds, mapping T1->T1, N2->N1, N3->N3, N4->N2
-      sysAbsViews.add(
-        new ComponentView(servers2, getDatumSt(T1,N1,N2), 
-          Array(bNode(N1,N3), cNode(N2, Null)) ))
-      assert(containsReferencingView(conc, st, 3))
+      val cv = new ComponentView(servers2, getDatumSt(T1,N1,N2), 
+          Array(bNode(N1,N3), cNode(N2, Null)))
+      sysAbsViews.add(cv)
+      assert(findReferencingView(conc, st, 3) == cv)
     }
 
     println("== containsReferencingViewTest ==")
