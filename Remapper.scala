@@ -3,7 +3,7 @@ package ViewAbstraction.RemapperP
 import ViewAbstraction._
 import ox.gavin.profiling.Profiler
 import scala.math.Ordering.Implicits._ // for sorting list of lists
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer,HashMap}
 
 /** Utility object to apply remapping of parameters in states.  
   * 
@@ -236,17 +236,36 @@ object Remapper{
     map: RemappingMap, nextArg: NextArgMap, procs: Array[State]): Array[State] = 
     procs.map(st => remapState(map, nextArg, st))
 
-  @inline private 
-  def remapServerStates(map: RemappingMap, nextArg: NextArgMap, ss: ServerStates)
-      : ServerStates = 
-    ServerStates(remapStates(map, nextArg, ss.servers))
+  // @inline private 
+  // def remapServerStates(map: RemappingMap, nextArg: NextArgMap, ss: ServerStates)
+  //     : ServerStates = 
+  //   ServerStates(remapStates(map, nextArg, ss.servers))
+
+  private val remapSSCache = 
+    new HashMap[ServerStates, (ServerStates, RemappingMap, NextArgMap)]
+
+  @inline private def remapServerStates(ss: ServerStates)
+      : (ServerStates, RemappingMap, NextArgMap) = {
+    remapSSCache.get(ss) match{
+      case Some((ss1, map, nextArgs)) => 
+        Profiler.count("remapServerStates found")
+        (ss1, cloneMap(map), nextArgs.clone)
+      case None =>
+        Profiler.count("remapServerStates new")
+        val map = newRemappingMap; var nextArg = newNextArgMap
+        val servers = ServerStates(remapStates(map, nextArg, ss.servers))
+        remapSSCache += ss -> ((servers, cloneMap(map), nextArg.clone))
+        (servers, map, nextArg)
+    }
+  }
 
   // =================== Remapping views
 
   /** Remap a ComponentView. */
   @inline def remapComponentView(v: ComponentView): ComponentView = {
-    val map = newRemappingMap; var nextArg = newNextArgMap
-    val servers1 = remapServerStates(map, nextArg, v.servers)
+    // val map = newRemappingMap; var nextArg = newNextArgMap
+    // val servers1 = remapServerStates(map, nextArg, v.servers)
+    val (servers1, map, nextArg) = remapServerStates(v.servers)
     val principal1 = remapState(map, nextArg, v.principal)
     val others1 = remapStates(map, nextArg, v.others)
     new ComponentView(servers1, principal1, others1)
@@ -256,8 +275,9 @@ object Remapper{
     * canonical form. */
   @inline def mkComponentView(
      servers: ServerStates, principal: State, others: Array[State]) = {
-    val map = newRemappingMap; var nextArg = newNextArgMap
-    val servers1 = remapServerStates(map, nextArg, servers)
+    // val map = newRemappingMap; var nextArg = newNextArgMap
+    // val servers1 = remapServerStates(map, nextArg, servers)
+    val (servers1, map, nextArg) = remapServerStates(servers)
     val principal1 = remapState(map, nextArg, principal)
     val others1 = remapStates(map, nextArg, others)
     new ComponentView(servers1, principal1, others1)

@@ -61,7 +61,8 @@ class ResultCache(initSize: Int = 16){
   private def mkHash(sts: States): Int = {
     var h = 0; var i = 0
     while(i < sts.length){ h = h*73 + sts(i).hashCode; i += 1 }
-    h
+    h ^= ((h >>> 20) ^ (h >>> 12))
+    (h >>> 7) ^ (h >>> 4)
   }
 
   /** Find the index in the arrays corresponding to k. */

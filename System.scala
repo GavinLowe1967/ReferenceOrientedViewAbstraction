@@ -425,6 +425,10 @@ class System(fname: String, checkDeadlock: Boolean,
     ok
   }
 
+  /** Next states of st after performing e, synchronising with pid. */
+  def nextsAfter(st: State, e: EventInt, pid: ProcessIdentity): List[State] = 
+    components.getTransComponent(st).nexts(e, pid._1, pid._2)
+
   // private val consistentStatesCache = 
   //   new HashMap[(ProcessIdentity, Concretization, EventInt, ComponentView),
   //     ArrayBuffer[(State, List[State])] ]()
@@ -516,9 +520,9 @@ class System(fname: String, checkDeadlock: Boolean,
       : (RenamingTuples, OtherArgMap) = {
     val preCptsL = preCpts.toList
     mapCache.get(st, pid, servers, preCptsL) match{
-      case Some(tuple) => Profiler.count("getMaps: retrieved"); tuple
+      case Some(tuple) => /* Profiler.count("getMaps: retrieved"); */ tuple
       case  None =>
-        Profiler.count("getMaps: new")
+        // Profiler.count("getMaps: new") ~1.5%
         val (f,id) = pid; val map0 = servers.remappingMap
         val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
         otherArgs(f) = otherArgs(f).filter(_ != id)

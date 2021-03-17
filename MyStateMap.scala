@@ -1,8 +1,6 @@
 package ViewAbstraction
 
 object MyStateMap{
-
-
   /** Mapping storing all the States found so far. */
   @volatile private var stateStore: StateMap = new InitialisationStateHashMap
     // if(UseTrieStateMap) new InitialisationStateHashMap else new ShardedStateMap
@@ -45,7 +43,7 @@ object MyStateMap{
   @noinline def get(ix: StateIndex): State = stateStore.get(ix)
 
   /** Replace the initial StateMap with a Trie-based one. */
-  def renewStateStore(numCS: Int, minCS: Int) = /* if(UseTrieStateMap) */ {
+  def renewStateStore(numCS: Int, minCS: Int) = if(false){
     print("Creating Trie-based StateMap...")
     // IMPROVE following if just tsm used
     val it = stateStore.asInstanceOf[InitialisationStateHashMap].iterator.toArray
