@@ -43,7 +43,11 @@ class ServerStates(val servers: List[State]){
 
   /** A template Remapper.RemappingMap */
   private val remappingMapTemplate = Array.tabulate(numTypes)(t => 
-    Array.tabulate(typeSizes(t))(i => if(i < numParams(t)) i else -1))
+    // For a remapping involving this, assuming the script has enough
+    // parameters, each set of components can have at most
+    // typeSizes(t)-numParams(t) fresh parameters, giving the value below.
+    Array.tabulate(2*typeSizes(t)-numParams(t))(i => 
+      if(i < numParams(t)) i else -1))
 
   /** A (fresh) RemappingMap, representing the identity on the parameters of 
     * this. */

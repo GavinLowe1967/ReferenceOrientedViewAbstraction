@@ -142,6 +142,9 @@ package object ViewAbstraction{
     if(h == 0) 12344577 else h
   }
 
+  /** Switch to activate various assertions. */
+  val debugging = false
+
   type SignificancePath = List[Int]
 
   private val formatter = java.text.NumberFormat.getNumberInstance
@@ -187,6 +190,10 @@ package object ViewAbstraction{
 
   /** The number of distinguished values of each type. */
   var distinguishedSizes: Array[Int] = null
+
+  /** The number of non-distinguished values of each type that we might need to
+    * deal with in remappings. */
+  var remapSizes: Array[Int] = null
 
   /** Set numTypes to be nt, and numFamilies to be nf; initialise arrays
     * indexed by types. */

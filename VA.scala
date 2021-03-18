@@ -141,7 +141,7 @@ object VA{
     ox.gavin.profiling.Profiler.report 
     println(s"Unification.renameXCount = "+
       printLong(RemapperP.Unification.renameXCount))
-    println(s"Remapper.combine2Count = "+
+    println(s"Unification.combine2Count = "+
       printLong(RemapperP.Unification.combine2Count))
     println(s"Unification.combineCount = "+
       printLong(RemapperP.Unification.combineCount))

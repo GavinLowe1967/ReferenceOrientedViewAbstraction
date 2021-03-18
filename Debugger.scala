@@ -124,7 +124,7 @@ class Debugger(
     // (modulo renaming).  And v = abss.target
     // befores, events, afters have same length; abss is one longer
     while(!done){
-      val pre = v.pre; val e = v.e; val post = v.post
+      val (pre, e, post) = v.getCreationInfo
       assert(e >= 0, s"$pre -($e)-> $post")
       // println(s"$pre -${system.showEvent(e)}-> $post ]= $v")
       befores += pre; events += e; afters += post

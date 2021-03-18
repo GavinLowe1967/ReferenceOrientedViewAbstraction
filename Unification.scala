@@ -3,6 +3,7 @@ package ViewAbstraction.RemapperP
 import ViewAbstraction._
 import ViewAbstraction.RemapperP._
 
+import ox.gavin.profiling.Profiler
 import scala.collection.mutable.ArrayBuffer
 
 /** Operations concerned with unifying states or views. */
@@ -114,7 +115,7 @@ object Unification{
   private[RemapperP]
   def combine2(map: RemappingMap, nextArg: NextArgMap,
     otherArgs: OtherArgMap, cpts1: Array[State], cpts2: Array[State],
-    result: CombineResult, i: Int = 0, j: Int = 0, unifs: Unifications = List()): Unit 
+    result: CombineResult, i: Int, j: Int, unifs: Unifications): Unit 
   = {
     /* Rename (f,id) to id1; if this is the identity parameter, then
      * unify with corresponding component in cpts1 if there is one. */
@@ -158,6 +159,10 @@ object Unification{
         else{ // rename (f, id)
           // Case 1: map id to the corresponding value idX in map, if any;
           // otherwise to an element id1 of otherArgs(f).
+          assert(id < map(f).length, 
+            s"f = $f, id = $id, c = $c\ncpts1 = "+
+              cpts1.map(_.toString0).mkString("; ")+
+              "\ncpts2 = "+cpts2.map(_.toString0).mkString("; "))
           val idX = map(f)(id)
           if(idX < 0){
             // Call renameX for each id1 in otherArgs(f), with id1 removed
@@ -206,7 +211,7 @@ object Unification{
     val (map0, otherArgs, nextArg) =  v1.getCombiningMaps
       // Remapper.createCombiningMaps(servers, components1)
 
-    if(false){      // IMPROVE: following checks are expensive
+    if(debugging){      // IMPROVE: following checks are expensive
       var f = 0
       while(f < numTypes){
         // Check otherArgs(f) disjoint from ran(map0(f))
@@ -277,7 +282,9 @@ object Unification{
                 f += 1
               }
               // IMPROVE:  don't remap st1?
-              combine2(map1, nextArg1, otherArgs1, components1, components2, result)
+              Profiler.count("combine2 with unification")
+              combine2(map1, nextArg1, otherArgs1, components1, components2, 
+                result, 0, 0, List())
               // assert(res.forall{case (_,unifs) => unifs.contains(i,j)})
 
             }

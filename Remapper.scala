@@ -200,7 +200,7 @@ object Remapper{
   def remapParams(map: RemappingMap, nextArg: NextArgMap, st: State)
       : Array[Identity] = {
     val cs = st.cs; val ids = st.ids; val len = ids.length; var index = 0
-    val remappedParams = State.getIdentityArray(len) 
+    val remappedParams = new Array[Identity](len) // State.getIdentityArray(len) 
     val tArray = State.stateTypeMap(cs) // array giving types of ids
     while(index < len){
       remappedParams(index) = remapArg(map, nextArg, tArray(index), ids(index))
@@ -263,24 +263,18 @@ object Remapper{
 
   /** Remap a ComponentView. */
   @inline def remapComponentView(v: ComponentView): ComponentView = {
-    // val map = newRemappingMap; var nextArg = newNextArgMap
-    // val servers1 = remapServerStates(map, nextArg, v.servers)
     val (servers1, map, nextArg) = remapServerStates(v.servers)
-    val principal1 = remapState(map, nextArg, v.principal)
-    val others1 = remapStates(map, nextArg, v.others)
-    new ComponentView(servers1, principal1, others1)
+    val components1 = remapStates(map, nextArg, v.components)
+    new ComponentView(servers1, components1) // principal1, others1)
   }
 
   /** Make a ComponentView from servers, principal and others, remapping to
     * canonical form. */
   @inline def mkComponentView(
-     servers: ServerStates, principal: State, others: Array[State]) = {
-    // val map = newRemappingMap; var nextArg = newNextArgMap
-    // val servers1 = remapServerStates(map, nextArg, servers)
+    servers: ServerStates, components: Array[State]) = {
     val (servers1, map, nextArg) = remapServerStates(servers)
-    val principal1 = remapState(map, nextArg, principal)
-    val others1 = remapStates(map, nextArg, others)
-    new ComponentView(servers1, principal1, others1)
+    val components1 = remapStates(map, nextArg, components)
+    new ComponentView(servers1, components1) // principal1, others1)
   }
 
   def remapView(v: View) = v match{

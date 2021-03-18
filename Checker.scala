@@ -529,6 +529,7 @@ class Checker(system: SystemP.System){
   protected def effectOn(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
   = {
+    Profiler.count("effectOn")
     // effectOnCount += 1
     // if(veryVerbose) 
     //   println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
@@ -550,22 +551,25 @@ class Checker(system: SystemP.System){
     }
     var cptIx = 0
     while(cptIx < newCpts.length){
-      val (cpts, unifs) = newCpts(cptIx); cptIx += 1
-      assert(changedServers || unifs.nonEmpty)
+      Profiler.count("effect on success")
+      val /*(cpts, unifs)*/ pair = newCpts(cptIx); val cpts = pair._1; cptIx += 1
+      var us = pair._2; assert(changedServers || us.nonEmpty)
       // View.checkDistinct(cpts)
       // pre U cpts is a consistent view.  
       // pre.components(i) = cpts(j)  iff  (i,j) in unifs.
       // Find what cpts(0) gets mapped to by unifs
-      var us = unifs
       while(us.nonEmpty && us.head._2 != 0) us = us.tail
       val newPrinc =
         if(us.isEmpty) cpts(0)
         else{ val ix = us.head._1; post.components(ix) }
-      var others = new ArrayBuffer[State]; val len = newPrinc.ids.length
+      val len = newPrinc.ids.length
+      var newComponents = new Array[State](len); newComponents(0) = newPrinc
       val pids = newPrinc.processIdentities
-      var i = 1; val princId = newPrinc.componentProcessIdentity // pids(0)
+      var i = 1; var k = 1; val princId = newPrinc.componentProcessIdentity
+      // Note, we might end up with fewer than len new components.
+      // Inv: we have filled newComponents0[0..k) using pids[0..i)
       while(i < len){
-        val pid = pids(i) // newPrinc.processIdentity(i) // pids(i)
+        val pid = pids(i)
         if(!isDistinguished(pid._2) && pid != princId){
           // check this is first occurrence of pid
           var j = 1; while(j < i && pids(j) != pid) j += 1
@@ -573,16 +577,19 @@ class Checker(system: SystemP.System){
             // Find the component of post or cpts with process identity pid, 
             // and add to others
             val st1 = find0(pid, post.components)
-            if(st1 != null) others += st1
-            else{ val st2 = find0(pid, cpts); others += st2 }
+            if(st1 != null){ newComponents(k) = st1; k += 1 }
+            else{ val st2 = find0(pid, cpts); newComponents(k) = st2; k += 1 }
           }
         }
         i += 1
       }
-      val othersA = others.toArray
-      // View.checkDistinct(others, newPrinc.toString)
-      val nv = Remapper.mkComponentView(post.servers, newPrinc, othersA)
-      // View.checkDistinct(nv.components, View.showStates(others))
+      if(k < len){ // We avoided a repeated component; trim newComponents
+        val nc = new Array[State](k); var j = 0
+        while(j < k){ nc(j) = newComponents(j); j += 1 }
+        newComponents = nc
+      }
+      if(debugging) View.checkDistinct(newComponents, newPrinc.toString)
+      val nv = Remapper.mkComponentView(post.servers, newComponents)
       newViewCount += 1
       if(!nv.representableInScript){
         println("Not enough identities in script to combine transition\n"+
@@ -591,14 +598,15 @@ class Checker(system: SystemP.System){
       }
       if(!sysAbsViews.contains(nv)){ // TODO: test if this helps
         nextNewViews += nv; addedViewCount += 1
-        val extendedPre = new Concretization(pre.servers, 
-            View.union(pre.components, cpts))
-        extendedPre.setSecondaryView(cv, null) // IMPROVE?  
-        val extendedPost = new Concretization(post.servers, 
-          View.union(post.components, newPrinc +: othersA))
-        nv.setCreationInfo(extendedPre, e, extendedPost)
+        nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents)
+        // val extendedPre = new Concretization(pre.servers, 
+        //     View.union(pre.components, cpts))
+        // extendedPre.setSecondaryView(cv, null) // IMPROVE?  
+        // val extendedPost = new Concretization(post.servers, 
+        //   View.union(post.components, newComponents))
+        // nv.setCreationInfo(extendedPre, e, extendedPost)
       }
-    }
+    } // end of main while loop
   }
 
   /** The effect of previously found extended transitions on the view cv. */

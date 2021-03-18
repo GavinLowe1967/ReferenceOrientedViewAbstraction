@@ -126,6 +126,10 @@ class System(fname: String, checkDeadlock: Boolean,
       components.getEventMap
     val serverAlphaMap: Array[Boolean] = servers.alphaBitMap
 
+    // Set max sizes of maps needed in remappings.  IMPROVE: I suspect we can do
+    // better than this.
+    remapSizes = typeSizes.map(_+4)
+
     // find three-way synchronisations
     assert(cptEventMap.length == eventsSize, 
            s"${cptEventMap.length}; $numEvents")
@@ -226,7 +230,8 @@ class System(fname: String, checkDeadlock: Boolean,
     if(activePrincipal) 
       for(i <- 0 until princTrans.eventsSolo.length-1;
         st1 <- princTrans.nextsSolo(i)){
-        val post = Concretization(cv.servers, st1, cv.others)
+        val newCpts = cv.components.clone; newCpts(0) = st1
+        val post = new Concretization(cv.servers, newCpts) 
         maybeAdd(conc0, princTrans.eventsSolo(i), post, null)
       }
 
@@ -248,7 +253,8 @@ class System(fname: String, checkDeadlock: Boolean,
               if(!activePrincipal) println("server-only event: "+showEvent(sE))
               // println(s"Server-principal sync on ${showEvent(pE)}")
               for(pNext <- pNexts(cptIndex); sNext <- sNexts(serverIndex)){
-                val post = Concretization(ServerStates(sNext), pNext, cv.others)
+                val newCpts = cv.components.clone; newCpts(0) = pNext
+                val post = new Concretization(ServerStates(sNext), newCpts) 
                 maybeAdd(conc0, sE, post, null)
               }
             }
@@ -262,8 +268,9 @@ class System(fname: String, checkDeadlock: Boolean,
     // Case 3: events synchronising principal component and one component.
     if(activePrincipal) for(f <- passiveFamilies; id <- 0 until idSizes(f)){
       val theseTrans = princTrans.transComponent(f)(id)
-      val componentIx = // index of (f,id) in others, or -1
-        cv.others.indexWhere(_.componentProcessIdentity == (f,id))
+      val componentIx = // index of (f,id) in components, or -1
+        cv.components.indexWhere(_.componentProcessIdentity == (f,id))
+      assert(componentIx != 0)
       if(theseTrans != null){ 
         val (oEs, oNs): (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = 
           theseTrans
@@ -273,14 +280,15 @@ class System(fname: String, checkDeadlock: Boolean,
           val e = oEs(i); assert(i < Sentinel)
           assert(components.passiveCptsOfEvent(e) == List((f,id)))
           if(componentIx >= 0){ // the passive component is present
-            val passiveSt = cv.others(componentIx) 
+            val passiveSt = cv.components(componentIx) 
             // Next states for the present passives
             val pNexts = components.getTransComponent(passiveSt).nexts(e, pf, pi)
             for(pNext <- pNexts){
-              // Post-state of others: insert pNext into cv.others
-              val othersPost = cv.others.clone; othersPost(componentIx) = pNext
               for(st1 <- oNs(i)){
-                val post = Concretization(cv.servers, st1, othersPost)
+                // Post-state of components
+                val cptsPost = cv.components.clone; cptsPost(0) = st1;
+                cptsPost(componentIx) = pNext
+                val post = new Concretization(cv.servers, cptsPost) 
                 maybeAdd(conc0, e, post, null)
               }
             }
@@ -288,7 +296,8 @@ class System(fname: String, checkDeadlock: Boolean,
           else{ // the passive component is absent
             val conc0 = Concretization(cv)
             for(st1 <- oNs(i)){ // the post state of the principal cpt
-              val post = Concretization(cv.servers, st1, cv.others)
+              val newCpts = cv.components.clone; newCpts(0) = st1
+              val post = new Concretization(cv.servers, newCpts)
               maybeAdd(conc0, e, post, (f,id))
             }
           }
@@ -301,8 +310,7 @@ class System(fname: String, checkDeadlock: Boolean,
     var index = 0; var e = sEsSolo(0)
     while(e < Sentinel){
       for(newServers <- sNsSolo(index)){
-        val post = 
-          Concretization(ServerStates(newServers), cv.principal, cv.others)
+        val post = new Concretization(ServerStates(newServers), cv.components)
         maybeAdd(conc0, e, post, null)
       }
       // println("sEsSolo = "+sEsSolo.init.map(showEvent).mkString("; "))
@@ -323,10 +331,8 @@ class System(fname: String, checkDeadlock: Boolean,
       if(theseCptTrans != null && theseServerTrans != null){
         val (pEs,pNexts) = theseCptTrans; val (sEs, sNexts) = theseServerTrans
         // is the other component in cv?
-        val otherIndices = (0 until cv.others.length).filter(i =>
-          cv.others(i).componentProcessIdentity == (of,oi))
-        // val otherPresent = 
-        //   cv.others.exists(_.componentProcessIdentity == (of,oi))
+        val otherIndices = (1 until cv.components.length).filter(i =>
+          cv.components(i).componentProcessIdentity == (of,oi))
         // Scan through arrays, looking for synchronisations.  Indexes into
         // the arrays and corresp events: Inv: pE = pEs(pj), sE = sEs(sj)
         var pj = 0; var pE = pEs(pj); var sj = 0; var sE = sEs(sj)
@@ -343,7 +349,7 @@ class System(fname: String, checkDeadlock: Boolean,
                     pNexts(pj)+"; "+sNexts(sj))
                 assert(otherIndices.length == 1) // FIXME: could have two refs 
                 val otherIndex = otherIndices.head
-                val otherState = cv.others(otherIndex)
+                val otherState = cv.components(otherIndex)
                 // Synchronisations between otherState and the principal
                 val otherNexts
                     : (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) =
@@ -355,16 +361,16 @@ class System(fname: String, checkDeadlock: Boolean,
                   if(otherEs(oj) == pE){
                     val pre = Concretization(cv)
                     // Possible next states of others
-                    val newOtherss = otherStates(oj).map{ st => 
-                      val nos = cv.others.clone; nos(otherIndex) = st; nos }
                     for(newServers <- sNexts(sj); newPrincSt <- pNexts(pj);
-                      newOthers <- newOtherss){
-                      val post = Concretization(ServerStates(newServers), 
-                        newPrincSt, newOthers)
-                      if(verbose)
-                        println(s"Three-way synchronisation: "+
-                          s"$pre -${showEvent(sE)}-> $post "+
-                          "with present other ${(of,oi)}")
+                        st <- otherStates(oj)){
+                      val newCpts = cv.components.clone
+                      newCpts(0) = newPrincSt; newCpts(otherIndex) = st
+                      val post =
+                        new Concretization(ServerStates(newServers), newCpts)
+                      // if(verbose)
+                      //   println(s"Three-way synchronisation: "+
+                      //     s"$pre -${showEvent(sE)}-> $post "+
+                      //     "with present other ${(of,oi)}")
                       maybeAdd(pre, sE, post, null)
                     }
                   }
@@ -373,8 +379,9 @@ class System(fname: String, checkDeadlock: Boolean,
               else{
                 val pre = Concretization(cv)
                 for(newServers <- sNexts(sj); newPrincSt <- pNexts(pj)){
-                  val post = Concretization(ServerStates(newServers), 
-                    newPrincSt, cv.others)
+                  val newCpts = cv.components.clone; newCpts(0) = newPrincSt
+                  val post = 
+                    new Concretization(ServerStates(newServers), newCpts)
                   if(verbose)
                     println(s"Three-way synchronisation: "+
                       s"$pre -${showEvent(sE)}-> $post with ${(of,oi)}")
@@ -400,7 +407,8 @@ class System(fname: String, checkDeadlock: Boolean,
       : Boolean = {
     // iterate through pre and post, recording which parameters are used.
     val bitMap = 
-      Array.tabulate(numFamilies)(f => new Array[Boolean](typeSizes(f)))
+// FIXME: size below
+      Array.tabulate(numFamilies)(f => new Array[Boolean](remapSizes(f)))
     // Record the parameters in bitMap 
     @inline def recordIds(st: State) = {
       val ids = st.ids; val typeMap = st.typeMap

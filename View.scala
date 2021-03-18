@@ -5,51 +5,100 @@ import ox.gavin.profiling.Profiler
 /** Superclass of views of a system state. */
 abstract class View{
   /** This view was created by the extended transition pre -e-> post. */
-  var pre, post: Concretization = null
-  var e: EventInt = -1
+  private var pre, post: Concretization = null
+  private var e: EventInt = -1
+
+  /** Ingredients for making an extended transition.  If this contains a tuple
+    * (pre1, cpts, cv, post1, newCpts) then this was created by the extended
+    * transition 
+    * mkExtendedPre(pre1, cpts, cv) -e1-> mkExtendedPost(post1, newCpts). 
+    * We lazily avoid creating these concretizations until needed. */ 
+  private var creationIngredients: 
+      (Concretization, Array[State], ComponentView, Concretization, Array[State])
+  = null
+
+  /** Get the creation information for this. */
+  def getCreationInfo: (Concretization, EventInt, Concretization) = 
+    if(pre != null){ println("old style"); (pre, e, post) }
+    else{ 
+      println("new style")
+      val (pre1, cpts, cv, post1, newCpts) = creationIngredients
+      (mkExtendedPre(pre1, cpts, cv), e, mkExtendedPost(post1, newCpts))
+    }
 
   /** Record that this view was created by the extended transition 
     * pre1 -e1-> post1. */
   def setCreationInfo(pre1: Concretization, e1: EventInt, post1: Concretization) 
   = {
+    require(creationIngredients == null)
     pre = pre1; e = e1; post = post1
   }
+
+  /** Record that this view was created by the extended transition
+    * mkExtendedPre(pre1, cpts, cv) -e1-> mkExtendedPost(post1, newCpts).
+    */
+  def setCreationInfoIndirect(
+    pre1: Concretization, cpts: Array[State], cv: ComponentView,
+    e1: EventInt, post1: Concretization, newCpts: Array[State]) 
+  = {
+    require(pre == null); 
+    creationIngredients = (pre1, cpts, cv, post1, newCpts); e = e1
+  }
+
+  /** Make the extended pre-state by extending pre1 with cpts, and setting cv as
+    * the secondary view. */
+  private def mkExtendedPre(
+    pre1: Concretization, cpts: Array[State], cv: ComponentView)
+      : Concretization = {
+    val extendedPre = new Concretization(pre1.servers,
+      View.union(pre1.components, cpts))
+    extendedPre.setSecondaryView(cv, null)
+    extendedPre
+  }
+
+  /** Make the extended post-state by extending post1 with newCpts. */
+  private def mkExtendedPost(post1: Concretization, newCpts: Array[State]) = 
+    new Concretization(post1.servers, View.union(post1.components, newCpts))
 }
 
 // =======================================================
 
 /** A component-centric view.
   * @param servers the states of the servers
-  * @param principal the principal component state
-  * @param others the other components, referenced by principal.
+  * @param components the components, with the principal component state first.
   */
-class ComponentView(
-  val servers: ServerStates, val principal: State, val others: Array[State])
+class ComponentView(val servers: ServerStates, val components: Array[State])
     extends View{
-  /** All the components in this view, with the principal component first. */
-  val components = principal +: others // IMPROVE
 
-  val componentsList = components.toList
+  def this(servers: ServerStates, principal: State, others: Array[State]){
+    this(servers, principal +: others)
+  }
+
+  /** The principal component. */
+  def principal = components(0)
+
+  // val componentsList = components.toList
 
   /** Check all components referenced by principal are included, and no more. */
   // IMRPOVE: this is moderately expensive
-  @noinline private def checkValid = { 
-    val len = principal.ids.length; val othersLen = others.length; var i = 1
+  @noinline private def checkValid = if(debugging){ 
+    val len = principal.ids.length; val cptsLen = components.length; var i = 1
     while(i < len){
       val pid = principal.processIdentity(i)
       if(!isDistinguished(pid._2)){
         // Test if otherPids.contains(pid)
-        var j = 0
-        while(j < othersLen && others(j).componentProcessIdentity != pid) j += 1
-        assert(j < othersLen || pid == principal.componentProcessIdentity,
+        var j = 1
+        while(j < cptsLen && components(j).componentProcessIdentity != pid) 
+          j += 1
+        assert(j < cptsLen || pid == principal.componentProcessIdentity,
           s"Not a correct ComponentView: $this")
       }
       i += 1
     }
     // Check all of others referenced by principal
-    var j = 0
-    while(j < others.length){
-      val otherId = others(j).componentProcessIdentity 
+    var j = 1
+    while(j < cptsLen){
+      val otherId = components(j).componentProcessIdentity 
       var i = 0
       while(i < len && principal.processIdentity(i) != otherId) i += 1
       assert(i < len, s"Not a correct ComponentView: $this")
@@ -61,41 +110,29 @@ class ComponentView(
 
   /** Is this representable using the values defined in the script? */
   def representableInScript = 
-    servers.representableInScript && principal.representableInScript &&
-      others.forall(_.representableInScript)
+    servers.representableInScript && components.forall(_.representableInScript)
 
   override def toString = 
-    s"$servers || $principal"+
-    (if(others.nonEmpty) " || "+others.mkString("[", " || ", "]") else "")
+    s"$servers || "+components.mkString("[", " || ", "]")
 
   def toString0 = 
-    s"${servers.toString0} || ${principal.toString0}"+
-    (if(others.nonEmpty) 
-      " || "+others.map(_.toString0).mkString("[", " || ", "]") 
-    else "")
+    servers.toString0+" || "+
+      components.map(_.toString0).mkString("[", " || ", "]")
 
   override def equals(that: Any) = that match{
     case cv: ComponentView => 
-      // println(s"equals $this $that") 
-      servers == cv.servers && principal == cv.principal && 
-      others.sameElements(cv.others)
+      servers == cv.servers && components.sameElements(cv.components)
   }
 
   /** Create hash code. */
   @inline private def mkHashCode = {
-    var h = servers.hashCode*71+principal.hashCode
-    var i = 0; var n = others.length
-    while(i < n){ h = h*71+others(i).hashCode; i += 1 }    
+    var h = servers.hashCode*71 
+    var i = 0; var n = components.length
+    while(i < n){ h = h*71+components(i).hashCode; i += 1 }    
     h 
   }
 
   override val hashCode = mkHashCode
-
-  // override def hashCode = {
-  //   if(theHashCode == 0) theHashCode = mkHashCode
-  //   theHashCode
-  // }
-
 }
 
 
@@ -103,15 +140,15 @@ class ComponentView(
 
 /** Companion object. */
 object View{
-  /** All components referenced by principal in states. */
+  /** All components referenced by principal in states, including itself. */
   def referencedStates(principal: State, states: Array[State]): Array[State] = {
     val len = principal.ids.length
-    val refed = new Array[State](len-1)
+    val refed = new Array[State](len); refed(0) = principal
     for(i <- 1 until len){
       val thisId = principal.ids(i)
       val matches = states.filter(_.ids(0) == thisId)
       assert(matches.length == 1)
-      refed(i-1) = matches(0)
+      refed(i) = matches(0)
     }
     refed
   }
@@ -218,7 +255,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     assert(princ.ids.tail.forall(id => isDistinguished(id) || cIds.contains(id)),
       s"\nConcretization.getViewOf: Not all references of $princ included in\n"+
         this)
-    new ComponentView(servers, princ, components1)
+    new ComponentView(servers, princ +: components1)
   }
 
   def componentsList = components.toList
@@ -325,7 +362,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 object Concretization{
   /** Make a concretization from cv. */
   def apply(cv: ComponentView) =
-    new Concretization(cv.servers, cv.principal +: cv.others)
+    new Concretization(cv.servers, cv.components) // cv.principal +: cv.others)
 
   def apply(servers: ServerStates, principal: State, others: Array[State]) =
     new Concretization(servers, principal +: others)
