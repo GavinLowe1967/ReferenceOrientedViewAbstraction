@@ -125,10 +125,16 @@ class Debugger(
     // befores, events, afters have same length; abss is one longer
     while(!done){
       val (pre, e, post) = v.getCreationInfo
+      // assert(pre.ply <= v.ply)
+      if(pre.ply > v.ply) 
+        println("Unexpected ply in pre: $pre $pre.ply$; $v $v.ply$")
       assert(e >= 0, s"$pre -($e)-> $post")
       // println(s"$pre -${system.showEvent(e)}-> $post ]= $v")
       befores += pre; events += e; afters += post
       v = sysAbsViews.getRepresentative(pre.toComponentView); abss += v
+      // assert(v.ply <= pre.ply)
+      if(v.ply > pre.ply) 
+        println("Unexpected ply in v: $v $v.ply$; $pre $pre.ply$")
       done = initViews.contains(v)
     }
     if(verbose) println

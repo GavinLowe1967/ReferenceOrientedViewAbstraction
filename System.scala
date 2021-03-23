@@ -181,6 +181,7 @@ class System(fname: String, checkDeadlock: Boolean,
     // assert(cptViews.forall(_.length == k))
     for(v <- views){
       val v1 = Remapper.remapView(v)
+      v1.setPly(0)
       if(verbose) 
         println(v.toString+" -> "+v1.toString+(if(isActive(v)) "*" else ""))
       if(viewSet.add(v1)){ activeViews += v1; if(verbose) println("**") }

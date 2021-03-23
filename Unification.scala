@@ -43,22 +43,12 @@ object Unification{
     }
   }
 
-  /** Unifications between the components of two views, giving the indices of
-    * components that are unified with one another. */
-  type Unifications = List[(Int, Int)]
-
   /** Find the index k of cpts with identity pid.  Return -1 if no such index. */
   @inline private def find(cpts: Array[State], f: Family, id: Identity) = {
     // Search backwards to facilitate default result of -1
     var k = cpts.length-1
     while(k >= 0 && !cpts(k).hasPID(f,id)) k -= 1
     k
-    // var k = -1; var i = 0
-    // while(i < cpts.length){
-    //   if(cpts(i).hasPID(f,id)){ assert(k < 0); k = i } // IMPROVE
-    //   i += 1
-    // }
-    // k
   }
 
   /** Update otherArgs to be disjoint from ran map. */
@@ -78,16 +68,17 @@ object Unification{
     }
   }
 
-  type CombineResult = ArrayBuffer[(Array[State], Unifications)]
+  /** The result of a call to combine.  All remapped states, and the index of
+    * the component in cpts1 that the principal of cpts2 gets mapped to, or -1
+    * if none. */
+  type CombineResult = ArrayBuffer[(Array[State], Int)]
 
   /** Extend map, in all possible ways, to remap cpts2 so as to be compatible
     * with cpts1.  Each parameter (f,p), not in the domain of map, can be
     * mapped to an element of otherArgs(f) (a subset of the parameters of
-    * cpts1), or a fresh value given by nextArg(f).  If the jth identity
-    * parameter of cpts2 maps to the kth identity parameter of cpts1, then the
-    * corresponding States much match, and the pair (k,j) is included in the
-    * Unifications returned.  Called by combine.  See
-    * RemapperTest.combine1Test for examples.
+    * cpts1), or a fresh value given by nextArg(f).  If an identity of cpts2
+    * maps to an identity of cpts1, then the corresponding parameters must
+    * match.  Called by combine.  See RemapperTest.combine1Test for examples.
     * 
     * @param map the RemappingMap that gets extended.  Cloned before being 
     * mutated.
@@ -99,23 +90,26 @@ object Unification{
     * can be mapped to.  For each type, disjoint from the range of the
     * corresponding element of map0.  Used mutably, but each update is
     * backtracked.
-    * @return all resulting remappings of cpts2 together with the 
-    * unifications. */
+    * @return all resulting remappings of cpts2, together with the index of the
+    * component of cpts1 that the principal of cpts2 maps to, if any,
+    * otherwise -1. */
   private[RemapperP]
   def combine1(map: RemappingMap, nextArg: NextArgMap,
       otherArgs: OtherArgMap, cpts1: Array[State], cpts2: Array[State])
       : CombineResult = {
-    val result = new ArrayBuffer[(Array[State], Unifications)]
-    combine2(map, nextArg, otherArgs, cpts1, cpts2, result, 0, 0, List())
+    val result = new CombineResult // ArrayBuffer[(Array[State], Int)]
+    combine2(map, nextArg, otherArgs, cpts1, cpts2, result, 0, 0, -1)
     result
   }
 
   /** As combine1, except extending map to remap cpts2(j).ids[i..) and then
-    * cpts2[j+1..), adding all results to results. */
+    * cpts2[j+1..), adding all results to results; unif0 is the index of the
+    * component of cpts1 that the principal of cpts2 maps to, if any,
+    * otherwise -1. */
   private[RemapperP]
   def combine2(map: RemappingMap, nextArg: NextArgMap,
     otherArgs: OtherArgMap, cpts1: Array[State], cpts2: Array[State],
-    result: CombineResult, i: Int, j: Int, unifs: Unifications): Unit 
+    result: CombineResult, i: Int, j: Int, unif0: Int): Unit 
   = {
     /* Rename (f,id) to id1; if this is the identity parameter, then
      * unify with corresponding component in cpts1 if there is one. */
@@ -133,29 +127,29 @@ object Unification{
           // Update otherArgs to be disjoint from ran map2.
           makeDisjoint(otherArgs, map2) // (+)
           combine2(map2, nextArg, otherArgs, cpts1, cpts2, result,
-            0, j+1, (k,j)::unifs)
+            0, j+1, if(j == 0){assert(unif0 < 0); k} else unif0)
           restoreOtherArgMap(otherArgs, oldOtherArgs) // Undo (+)
         }
         map(f)(id) = idX // backtrack (*)
       } // end of if k >= 0
       else{ // No cpt of cpts1 matched; move on
         map(f)(id) = id1  // temporary update (*)
-        combine2(map, nextArg, otherArgs, cpts1, cpts2, result, i+1, j, unifs)
+        combine2(map, nextArg, otherArgs, cpts1, cpts2, result, i+1, j, unif0)
         map(f)(id) = idX // backtrack (*)
       }
     } // end of renameX
 
     combine2Count += 1
     if(j == cpts2.length)
-      result += ((Remapper.applyRemapping(map, cpts2), unifs))  // base case
+      result += ((Remapper.applyRemapping(map, cpts2), unif0))  // base case
     else{
       val c = cpts2(j); val ids = c.ids; val typeMap = c.typeMap
       if(i == ids.length) // End of this component; move to next component
-        combine2(map, nextArg, otherArgs, cpts1, cpts2, result, 0, j+1, unifs)
+        combine2(map, nextArg, otherArgs, cpts1, cpts2, result, 0, j+1, unif0)
       else{
         val id = ids(i); val f = typeMap(i)
         if(isDistinguished(id))  // just move on
-          combine2(map, nextArg, otherArgs, cpts1, cpts2, result, i+1, j, unifs)
+          combine2(map, nextArg, otherArgs, cpts1, cpts2, result, i+1, j, unif0)
         else{ // rename (f, id)
           // Case 1: map id to the corresponding value idX in map, if any;
           // otherwise to an element id1 of otherArgs(f).
@@ -172,7 +166,7 @@ object Unification{
             // Profiler.count("rec"+toDoIds.length): 0: 5%; 1: 60%; 2: 30%; 3: 5%
             while(toDoIds.nonEmpty){
               val id1 = toDoIds.head; toDoIds = toDoIds.tail
-              otherArgs(f) = doneIds++toDoIds // temporary update (*)
+              otherArgs(f) = append1(doneIds, toDoIds) // doneIds++toDoIds // temporary update (*)
               renameX(f, id, id1)
               doneIds = id1::doneIds //  order doesn't matter
             }
@@ -185,7 +179,7 @@ object Unification{
             val id1 = nextArg(f); nextArg(f) += 1 // temporary update (+)
             map(f)(id) = id1 // (+)
             combine2(map, nextArg, otherArgs, cpts1, cpts2, result, 
-              i+1, j, unifs) // Move on to next parameter
+              i+1, j, unif0) // Move on to next parameter
             nextArg(f) -= 1; map(f)(id) = idX  // undo (+)
           }
         }
@@ -198,8 +192,7 @@ object Unification{
     * the jth identity parameter of v2 maps to the kth identity parameter of
     * v1, then the corresponding States much match, and the pair (k,j) is
     * included in the Unifications returned. */
-  def combine(v1: Concretization, v2: ComponentView)
-      : ArrayBuffer[(Array[State], Unifications)] = {
+  def combine(v1: Concretization, v2: ComponentView) : CombineResult = {
     combineCount += 1
     // println(s"combine($v1, $v2)")
     val servers = v1.servers; require(v2.servers == servers)
@@ -209,7 +202,6 @@ object Unification{
     // otherArgs gives parameters used in v1 but not the servers; nextArg
     // gives the next fresh parameters.
     val (map0, otherArgs, nextArg) =  v1.getCombiningMaps
-      // Remapper.createCombiningMaps(servers, components1)
 
     if(debugging){      // IMPROVE: following checks are expensive
       var f = 0
@@ -219,7 +211,8 @@ object Unification{
         while(oa.nonEmpty){
           require(!map0(f).contains(oa.head),
             s"combine1: otherArgs not disjoint from map0 for $f: "+
-              map0(f).mkString("[",",","]")+"; "+otherArgs(f).mkString("[",",","]"))
+              map0(f).mkString("[",",","]")+"; "+
+              otherArgs(f).mkString("[",",","]"))
           oa = oa.tail
         }
         // Check nextArg(f) holds next fresh value
@@ -227,10 +220,11 @@ object Unification{
           if(otherArgs(f).isEmpty) map0(f).max
           else(map0(f).max max otherArgs(f).max)  ),
           s"combine1: nextArg($f) with incorrect value: "+nextArg(f)+"; "+
-            map0(f).mkString("[",",","]")+"; "+otherArgs(f).mkString("[",",","]"))
+            map0(f).mkString("[",",","]")+"; "+
+            otherArgs(f).mkString("[",",","]"))
         f += 1
       }
-    } // end of if(false)
+    } // end of if(debugging)
 
     combine1(map0, nextArg, otherArgs, components1, components2)
   }
@@ -240,18 +234,18 @@ object Unification{
     * a component of v2 unifies with some component of v1 such that the
     * corresponding entry in flags is true.  If the jth identity parameter of
     * v2 maps to the kth identity parameter of v1, then the corresponding
-    * States much match, and the pair (k,j) is included in the Unifications
-    * returned. */
+    * States much match.  Also return the index of the component of v2 that
+    * the principal of v1 maps onto, if any, otherwise -1. */
   def combineWithUnification(
     v1: Concretization, flags: Array[Boolean], v2: ComponentView)
-      : ArrayBuffer[(Array[State], Unifications)] = {
+      : CombineResult = {
+    Profiler.count("combineWithUnification")
     val servers = v1.servers; require(v2.servers == servers)
     val components1 = v1.components; val components2 = v2.components
     // View.checkDistinct(components2); 
     require(components1.length == flags.length)
-    val result = new ArrayBuffer[(Array[State], Unifications)]
+    val result = new CombineResult 
     val (map0, otherArgs0, nextArg0) = v1.getCombiningMapsImmutable
-      // Remapper.createCombiningMaps(servers, components1)
     val otherArgs1 = new Array[List[Identity]](numTypes)
     val nextArg1 = new Array[Int](numTypes)
 
@@ -268,7 +262,6 @@ object Unification{
               //  make otherArgs1 and nextArg1 consistent with map1
               var f = 0
               while(f < numTypes){
-                // otherArgs1(f) = otherArgs0(f).filter(id => !map1(f).contains(id))
                 var xs = otherArgs0(f); var ys = List[Identity]()
                 while(xs.nonEmpty){
                   val id = xs.head; xs = xs.tail; 
@@ -284,9 +277,7 @@ object Unification{
               // IMPROVE:  don't remap st1?
               Profiler.count("combine2 with unification")
               combine2(map1, nextArg1, otherArgs1, components1, components2, 
-                result, 0, 0, List())
-              // assert(res.forall{case (_,unifs) => unifs.contains(i,j)})
-
+                result, 0, 0, -1)
             }
           }
           j += 1

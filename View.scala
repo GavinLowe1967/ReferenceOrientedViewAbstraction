@@ -8,6 +8,13 @@ abstract class View{
   private var pre, post: Concretization = null
   private var e: EventInt = -1
 
+  /** The ply on which this was created.  This is only used in assertions. */
+  var ply = Int.MaxValue
+
+  def setPly(p: Int) = { 
+    require(ply == Int.MaxValue || ply == p, s"$ply $p"); ply = p 
+  }
+
   /** Ingredients for making an extended transition.  If this contains a tuple
     * (pre1, cpts, cv, post1, newCpts) then this was created by the extended
     * transition 
@@ -28,10 +35,14 @@ abstract class View{
 
   /** Record that this view was created by the extended transition 
     * pre1 -e1-> post1. */
-  def setCreationInfo(pre1: Concretization, e1: EventInt, post1: Concretization) 
+  def setCreationInfo(
+    pre1: Concretization, e1: EventInt, post1: Concretization, ply1: Int)
   = {
-    require(creationIngredients == null)
-    pre = pre1; e = e1; post = post1
+    require(ply == Int.MaxValue || ply == ply1, s"$ply $ply1")
+    require(creationIngredients == null && pre == null)
+    require(pre1.ply <= ply1, s"${pre1.ply} $ply1")
+    require(post1.ply <= ply1)
+    pre = pre1; e = e1; post = post1; ply = ply1
   }
 
   /** Record that this view was created by the extended transition
@@ -39,10 +50,12 @@ abstract class View{
     */
   def setCreationInfoIndirect(
     pre1: Concretization, cpts: Array[State], cv: ComponentView,
-    e1: EventInt, post1: Concretization, newCpts: Array[State]) 
+    e1: EventInt, post1: Concretization, newCpts: Array[State], ply1: Int) 
   = {
-    require(pre == null); 
-    creationIngredients = (pre1, cpts, cv, post1, newCpts); e = e1
+    require(ply == Int.MaxValue || ply == ply1, s"$ply $ply1")
+    require(pre == null && creationIngredients == null)
+    require(pre1.ply <= ply1 && cv.ply <= ply1 && post1.ply <= ply1)
+    creationIngredients = (pre1, cpts, cv, post1, newCpts); e = e1; ply = ply1
   }
 
   /** Make the extended pre-state by extending pre1 with cpts, and setting cv as
@@ -52,7 +65,7 @@ abstract class View{
       : Concretization = {
     val extendedPre = new Concretization(pre1.servers,
       View.union(pre1.components, cpts))
-    extendedPre.setSecondaryView(cv, null)
+    extendedPre.setSecondaryView(cv, null, ply)
     extendedPre
   }
 
@@ -113,11 +126,11 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     servers.representableInScript && components.forall(_.representableInScript)
 
   override def toString = 
-    s"$servers || "+components.mkString("[", " || ", "]")
+    s"$servers || "+components.mkString("[", " || ", "]")+s" <$ply>"
 
   def toString0 = 
     servers.toString0+" || "+
-      components.map(_.toString0).mkString("[", " || ", "]")
+      components.map(_.toString0).mkString("[", " || ", "]")+s" <$ply>"
 
   override def equals(that: Any) = that match{
     case cv: ComponentView => 
@@ -242,9 +255,50 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 // FIXME: I think this goes wrong if princ has two references to the same
 // component.
   def getViewOf(princ: State): ComponentView = {
-    val princIds = princ.ids
+    val princIds = princ.processIdentities; val len = princIds.length
+    var components1 = new Array[State](len); components1(0) = princ
     // Other components to be included in the ComponentView: those referenced 
     // by princ
+    var i = 1; var j = 1
+    // We have filled components1[0..j) from princIds[0..i)
+    while(i < len){
+      val pid = princIds(i)
+      if(!isDistinguished(pid._2)){
+        // Test if this is the first occurrence of pid
+        var k = 0; while(k < i && princIds(k) != pid) k += 1
+        if(k == i){
+          // Find pid in components
+          var k = 1
+          while(components(k).componentProcessIdentity != pid) k += 1
+          components1(j) = components(k); j += 1; k += 1
+        }
+        // else println("Repeated parameter "+princ)
+      }
+      i += 1
+    }
+    if(j < len){
+      // Some distinguished or repeated parameters; trim unfilled slots.
+      val nc = new Array[State](j); var k = 0
+      while(k < j){ nc(k) = components1(k); k += 1 }
+      components1 = nc
+    }
+    if(true){ // testing against previous version IMPROVE
+      val components1X = components.tail.filter{cpt =>
+        val (f,id) = cpt.componentProcessIdentity
+          (1 until princIds.length).exists{j =>
+            princIds(j) == (f,id)}
+      }
+      val components2t = components1.tail
+      assert(components1X.sameElements(components2t) ||
+        components1X.length == components2t.length &&
+        components1X.forall(st => components2t.contains(st)),
+        components1X.map(_.toString).mkString("[",", ","]")+
+          components1.map(_.toString).mkString("[",", ","]"))
+    }
+    val v = new ComponentView(servers, components1)
+    v.setPly(ply)
+    v
+/*
     val components1 = components.tail.filter{cpt =>
       val (f,id) = cpt.componentProcessIdentity
       (1 until princIds.length).exists{j => 
@@ -256,6 +310,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       s"\nConcretization.getViewOf: Not all references of $princ included in\n"+
         this)
     new ComponentView(servers, princ +: components1)
+ */
   }
 
   def componentsList = components.toList
@@ -271,9 +326,22 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   // IMPROVE: would it be enough to store just the non-null elements, to use
   // less memory?
 
+  /** The ply on which this was created. */
+  var ply = Int.MaxValue
+
+  def setPly(p: Int) = { assert(ply == Int.MaxValue); ply = p }
+
   /** Set the secondary view. */
-  def setSecondaryView(sv: ComponentView, rv: Array[ComponentView]) = {
-    assert(secondaryView == null); secondaryView = sv; referencingViews = rv
+  def setSecondaryView(sv: ComponentView, rv: Array[ComponentView], ply1: Int) 
+  = {
+    require(ply == Int.MaxValue, s"$ply $ply1")
+    require(secondaryView == null || secondaryView == sv,
+    s"this = $this\nsecondaryView = $secondaryView\nsv = $sv")
+    require(sv != null)
+    require(sv.ply < ply1, s"$sv ${sv.ply} $ply1 ")
+    require(rv == null || rv.forall(c => c == null || c.ply < ply1), 
+      rv.filter(_ != null).map(_.ply).mkString(","))
+    secondaryView = sv; referencingViews = rv; ply = ply1
   }
 
   /** Get the secondary view. */
@@ -334,7 +402,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   }
 
   override def toString = 
-    s"$servers || ${components.mkString("[", " || ", "]")}"
+    s"$servers || ${components.mkString("[", " || ", "]")}"+s" <$ply>"
 
   /** A new concretization, extending this with component newState. */
   def extend(newState: State): Concretization =
@@ -361,8 +429,11 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
 object Concretization{
   /** Make a concretization from cv. */
-  def apply(cv: ComponentView) =
-    new Concretization(cv.servers, cv.components) // cv.principal +: cv.others)
+  def apply(cv: ComponentView) = {
+    val c = new Concretization(cv.servers, cv.components)
+    // cv.principal +: cv.others)
+    c.setPly(cv.ply); c
+  }
 
   def apply(servers: ServerStates, principal: State, others: Array[State]) =
     new Concretization(servers, principal +: others)

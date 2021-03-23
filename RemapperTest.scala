@@ -74,10 +74,10 @@ object RemapperTest{
       map1(0).indices.forall(i => i == 1 || i ==2 || map1(0)(i) == -1) &&
       emptyMap(map1(1)))
   }
-
+ 
   private def combine1Test = {
     println("== combine1Test ==")
-    def showBuff(buff: ArrayBuffer[(Array[State], Unifications)]) = 
+    def showBuff(buff: ArrayBuffer[(Array[State], Int)]) = 
       buff.map{case(states,unifs) => View.showStates(states)+"; "+unifs }.
         mkString("\n")
     def test1 = { // 6[0](N0), 6[0](N1), allowing N1 -> N0
@@ -86,9 +86,9 @@ object RemapperTest{
       assert(buff.length == 2)
       // println("test1\n"+showBuff(buff))
       assert(buff.exists{case(sts,unifs) => // mapping N1 -> N0 with unification
-        sts.sameElements(Array(initNode(N0))) && unifs == List((0,0)) })
+        sts.sameElements(Array(initNode(N0))) && unifs == 0 })
       assert(buff.exists{case(sts,unifs) => // mapping N1 -> N1
-        sts.sameElements(Array(initNode(N1))) && unifs == List() })
+        sts.sameElements(Array(initNode(N1))) && unifs == -1 })
     }
     def test2 = { // Thread(T0) and InitNode(N0/N1)
       val buff = combine1(newRemappingMap, Array(1,1), Array(List(0), List()),
@@ -96,23 +96,21 @@ object RemapperTest{
       assert(buff.length == 2)
       // println("test2\n"+showBuff(buff))
       assert(buff.exists{case(sts,unifs) => // N1 -> N0, with unification, T0 -> T1
-        sts.sameElements(Array(initSt(T1), initNode(N0))) && unifs == List((1,1)) })
+        sts.sameElements(Array(initSt(T1), initNode(N0))) && unifs == -1 })
       assert(buff.exists{case(sts,unifs) => // N1 -> N1, no unification, T0 -> T1
-        sts.sameElements(Array(initSt(T1), initNode(N1))) && unifs == List() })
+        sts.sameElements(Array(initSt(T1), initNode(N1))) && unifs == -1 })
     }
     def test3 = { // Thread(T0) and InitNode(N0/N1)
       val buff = combine1(newRemappingMap, Array(1,1), Array(List(0), List(0)),
         Array(initSt(T0), initNode(N0)), Array(initSt(T0), initNode(N1)))
       assert(buff.length == 4)
-      // println("test3\n"+showBuff(buff))
+      println("test3\n"+showBuff(buff))
       assert(buff.forall{case(sts,unifs) =>
-        // N1 -> N0 with unification; or N1 -> N1 without unification
-        ( sts.contains(initNode(N0)) && unifs.contains((1,1)) ||
-          sts.contains(initNode(N1)) && !unifs.contains((1,1)) ) &&
+        // N1 -> N0 or N1 -> N1
+        ( sts.contains(initNode(N0)) || sts.contains(initNode(N1)) ) &&
         // T0 -> T0 with unification; or T0 -> T1 without unification
-        ( sts.contains(initSt(T0)) && unifs.contains((0,0)) ||
-          sts.contains(initSt(T1)) && !unifs.contains((0,0)) ) &&
-        unifs.forall(u => u == (0,0) || u == (1,1))
+        ( sts.contains(initSt(T0)) && unifs == 0  ||
+          sts.contains(initSt(T1)) && unifs < 0 )
       })
     }
     def test4 = { // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2)
@@ -121,13 +119,13 @@ object RemapperTest{
       assert(buff.length == 4)
       // println("test4\n"+showBuff(buff))
       assert(buff.exists{case(sts,unifs) => // N0 -> N0, N1 -> N1 with unif, N2 -> N2
-        sts.sameElements(Array(aNode(N0,N1), aNode(N1,N2))) && unifs == List((1,0)) })
+        sts.sameElements(Array(aNode(N0,N1), aNode(N1,N2))) && unifs == 1 })
       assert(buff.exists{case(sts,unifs) => // N1 -> N0, N2 -> N1 with unif; N0 -> N2
-        sts.sameElements(Array(aNode(N2,N0), aNode(N0,N1))) && unifs == List((1,1)) })
+        sts.sameElements(Array(aNode(N2,N0), aNode(N0,N1))) && unifs < 0 })
       assert(buff.exists{case(sts,unifs) => // N0 -> N2, N1 -> N3, N2 -> N4, no unifs
-        sts.sameElements(Array(aNode(N2,N3), aNode(N3,N4))) && unifs.isEmpty })
+        sts.sameElements(Array(aNode(N2,N3), aNode(N3,N4))) && unifs < 0 })
       assert(buff.exists{case(sts,unifs) => // N0 -> N2, N1 -> N3, N2 -> N0, no unifs
-        sts.sameElements(Array(aNode(N2,N3), aNode(N3,N0))) && unifs.isEmpty })
+        sts.sameElements(Array(aNode(N2,N3), aNode(N3,N0))) && unifs < 0 })
     }
     def test5 = { 
       // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2) with N1 -> N0
@@ -137,7 +135,7 @@ object RemapperTest{
       assert(buff.length == 1) // just second case from previous test
       // println("test5\n"+showBuff(buff))
       assert{val (sts,unifs) = buff.head; // N1 -> N0, N2 -> N1 with unif; N0 -> N2
-        sts.sameElements(Array(aNode(N2,N0), aNode(N0,N1))) && unifs == List((1,1)) }
+        sts.sameElements(Array(aNode(N2,N0), aNode(N0,N1))) && unifs < 0 }
     }
     def test6 = {
       // println("test6")
@@ -151,8 +149,8 @@ object RemapperTest{
       assert(buff.length == 2)
       assert(buff.forall{case(sts,unifs) =>
         (sts.sameElements(Array(aNode(N2,N0), aNode(N0,N1))) || 
-          sts.sameElements(Array(aNode(N3,N0), aNode(N0,N1)))) &&
-        unifs == List((1,1)) })
+          sts.sameElements(Array(aNode(N3,N0), aNode(N0,N1))))  && unifs < 0
+      })
     }
     test1; test2; test3; test4; test5; test6
   } // end of combine1Test
@@ -167,8 +165,7 @@ object RemapperTest{
       assert(buff.length == 2)
       // N1 -> N0 with unif; or N1 -> N1
       assert(buff.forall{ case(Array(st), unifs) => 
-        st == initNode(N0) && unifs == List((0,0)) || 
-        st == initNode(N1) && unifs.isEmpty
+        st == initNode(N0) && unifs == 0 || st == initNode(N1) && unifs < 0
       })
     }
     def test2 = { // 6[0](N0), 6[0](N0)
@@ -178,8 +175,7 @@ object RemapperTest{
       assert(buff.length == 2)
       // N0 -> N0 with unif; or N0 -> N1
       assert(buff.forall{ case(Array(st), unifs) => 
-        st == initNode(N0) && unifs == List((0,0)) || 
-        st == initNode(N1) && unifs.isEmpty
+        st == initNode(N0) && unifs == 0 || st == initNode(N1) && unifs < 0
       })
     }
     def test3 = { // Thread with ref to A-node, and A-node
@@ -189,8 +185,7 @@ object RemapperTest{
       assert(buff.length == 2)
       // N0 -> N0 with unif; or N0 -> N1
       assert(buff.forall{ case(Array(st), unifs) => 
-        st == aNode(0,-1) && unifs == List((1,0)) || 
-        st == aNode(1,-1) && unifs.isEmpty })
+        st == aNode(0,-1) && unifs == 1 || st == aNode(1,-1) && unifs < 0 })
     }
     def test4 = { // Thread with ref to A-node with non-null next, and A-node
                   // with null next: 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,Null)
@@ -200,7 +195,7 @@ object RemapperTest{
       // N0 -> N1 or N0 -> N2
       assert(buff.length == 2)
       assert(buff.forall{ case(Array(st), unifs) => 
-        (st == aNode(1,-1) || st == aNode(2,-1)) && unifs.isEmpty })
+        (st == aNode(1,-1) || st == aNode(2,-1)) && unifs < 0 })
     }
     def test5 = { // 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2)
       // println("test5")
@@ -220,15 +215,15 @@ object RemapperTest{
       // 7[0](N2,N3) || 7[0](N3,N4); List()
       assert(buff.length == 9)
       assert(buff.forall{ case(Array(st1, st2), unifs) =>
-        st1 == aNode(0,1) && st2 == aNode(1,2) && unifs == List((1,0)) || // N0->N0
-        st1 == aNode(2,0) && st2 == aNode(0,1) && unifs == List((1,1)) || // N1->N0
+        st1 == aNode(0,1) && st2 == aNode(1,2) && unifs == 1 || // N0->N0
+        st1 == aNode(2,0) && st2 == aNode(0,1) && unifs < 0 || // N1->N0
         st1 == aNode(1,2) && (st2 == aNode(2,3) || st2 == aNode(2,0)) && 
-          unifs.isEmpty ||  // N0 -> N1
+          unifs < 0 ||  // N0 -> N1
         st1 == aNode(2,1) && (st2 == aNode(1,3) || st2 == aNode(1,0)) && 
-          unifs.isEmpty || // N1 -> N1
+          unifs < 0 || // N1 -> N1
         st1 == aNode(2,3) && 
-          (st2 == aNode(3,4) || st2 == aNode(3,0) || st2 == aNode(3,1)) && 
-          unifs.isEmpty // distinct nodes
+          (st2 == aNode(3,4) || st2 == aNode(3,0) || st2 == aNode(3,1)) && unifs < 0
+           // distinct nodes
       })
     }
     def test6 = {// 12[1](T0,N0) || 7[0](N0,N1) and 7[0](N0,N1) || 7[0](N1,N2)
@@ -242,7 +237,7 @@ object RemapperTest{
       //   states.mkString(" || ")+"; "+unifs}.mkString("\n"))
       // Just identity mapping since N0 fixed
       assert(buff.length == 1 && buff.forall{case(Array(st1, st2), unifs) =>
-        st1 == aNode(0,1) && st2 == aNode(1,2) && unifs == List((1,0)) })
+        st1 == aNode(0,1) && st2 == aNode(1,2) && unifs == 1 })
     }
     test1; test2; test3; test4; test5; test6
   }

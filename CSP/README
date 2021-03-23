@@ -64,6 +64,7 @@ threads can have these nodes locked.
 lazySetBug.csp: this seems to display a bug in FDR.  When a node is locked, it
 ought to store the identity of the locking thread, but doesn't.
 
+lazySet1.csp: version where nodes do not have prev references
 
 Test files
 ==========

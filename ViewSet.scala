@@ -29,7 +29,10 @@ trait ViewSet{
     * Pre: this includes such a representative. */
   def getRepresentative(sv: ComponentView): ComponentView
 
+  def summarise: String
+
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
+
 }
 
 // =======================================================
@@ -236,6 +239,8 @@ class ServerBasedViewSet(initSize: Int = 16) extends ViewSet{
     val set = underlying.get(sv.servers); set.find(_ == sv).get
   }
 
+  def summarise = ???
+
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 }
 
@@ -292,6 +297,10 @@ class PrincipalBasedViewSet(initSize: Int = 4){
     // IMPROVE: using find is inefficient
     underlying.get(sv.principal).find(_ == sv).get
   }
+
+  /** An iterator giving a summary for each principal. */
+  def summarise: Iterator[String] = 
+    underlying.iterator.map(set => set.head.toString+": "+set.size)
 
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 }
@@ -362,6 +371,8 @@ class ServerPrincipalBasedViewSet(initSize: Int = 16) extends ViewSet {
   def getRepresentative(sv: ComponentView): ComponentView = {
     underlying.get(sv.servers).getRepresentative(sv)
   }
+
+  def summarise: String = underlying.iterator.flatMap(_.summarise).toArray.sorted.mkString("\n")
 
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 }
