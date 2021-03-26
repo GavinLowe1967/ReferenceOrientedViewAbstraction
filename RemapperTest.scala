@@ -357,15 +357,21 @@ object RemapperTest{
       val cv = new ComponentView(servers0, Array(aNode(N0,N1), cNode(N1,Null)))
       // val cv = new ComponentView(servers0, Array(aNode(N2,N3)))
       // servers0 contains no ids, servers2 contains T0, N0
-      val buffer = newCombine(pre, post, cv, true)
+      val buffer = newCombine(pre, post, cv) // , true
+      println(showBuffer(buffer))
       // Unifying, N0 -> N0, N1 -> N1
       assert(buffer.exists{case (states, unifs) =>
         unifs == List((0,1)) && 
         states.sameElements(Array(aNode(N0,N1), cNode(N1,Null)))
       })
-      assert(buffer.length == 1)
+      // No unification
+      assert(buffer.exists{case (states, unifs) =>
+        unifs.isEmpty && states.sameElements(Array(aNode(N3,N4), cNode(N4,Null)))
+      })
+      assert(buffer.length == 2)
 
-      val buffer2 = newCombine(pre, post, cv, false)
+      effectOnChangedServersCache.clear
+      val buffer2 = newCombine(pre, post, cv) // , false
       // Unifying, N0 -> N0, N1 -> N1
       println(showBuffer(buffer2))
       assert(buffer2.exists{case (states, unifs) =>
@@ -381,13 +387,14 @@ object RemapperTest{
 
     def test2 = {
       println("\n=test2=")
+      effectOnChangedServersCache.clear
       val pre = new Concretization(servers0, 
         Array(getDatumSt(T0,N0,N1), aNode(N0,N2), bNode(N1,N3)) )
       val post = 
         new Concretization(servers2, 
           Array(setTopB(T0,N0), bNode(N0,N1), bNode(N1,N3)) )
       val cv = new ComponentView(servers0, Array(aNode(N0,N1), cNode(N1,Null)))
-      val buffer = newCombine(pre, post, cv, false)
+      val buffer = newCombine(pre, post, cv) // , false
       // Note, N2 in pre is ignored as it doesn't unify 
       // println(showBuffer(buffer))
       assert(buffer.length == 2)
@@ -411,7 +418,7 @@ object RemapperTest{
           Array(setTopB(T0,N0), bNode(N0,N1), bNode(N1,N3)) )
       val cv = new ComponentView(servers1, 
         Array(getDatumSt(T0,N0,Null), aNode(N0,N1)))
-      val buffer = newCombine(pre, post, cv, false)
+      val buffer = newCombine(pre, post, cv) // , false
       // servers1 contains T0, and the T0 components in pre and cv can't be 
       // unified.
       assert(buffer.isEmpty)
@@ -432,7 +439,7 @@ object RemapperTest{
       // servers2 contains N0 and T0
       val cv = new ComponentView(servers1, 
         Array(getDatumSt(T1,N0,N2), aNode(N0,N1), cNode(N2,N3)))
-      val buffer = newCombine(pre, post, cv, false)
+      val buffer = newCombine(pre, post, cv) // , false
       println("\n"+showBuffer(buffer))
       assert(buffer.forall{case (states, unifs) =>
         unifs == List((1,1)) && ( 
@@ -474,7 +481,7 @@ object RemapperTest{
       val post = new Concretization(servers1, 
         Array(setTopB(T0,N0), bNode(N0,Null)))
       val cv = new ComponentView(servers1, Array(initNodeSt(T0,Null)))
-      val buffer = newCombine(pre, post, cv, false)
+      val buffer = newCombine(pre, post, cv) // , false
       println(showBuffer(buffer))
 
       // assert(false)

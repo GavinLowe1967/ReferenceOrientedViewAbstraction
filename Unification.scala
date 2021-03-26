@@ -4,7 +4,7 @@ import ViewAbstraction._
 import ViewAbstraction.RemapperP._
 
 import ox.gavin.profiling.Profiler
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer,HashSet}
 
 /** Operations concerned with unifying states or views. */
 object Unification{
@@ -420,6 +420,14 @@ object Unification{
     rec(0, 0)
   }
 
+
+  /** Record of the cv, pre.servers and post.servers, with pre.servers !=
+    *  post.servers, for which there has been a call to newCombine giving a
+    *  result with no unifications.  */ 
+  private[RemapperP] val effectOnChangedServersCache = 
+    new HashSet[(ComponentView, ServerStates, ServerStates)]
+
+
   /** All ways of unifying pre and cv.  Each parameter of cv is remapped (1) as
     * identity function for parameters in pre.servers; (2) if a unification is
     * done, as required by that unification; (3) otherwise either (a) to a
@@ -428,17 +436,17 @@ object Unification{
     * identities cannot be mapped to identities in post.components, other than
     * with unification.  Return remapped state, paired with a
     * ReunificationList such that contains (j,i) whenever cv.components(j)
-    * unifies with pre.components(i). 
-    * @param requireUnif if true then require at least one unification. */
-  def newCombine(pre: Concretization, post: Concretization, cv: ComponentView, 
-    requireUnif: Boolean)
+    * unifies with pre.components(i).  */
+  def newCombine(pre: Concretization, post: Concretization, cv: ComponentView) 
+//    requireUnif: Boolean)
       : NewCombineResult = {
     val servers = pre.servers; require(servers == cv.servers)
-    val postCpts = post.components
+    val preCpts = pre.components; val postCpts = post.components
     require(pre.components.length == postCpts.length)
+    val changedServers = servers != post.servers
     val map0 = servers.remappingMap
     // Create NextArgMap, greater than anything in pre or post
-    val nextArg: NextArgMap = pre.getNextArgMap // new Array[Int](numTypes)
+    val nextArg: NextArgMap = pre.getNextArgMap 
     post.updateNextArgMap(nextArg)
     // Find all ids in post.servers but not in pre.servers, as a bitmap.
     val newServerIds = new Array[Array[Boolean]](numTypes); var f = 0
@@ -453,13 +461,35 @@ object Unification{
         if(id >= servers.numParams(f)) newServerIds(f)(id) = true
       }
     }
+    // Bit map indicating which components have changed state.
+    val changedStateBitMap = new Array[Boolean](preCpts.length)
+    for(i <- 0 until preCpts.length)
+      changedStateBitMap(i) = preCpts(i) != postCpts(i)
 
     val result = new NewCombineResult
     val allUs = allUnifs(map0, pre.components, cv.components)
     var ix = 0
     while(ix < allUs.length){
       val (map1, unifs) = allUs(ix); ix += 1
-      if(unifs.nonEmpty || !requireUnif){
+      // Test if either (1) the servers changed, and either (a) we have some
+      // unification, or (b) this is the first time for no unification with
+      // this combination of cv, pre.servers and post.servers; or (2) the
+      // servers are unchanged but we unify with a component that does change
+      // state.  If not, we can ignore this combination.
+      var sufficientUnif = false
+      if(changedServers)
+        sufficientUnif = unifs.nonEmpty ||
+          effectOnChangedServersCache.add((cv, pre.servers, post.servers))
+      else{
+        var us = unifs
+        while(!sufficientUnif && us.nonEmpty){
+          sufficientUnif = changedStateBitMap(us.head._2); us = us.tail
+        }
+// IMPROVE, try to identify this within allUnifs, by trying to unify
+// components that change state first.
+      }
+      Profiler.count(s"sufficientUnif = $sufficientUnif")
+      if(sufficientUnif){
         // println("newCombine: "+Remapper.show(map1)+"; "+unifs)
         // Create OtherArgMap containing all values not in ran map1 or
         // pre.servers, but (1) in post.servers; or (2) in post.cpts for a

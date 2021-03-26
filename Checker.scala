@@ -516,17 +516,17 @@ class Checker(system: SystemP.System){
     }
   }
 
-  /** Record of the cv, pre and post.servers for which there has been a call to
-    * effectOn, with pre.servers != post.servers. */ 
+  /** Record of the cv, pre.servers and post.servers, with pre.servers !=
+    *  post.servers, for which there has been a call to Unification.newCombine
+    *  giving a result with no unifications.  */ 
   // private val effectOnChangedServersCache = 
-  //   new HashSet[(ComponentView, Concretization, EventInt, ServerStates)]
-  // Doesn't seem to help
+  //   new HashSet[(ComponentView, ServerStates, ServerStates)]
 
-  protected def effectOn(
-    pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
-  = newEffectOn(pre, e, post, cv)
+  // protected def effectOn(
+  //   pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
+  // = newEffectOn(pre, e, post, cv)
 
-
+/*
   /** The effect of the transition pre -e-> post on cv.  If cv is consistent with
     * pre (i.e. unifiable), and contains at least one process that changes
     * state, then update as per this transition.  Generate all new views that
@@ -577,56 +577,51 @@ class Checker(system: SystemP.System){
       }
     } // end of main while loop
   }
+ */
 
-  protected def newEffectOn(
+  protected def effectOn(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
   = {
     Profiler.count("effectOn")
     require(pre.servers == cv.servers &&
       pre.components.length == post.components.length)
-    for(i <- 0 until pre.components.length)
+    var i = 0
+    while(i < pre.components.length){
       require(pre.components(i).componentProcessIdentity == 
         post.components(i).componentProcessIdentity)
-    val changedServers = pre.servers != post.servers
+      i += 1
+    }
     val cptsLen = cv.components.length; val postCpts = post.components
+
+    // All remappings of cv to unify with pre, together with the list of
+    // indices of unified components.
     val newCpts: ArrayBuffer[(Array[State], List[(Int,Int)])] =
-      Unification.newCombine(pre, post, cv, !changedServers)
-// IMPROVE: require unification if we've done this (pre.servers, post.servers,
-// cv) before.
+      Unification.newCombine(pre, post, cv) 
     var cptIx = 0
     while(cptIx < newCpts.length){
-      val (cpts, unifs) = newCpts(cptIx);  cptIx += 1
-      // println(cpts.mkString(" || ")+"; "+unifs)
-      if(true || debugging) View.checkDistinct(cpts)
+      val (cpts, unifs) = newCpts(cptIx); cptIx += 1
+      if(debugging) View.checkDistinct(cpts)
       assert(cpts.length == cptsLen)
-      // What does cpts(0) get mapped to
-      val matches = unifs.filter(_._1 == 0)
-      val newPrinc = 
-        if(matches.isEmpty) cpts(0) else postCpts(matches.head._2)
+      // What does cpts(0) get mapped to?
+      var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
+      // val matches = unifs.filter(_._1 == 0) 
+// IMPROVE: don't need all of unifs
+      val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
+      // val newPrinc = if(matches.isEmpty) cpts(0) else postCpts(matches.head._2)
       val newComponents = makePostComponents(newPrinc, postCpts, cpts)
-/*
-      // Build components of post state
-      val newComponents = new Array[State](cptsLen)
-      for(j <- 0 until cptsLen){
-        // What does j get mapped to under unifs?
-        val matches = unifs.filter(_._1 == j)
-        if(matches.nonEmpty){
-          newComponents(j) = postCpts(matches.head._2)
-          assert(newComponents(j).componentProcessIdentity == 
-            cv.components(j).componentProcessIdentity)
-        }
-        else newComponents(j) = cpts(j) // cv.components(j)
-      } // end of for loop 
- */
       if(false) print(
         s"$pre --> $post\n  with unifications $unifs\n"+
           s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
           s"  --> ${View.show(post.servers, newComponents)}")
       val nv = Remapper.mkComponentView(post.servers, newComponents)
-      newViewCount += 1
+      newViewCount += 1 //; Profiler.count("newViewCount"+unifs.isEmpty)
+      // Mostly with unifs.nonEmpty
       if(!sysAbsViews.contains(nv) && nextNewViews.add(nv)){
-        addedViewCount += 1
-        if(false) println(s" == $nv")
+        addedViewCount += 1 // ; Profiler.count("addedViewCount"+unifs.isEmpty)
+        if(false) println(
+          s"$pre --> $post\n  with unifications $unifs\n"+
+            s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+            s"  --> ${View.show(post.servers, newComponents)} == $nv")
         nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
         if(!nv.representableInScript){
           println("Not enough identities in script to combine transition\n"+

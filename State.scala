@@ -313,10 +313,19 @@ object State{
     val (t,id) = pid; scriptNames(t)(id)
   }
 
+  /** A template used in indexMap. */
+  private var indexMapTemplate: Array[Array[Int]] = null
+
   /** A map, implemented as an array, giving the index of identities within
     * states, or -1 if an index does not appear. */ 
   @inline def indexMap(states: Array[State]): Array[Array[Int]] = {
-    val map = Array.tabulate(numTypes)(f => Array.fill(typeSizes(f))(-1))
+    if(indexMapTemplate == null) 
+      indexMapTemplate =
+        Array.tabulate(numTypes)(f => Array.fill(typeSizes(f))(-1))
+    // Clone indexMaptemplate
+    val map = new Array[Array[Int]](numTypes); var f = 0
+    while(f < numTypes){ map(f) = indexMapTemplate(f).clone; f += 1 }
+    // Now update based on states
     var i = 0
     while(i < states.length){
       val st = states(i); map(st.family)(st.ids(0)) = i; i += 1
