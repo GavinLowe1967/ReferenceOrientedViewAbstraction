@@ -143,7 +143,7 @@ package object ViewAbstraction{
   }
 
   /** Switch to activate various assertions. */
-  val debugging = false
+  val debugging = true // false
 
   type SignificancePath = List[Int]
 

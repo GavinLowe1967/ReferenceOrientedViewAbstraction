@@ -50,7 +50,7 @@ $(DIR)/TestStates.class: $(DIR)/MyStateMap.class
 
 $(DIR)/RemapperP/Remapper.class: $(DIR)/View.class 
 
-$(DIR)/RemapperP/RemapperTest.class: $(DIR)/TestStates.class $(DIR)/RemapperP/Remapper.class
+$(DIR)/RemapperP/RemapperTest.class: $(DIR)/TestStates.class $(DIR)/RemapperP/Remapper.class $(DIR)/RemapperP/Unification.class
 
 $(COMBINERP)/Combiner.class: $(DIR)/RemapperP/Remapper.class
 

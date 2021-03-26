@@ -18,6 +18,7 @@ object TestStates{
 
   // Nodes
   val N0 = 0; val N1 = 1; val N2 = 2; val N3 = 3; val N4 = 4; val N5 = 5
+  val N6 = 6; val N7 = 7
   val Null = -1
   def initNode(n: Int) = MyStateMap(0, 6, Array(n))
   val initNode1 = MyStateMap(0, 6, Array(N1))

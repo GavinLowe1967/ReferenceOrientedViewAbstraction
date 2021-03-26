@@ -104,7 +104,7 @@ object RemapperTest{
       val buff = combine1(newRemappingMap, Array(1,1), Array(List(0), List(0)),
         Array(initSt(T0), initNode(N0)), Array(initSt(T0), initNode(N1)))
       assert(buff.length == 4)
-      println("test3\n"+showBuff(buff))
+      // println("test3\n"+showBuff(buff))
       assert(buff.forall{case(sts,unifs) =>
         // N1 -> N0 or N1 -> N1
         ( sts.contains(initNode(N0)) || sts.contains(initNode(N1)) ) &&
@@ -257,6 +257,233 @@ object RemapperTest{
     assert(remapToPrincipal(servers2, pushSt(T2,N2)) == pushSt(T1,N1))
   }
 
+
+  /** Test of Unification.allUnifs. */
+  def allUnifsTest = {
+    println("== allUnifsTest ==")
+    def showBuffer(buff: AllUnifsResult) =
+      buff.map{ case (map, us) => show(map)+"; "+us }.mkString("\n")
+
+    def test1 = {
+      val buffer = 
+        allUnifs(newRemappingMap, Array(aNode(N0,N1)), Array(aNode(N2,N3)))
+      // println("\n"+showBuffer(buffer))
+      // One result without unification: can't unify principals.
+      assert(buffer.length == 1)
+      assert(buffer.forall{case (map, unifs) => 
+        map.forall(emptyMap) && unifs.isEmpty //  ||
+        // checkMap(map(0), List((2,0), (3,1))) && emptyMap(map(1)) &&
+        //   unifs == List((0,0))
+      })
+    }
+
+    def test2 = {
+      //println("test2")
+      val buffer = 
+        allUnifs(newRemappingMap, Array(aNode(N0,N1), aNode(N1,N2)), 
+          Array(aNode(N2,N3), aNode(N3,N4)))
+      // println("\n"+showBuffer(buffer))
+      assert(buffer.length == 4)
+      assert(buffer.forall{case (map, unifs) => 
+        emptyMap(map(1)) && (
+          // unify both -- no, can't unify principals
+          // checkMap(map(0), List((2,0), (3,1), (4,2))) && 
+            // unifs == List((1,1), (0,0)) ||
+            // N2 -> N1, N3 -> N2
+            checkMap(map(0), List((2,1),(3,2))) && unifs == List((0,1)) ||
+            // N3 -> N0, N4 -> N1
+            checkMap(map(0), List((3,0),(4,1))) && unifs == List((1,0)) ||
+            // N3 -> N1, N4 -> N2
+            checkMap(map(0), List((3,1),(4,2))) && unifs == List((1,1)) ||
+            // no unification
+            emptyMap(map(0)) && unifs.isEmpty
+        )})
+    }
+
+    def test3 = {
+      val buffer = 
+        allUnifs(newRemappingMap, Array(initNodeSt(T0,N0), aNode(N0,N1)), 
+          Array(unlock(T0), aNode(N2,N3)))
+      // println("\n"+showBuffer(buffer))
+      // One result without unification: can't unify principals.
+      assert(buffer.length == 2)
+      assert(buffer.forall{case (map, unifs) => 
+        map.forall(emptyMap) && unifs.isEmpty  ||
+        checkMap(map(0), List((2,0), (3,1))) && emptyMap(map(1)) &&
+          unifs == List((1,1))
+      })
+    }
+
+    def test4 = {
+      println("test4")
+      val buffer = 
+        allUnifs(newRemappingMap, 
+          Array(initNodeSt(T0,N0), aNode(N0,N1), aNode(N1,N2)),
+          Array(unlock(T0), aNode(N2,N3), aNode(N3,N4)))
+      // println("\n"+showBuffer(buffer))
+      assert(buffer.length == 5)
+      assert(buffer.forall{case (map, unifs) => 
+        emptyMap(map(1)) && (
+          // unify both nodes
+          checkMap(map(0), List((2,0), (3,1), (4,2))) && 
+            unifs == List((2,2), (1,1)) ||
+            // N2 -> N1, N3 -> N2
+            checkMap(map(0), List((2,1),(3,2))) && unifs == List((1,2)) ||
+            // N3 -> N0, N4 -> N1
+            checkMap(map(0), List((3,0),(4,1))) && unifs == List((2,1)) ||
+            // N3 -> N1, N4 -> N2
+            checkMap(map(0), List((3,1),(4,2))) && unifs == List((2,2)) ||
+            // no unification
+            emptyMap(map(0)) && unifs.isEmpty
+        )})
+    }
+
+    test1; test2; test3; test4
+  }
+
+
+  /** Test of Unification.newCombine. */
+  def newCombineTest = {
+    println("== newCombineTest ==***")
+    def showBuffer(buff: NewCombineResult) =
+      buff.map{ case (states, us) => View.showStates(states)+"; "+us }.
+        mkString("\n")
+
+    def test1 = {
+      println("=test1=")
+      val pre = new Concretization(servers0, 
+        Array(initNodeSt(T0,N0), aNode(N0,N1)))
+      val post = new Concretization(servers2, Array(unlock(T0), bNode(N0,N2)))
+      val cv = new ComponentView(servers0, Array(aNode(N0,N1), cNode(N1,Null)))
+      // val cv = new ComponentView(servers0, Array(aNode(N2,N3)))
+      // servers0 contains no ids, servers2 contains T0, N0
+      val buffer = newCombine(pre, post, cv, true)
+      // Unifying, N0 -> N0, N1 -> N1
+      assert(buffer.exists{case (states, unifs) =>
+        unifs == List((0,1)) && 
+        states.sameElements(Array(aNode(N0,N1), cNode(N1,Null)))
+      })
+      assert(buffer.length == 1)
+
+      val buffer2 = newCombine(pre, post, cv, false)
+      // Unifying, N0 -> N0, N1 -> N1
+      println(showBuffer(buffer2))
+      assert(buffer2.exists{case (states, unifs) =>
+        unifs == List((0,1)) && 
+        states.sameElements(Array(aNode(N0,N1), cNode(N1,Null)))
+      })
+      // No unification, N0 -> N3, N1 -> N4
+      assert(buffer2.exists{case (states, unifs) =>
+        unifs.isEmpty && states.sameElements(Array(aNode(N3,N4), cNode(N4,Null)))
+      })
+      assert(buffer2.length == 2)
+    }
+
+    def test2 = {
+      println("\n=test2=")
+      val pre = new Concretization(servers0, 
+        Array(getDatumSt(T0,N0,N1), aNode(N0,N2), bNode(N1,N3)) )
+      val post = 
+        new Concretization(servers2, 
+          Array(setTopB(T0,N0), bNode(N0,N1), bNode(N1,N3)) )
+      val cv = new ComponentView(servers0, Array(aNode(N0,N1), cNode(N1,Null)))
+      val buffer = newCombine(pre, post, cv, false)
+      // Note, N2 in pre is ignored as it doesn't unify 
+      // println(showBuffer(buffer))
+      assert(buffer.length == 2)
+      // Unifying N2 -> N0, N3 -> N2
+      assert(buffer.exists{case (states, unifs) =>
+        unifs == List((0,1)) && 
+        states.sameElements(Array(aNode(N0,N2), cNode(N2,Null)))
+      })
+      // No unification; N0 -> N4, N1 -> N5
+      assert(buffer.exists{case (states, unifs) =>
+        unifs.isEmpty && states.sameElements(Array(aNode(N4,N5), cNode(N5,Null)))
+      })
+    }
+
+    def test3 = {
+      println("=test3=")
+      val pre = new Concretization(servers1, 
+        Array(getDatumSt(T0,N0,N1), aNode(N0,N2), bNode(N1,N3)) )
+      val post = 
+        new Concretization(servers2, 
+          Array(setTopB(T0,N0), bNode(N0,N1), bNode(N1,N3)) )
+      val cv = new ComponentView(servers1, 
+        Array(getDatumSt(T0,N0,Null), aNode(N0,N1)))
+      val buffer = newCombine(pre, post, cv, false)
+      // servers1 contains T0, and the T0 components in pre and cv can't be 
+      // unified.
+      assert(buffer.isEmpty)
+    }
+
+    def test4 = {
+      println("=test4=")
+      // val pre = new Concretization(servers1, 
+      //   Array(getDatumSt(T0,N0,N2), aNode(N0,N1), bNode(N2,N3)) )
+      // val post = 
+      //   new Concretization(servers2, 
+      //     Array(setTopB(T0,N0), bNode(N0,N2), bNode(N2,N3)) )
+      val pre = new Concretization(servers1, 
+        Array(getDatumSt(T0,N0,N1), aNode(N0,N2), bNode(N1,N3)) )
+      val post = 
+        new Concretization(servers2, 
+          Array(setTopB(T0,N0), bNode(N0,N1), bNode(N1,N3)) )
+      // servers2 contains N0 and T0
+      val cv = new ComponentView(servers1, 
+        Array(getDatumSt(T1,N0,N2), aNode(N0,N1), cNode(N2,N3)))
+      val buffer = newCombine(pre, post, cv, false)
+      println("\n"+showBuffer(buffer))
+      assert(buffer.forall{case (states, unifs) =>
+        unifs == List((1,1)) && ( 
+          // N0 -> N0, N1 -> N2, T1 -> T1, N2 -> fresh (can't map to N1),
+          // N3 -> N1 or fresh
+          states.sameElements( // N3 -> N1
+            Array(getDatumSt(T1,N0,N4), aNode(N0,N2), cNode(N4,N1))) ||
+            states.sameElements( // both fresh
+              Array(getDatumSt(T1,N0,N4), aNode(N0,N2), cNode(N4,N5)))
+        ) ||
+        unifs.isEmpty && (
+          // T1 -> T1; N0, N2 -> fresh values; N1, N3 -> N0 (from servers2) or
+          // fresh values.
+          states.sameElements(
+            Array(getDatumSt(T1,N4,N5), aNode(N4,N0), cNode(N5,N6))) ||
+            states.sameElements(
+              Array(getDatumSt(T1,N4,N5), aNode(N4,N6), cNode(N5,N0))) ||
+            states.sameElements(
+              Array(getDatumSt(T1,N4,N5), aNode(N4,N6), cNode(N5,N7))) 
+        )
+        //   states.sameElements( // N0 -> N0
+        //     Array(getDatumSt(T1,N0,N1), aNode(N0,N2), cNode(N1,N3))) ||
+        //     states.sameElements( // N2 -> N0
+        //       Array(getDatumSt(T1,N1,N0), aNode(N1,N2), cNode(N0,N3))) ||
+        //     states.sameElements( // N1 -> N0
+        //       Array(getDatumSt(T1,N1,N2), aNode(N1,N0), cNode(N2,N3))) ||
+        //     states.sameElements( // N3 -> N0
+        //       Array(getDatumSt(T1,N1,N2), aNode(N1,N3), cNode(N2,N0))) ||
+        //     states.sameElements( // all fresh
+        //       Array(getDatumSt(T1,N1,N2), aNode(N1,N3), cNode(N2,N4)))
+        // )
+      })
+    }
+
+    def test5 = {
+      println("\n=test5**=")
+      val pre = new Concretization(servers1, 
+        Array(initNodeSt(T0,Null), initNode(N0)))
+      val post = new Concretization(servers1, 
+        Array(setTopB(T0,N0), bNode(N0,Null)))
+      val cv = new ComponentView(servers1, Array(initNodeSt(T0,Null)))
+      val buffer = newCombine(pre, post, cv, false)
+      println(showBuffer(buffer))
+
+      // assert(false)
+    }
+
+    test1; test2; test3; test4; test5
+
+  }
+
   def test = {
     println("=== RemapperTest ===")
     createCombiningMapsTest
@@ -265,6 +492,8 @@ object RemapperTest{
     combine1Test
     combineTest
     remapToPrincipalTest
+    allUnifsTest
+    newCombineTest
   }
 
 }

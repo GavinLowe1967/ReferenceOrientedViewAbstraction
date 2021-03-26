@@ -19,7 +19,7 @@ class State(val family: Family, val cs: ControlState,
   /** The component process identity. */
   val componentProcessIdentity: ProcessIdentity = {
     // assert(family >= 0)
-    if(family >= 0) (family, ids.head) else null
+    if(family >= 0) (family, ids(0)) else null
   }
 
   /** Does this have a process identity matching (f,id)? */
@@ -223,7 +223,6 @@ object State{
       if(count > 0){ count -= 1; buff(count) }
       else new IdArray(size) 
         // Profiler.count("IdArray pool get fail "+size)
-        
   }
 
   /** Pool for IdArrays of size 0. */
@@ -313,4 +312,16 @@ object State{
   def showProcessId(pid: ProcessIdentity) = {
     val (t,id) = pid; scriptNames(t)(id)
   }
+
+  /** A map, implemented as an array, giving the index of identities within
+    * states, or -1 if an index does not appear. */ 
+  @inline def indexMap(states: Array[State]): Array[Array[Int]] = {
+    val map = Array.tabulate(numTypes)(f => Array.fill(typeSizes(f))(-1))
+    var i = 0
+    while(i < states.length){
+      val st = states(i); map(st.family)(st.ids(0)) = i; i += 1
+    }
+    map
+  }
+
 }

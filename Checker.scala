@@ -27,7 +27,7 @@ class Checker(system: SystemP.System){
 
   val Million = 1000000
 
-  private var done = new AtomicBoolean(false); private var ply = 1
+  private var done = new AtomicBoolean(false); protected var ply = 1
 
   import TransitionSet.Transition // (Concretization, EventInt, Concretization)
 
@@ -146,7 +146,10 @@ class Checker(system: SystemP.System){
     val newPids: Array[ProcessIdentity] =
       princ1.processIdentities.tail.filter(p =>
         !isDistinguished(p._2) && !otherIds.contains(p))
-    assert(newPids.length <= 1) // simplifying assumption
+    assert(newPids.length <= 1,    // simplifying assumption
+      s"$pre -${system.showEvent(e)}-> $post:\n"+
+        s"otherIds = ${otherIds.mkString(", ")}; "+
+        s"newPids = ${newPids.mkString(", ")}")
     // The following assertion (outsidePid in newPids) captures an assumption
     // that the principal component cannot acquire a reference from nowhere:
     // the reference must be acquired either from another process in the view
@@ -513,38 +516,29 @@ class Checker(system: SystemP.System){
     }
   }
 
-
-  /** Find the component of cpts with process identity pid, or return null if no
-    * such.  IMPROVE: move elsewhere, combine with Unification.find */
-  @inline private def find0(pid: ProcessIdentity, cpts: Array[State]): State = {
-    var i = 0
-    while(i < cpts.length && cpts(i).componentProcessIdentity != pid)
-      i += 1
-    if(i < cpts.length) cpts(i) else null
-  }
-
   /** Record of the cv, pre and post.servers for which there has been a call to
     * effectOn, with pre.servers != post.servers. */ 
   // private val effectOnChangedServersCache = 
   //   new HashSet[(ComponentView, Concretization, EventInt, ServerStates)]
   // Doesn't seem to help
 
+  protected def effectOn(
+    pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
+  = newEffectOn(pre, e, post, cv)
+
+
   /** The effect of the transition pre -e-> post on cv.  If cv is consistent with
     * pre (i.e. unifiable), and contains at least one process that changes
     * state, then update as per this transition.  Generate all new views that
     * would result from this view under the transition.  Called by
     * effectOnOthers and effectOfPreviousTransitions.  */
-  protected def effectOn(
+  protected def oldEffectOn(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
   = {
     Profiler.count("effectOn")
-    // effectOnCount += 1
-    // if(veryVerbose) 
-    //   println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers &&
       pre.components.length == post.components.length)
     val changedServers = pre.servers != post.servers
-    // if(changedServers) Profiler.count(pre.toString+post.servers+cv)
     // View.checkDistinct(cv.components)
     // All ways of merging cv and pre
     val newCpts: ArrayBuffer[(Array[State], Int)] = 
@@ -558,61 +552,19 @@ class Checker(system: SystemP.System){
         val preC = pre.components; val postC = post.components
         val flags = new Array[Boolean](preC.length); var i = 0
         while(i < preC.length){ flags(i) = preC(i) != postC(i); i += 1 }
-        // val flags = Array.tabulate(preC.length)(i => preC(i) != postC(i))
         Unification.combineWithUnification(pre, flags, cv)
     }
     var cptIx = 0
     while(cptIx < newCpts.length){
-      Profiler.count("effect on got unif")
-      val pair = newCpts(cptIx); val cpts = pair._1; cptIx += 1
+      val (cpts, mi) = newCpts(cptIx);  cptIx += 1
       if(debugging) View.checkDistinct(cpts)
       // pre U cpts is a consistent view.  
       // pre.components(i) = cpts(j)  iff  (i,j) in unifs.
-      // Find what cpts(0) gets mapped to by unifs
-      val mi = pair._2;
+      // Find what cpts(0) gets mapped to.
       val newPrinc = if(mi < 0) cpts(0) else post.components(mi)
-      val newComponents = makePostState(newPrinc, post.components, cpts)
-      // val len = newPrinc.ids.length
-      // var newComponents = new Array[State](len); newComponents(0) = newPrinc
-      // val pids = newPrinc.processIdentities
-      // var i = 1; var k = 1; val princId = newPrinc.componentProcessIdentity
-      // // val changedPrinc = newPrinc != cv.components(0)
-      // // changedState tracks whether we've detected any change of state
-      // // This doesn't work, because of the remapping at the end. 
-      // // var changedState = changedServers || changedPrinc
-      // // Note, we might end up with fewer than len new components.
-      // // Inv: we have filled newComponents0[0..k) using pids[0..i).  
-      // // If !changedPrinc then those are the post-states of cpts[0..k).
-      // while(i < len){
-      //   val pid = pids(i)
-      //   if(!isDistinguished(pid._2) && pid != princId){
-      //     // check this is first occurrence of pid
-      //     var j = 1; while(j < i && pids(j) != pid) j += 1
-      //     if(j == i){
-      //       // Find the component of post or cpts with process identity pid, 
-      //       // and add to others
-      //       val st1 = find0(pid, post.components)
-      //       if(st1 != null){ newComponents(k) = st1; k += 1 }
-      //       else{ 
-      //         val st2 = find0(pid, cpts)
-      //         newComponents(k) = st2; k += 1 
-      //       }
-      //     }
-      //   }
-      //   i += 1
-      // }
-      // // if(changedState){
-      // if(k < len){ // We avoided a repeated component; trim newComponents
-      //   val nc = new Array[State](k); var j = 0
-      //   while(j < k){ nc(j) = newComponents(j); j += 1 }
-      //   newComponents = nc
-      // }
-      // if(debugging) View.checkDistinct(newComponents, newPrinc.toString)
+      val newComponents = makePostComponents(newPrinc, post.components, cpts)
       val nv = Remapper.mkComponentView(post.servers, newComponents)
-      // assert(nv != cv,
-      // s"nv = $nv, cv = $cv $changedServers $changedPrinc ${post.servers}")
       newViewCount += 1
-      Profiler.count("new view"+(nv!=cv))
       if(!sysAbsViews.contains(nv) && nextNewViews.add(nv)){
         addedViewCount += 1
         // println(s"$nv: $cv\n  $pre --> $post")
@@ -626,14 +578,81 @@ class Checker(system: SystemP.System){
     } // end of main while loop
   }
 
+  protected def newEffectOn(
+    pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
+  = {
+    Profiler.count("effectOn")
+    require(pre.servers == cv.servers &&
+      pre.components.length == post.components.length)
+    for(i <- 0 until pre.components.length)
+      require(pre.components(i).componentProcessIdentity == 
+        post.components(i).componentProcessIdentity)
+    val changedServers = pre.servers != post.servers
+    val cptsLen = cv.components.length; val postCpts = post.components
+    val newCpts: ArrayBuffer[(Array[State], List[(Int,Int)])] =
+      Unification.newCombine(pre, post, cv, !changedServers)
+// IMPROVE: require unification if we've done this (pre.servers, post.servers,
+// cv) before.
+    var cptIx = 0
+    while(cptIx < newCpts.length){
+      val (cpts, unifs) = newCpts(cptIx);  cptIx += 1
+      // println(cpts.mkString(" || ")+"; "+unifs)
+      if(true || debugging) View.checkDistinct(cpts)
+      assert(cpts.length == cptsLen)
+      // What does cpts(0) get mapped to
+      val matches = unifs.filter(_._1 == 0)
+      val newPrinc = 
+        if(matches.isEmpty) cpts(0) else postCpts(matches.head._2)
+      val newComponents = makePostComponents(newPrinc, postCpts, cpts)
+/*
+      // Build components of post state
+      val newComponents = new Array[State](cptsLen)
+      for(j <- 0 until cptsLen){
+        // What does j get mapped to under unifs?
+        val matches = unifs.filter(_._1 == j)
+        if(matches.nonEmpty){
+          newComponents(j) = postCpts(matches.head._2)
+          assert(newComponents(j).componentProcessIdentity == 
+            cv.components(j).componentProcessIdentity)
+        }
+        else newComponents(j) = cpts(j) // cv.components(j)
+      } // end of for loop 
+ */
+      if(false) print(
+        s"$pre --> $post\n  with unifications $unifs\n"+
+          s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+          s"  --> ${View.show(post.servers, newComponents)}")
+      val nv = Remapper.mkComponentView(post.servers, newComponents)
+      newViewCount += 1
+      if(!sysAbsViews.contains(nv) && nextNewViews.add(nv)){
+        addedViewCount += 1
+        if(false) println(s" == $nv")
+        nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
+        if(!nv.representableInScript){
+          println("Not enough identities in script to combine transition\n"+
+            s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+          sys.exit
+        }
+      }
+    } // end of while loop
+  }
+
+  /** Find the component of cpts with process identity pid, or return null if no
+    * such.  IMPROVE: move elsewhere, combine with Unification.find */
+  @inline private def find0(pid: ProcessIdentity, cpts: Array[State]): State = {
+    var i = 0
+    while(i < cpts.length && cpts(i).componentProcessIdentity != pid)
+      i += 1
+    if(i < cpts.length) cpts(i) else null
+  }
+
   /** Make new states for components, with newPrinc as principal, and other
     * components from either postCpts or cpts. */
-  private def makePostState(
+  private def makePostComponents(
     newPrinc: State, postCpts: Array[State], cpts: Array[State])
       : Array[State] = {
-    val len = newPrinc.ids.length
+    val len = newPrinc.ids.length; val pids = newPrinc.processIdentities
     var newComponents = new Array[State](len); newComponents(0) = newPrinc
-    val pids = newPrinc.processIdentities
     var i = 1; var k = 1; val princId = newPrinc.componentProcessIdentity
     // Note, we might end up with fewer than len new components.
     // Inv: we have filled newComponents0[0..k) using pids[0..i).

@@ -166,7 +166,7 @@ object Unification{
             // Profiler.count("rec"+toDoIds.length): 0: 5%; 1: 60%; 2: 30%; 3: 5%
             while(toDoIds.nonEmpty){
               val id1 = toDoIds.head; toDoIds = toDoIds.tail
-              otherArgs(f) = append1(doneIds, toDoIds) // doneIds++toDoIds // temporary update (*)
+              otherArgs(f) = append1(doneIds, toDoIds) // temporary update (*)
               renameX(f, id, id1)
               doneIds = id1::doneIds //  order doesn't matter
             }
@@ -285,6 +285,239 @@ object Unification{
       }
       i += 1
     }
+    result
+  }
+
+  private type UnificationList = List[(Int,Int)]
+
+  type AllUnifsResult =  ArrayBuffer[(RemappingMap, UnificationList)]
+
+  /** All ways of extending map0 to a mapping map so that for each component c =
+    * cpts(j) whose identity is in dom map, map(c) agrees with any component
+    * preC = preCpts(i) with the same identity.  Also include the pair (j,i)
+    * in the UnificationList.  */
+  private[RemapperP] def allUnifs(
+    map0: RemappingMap, preCpts: Array[State], cpts: Array[State]) 
+      : AllUnifsResult = {
+    // Map from identities to the index of the corresponding component in
+    // preCpts, if any, otherwise -1.
+    val preCptsBitMap = State.indexMap(preCpts)
+    val result = new AllUnifsResult // holds final result
+
+    // Extend map and unifs to cpts[from..), adding results to results. 
+    def allUnifsRec(map: RemappingMap, from: Int, unifs: UnificationList)
+        : Unit = {
+      // println(s"$from: "+Remapper.show(map)+"; "+unifs)
+      if(from == cpts.length) result += ((map, unifs))
+      else{
+        val c = cpts(from)
+
+        // Try to unify c with preCpts(i)
+        @inline def tryUnify(i: Int): Unit = {
+          val map1 = unify(map,  preCpts(i), c)
+          if(map1 != null){
+            // check that map was not extended on any identity of a component
+            // in cpts[0..from) to match a component in preCpts: if so, we
+            // should have unified earlier.
+            var j = 0; var ok = true
+            while(j < from && ok){
+              val (f,id) = cpts(j).componentProcessIdentity
+              val id1 = map1(f)(id)
+              // Check map not extended on (f,id), or (f,id1) doesn't match an
+              // identity in preCpts
+              ok = id1 == map(f)(id) || preCptsBitMap(f)(id1) < 0
+              j += 1
+            }
+            if(ok) allUnifsRec(map1, from+1, (from,i)::unifs)
+          } // end of if
+        } // end of tryUnify
+
+        // Test if (fc,fId) already mapped to a component of preCpts
+        val fc = c.family; val id1 = map(fc)(c.id)
+        val ix = if(id1 < 0) -1 else preCptsBitMap(fc)(id1)
+        if(ix >= 0) tryUnify(ix) 
+        else{
+          // Try to unify with each component in turn, but don't unify the two
+          // principals (that would just recreate the same transition).
+          var i = if(from == 0) 1 else 0
+          while(i < preCpts.length){ tryUnify(i); i += 1 }
+          // No unifications for c
+          allUnifsRec(map, from+1, unifs)
+        }
+      }
+    } // end of allUnifsRec
+
+    allUnifsRec(map0, 0, List())
+    result
+  }
+
+  private type BitMap = Array[Array[Boolean]]
+
+  type NewCombineResult = ArrayBuffer[(Array[State], UnificationList)]
+
+  /** All ways of remapping cpts, consistent with map.  Parameters not in dom
+    * map can be mapped: (1) to values of otherArgs, but, in the case of
+    * identities, only those included in bitMap; or (2) to fresh values
+    * starting from nextArg.  Pair each resulting map with unifs, and add to
+    * result.
+    * 
+    * IMPROVE: do not remap components with inxes in map fst unifs.
+    * 
+    * map, otherArgs and nextArg are treated mutable, but all updates are
+    * backtracked. */
+  private def combineX(
+    map: RemappingMap, otherArgs: OtherArgMap, bitMap: BitMap, 
+    nextArg: NextArgMap, unifs: UnificationList, 
+    cpts: Array[State], result: NewCombineResult)
+      : Unit = {
+    // println(s"combineX: $unifs")
+
+    // Recursively remap cpts(i).args[j..), then cpts[i+1..).
+    def rec(i: Int, j: Int): Unit = {
+      if(i == cpts.length){
+        // println((View.showStates(Remapper.applyRemapping(map, cpts)), unifs))
+        // IMPROVE: remap each state in turn (and clone at this point)
+        result += ((Remapper.applyRemapping(map, cpts), unifs))
+      }
+      else{
+        val c = cpts(i); val ids = c.ids
+        if(j == ids.length) // End of this component; move to next component
+          rec(i+1, 0)
+        else {
+          val id = ids(j); val f = c.typeMap(j)
+          // Maybe rename (f, id)
+          if(isDistinguished(id) || map(f)(id) >= 0) rec(i, j+1) // just move on
+          else{
+            // Is (f,id) an identity of any component?  IMPROVE
+            val isIdentity = cpts.exists(st => st.family == f && st.id == id)
+            // Case 1: map id to an element id1 of otherArgs(f) (respecting
+            // bitMap if (f,id) is an identity).
+            var toDoIds = otherArgs(f); var doneIds = List[Identity]()
+            // We still need to map id to each element of toDoIds; doneIds
+            // represents those done already.
+            while(toDoIds.nonEmpty){
+              val id1 = toDoIds.head; toDoIds = toDoIds.tail
+              if(!isIdentity || bitMap(f)(id1)){
+                otherArgs(f) = append1(doneIds, toDoIds) // temporary update (*)
+                map(f)(id) = id1 // temporary update (+)
+                rec(i, j+1)
+                map(f)(id) = -1  // backtrack (+)
+              }
+              doneIds = id1::doneIds // order doesn't matter
+            } // end of while loop
+            otherArgs(f) = doneIds // undo (*)
+
+            // Case 2: map id to nextArg(f)
+            val id1 = nextArg(f)
+            map(f)(id) = id1; nextArg(f) += 1 // temporary updates (+)
+            rec(i, j+1)
+            nextArg(f) -= 1; map(f)(id) = -1 // backtrack (+)
+          }
+        }
+      }
+    } // end of rec
+
+    rec(0, 0)
+  }
+
+  /** All ways of unifying pre and cv.  Each parameter of cv is remapped (1) as
+    * identity function for parameters in pre.servers; (2) if a unification is
+    * done, as required by that unification; (3) otherwise either (a) to a
+    * parameter in post.servers or the post-state of a unified component, but
+    * not in pre.servers, or (b) the next fresh variable.  Also, under (a),
+    * identities cannot be mapped to identities in post.components, other than
+    * with unification.  Return remapped state, paired with a
+    * ReunificationList such that contains (j,i) whenever cv.components(j)
+    * unifies with pre.components(i). 
+    * @param requireUnif if true then require at least one unification. */
+  def newCombine(pre: Concretization, post: Concretization, cv: ComponentView, 
+    requireUnif: Boolean)
+      : NewCombineResult = {
+    val servers = pre.servers; require(servers == cv.servers)
+    val postCpts = post.components
+    require(pre.components.length == postCpts.length)
+    val map0 = servers.remappingMap
+    // Create NextArgMap, greater than anything in pre or post
+    val nextArg: NextArgMap = pre.getNextArgMap // new Array[Int](numTypes)
+    post.updateNextArgMap(nextArg)
+    // Find all ids in post.servers but not in pre.servers, as a bitmap.
+    val newServerIds = new Array[Array[Boolean]](numTypes); var f = 0
+    while(f < numTypes){ 
+      newServerIds(f) = new Array[Boolean](typeSizes(f)); f += 1
+    }
+    var sts: List[State] = post.servers.servers
+    while(sts.nonEmpty){
+      val pids = sts.head.processIdentities; sts = sts.tail; var i = 0
+      while(i < pids.length){
+        val (f,id) = pids(i); i += 1
+        if(id >= servers.numParams(f)) newServerIds(f)(id) = true
+      }
+    }
+
+    val result = new NewCombineResult
+    val allUs = allUnifs(map0, pre.components, cv.components)
+    var ix = 0
+    while(ix < allUs.length){
+      val (map1, unifs) = allUs(ix); ix += 1
+      if(unifs.nonEmpty || !requireUnif){
+        // println("newCombine: "+Remapper.show(map1)+"; "+unifs)
+        // Create OtherArgMap containing all values not in ran map1 or
+        // pre.servers, but (1) in post.servers; or (2) in post.cpts for a
+        // unified component.  Start with a bit map.
+        val otherArgsBitMap = newServerIds.map(_.clone)
+        // Add values in components of post corresponding to unifs.
+        var us = unifs
+        while(us.nonEmpty){
+          val i = us.head._2; us = us.tail
+          val pids = postCpts(i).processIdentities; var j = 0
+          // Add values in pids to otherArgsBitMap
+          while(j < pids.length){
+            val (f,id) = pids(j); j += 1
+            if(id >= servers.numParams(f)) otherArgsBitMap(f)(id) = true
+          }
+        }
+        // Remove values in ran map1, and convert into otherArgMap
+        val otherArgs = Remapper.newOtherArgMap; var f = 0
+        while(f < numFamilies){
+          var i = 0; val len = typeSizes(f)
+          while(i < len){
+            val id = map1(f)(i); i += 1
+            if(id >= 0) otherArgsBitMap(f)(id) = false
+          }
+          // Create otherArgs(f)
+          i = 0
+          while(i < len){
+            if(otherArgsBitMap(f)(i)) otherArgs(f) ::= i
+            i += 1
+          }
+          f += 1
+        }
+        // Find values that identities can be mapped to: values in otherArgs,
+        // but not identities of components in post; update otherArgsBitMap to
+        // record.
+        var i = 0
+        while(i < postCpts.length){
+          val st = postCpts(i); i += 1; otherArgsBitMap(st.family)(st.id) = false
+        }
+
+        if(false){
+          println("\nunifs = "+unifs)
+          println("map1 = "+Remapper.show(map1))
+          println("otherArgs = "+otherArgs.mkString(", "))
+          println("nextArg = "+nextArg.mkString(", "))
+          val otherIds = (0 until numTypes).map(f =>
+            otherArgs(f).filter(id => otherArgsBitMap(f)(id)))
+          println("otherIds = "+otherIds.mkString(", "))
+        }
+        // IMPROVE: inline?
+        combineX(
+          map1, otherArgs, otherArgsBitMap, nextArg, unifs, 
+          cv.components, result)
+// IMPROVE: do we need all of unifs? 
+
+      } // end of if
+    } // end of while loop
+
     result
   }
 

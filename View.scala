@@ -54,7 +54,8 @@ abstract class View{
   = {
     require(ply == Int.MaxValue || ply == ply1, s"$ply $ply1")
     require(pre == null && creationIngredients == null)
-    require(pre1.ply <= ply1 && cv.ply <= ply1 && post1.ply <= ply1)
+    require(pre1.ply <= ply1 && cv.ply <= ply1 && post1.ply <= ply1,
+      s"pre1 = $pre1 \ncv = $cv \npost1 = $post1 \n ply1 = $ply1")
     creationIngredients = (pre1, cpts, cv, post1, newCpts); e = e1; ply = ply1
   }
 
@@ -169,7 +170,10 @@ object View{
   /** All the views of a particular concretization. */
   //def alpha(conc: Concretization): List[View] = ???
 
-  def showStates(states: Array[State]) = states.mkString("[", " || ", "]")
+  def showStates(states: Array[State]) = states.map(_.toString0).mkString("[", " || ", "]")
+
+  def show(servers: ServerStates, states: Array[State]) =
+    servers.toString+" || "+showStates(states)
 
   /** Do cpts1 and cpts2 agree on all components with the same identity?
     * Pre: cpts1(i) agrees with cpts2 on any component with the same identity. */
@@ -282,7 +286,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       while(k < j){ nc(k) = components1(k); k += 1 }
       components1 = nc
     }
-    if(true){ // testing against previous version IMPROVE
+    if(debugging){ // testing against previous version IMPROVE
       val components1X = components.tail.filter{cpt =>
         val (f,id) = cpt.componentProcessIdentity
           (1 until princIds.length).exists{j =>
@@ -399,6 +403,32 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     // Profiler.count("getCombiningMaps"+(otherArgs == null))
     if(otherArgs == null) initMaps()
     (map, otherArgs, nextArg)
+  }
+
+  /** Get a (fresh) NextArgMap. */
+  def getNextArgMap: NextArgMap = {
+    if(otherArgs == null) initMaps()
+    nextArg.clone
+  }
+
+  /** Update nextArg, so entries are greater than all identities in this. */
+  def updateNextArgMap(nextArg: NextArgMap) = {
+    var states = servers.servers
+    while(states.nonEmpty){
+      updateNextArgMapFrom(states.head, nextArg); states = states.tail
+    }
+    var i = 0
+    while(i < components.length){
+      updateNextArgMapFrom(components(i), nextArg); i += 1
+    }
+  }
+
+  /** Update nextArg so entries are greater than identities in state. */
+  @inline private def updateNextArgMapFrom(state: State, nextArg: NextArgMap) = {
+    var pids = state.processIdentities; var i = 0
+    while(i < pids.length){
+      val (f,id) = pids(i); nextArg(f) = nextArg(f) max (id+1); i += 1
+    }
   }
 
   override def toString = 
