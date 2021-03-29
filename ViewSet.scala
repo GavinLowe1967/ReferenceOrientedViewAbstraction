@@ -105,13 +105,13 @@ class BasicHashMap[K: scala.reflect.ClassTag, D: scala.reflect.ClassTag]
   /** The threshold at which the next resizing will happen. */
   private var threshold = initSize * ThresholdRatio
 
-  /** The array holding the servers. */
+  /** The array holding the keys. */
   private var keys = new Array[K](initSize)
 
-  /** The array holding the corresponding ComponentViews. */
+  /** The array holding the corresponding D values. */
   private var data = new Array[D](initSize)
 
-  /** Find the index in the arrays corresponding to servers. */
+  /** Find the index in the arrays corresponding to k. */
   private def find(k: K): Int = {
     var i = k.hashCode & mask
     while(keys(i) != k && keys(i) != null) i = (i+1)&mask
@@ -133,9 +133,9 @@ class BasicHashMap[K: scala.reflect.ClassTag, D: scala.reflect.ClassTag]
     val i = find(k)
     if(keys(i) == null){
       if(count >= threshold){ resize(); return add(k,d) }
-      keys(i) = k
+      keys(i) = k; count += 1
     }
-    data(i) = d; count += 1
+    data(i) = d
   }
 
   /** Get the value associated with k, or null if there is no such. */

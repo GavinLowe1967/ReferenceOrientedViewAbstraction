@@ -301,7 +301,7 @@ object Unification{
       : AllUnifsResult = {
     // Map from identities to the index of the corresponding component in
     // preCpts, if any, otherwise -1.
-    val preCptsBitMap = State.indexMap(preCpts)
+    val preCptsIndexMap = State.indexMap(preCpts)
     val result = new AllUnifsResult // holds final result
 
     // Extend map and unifs to cpts[from..), adding results to results. 
@@ -321,11 +321,12 @@ object Unification{
             // should have unified earlier.
             var j = 0; var ok = true
             while(j < from && ok){
-              val (f,id) = cpts(j).componentProcessIdentity
+              val cj = cpts(j); val f = cj.family; val id = cj.ids(0)
+              // val (f,id) = cpts(j).componentProcessIdentity
               val id1 = map1(f)(id)
               // Check map not extended on (f,id), or (f,id1) doesn't match an
               // identity in preCpts
-              ok = id1 == map(f)(id) || preCptsBitMap(f)(id1) < 0
+              ok = id1 == map(f)(id) || preCptsIndexMap(f)(id1) < 0
               j += 1
             }
             if(ok) allUnifsRec(map1, from+1, (from,i)::unifs)
@@ -334,7 +335,7 @@ object Unification{
 
         // Test if (fc,fId) already mapped to a component of preCpts
         val fc = c.family; val id1 = map(fc)(c.id)
-        val ix = if(id1 < 0) -1 else preCptsBitMap(fc)(id1)
+        val ix = if(id1 < 0) -1 else preCptsIndexMap(fc)(id1)
         if(ix >= 0) tryUnify(ix) 
         else{
           // Try to unify with each component in turn, but don't unify the two
@@ -361,7 +362,7 @@ object Unification{
     * starting from nextArg.  Pair each resulting map with unifs, and add to
     * result.
     * 
-    * IMPROVE: do not remap components with inxes in map fst unifs.
+    * IMPROVE: do not remap components with indexes in map fst unifs.
     * 
     * map, otherArgs and nextArg are treated mutable, but all updates are
     * backtracked. */
@@ -388,8 +389,13 @@ object Unification{
           // Maybe rename (f, id)
           if(isDistinguished(id) || map(f)(id) >= 0) rec(i, j+1) // just move on
           else{
-            // Is (f,id) an identity of any component?  IMPROVE
-            val isIdentity = cpts.exists(st => st.family == f && st.id == id)
+            // Is (f,id) an identity of any component? 
+            var ii = 0; var isIdentity = false
+            while(ii < cpts.length && !isIdentity){
+              val st = cpts(ii); isIdentity = st.family == f && st.id == id
+              ii += 1
+            }
+            // val isIdentity = cpts.exists(st => st.family == f && st.id == id)
             // Case 1: map id to an element id1 of otherArgs(f) (respecting
             // bitMap if (f,id) is an identity).
             var toDoIds = otherArgs(f); var doneIds = List[Identity]()
@@ -423,10 +429,10 @@ object Unification{
 
   /** Record of the cv, pre.servers and post.servers, with pre.servers !=
     *  post.servers, for which there has been a call to newCombine giving a
-    *  result with no unifications.  */ 
+    *  result with no unifications.  Note that we don't need to record
+    *  pre.servers explicitly, because it equals cv.servers. */ 
   private[RemapperP] val effectOnChangedServersCache = 
-    new HashSet[(ComponentView, ServerStates, ServerStates)]
-
+    new BasicHashSet[(ComponentView, /* ServerStates,*/ ServerStates)]
 
   /** All ways of unifying pre and cv.  Each parameter of cv is remapped (1) as
     * identity function for parameters in pre.servers; (2) if a unification is
@@ -438,7 +444,6 @@ object Unification{
     * ReunificationList such that contains (j,i) whenever cv.components(j)
     * unifies with pre.components(i).  */
   def newCombine(pre: Concretization, post: Concretization, cv: ComponentView) 
-//    requireUnif: Boolean)
       : NewCombineResult = {
     val servers = pre.servers; require(servers == cv.servers)
     val preCpts = pre.components; val postCpts = post.components
@@ -446,8 +451,7 @@ object Unification{
     val changedServers = servers != post.servers
     val map0 = servers.remappingMap
     // Create NextArgMap, greater than anything in pre or post
-    val nextArg: NextArgMap = pre.getNextArgMap 
-    post.updateNextArgMap(nextArg)
+    val nextArg: NextArgMap = pre.getNextArgMap; post.updateNextArgMap(nextArg)
     // Find all ids in post.servers but not in pre.servers, as a bitmap.
     val newServerIds = new Array[Array[Boolean]](numTypes); var f = 0
     while(f < numTypes){ 
@@ -462,11 +466,13 @@ object Unification{
       }
     }
     // Bit map indicating which components have changed state.
-    val changedStateBitMap = new Array[Boolean](preCpts.length)
-    for(i <- 0 until preCpts.length)
-      changedStateBitMap(i) = preCpts(i) != postCpts(i)
-
+    val changedStateBitMap = new Array[Boolean](preCpts.length); var i = 0
+    while(i < preCpts.length){
+      changedStateBitMap(i) = preCpts(i) != postCpts(i); i += 1
+    }
     val result = new NewCombineResult
+
+    // Get all ways of unifying pre and cv. 
     val allUs = allUnifs(map0, pre.components, cv.components)
     var ix = 0
     while(ix < allUs.length){
@@ -479,7 +485,7 @@ object Unification{
       var sufficientUnif = false
       if(changedServers)
         sufficientUnif = unifs.nonEmpty ||
-          effectOnChangedServersCache.add((cv, pre.servers, post.servers))
+          effectOnChangedServersCache.add((cv, /* pre.servers,*/ post.servers))
       else{
         var us = unifs
         while(!sufficientUnif && us.nonEmpty){
@@ -488,8 +494,9 @@ object Unification{
 // IMPROVE, try to identify this within allUnifs, by trying to unify
 // components that change state first.
       }
-      Profiler.count(s"sufficientUnif = $sufficientUnif")
+      // Profiler.count(s"sufficientUnif = $sufficientUnif$changedServers${unifs.nonEmpty}")
       if(sufficientUnif){
+        //if(changedServers && unifs.isEmpty)  Profiler.count(cv.toString+post.servers)
         // println("newCombine: "+Remapper.show(map1)+"; "+unifs)
         // Create OtherArgMap containing all values not in ran map1 or
         // pre.servers, but (1) in post.servers; or (2) in post.cpts for a

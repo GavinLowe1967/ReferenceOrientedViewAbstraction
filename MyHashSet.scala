@@ -27,9 +27,99 @@ trait MyHashSet[A]{
     * is no such. */
   // def getOrAdd(x: A): A 
 
+  def apply(x: A) = contains(x)
+
   /** Does this contain x?
     *  Pre: this operation is not concurrent to any add operation. */
   def contains(x: A): Boolean
+}
+
+// ==================================================================
+
+/** A basic implementation of a hash map, using open addressing. */
+class BasicHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
+    extends MyHashSet[A]{
+
+  checkPow2(initSize)
+
+  /** The number of keys. */
+  private var count = 0L
+
+ /** The number of slots in the hash table. */
+  private var n = initSize
+
+  /** A bitmask to produce a value in [0..n). */
+  private var mask = n-1
+
+  /** The threshold ratio at which resizing happens. */
+  private val ThresholdRatio = 0.6
+
+  /** The threshold at which the next resizing will happen. */
+  private var threshold = initSize * ThresholdRatio
+
+  /** The array holding the keys. */
+  private var keys = new Array[A](initSize)
+
+  /** Find the index in the arrays corresponding to k. */
+  private def find(k: A): Int = {
+    var i = k.hashCode & mask
+    while(keys(i) != k && keys(i) != null) i = (i+1)&mask
+    i
+  }  
+
+  /** Add x to this set. */
+  def add(x: A): Boolean = {
+    val i = find(x)
+    if(keys(i) == null){
+      if(count >= threshold){ resize(); return add(x) }
+      keys(i) = x; count += 1; true
+    }
+    else false
+  }
+
+  /** Resize the hash table. */
+  private def resize(): Unit = {
+    val oldKeys = keys; val oldN = n
+    n += n; threshold = n * ThresholdRatio; mask = n-1
+    keys = new Array[A](n); var i = 0
+    while(i < oldN){
+      val k = oldKeys(i)
+      if(k != null){ // copy across
+        val j = find(k); keys(j) = k
+      }
+      i += 1
+    }
+  }
+
+  /** An iterator over the values in the set. */
+  def iterator = new Iterator[A]{
+    /** The index of the next value to return. */
+    private var ix = 0
+
+    /** Advance to the next value. */
+    private def advance = while(ix < n && keys(ix) == null) ix += 1
+
+    advance
+
+    def hasNext = ix < n
+
+    def next = { val k = keys(ix); ix += 1; advance; k }
+  } // end of iterator
+
+  /** Does this set contain x? */
+  def contains(x: A): Boolean = { val i = find(x); keys(i) != null }
+
+  /** Get the element of this that is equal (==) to x. 
+    * Pre: such an element exists; and this operation is not concurrent with
+    * any add operation. */
+  def get(x: A): A = { val i = find(x); keys(i) }
+
+  def size: Long = count
+
+  def clear = {
+    keys = new Array[A](initSize); count = 0; 
+    n = initSize; mask = n-1; threshold = initSize * ThresholdRatio
+  }
 }
 
 // =======================================================

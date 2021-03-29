@@ -123,8 +123,14 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   checkValid
 
   /** Is this representable using the values defined in the script? */
-  def representableInScript = 
-    servers.representableInScript && components.forall(_.representableInScript)
+  def representableInScript: Boolean = {
+    if(! servers.representableInScript) false
+    else{
+      var i = 0
+      while(i < components.length && components(i).representableInScript) i += 1
+      i == components.length
+    }
+  }
 
   override def toString = 
     s"$servers || "+components.mkString("[", " || ", "]")+s" <$ply>"

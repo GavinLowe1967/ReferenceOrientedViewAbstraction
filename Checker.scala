@@ -19,7 +19,7 @@ class Checker(system: SystemP.System){
   // adding new views to the set while that is going on.
 
   /** The new views to be considered on the next ply. */
-  protected var nextNewViews: HashSet[ComponentView] = null
+  protected var nextNewViews: MyHashSet[ComponentView] = null
 
   private def showTransition(
     pre: Concretization, e: EventInt, post: Concretization) =
@@ -43,7 +43,7 @@ class Checker(system: SystemP.System){
 
   /** Transitions found on this ply.  Transitions are initially added to
     * newTransitions, but transferred to transitions at the end of the ply. */
-  private var newTransitions: HashSet[Transition] = null
+  private var newTransitions: BasicHashSet[Transition] = null
 
   import TransitionTemplateSet.TransitionTemplate
   // = (Concretization, Concretization, ProcessIdentity, EventInt, Boolean)
@@ -62,7 +62,7 @@ class Checker(system: SystemP.System){
   /** Transition templates found on this ply.  Transition templates are
     * initially added to newTransitionTemplates, but transferred to
     * transitionsTemplates at the end of the ply. */
-  private var newTransitionTemplates: HashSet[TransitionTemplate] = null
+  private var newTransitionTemplates: MyHashSet[TransitionTemplate] = null
 
 
   var addTransitionCount = 0L
@@ -269,6 +269,7 @@ class Checker(system: SystemP.System){
       extendedPre.setSecondaryView(cv, referencingViews, ply) 
       var op = outsidePosts
       while(op.nonEmpty){
+        // Profiler.count("instantiateTT3")
         val postSt = op.head; op = op.tail
         val extendedPost = post.extend(postSt)
         // if(verbose && !transitions.contains((extendedPre, e, extendedPost)) &&
@@ -510,8 +511,6 @@ class Checker(system: SystemP.System){
     val iter = sysAbsViews.iterator(pre.servers)
     while(iter.hasNext){
       val cv = iter.next
-      // IMPROVE if nothing changed state.
-      // effectOnViaOthersCount += 1
       effectOn(pre, e, post, cv)
     }
   }
@@ -582,7 +581,7 @@ class Checker(system: SystemP.System){
   protected def effectOn(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
   = {
-    Profiler.count("effectOn")
+    // Profiler.count("effectOn")
     require(pre.servers == cv.servers &&
       pre.components.length == post.components.length)
     var i = 0
@@ -604,15 +603,9 @@ class Checker(system: SystemP.System){
       assert(cpts.length == cptsLen)
       // What does cpts(0) get mapped to?
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
-      // val matches = unifs.filter(_._1 == 0) 
 // IMPROVE: don't need all of unifs
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
-      // val newPrinc = if(matches.isEmpty) cpts(0) else postCpts(matches.head._2)
       val newComponents = makePostComponents(newPrinc, postCpts, cpts)
-      if(false) print(
-        s"$pre --> $post\n  with unifications $unifs\n"+
-          s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-          s"  --> ${View.show(post.servers, newComponents)}")
       val nv = Remapper.mkComponentView(post.servers, newComponents)
       newViewCount += 1 //; Profiler.count("newViewCount"+unifs.isEmpty)
       // Mostly with unifs.nonEmpty
@@ -628,6 +621,15 @@ class Checker(system: SystemP.System){
             s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
           sys.exit
         }
+      }
+      else if(false){
+        // if(pre.servers != post.servers && unifs.isEmpty)
+        //   Profiler.count(cv.toString+post.servers)
+        Profiler.count("non-new view"+(pre.servers != post.servers)+unifs.isEmpty)
+        println(
+        s"$pre --> $post\n  with unifications $unifs\n"+
+          s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+          s"  --> ${View.show(post.servers, newComponents)} == $nv")
       }
     } // end of while loop
   }
@@ -706,9 +708,9 @@ class Checker(system: SystemP.System){
       println(s"#transitions = ${printLong(transitions.size)}")
       println(s"#transition templates = ${printLong(transitionTemplates.size)}")
       println("#new active abstract views = "+printInt(newViews.size))
-      nextNewViews = new HashSet[ComponentView]
-      newTransitions = new HashSet[Transition]
-      newTransitionTemplates = new HashSet[TransitionTemplate]
+      nextNewViews = new BasicHashSet[ComponentView]
+      newTransitions = new BasicHashSet[Transition]
+      newTransitionTemplates = new BasicHashSet[TransitionTemplate]
       var i = 0
 
       // Process all views from newViews.
@@ -735,19 +737,19 @@ class Checker(system: SystemP.System){
           newViewsAB += v; true 
         } 
         else false
-      for((pre,e,post) <- newTransitions){
+      for((pre,e,post) <- newTransitions.iterator){
         assert(transitions.add(pre, e, post)) // IMPROVE: assert this worked
         val v = Remapper.remapComponentView(post.toComponentView)
         if(addView(v)) v.setCreationInfo(pre, e, post, ply)
       }
       if(false) // print newTransitions
         println(
-          (for((pre,e,post) <- newTransitions.toArray)
+          (for((pre,e,post) <- newTransitions.iterator.toArray)
           yield s"$pre -${system.showEvent(e)}->\n  $post"
           ).sorted.mkString("\n") )
-      for((pre, post, id, e, inc) <- newTransitionTemplates)
+      for((pre, post, id, e, inc) <- newTransitionTemplates.iterator)
         transitionTemplates.add(pre, post, id, e, inc)
-      for(v <- nextNewViews) addView(v)
+      for(v <- nextNewViews.iterator) addView(v)
       ply += 1; newViews = newViewsAB.toArray; 
       if(false) 
         println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
