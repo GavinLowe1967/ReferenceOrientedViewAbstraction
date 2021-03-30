@@ -440,6 +440,10 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   override def toString = 
     s"$servers || ${components.mkString("[", " || ", "]")}"+s" <$ply>"
 
+  def toString0 = 
+    servers.toString0+" || "+
+      components.map(_.toString0).mkString("[", " || ", "]")+s" <$ply>"
+
   /** A new concretization, extending this with component newState. */
   def extend(newState: State): Concretization =
     new Concretization(servers, components :+ newState)

@@ -335,7 +335,14 @@ object Unification{
 
         // Test if (fc,fId) already mapped to a component of preCpts
         val fc = c.family; val id1 = map(fc)(c.id)
-        val ix = if(id1 < 0) -1 else preCptsIndexMap(fc)(id1)
+        val ix = 
+          if(id1 < 0) -1 
+          else{ 
+            assert(id1 < preCptsIndexMap(fc).length, 
+              s"preCpts = ${View.showStates(preCpts)} "+
+                s"cpts = ${View.showStates(cpts)} id1 = $id1")
+            preCptsIndexMap(fc)(id1)
+          }
         if(ix >= 0) tryUnify(ix) 
         else{
           // Try to unify with each component in turn, but don't unify the two
@@ -456,6 +463,7 @@ object Unification{
     val newServerIds = new Array[Array[Boolean]](numTypes); var f = 0
     while(f < numTypes){ 
       newServerIds(f) = new Array[Boolean](typeSizes(f)); f += 1
+// Is above size enough?
     }
     var sts: List[State] = post.servers.servers
     while(sts.nonEmpty){
@@ -510,6 +518,10 @@ object Unification{
           // Add values in pids to otherArgsBitMap
           while(j < pids.length){
             val (f,id) = pids(j); j += 1
+            assert(id < otherArgsBitMap(f).length, 
+              s"pre = ${pre.toString0}, post = ${post.toString0}, "+
+                s"cv = ${cv.toString0}, id = $id")
+// FIXME: throw better exception here?
             if(id >= servers.numParams(f)) otherArgsBitMap(f)(id) = true
           }
         }

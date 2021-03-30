@@ -112,6 +112,8 @@ class System(fname: String, checkDeadlock: Boolean,
   // f2.
   var threeWaySyncs: Array[Array[Boolean]] = null
 
+
+
   private def init() = {
     // Create the mapping from control states to types of parameters
     transMapBuilder.createStateTypeMap
@@ -151,10 +153,118 @@ class System(fname: String, checkDeadlock: Boolean,
     for(f1 <- 0 until numFamilies; f2 <- 0 to f1; if threeWaySyncs(f1)(f2))
       println(s"Three-way synchronisation involving families $f2 and $f1")
 
+    for(oi <- file.omitInfos) processOmitInfo(oi)
+
     fdr.libraryExit()
   }
 
   init()
+
+
+  /** Process the omit information from the file.  We build a partial mapping
+    * from control states to bitmaps, showing which referenced states are
+    * omitted. */
+  private def processOmitInfo(omitInfo: OmitInfo) = {
+    println(s"Processing $omitInfo") 
+    val OmitInfo(processName, params, omits) = omitInfo
+
+    // Bitmap showing which parameters are from distinguished types.
+    val indexingTypes = params.map{ case (p,t) => familyTypeNames.contains(t) }
+    // println(s"indexingTypes = $indexingTypes")
+    val numDistinguished = indexingTypes.count(identity)
+    // Build mapping from the indices of parameters of the resulting States to
+    // indices of params, and bitmap showing which parameters of States will
+    // be included.
+    val stateParamIxs = new Array[Int](numDistinguished)
+    val includeBitMap = new Array[Boolean](numDistinguished)
+    var i = 0; var j = 0
+    while(j < indexingTypes.length){
+      if(indexingTypes(j)){ 
+        stateParamIxs(i) = j; 
+        includeBitMap(i) = !omits.contains(params(j)._1);  i += 1 
+      }
+      j += 1
+    }
+    // println(stateParamIxs.mkString(", "))
+    // println(includeBitMap.mkString(", "))
+
+    // Check each omitted value corresponds to a distinguished type. 
+    val argNames = params.map(_._1)
+    for(om <- omits){
+      val ix = argNames.indexOf(om)
+      assert(indexingTypes(ix),
+        "Type "+params(ix)._2+
+          " of omitted reference is not a distinguished type.")
+    }
+
+    // The values in the types of the parameters
+    val typeValues = params.map{ case(p,t) => fdrSession.setStringToList(t) }
+    // println(s"typeValues = $typeValues")
+    // All values for the distinguished types
+    val distVals: List[List[Option[String]]] = cp(typeValues, indexingTypes)
+    //println(distVals.mkString("\n"))
+    // All values for the non-distinguished types
+    val nonDistVals = cp(typeValues, indexingTypes.map(!_))
+    //println(nonDistVals.mkString("\n"))
+
+    // Get the control state and parameters corresponding to processName with
+    // parameters the merger of nd and dv.
+    def getProcInfo(nd: List[Option[String]], dv: List[Option[String]]) = {
+      val idStrings = merge(nd, dv)
+      val procString = processName+idStrings.mkString("(", ",", ")")
+      val (cs,ids) = transMapBuilder.getProcInfo(procString)
+      // println(s"$procString: ($cs,$ids)")
+      (cs,ids)
+    }
+
+    for(nd <- nonDistVals){
+      val (cs,_) = getProcInfo(nd, distVals.head)
+      val f = State.stateTypeMap(cs)(0)
+      println(s"Storing omit information $cs (family $f) -> "+
+        includeBitMap.mkString(", "))
+      assert(passiveFamilies.contains(f), 
+        "Only passive families can have omit information.  Process "+processName+
+          " is from an active family.")
+      State.setOmitInfo(cs, includeBitMap)
+      // Check all others agree.
+      for(dv <- distVals){
+        val (cs1,ids) = getProcInfo(nd, dv); assert(cs1 == cs)
+        // Traverse through dv and ids, checking they correspond
+        var i = 0; var j = 0
+        while(j < dv.length){
+          if(dv(j).nonEmpty){
+            assert(dv(j).get == typeValues(j)(ids(i)), s"$dv $ids"); i += 1
+          }
+          j += 1
+        }
+      }
+    }
+  }
+
+  /* Cartesian product of values from typeValues(i) such that flags(i), wrapping
+   * such values as Some(_) values, and using None where !flags(i). */
+  private def cp(typeValues: List[List[String]], flags: List[Boolean])
+      : List[List[Option[String]]] = {
+    if(typeValues.isEmpty){ assert(flags.isEmpty); List(List()) }
+    else{
+      val rest = cp(typeValues.tail, flags.tail)
+      if(flags.head) typeValues.head.flatMap(v => rest.map(r => Some(v)::r))
+      else rest.map(None::_)
+    }
+  }
+
+  /** The merge of dv and nd.  The two lists are expected to have Some values in
+    * opposite positions. */ 
+  private def merge(dv: List[Option[String]], nd: List[Option[String]])
+      : List[String] = {
+    if(dv.isEmpty){ assert(nd.isEmpty); List() }
+    else{
+      val dv0 = dv.head; val nd0 = nd.head; val rest = merge(dv.tail, nd.tail)
+      if(dv0.nonEmpty){ assert(nd0.isEmpty); dv0.get::rest }
+      else nd0.get::rest
+    }
+  }
+
 
   /** Representation of the tau event. */
   // private val Tau = 1

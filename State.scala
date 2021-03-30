@@ -284,6 +284,12 @@ object State{
     * or -1 for server processes with no identity.  */
   private var idTypeArray: Array[Type] = null
 
+  /** Array to hold information about which referenced components should be
+    * omitted from Views.  Created in setStateTypeMap.  Updated and read via
+    * setOmitInfo and getOmitInfo.  Values are stored with an offset of
+    * minCS. */
+  private var omitInformation: Array[Array[Boolean]] = null
+
   /** Initialise the stateTypeMapArray, idTypeArray and minCS.  Also
     * update the StateMap.  Called by
     * FDRTransitionMap.createStateTypeMap, called by System.init. */
@@ -297,6 +303,7 @@ object State{
     maxParamsOfType = Array.tabulate(numTypes)( t =>
       stma.filter(_ != null).map(_.count(_ == t)).max )
     println("maxParamsOfType = "+maxParamsOfType.mkString(", "))
+    omitInformation = new Array[Array[Boolean]](State.numCS)
     //rowSizes = Array.tabulate(numTypes)( t => typeSizes(t) /* + maxParamsOfType(t) */ )
     // MyStateMap.renewStateStore(stma.length, minCS)
   }
@@ -307,6 +314,11 @@ object State{
 
   /** Type of the identity of component with control state cs. */
   private def idType(cs: ControlState): Type = idTypeArray(cs-minCS)
+
+  def setOmitInfo(cs: ControlState, omitInfo: Array[Boolean]) =
+    omitInformation(cs-minCS) = omitInfo
+
+  @inline def getOmitInfo(cs: ControlState) = omitInformation(cs-minCS)
 
   /** The script name for pid. */
   def showProcessId(pid: ProcessIdentity) = {
@@ -321,7 +333,8 @@ object State{
   @inline def indexMap(states: Array[State]): Array[Array[Int]] = {
     if(indexMapTemplate == null) 
       indexMapTemplate =
-        Array.tabulate(numTypes)(f => Array.fill(typeSizes(f))(-1))
+        Array.tabulate(numTypes)(f => Array.fill(typeSizes(f)+1)(-1))
+// FIXME: the +1 is a bit arbitrary
     // Clone indexMaptemplate
     val map = new Array[Array[Int]](numTypes); var f = 0
     while(f < numTypes){ map(f) = indexMapTemplate(f).clone; f += 1 }
