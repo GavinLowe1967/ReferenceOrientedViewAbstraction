@@ -10,8 +10,7 @@ import ox.gavin.profiling.Profiler
 
 /** An object that creates the System corresponding to the CSP file fname.
   * @param checkDeadlock are we checking for deadlock? */
-class System(fname: String, checkDeadlock: Boolean, 
-             significancePaths: List[SignificancePath]) {
+class System(fname: String) {
   // type View = Views.View
 
   var verbose = false

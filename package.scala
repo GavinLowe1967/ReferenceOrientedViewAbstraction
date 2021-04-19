@@ -3,6 +3,8 @@ import scala.collection.mutable.Map
 /** The package object defines various types, so as to make them globally
   * visible. */
 package object ViewAbstraction{
+  // ------------------- Types, and basic operations.
+
   /** Identities of replicated processes. */
   type Identity = Int
 
@@ -10,10 +12,8 @@ package object ViewAbstraction{
     * This corresponds to it being negative. */
   @inline def isDistinguished(id: Identity): Boolean = id < 0
 
-  /** Names of types, used within parameters of processes. */
+  /** Identifiers for types, used within parameters of processes. */
   type Type = Int 
-
-  type Shape = Array[Int]
 
   /** A parameter of a process. */
   type Parameter = (Type, Identity)
@@ -26,34 +26,19 @@ package object ViewAbstraction{
     * and identity. */
   type ProcessIdentity = (Family, Identity)
 
-  /** Is p a distinguished parameter?  
-    * This corresponds to the identity being negative. */
-  // @inline def isDistinguished(p: Parameter): Boolean = isDistinguished(p._2)
-
   /** Control states of processes (which include all data other than
     * Identitys). */
   type ControlState = Int
 
-  /** A partial mapping from identities to identities. */
-  type IdMap = List[(Identity, Identity)]
-
   /** Index into the global array of States in the State object. */
   type StateIndex = Int
 
-  /** Look up arg in the IdMap rho, given an Option result. */
-  // def lookup(rho: IdMap, arg: Identity): Option[Identity] =
-  //   if(rho.isEmpty) None
-  //   else{
-  //     val (arg1, arg2) = rho.head
-  //     if(arg == arg1) Some(arg2) else lookup(rho.tail, arg)
-  //   }
-
-  /** A partial mapping over Parameters, represented as a type-indexed array 
-    * of IdMaps. */
-  type ParamMap = Array[IdMap]
-
-  /** Representation of events in the FDR-based version. */
+  /** Representation of events. */
   type EventInt = Int
+
+  /** Sentinel uses at end of lists of events, as part of the representation of
+    * transitions. */
+  val Sentinel = Int.MaxValue
 
   /** The representation of tau. */
   val Tau: EventInt = 1
@@ -67,7 +52,6 @@ package object ViewAbstraction{
     */
   type RemappingMap = Array[Array[Identity]]
 
-
   /** The type of maps giving the next argument to map a parameter of
     * type t.  The corresponding RemappingMap has domain all
     * parameters (t,i) for i <- [0..nextArg(t)), for each t. */
@@ -77,7 +61,7 @@ package object ViewAbstraction{
     * be mapped to. */
   type OtherArgMap = Array[List[Identity]]
 
-
+  // --------------------------- Various useful functions
 
   /** Append two lists together: more efficient than API version. */
   def append(xs: List[Int], ys: List[Int]): List[Int] =
@@ -105,19 +89,7 @@ package object ViewAbstraction{
     }
   }
 
-  /** Compare xs and ys lexicographically.
-    * @return 0 if xs == ys, -1 if xs < ys, +1 if xs > ys. */
-  @inline def compareArrays(xs: Array[Int], ys: Array[Int]): Int = {
-    val len = xs.length; require(len == ys.length); var i = 0 // IMPROVE
-    while(i < len && xs(i) == ys(i)) i += 1
-    if(i == len) 0 else if (xs(i) < ys(i)) -1 else 1
-  }
-
-
-  /** Sentinel uses at end of lists of events, as part of the representation of
-    * transitions. */
-  val Sentinel = Int.MaxValue
-
+  /** Is n a power of 2? */
   def checkPow2(n: Int) = {
     var k = n
     while(k > 1){
@@ -142,11 +114,6 @@ package object ViewAbstraction{
     if(h == 0) 12344577 else h
   }
 
-  /** Switch to activate various assertions. */
-  val debugging = true // false
-
-  type SignificancePath = List[Int]
-
   private val formatter = java.text.NumberFormat.getNumberInstance
 
   /** Print an Int with commas. */
@@ -154,18 +121,13 @@ package object ViewAbstraction{
 
   def printLong(n: Long): String = formatter.format(n)
 
-  // ----- Global variables
+  // ------------------------------------------- Global variables
 
-  /** Are we using the old style of checking, where on each ply we calculate
-    * gamma of all new abstractions, then post, then alpha? */
-  // var oldStyle = false
+  /** Switch to activate various assertions. */
+  val debugging = true // false
 
-  // /** Are we using the new style of checking, where on each ply, we consider
-  //   * each new abstraction separately? */
-  // var newStyle = !oldStyle
-
-  /** Are we performing memoryless checking? */
-  // var memoryless = false 
+  /** Are we creating Views with just a single referenced component? */
+  var singleRef = false
 
   /** Are we supporting debugging? */ 
   var debuggable = true
@@ -231,5 +193,4 @@ package object ViewAbstraction{
 
   /** Number of machine threads. */
   var numThreads = Runtime.getRuntime.availableProcessors 
-  println("numThreads = "+numThreads)
 }

@@ -70,11 +70,11 @@ class Checker(system: SystemP.System){
   private var newTransitionTemplates: MyHashSet[TransitionTemplate] = null
 
   var addTransitionCount = 0L
-  var effectOfPreviousTransitionsCount = 0
-  var effectOnOthersCount = 0
+  // var effectOfPreviousTransitionsCount = 0
+  // var effectOnOthersCount = 0
   var newViewCount = 0L
   var addedViewCount = 0L
-  var effectOnRepetition = 0
+  // var effectOnRepetition = 0
   var instantiateTransitionTemplateCount = 0L
   // Counts on transition templates
 
@@ -180,7 +180,7 @@ class Checker(system: SystemP.System){
       val preCpts = pre.components; val len = preCpts.length; 
       var i = 0; var done = false
       while(i < len && !done){
-        // if(preCpts(i).processIdentities.contains(newPid)) done = true
+        // Test if preCpts(i) has non-omitted reference to newPid
         val cpt = preCpts(i); val pids = cpt.processIdentities; 
         val includeInfo = State.getIncludeInfo(cpt.cs); var j = 0
         while(j < pids.length && 
@@ -460,7 +460,6 @@ class Checker(system: SystemP.System){
   protected[Checker] 
   def findReferencingView(pre: Concretization, st: State, j : Int)
       : ComponentView = {
-    // println(s"findReferencingView($pre, $st, $j)")
     val servers = pre.servers; val pCpt = pre.components(j)
     // Find index of st within pCpt's references
     val stPid = st.componentProcessIdentity; val (stF, stId) = stPid
@@ -486,7 +485,6 @@ class Checker(system: SystemP.System){
       while(ix < pLen && pIds(ix) != cpt.componentProcessIdentity) ix += 1
       if(ix < pLen){
         if(includeInfo == null || includeInfo(ix)) pRefs(ix) = cpt
-        // else println(s"Excluding $cpt from view of $pCpt")
       }
     }
 
@@ -571,7 +569,7 @@ class Checker(system: SystemP.System){
     // All remappings of cv to unify with pre, together with the list of
     // indices of unified components.
     val newCpts: ArrayBuffer[(Array[State], List[(Int,Int)])] =
-      Unification.newCombine(pre, post, cv) 
+      Unification.combine(pre, post, cv) 
     var cptIx = 0
     while(cptIx < newCpts.length){
       val (cpts, unifs) = newCpts(cptIx); cptIx += 1

@@ -26,9 +26,8 @@ abstract class View{
 
   /** Get the creation information for this. */
   def getCreationInfo: (Concretization, EventInt, Concretization) = 
-    if(pre != null){ /* println("old style");*/  (pre, e, post) }
+    if(pre != null) (pre, e, post) 
     else{ 
-      // println("new style")
       val (pre1, cpts, cv, post1, newCpts) = creationIngredients
       (mkExtendedPre(pre1, cpts, cv), e, mkExtendedPost(post1, newCpts))
     }
@@ -209,12 +208,6 @@ object View{
     * identities. */
   def union(cpts1: Array[State], cpts2: Array[State]): Array[State] = {
     val len1 = cpts1.length; val len2 = cpts2.length
-    // identities of cpts1
-    // val ids1 = new Array[ProcessIdentity](len1); var i = 0
-    // while(i < len1){ ids1(i) = cpts1(i).componentProcessIdentity; i += 1 }
-    // val ids1 = cpts1.map(_.componentProcessIdentity)
-    // require(cpts2.forall(st => 
-    //   !ids1.contains(st.componentProcessIdentity) || cpts1.contains(st)))
     // Iterate through cpts2; count the number disjoint from cpts1, recording
     // those disjoint in newC, and check the two agree on common components.
     var i = 0; var count = 0; val newC = new Array[Boolean](len2)
@@ -333,7 +326,6 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
           while(components(k).componentProcessIdentity != pid) k += 1
           components1(j) = components(k); j += 1; k += 1
         }
-        // else println("Repeated parameter "+princ)
       }
       i += 1
     }
@@ -344,7 +336,6 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       components1 = nc
     }
     if(debugging){ // testing against previous version IMPROVE
-      // val components1X = components.tail.filter{cpt =>
       val components1X = 
         components.filter{ cpt =>
           val (f,id) = cpt.componentProcessIdentity;
@@ -470,14 +461,10 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   /** Update nextArg so entries are greater than identities in state. */
   @inline private def updateNextArgMapFrom(state: State, nextArg: NextArgMap) = {
-    // val pids = state.processIdentities
     val typeMap = state.typeMap; val ids = state.ids
     val len = ids.length; var i = 0
     while(i < len){
-      // val (f,id) = pids(i); 
-      val f = typeMap(i); val id = ids(i)
-      nextArg(f) = nextArg(f) max (id+1); 
-      i += 1
+      val f = typeMap(i); nextArg(f) = nextArg(f) max (ids(i)+1); i += 1
     }
   }
 
@@ -515,12 +502,10 @@ object Concretization{
   /** Make a concretization from cv. */
   def apply(cv: ComponentView) = {
     val c = new Concretization(cv.servers, cv.components)
-    // cv.principal +: cv.others)
     c.setPly(cv.ply); c
   }
 
   def apply(servers: ServerStates, principal: State, others: Array[State]) =
     new Concretization(servers, principal +: others)
-
 
 }
