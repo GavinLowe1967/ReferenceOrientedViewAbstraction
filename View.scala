@@ -244,6 +244,62 @@ object View{
       i += 1
     }
   }
+
+  /** Find the component of cpts with process identity pid, or return null if no
+    * such.  IMPROVE: combine with Unification.find */
+  @inline def find(pid: ProcessIdentity, cpts: Array[State]): State = {
+    var i = 0
+    while(i < cpts.length && cpts(i).componentProcessIdentity != pid)
+      i += 1
+    if(i < cpts.length) cpts(i) else null
+  }
+
+
+  /** Make new states for components, with newPrinc as principal, and other
+    * components from either postCpts or cpts. */
+  def makePostComponents(
+    newPrinc: State, postCpts: Array[State], cpts: Array[State])
+      : Array[State] = {
+    val len = newPrinc.ids.length; val pids = newPrinc.processIdentities
+    var newComponents = new Array[State](len); newComponents(0) = newPrinc
+    val includeInfo = State.getIncludeInfo(newPrinc.cs)
+    var i = 1; var k = 1; val princId = newPrinc.componentProcessIdentity
+    // Note, we might end up with fewer than len new components.
+    // Inv: we have filled newComponents0[0..k) using pids[0..i).
+    while(i < len){
+      val pid = pids(i)
+      if(!isDistinguished(pid._2) && pid != princId && 
+          (includeInfo == null || includeInfo(i))){
+        // check this is first occurrence of pid
+        var j = 1; while(j < i && pids(j) != pid) j += 1
+        if(j == i){
+          // Find the component of post or cpts with process identity pid,
+          // and add to others
+          val st1 = View.find(pid, postCpts)
+          if(st1 != null){ newComponents(k) = st1; k += 1 }
+          else{ val st2 = View.find(pid, cpts); newComponents(k) = st2; k += 1 }
+        }
+      }
+      i += 1
+    }
+    if(k < len){ // We avoided a repeated component; trim newComponents
+      val nc = new Array[State](k); var j = 0
+      while(j < k){ nc(j) = newComponents(j); j += 1 }
+      newComponents = nc
+    }
+    if(debugging) View.checkDistinct(newComponents, newPrinc.toString)
+    newComponents
+  }
+
+  /** Find the index of cpts with identity (f,id).  Return -1 if no such
+    * index. */
+  @inline def findIndex(cpts: Array[State], f: Family, id: Identity) = {
+    // Search backwards to facilitate default result of -1
+    var k = cpts.length-1
+    while(k >= 0 && !cpts(k).hasPID(f,id)) k -= 1
+    k
+  }
+
 }
 
 // =======================================================

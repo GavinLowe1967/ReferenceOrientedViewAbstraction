@@ -139,12 +139,12 @@ object VA{
  
     if(!timing) println("goodbye")
     ox.gavin.profiling.Profiler.report 
-    println(s"Unification.renameXCount = "+
-      printLong(RemapperP.Unification.renameXCount))
-    println(s"Unification.combine2Count = "+
-      printLong(RemapperP.Unification.combine2Count))
-    println(s"Unification.combineCount = "+
-      printLong(RemapperP.Unification.combineCount))
+    // println(s"Unification.renameXCount = "+
+    //   printLong(RemapperP.Unification.renameXCount))
+    // println(s"Unification.combine2Count = "+
+    //   printLong(RemapperP.Unification.combine2Count))
+    // println(s"Unification.combineCount = "+
+    //   printLong(RemapperP.Unification.combineCount))
     if(!testing){ // checker is null when testing
       // println(s"checker.effectOnCount = "+printLong(checker.effectOnCount))
       // println(s"checker.effectOnViaOthersCount = "+

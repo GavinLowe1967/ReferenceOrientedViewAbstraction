@@ -69,11 +69,7 @@ class Checker(system: SystemP.System){
     * transitionsTemplates at the end of the ply. */
   private var newTransitionTemplates: MyHashSet[TransitionTemplate] = null
 
-
   var addTransitionCount = 0L
-  // var effectOnCount = 0
-  // var effectOnViaOthersCount = 0
-  // var effectOnViaTransCount = 0
   var effectOfPreviousTransitionsCount = 0
   var effectOnOthersCount = 0
   var newViewCount = 0L
@@ -81,7 +77,6 @@ class Checker(system: SystemP.System){
   var effectOnRepetition = 0
   var instantiateTransitionTemplateCount = 0L
   // Counts on transition templates
-
 
   /** Store the ExtendedTransition pre -> post, and calculate its effect on
     * previously found views. */
@@ -273,8 +268,7 @@ class Checker(system: SystemP.System){
     while(i < extenders.length){
       val (outsideSt, outsidePosts) = extenders(i); i += 1
       assert(outsidePosts.nonEmpty && 
-        outsideSt.componentProcessIdentity == newPid)
-      // println(s"outsideSt = $outsideSt, outsidePosts = $outsidePosts")
+        outsideSt.componentProcessIdentity == newPid) 
       extendTransitionTemplateBy(pre, post, e, outsideSt, outsidePosts, cv)
     }
   }
@@ -290,7 +284,6 @@ class Checker(system: SystemP.System){
   = {
     // Profiler.count("instantiateTT1")
     val referencingViews = isExtendable(pre, outsideSt)
-    // println(s"referencingViews = $referencingViews")
     if(referencingViews != null){
       // Profiler.count("instantiateTT2")
       val extendedPre = pre.extend(outsideSt)
@@ -306,7 +299,6 @@ class Checker(system: SystemP.System){
         // println(s"Extended transition from template $extendedPre\n   -"+
         //   system.showEvent(e)+s"-> $extendedPost")
         if(e == system.Error) throw new FoundErrorException
-        // assert(e != system.Error) // FIXME
         // Store this transition, and calculate effect on other views.
         extendedPost.setPly(ply)
         addTransition(extendedPre, e, extendedPost)
@@ -328,17 +320,9 @@ class Checker(system: SystemP.System){
     Profiler.count("instantiateTransitionTemplateViaRef") // ~60% of TTs
     // Look for views with following as principal
     val princ = Remapper.remapToPrincipal(pre.servers, refState)
-    // Find index of newPid in refState.  IMPROVE: repeats work in
-    // processTransition
-    //var ix = 1; val pids = princ.processIdentities
-    //while(pids(ix) != newPid) ix += 1
-    // Id of principal
-    //val pId = pre.components(0).componentProcessIdentity
-
     val iter = sysAbsViews.iterator(pre.servers, princ)
     while(iter.hasNext){
       val cv = iter.next
-      // println(cv)
       instantiateTransitionTemplateBy(pre, post, newPid, e, include, cv)
       // IMPROVE: can simplify isExtendable, consistentStates, using the fact
       // that newPid is in position ix.
@@ -375,12 +359,10 @@ class Checker(system: SystemP.System){
     val servers = pre.servers; val components = pre.components
     val (k, rv) = isExtendableCache.getOrElse((pre, st), (-1, null))
     // Profiler.count("isExtendable"+k)
-    // println((k, rv))
 
     // Does SysAbsViews contain a view consistent with pre and with a
     // renaming of st as principal component?
     var found = k >= 0 || compatibleWith(pre, st)
-    // println(found)
 
     if(found){
       // If any component cpt of pre references st, then search for a
@@ -397,14 +379,13 @@ class Checker(system: SystemP.System){
           // if(veryVerbose) println(s"isExtendable($pre) with reference to $st")
           referencingViews(j) = findReferencingView(pre, st, j)
           found = referencingViews(j) != null
-          // println(j, found)
         }
         j += 1
       }
       isExtendableCache += (pre,st) -> (if(found) j else j-1, referencingViews)
       if(found) referencingViews else null
     }
-    else null // false
+    else null
   }
 
   /** Cached results of calls to Combiner.areUnifiable.  Effectively a map
@@ -552,11 +533,9 @@ class Checker(system: SystemP.System){
             scriptNames(stF)(stIdR))
         found = true
       }
-      // if(found && veryVerbose) println(s"found match with $cv1")
     } // end of while(iter.hasNext && !found)
     if(found) cv1 else null
   }
-
 
   // ========= Effect of transitions on other views
 
@@ -574,69 +553,6 @@ class Checker(system: SystemP.System){
       effectOn(pre, e, post, cv)
     }
   }
-
-  /** Record of the cv, pre.servers and post.servers, with pre.servers !=
-    *  post.servers, for which there has been a call to Unification.newCombine
-    *  giving a result with no unifications.  */ 
-  // private val effectOnChangedServersCache = 
-  //   new HashSet[(ComponentView, ServerStates, ServerStates)]
-
-  // protected def effectOn(
-  //   pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
-  // = newEffectOn(pre, e, post, cv)
-
-/*
-  /** The effect of the transition pre -e-> post on cv.  If cv is consistent with
-    * pre (i.e. unifiable), and contains at least one process that changes
-    * state, then update as per this transition.  Generate all new views that
-    * would result from this view under the transition.  Called by
-    * effectOnOthers and effectOfPreviousTransitions.  */
-  protected def oldEffectOn(
-    pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
-  = {
-    Profiler.count("effectOn")
-    require(pre.servers == cv.servers &&
-      pre.components.length == post.components.length)
-    val changedServers = pre.servers != post.servers
-    // View.checkDistinct(cv.components)
-    // All ways of merging cv and pre
-    val newCpts: ArrayBuffer[(Array[State], Int)] = 
-      if(changedServers) 
-        // && effectOnChangedServersCache.add((cv, pre, e, post.servers)))
-        // Doesn't seem to help
-        Unification.combine(pre, cv)
-      else{
-        // Only look for cases where a component of cv unifies with a
-        // component of pre that changes state.
-        val preC = pre.components; val postC = post.components
-        val flags = new Array[Boolean](preC.length); var i = 0
-        while(i < preC.length){ flags(i) = preC(i) != postC(i); i += 1 }
-        Unification.combineWithUnification(pre, flags, cv)
-    }
-    var cptIx = 0
-    while(cptIx < newCpts.length){
-      val (cpts, mi) = newCpts(cptIx);  cptIx += 1
-      if(debugging) View.checkDistinct(cpts)
-      // pre U cpts is a consistent view.  
-      // pre.components(i) = cpts(j)  iff  (i,j) in unifs.
-      // Find what cpts(0) gets mapped to.
-      val newPrinc = if(mi < 0) cpts(0) else post.components(mi)
-      val newComponents = makePostComponents(newPrinc, post.components, cpts)
-      val nv = Remapper.mkComponentView(post.servers, newComponents)
-      newViewCount += 1
-      if(!sysAbsViews.contains(nv) && nextNewViews.add(nv)){
-        addedViewCount += 1
-        // println(s"$nv: $cv\n  $pre --> $post")
-        nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
-        if(!nv.representableInScript){
-          println("Not enough identities in script to combine transition\n"+
-            s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
-          sys.exit
-        }
-      }
-    } // end of main while loop
-  }
- */
 
   protected def effectOn(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
@@ -665,7 +581,7 @@ class Checker(system: SystemP.System){
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
 // IMPROVE: don't need all of unifs
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
-      val newComponents = makePostComponents(newPrinc, postCpts, cpts)
+      val newComponents = View.makePostComponents(newPrinc, postCpts, cpts)
       val nv = Remapper.mkComponentView(post.servers, newComponents)
       newViewCount += 1 //; Profiler.count("newViewCount"+unifs.isEmpty)
       // Mostly with unifs.nonEmpty
@@ -683,8 +599,6 @@ class Checker(system: SystemP.System){
         }
       }
       else if(false){
-        // if(pre.servers != post.servers && unifs.isEmpty)
-        //   Profiler.count(cv.toString+post.servers)
         Profiler.count("non-new view"+(pre.servers != post.servers)+unifs.isEmpty)
         println(
         s"$pre --> $post\n  with unifications $unifs\n"+
@@ -694,51 +608,6 @@ class Checker(system: SystemP.System){
     } // end of while loop
   }
 
-  /** Find the component of cpts with process identity pid, or return null if no
-    * such.  IMPROVE: move elsewhere, combine with Unification.find */
-  @inline private def find0(pid: ProcessIdentity, cpts: Array[State]): State = {
-    var i = 0
-    while(i < cpts.length && cpts(i).componentProcessIdentity != pid)
-      i += 1
-    if(i < cpts.length) cpts(i) else null
-  }
-
-  /** Make new states for components, with newPrinc as principal, and other
-    * components from either postCpts or cpts. */
-  private def makePostComponents(
-    newPrinc: State, postCpts: Array[State], cpts: Array[State])
-      : Array[State] = {
-    val len = newPrinc.ids.length; val pids = newPrinc.processIdentities
-    var newComponents = new Array[State](len); newComponents(0) = newPrinc
-    val includeInfo = State.getIncludeInfo(newPrinc.cs)
-    var i = 1; var k = 1; val princId = newPrinc.componentProcessIdentity
-    // Note, we might end up with fewer than len new components.
-    // Inv: we have filled newComponents0[0..k) using pids[0..i).
-    while(i < len){
-      val pid = pids(i)
-      if(!isDistinguished(pid._2) && pid != princId && 
-          (includeInfo == null || includeInfo(i))){
-        // check this is first occurrence of pid
-        var j = 1; while(j < i && pids(j) != pid) j += 1
-        if(j == i){
-          // Find the component of post or cpts with process identity pid,
-          // and add to others
-          val st1 = find0(pid, postCpts)
-          if(st1 != null){ newComponents(k) = st1; k += 1 }
-          else{ val st2 = find0(pid, cpts); newComponents(k) = st2; k += 1 }
-        }
-      }
-      i += 1
-    }
-    if(k < len){ // We avoided a repeated component; trim newComponents
-      val nc = new Array[State](k); var j = 0
-      while(j < k){ nc(j) = newComponents(j); j += 1 }
-      newComponents = nc
-    }
-    if(debugging) View.checkDistinct(newComponents, newPrinc.toString)
-    newComponents
-  }
-
   /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
     // effectOfPreviousTransitionsCount += 1
@@ -746,7 +615,6 @@ class Checker(system: SystemP.System){
     while(iter.hasNext){
       val (pre, e, post) = iter.next
       // println(s"considering transition $pre -> $post")
-      // assert(pre.servers == cv.servers)
       // effectOnViaTransCount += 1
       effectOn(pre, e, post, cv)
     }
@@ -762,7 +630,7 @@ class Checker(system: SystemP.System){
     val (sav, initViews) = system.initViews; sysAbsViews = sav
     println("initViews = "+initViews.mkString("; "))
     for(v <- initViews) assert(v.ply == 0)
-    var newViews: Array[View] = initViews // .filter(system.isActive)
+    var newViews: Array[View] = initViews
 
     while(!done.get && ply <= bound){
       println("\nSTEP "+ply) 
@@ -781,7 +649,7 @@ class Checker(system: SystemP.System){
           done.set(true)
           val debugger = new Debugger(system, sysAbsViews, initViews)
           debugger(newViews(i))
-          ??? 
+          ??? // This should be unreachable.
         }
         i += 1
         if(i%50 == 0){ print("."); if(i%500 == 0) print(i) }
@@ -796,13 +664,12 @@ class Checker(system: SystemP.System){
         if(sysAbsViews.add(v)){ 
           if(false) println(v)
           assert(v.representableInScript)
-// IMPROVE: needed?
           v.ply = ply
           newViewsAB += v; true 
         } 
         else false
       for((pre,e,post) <- newTransitions.iterator){
-        assert(transitions.add(pre, e, post)) // IMPROVE: assert this worked
+        assert(transitions.add(pre, e, post))
         val v = Remapper.remapComponentView(post.toComponentView)
         if(addView(v)) v.setCreationInfo(pre, e, post, ply)
       }
@@ -822,14 +689,12 @@ class Checker(system: SystemP.System){
     } // end of main loop
 
     println("\nSTEP "+ply)
-    if(true) println(sysAbsViews)
+    if(false) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")
     println(s"#transition templates = ${printLong(transitionTemplates.size)}")
   }
-
-
 }
 
 

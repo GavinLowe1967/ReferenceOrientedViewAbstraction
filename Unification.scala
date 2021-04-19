@@ -43,14 +43,6 @@ object Unification{
     }
   }
 
-  /** Find the index k of cpts with identity pid.  Return -1 if no such index. */
-  @inline private def find(cpts: Array[State], f: Family, id: Identity) = {
-    // Search backwards to facilitate default result of -1
-    var k = cpts.length-1
-    while(k >= 0 && !cpts(k).hasPID(f,id)) k -= 1
-    k
-  }
-
   /** Update otherArgs to be disjoint from ran map. */
   @inline private def makeDisjoint(otherArgs: OtherArgMap, map: RemappingMap) = {
     var f1 = 0
@@ -118,7 +110,7 @@ object Unification{
       val idX = map(f)(id) // store for backtracking
       // If i==0, this is the identity; see if any component of cpts1
       // matches (f, id1)
-      val k = if(i > 0) -1 else find(cpts1, f, id1)
+      val k = if(i > 0) -1 else View.findIndex(cpts1, f, id1)
       if(k >= 0){
         map(f)(id) = id1 // temporary update (*)
         val map2 = unify(map, cpts1(k), cpts2(j))
@@ -192,7 +184,7 @@ object Unification{
     * the jth identity parameter of v2 maps to the kth identity parameter of
     * v1, then the corresponding States much match, and the pair (k,j) is
     * included in the Unifications returned. */
-  def combine(v1: Concretization, v2: ComponentView) : CombineResult = {
+  def combineXXX(v1: Concretization, v2: ComponentView) : CombineResult = {
     combineCount += 1
     // println(s"combine($v1, $v2)")
     val servers = v1.servers; require(v2.servers == servers)

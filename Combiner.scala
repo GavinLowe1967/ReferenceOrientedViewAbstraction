@@ -53,26 +53,6 @@ object Combiner{
     rec(map0, from); result
   }
 
-  // private[CombinerP]
-  // def remapStatesExcept(
-  //   map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap,
-  //   states: Array[State], exclude: Int)
-  //     : ArrayBuffer[RemappingMap] = {
-  //   require(Remapper.isInjective(map0), show(map0))
-  //   // Elements of otherArgs should not appear in the range of the
-  //   // corresponding part of map.
-  //   for(f <- 0 until numTypes)
-  //     require(otherArgs(f).forall(id => !map0(f).contains(id)))
-  //   val result = ArrayBuffer[RemappingMap]()
-
-  //   val rec(map: RenamingMap, i: Int) = 
-  //     if(i == states.length) result += map
-  //     else if(i == exclude) rec(map, i+1)
-  //     else{
-  //       val maps = remapState(map, otherArgs, nextArg, states(i))
-  //       for(map1 <- maps) rec(map1, i+1)
-  //     }
-
   // IMPROVE NOTE: it isn't possible to use remapState directly in
   // remapSelectedStates, because if it necessary to carry the otherArgs and
   // nextArg over from one state to the next.  It could be done by passing a
@@ -138,11 +118,11 @@ object Combiner{
     result
   }
 
-  /** All ways of remapping cpts(i), consistent with map0, otherArgs and
+  /** All ways of remapping st, consistent with map0, otherArgs and
     * nextArg, so that its identity maps to id.  Each parameter (f,id1) not in
     * the domain of map0 can be mapped to an element of otherArgs(f), or a
-    * fresh value given by nextArg(f). 
-    * Pre: extending map0 with so cpts(i).id -> id gives an injective map, and 
+    * fresh value given by nextArg(f).  Note: map0 is mutated. 
+    * Pre: extending map0 with so st.id -> id gives an injective map, and 
     * id is not in otherArgs(f).  Also otherArgs(f) is disjoint from ran(f). */
   def remapToId(map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap,
     /*cpts: Array[State], i: Int,*/ st: State, id: Identity)
@@ -153,20 +133,13 @@ object Combiner{
     // Check id not already in ran map0(f) other than at id0
     assert(map0(f).indices.forall(j => j == id0 || map0(f)(j) != id))
     assert(map0(f)(id0) < 0 || map0(f)(id0) == id, st)
-      // s"cpts = "+cpts.mkString("[",";","]")+s"; f = $f; id0 = $id0 -> "+
-      //   map0(f)(id0)+s"; id = $id")
     assert(!otherArgs(f).contains(id))
     for(f <- 0 until numTypes)
       require(otherArgs(f).forall(id1 => !map0(f).contains(id1)))
-    // println(s"remapToId($st): "+showRemappingMap(map0)+"; otherArgs = "+
-    //   otherArgs.mkString(";")+"; nextArg = "+nextArg.mkString(",")+";"+
-    //   (id0,id))
     map0(f)(id0) = id
     // Now remap the remaining components.
     remapState(map0, otherArgs, nextArg, st, 1)
-    // remapSelectedStates(map0, otherArgs, nextArg, cpts, Left(i))
   }
-
 
   /** Extend map0 to all elements of cpts except cpts(i), consistently with map0
     * and otherArgs, and then apply each such renaming to cpts.  
@@ -176,16 +149,6 @@ object Combiner{
     map0: RemappingMap, otherArgs: OtherArgMap, cpts: Array[State], i: Int)
       : Array[Array[State]] = {
     assert(cpts.length > 1)
-    // The following tests fail.
-    // If coming via Checker.compatibleWith, parameters of cpts(i) are in the
-    // range of map0; but not if coming via System.consistentStates.
-    // assert({ val ids1 = cpts(i).ids; val typeMap = cpts(i).typeMap
-    //   (0 until ids1.length).forall(j => 
-    //     ids1(j) < 0 || map0(typeMap(j)).contains(ids1(j))
-    //   )}, 
-    //   "\nmap = "+show(map0)+"undefined on cpts(i) = "+cpts(i) )
-    // If coming via System.consistentStates, cpts(i) are in the domain of map0;
-    // but not if coming via Checker.compatibleWith.
     if(false) assert({ val ids1 = cpts(i).ids; val typeMap = cpts(i).typeMap
       (0 until ids1.length).forall(j => 
         ids1(j) < 0 || map0(typeMap(j))(ids1(j)) >= 0

@@ -75,6 +75,7 @@ object RemapperTest{
       emptyMap(map1(1)))
   }
  
+/*
   private def combine1Test = {
     println("== combine1Test ==")
     def showBuff(buff: ArrayBuffer[(Array[State], Int)]) = 
@@ -241,6 +242,7 @@ object RemapperTest{
     }
     test1; test2; test3; test4; test5; test6
   }
+ */
 
   def remapToPrincipalTest = {
     println("== remapToPrincipalTest ==")
@@ -496,8 +498,8 @@ object RemapperTest{
     createCombiningMapsTest
     createMaps1Test
     unifyTest
-    combine1Test
-    combineTest
+    // combine1Test
+    // combineTest
     remapToPrincipalTest
     allUnifsTest
     newCombineTest
