@@ -347,7 +347,7 @@ object RemapperTest{
   /** Test of Unification.newCombine. */
   def newCombineTest = {
     println("== newCombineTest ==***")
-    def showBuffer(buff: NewCombineResult) =
+    def showBuffer(buff: CombineResult) =
       buff.map{ case (states, us) => View.showStates(states)+"; "+us }.
         mkString("\n")
 
