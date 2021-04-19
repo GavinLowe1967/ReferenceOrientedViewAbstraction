@@ -285,10 +285,10 @@ object State{
   private var idTypeArray: Array[Type] = null
 
   /** Array to hold information about which referenced components should be
-    * omitted from Views.  Created in setStateTypeMap.  Updated and read via
-    * setOmitInfo and getOmitInfo.  Values are stored with an offset of
-    * minCS. */
-  private var omitInformation: Array[Array[Boolean]] = null
+    * included in Views.  Created in setStateTypeMap.  Updated and read via
+    * setIncludeInfo and getIncludeInfo.  Values are stored with an offset of
+    * minCS.  Null entries mean to include all components. */
+  private var includeInformation: Array[Array[Boolean]] = null
 
   /** Initialise the stateTypeMapArray, idTypeArray and minCS.  Also
     * update the StateMap.  Called by
@@ -303,7 +303,7 @@ object State{
     maxParamsOfType = Array.tabulate(numTypes)( t =>
       stma.filter(_ != null).map(_.count(_ == t)).max )
     println("maxParamsOfType = "+maxParamsOfType.mkString(", "))
-    omitInformation = new Array[Array[Boolean]](State.numCS)
+    includeInformation = new Array[Array[Boolean]](State.numCS)
     //rowSizes = Array.tabulate(numTypes)( t => typeSizes(t) /* + maxParamsOfType(t) */ )
     // MyStateMap.renewStateStore(stma.length, minCS)
   }
@@ -312,13 +312,17 @@ object State{
   @inline def stateTypeMap(cs: ControlState): Array[Type] =
     stateTypeMapArray(cs-minCS)
 
+  /** Is cs a reachable control state? */
+  def isReachable(cs: ControlState) =
+    0 <= cs && cs-minCS < stateTypeMapArray.length
+
   /** Type of the identity of component with control state cs. */
   private def idType(cs: ControlState): Type = idTypeArray(cs-minCS)
 
-  def setOmitInfo(cs: ControlState, omitInfo: Array[Boolean]) =
-    omitInformation(cs-minCS) = omitInfo
+  def setIncludeInfo(cs: ControlState, includeInfo: Array[Boolean]) =
+    includeInformation(cs-minCS) = includeInfo
 
-  @inline def getOmitInfo(cs: ControlState) = omitInformation(cs-minCS)
+  @inline def getIncludeInfo(cs: ControlState) = includeInformation(cs-minCS)
 
   /** The script name for pid. */
   def showProcessId(pid: ProcessIdentity) = {

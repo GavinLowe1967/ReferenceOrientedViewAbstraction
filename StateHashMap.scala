@@ -118,6 +118,13 @@ class InitialisationStateHashMap(initLength: Int = 4096)
     extends StateHashMap(initLength){
   // println("InitialisationStateHashMap")
 
+  /** Are we still compiling?  If so, States should be created with isNew = 
+    * true. */
+  private var isNew = true
+
+  /** Record that compilation is over. */
+  def doneCompiling = { println("Done compiling"); isNew = false }
+
   /** The indexes: null here. */
   protected var indexes: Array[StateIndex] = null
 
@@ -132,7 +139,7 @@ class InitialisationStateHashMap(initLength: Int = 4096)
     if(oldSt == null){
       // assert(hashes(i) == 0 && states(i) == null)
       hashes(i) = h; controlStates(i) = cs; identities(i) = ids
-      val newState = new State(family, cs, ids, true); states(i) = newState
+      val newState = new State(family, cs, ids, isNew); states(i) = newState
       count += 1; newState
     }
     else{

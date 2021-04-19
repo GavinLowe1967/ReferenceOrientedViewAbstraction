@@ -10,6 +10,9 @@ lockBasedStack0Err1.csp: version where pop does not obtain lock.  Finds error.
 
 lockBasedStack0Err2.csp: version where push does not obtain lock.  Finds error.
 
+lockBasedStackOmit.csp: version where Nodes referenced by "next" reference are
+omitted from Views.  Finds error.
+
 With three-way synchronisations:
 
 lockBasedStack.csp: correct version with three-way synchronisation.  274 -> 302
@@ -27,13 +30,24 @@ Lock-based queue
 
 lockBasedQueue.csp: involves two synchronisations between thread and watchdog
 on each of enqueueing and dequeueing.  Also artificially keeps the tail
-node in an enqueueing thread's state. 538 abstractions -> 556 ??
+node in an enqueueing thread's state. 556 abstractions 
+
+lockBasedQueueOmit.csp: version where Nodes referenced by "next" reference are
+omitted from Views.  Finds error.
+
 
 Treiber Stack
 =============
 
-TreiberStack.csp: make node synchronise on the joining CAS.  1,770 states,
-~4s.
+TreiberStack.csp: make node synchronise on the joining CAS.  1,653 states,
+~3s.
+
+TreiberStackOmitCreator.csp: for newly created nodes, store the identity of
+the creating thread, but don't include that thread in views.  1,026 states
+~2.5s.
+
+TreiberStackOmitNext.csp: Nodes referenced by "next" reference are omitted
+from Views.  Finds error.
 
 TreiberStack2.csp: 2,780 states, ~7 sec.  This has a POR to force joined
 events immediately after the corresponding CAS.
@@ -47,7 +61,7 @@ POR.  7408 states, ~28 sec (with profiling)
 Lock-Free Queue
 ===============
 
-lockFreeQueue.csp: 2272 states, ~16 s (mostly compilation). 
+lockFreeQueue.csp: 2272 states, ~7 s (about half compilation). 
 
 Lazy Set
 ========

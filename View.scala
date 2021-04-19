@@ -26,9 +26,9 @@ abstract class View{
 
   /** Get the creation information for this. */
   def getCreationInfo: (Concretization, EventInt, Concretization) = 
-    if(pre != null){ println("old style"); (pre, e, post) }
+    if(pre != null){ /* println("old style");*/  (pre, e, post) }
     else{ 
-      println("new style")
+      // println("new style")
       val (pre1, cpts, cv, post1, newCpts) = creationIngredients
       (mkExtendedPre(pre1, cpts, cv), e, mkExtendedPost(post1, newCpts))
     }
@@ -91,15 +91,14 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   /** The principal component. */
   def principal = components(0)
 
-  // val componentsList = components.toList
-
   /** Check all components referenced by principal are included, and no more. */
   // IMRPOVE: this is moderately expensive
   @noinline private def checkValid = if(debugging){ 
     val len = principal.ids.length; val cptsLen = components.length; var i = 1
+    val includeInfo = State.getIncludeInfo(principal.cs)
     while(i < len){
       val pid = principal.processIdentity(i)
-      if(!isDistinguished(pid._2)){
+      if(!isDistinguished(pid._2) && (includeInfo == null || includeInfo(i))){
         // Test if otherPids.contains(pid)
         var j = 1
         while(j < cptsLen && components(j).componentProcessIdentity != pid) 
@@ -116,6 +115,8 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
       var i = 0
       while(i < len && principal.processIdentity(i) != otherId) i += 1
       assert(i < len, s"Not a correct ComponentView: $this")
+      assert(includeInfo == null || includeInfo(i), 
+        s"Not a correct ComponentView, omitted component included: $this")
       j += 1
     }
   }
@@ -173,10 +174,8 @@ object View{
     refed
   }
 
-  /** All the views of a particular concretization. */
-  //def alpha(conc: Concretization): List[View] = ???
-
-  def showStates(states: Array[State]) = states.map(_.toString0).mkString("[", " || ", "]")
+  def showStates(states: Array[State]) = 
+    states.map(_.toString0).mkString("[", " || ", "]")
 
   def show(servers: ServerStates, states: Array[State]) =
     servers.toString+" || "+showStates(states)
@@ -191,7 +190,7 @@ object View{
         // Use precondition to be lazy
         (j == i || agreesWithCommonComponent(cpts1(j), cpts2)) )
       j += 1
-    j == cpts1.length // ok
+    j == cpts1.length 
   }
 
   /** If cpt shares a process identity with cpts, are they the same state? */
@@ -233,7 +232,6 @@ object View{
     while(j < len2){ if(newC(j)){ result(i) = cpts2(j); i += 1 }; j += 1 }
     assert(i == len1+count)
     result
-    // cpts1 ++ cpts2.filter(st => !ids1.contains(st.componentProcessIdentity))
   }
 
   /** Check components in cpts are distinct. */
@@ -245,8 +243,6 @@ object View{
       assert(j == len, showStates(cpts)+" "+msg)
       i += 1
     }
-    // for(i <- 0 until cpts.length; j <- i+1 until cpts.length)
-    //   assert(cpts(i) != cpts(j), showStates(cpts)+" "+msg)
   }
 }
 
@@ -262,18 +258,17 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   /** Get the view of this with princ as principal component.  Pre: this
     * includes all the components referenced by princ. Note: not in canonical
     * form IMPROVE. */
-// FIXME: I think this goes wrong if princ has two references to the same
-// component.
-  def getViewOf(princ: State): ComponentView = {
+  private def getViewOf(princ: State): ComponentView = {
     val princIds = princ.processIdentities; val len = princIds.length
     var components1 = new Array[State](len); components1(0) = princ
+    val includeInfo = State.getIncludeInfo(princ.cs)
     // Other components to be included in the ComponentView: those referenced 
     // by princ
     var i = 1; var j = 1
     // We have filled components1[0..j) from princIds[0..i)
     while(i < len){
       val pid = princIds(i)
-      if(!isDistinguished(pid._2)){
+      if(!isDistinguished(pid._2) && (includeInfo == null || includeInfo(i))){
         // Test if this is the first occurrence of pid
         var k = 0; while(k < i && princIds(k) != pid) k += 1
         if(k == i){
@@ -287,40 +282,30 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       i += 1
     }
     if(j < len){
-      // Some distinguished or repeated parameters; trim unfilled slots.
+      // Some distinguished, repeated or omitted parameters; trim unfilled slots.
       val nc = new Array[State](j); var k = 0
       while(k < j){ nc(k) = components1(k); k += 1 }
       components1 = nc
     }
     if(debugging){ // testing against previous version IMPROVE
-      val components1X = components.tail.filter{cpt =>
-        val (f,id) = cpt.componentProcessIdentity
+      // val components1X = components.tail.filter{cpt =>
+      val components1X = 
+        components.filter{ cpt =>
+          val (f,id) = cpt.componentProcessIdentity;
           (1 until princIds.length).exists{j =>
-            princIds(j) == (f,id)}
-      }
+            princIds(j) == (f,id) && (includeInfo == null || includeInfo(j))}
+        }
       val components2t = components1.tail
       assert(components1X.sameElements(components2t) ||
         components1X.length == components2t.length &&
         components1X.forall(st => components2t.contains(st)),
-        components1X.map(_.toString).mkString("[",", ","]")+
-          components1.map(_.toString).mkString("[",", ","]"))
+        s"this = $this\nprinc = $princ"+
+        "\ncomponents1X = "+components1X.map(_.toString).mkString("[",", ","]")+
+          "\ncomponents1 = "+components1.map(_.toString).mkString("[",", ","]"))
     }
     val v = new ComponentView(servers, components1)
     v.setPly(ply)
     v
-/*
-    val components1 = components.tail.filter{cpt =>
-      val (f,id) = cpt.componentProcessIdentity
-      (1 until princIds.length).exists{j => 
-        princIds(j) == id && princ.typeMap(j) == f}
-    }
-    // Check all princ's references included
-    val cIds = components1.map(_.id)
-    assert(princ.ids.tail.forall(id => isDistinguished(id) || cIds.contains(id)),
-      s"\nConcretization.getViewOf: Not all references of $princ included in\n"+
-        this)
-    new ComponentView(servers, princ +: components1)
- */
   }
 
   def componentsList = components.toList
@@ -396,7 +381,6 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     * Note: these are cloned on each call. 
     */
   def getCombiningMaps: (RemappingMap, OtherArgMap, NextArgMap) = {
-    // Profiler.count("getCombiningMaps"+(otherArgs == null))
     if(otherArgs == null) initMaps()
     val map1 = new Array[Array[Int]](numTypes); var t = 0
     while(t < numTypes){ map1(t) = map(t).clone; t += 1 }
@@ -406,7 +390,6 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   /** As getCombiningMaps, except client code must not change the maps
     * returned. */
   def getCombiningMapsImmutable: (RemappingMap, OtherArgMap, NextArgMap) = {
-    // Profiler.count("getCombiningMaps"+(otherArgs == null))
     if(otherArgs == null) initMaps()
     (map, otherArgs, nextArg)
   }
@@ -431,9 +414,14 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   /** Update nextArg so entries are greater than identities in state. */
   @inline private def updateNextArgMapFrom(state: State, nextArg: NextArgMap) = {
-    var pids = state.processIdentities; var i = 0
-    while(i < pids.length){
-      val (f,id) = pids(i); nextArg(f) = nextArg(f) max (id+1); i += 1
+    // val pids = state.processIdentities
+    val typeMap = state.typeMap; val ids = state.ids
+    val len = ids.length; var i = 0
+    while(i < len){
+      // val (f,id) = pids(i); 
+      val f = typeMap(i); val id = ids(i)
+      nextArg(f) = nextArg(f) max (id+1); 
+      i += 1
     }
   }
 

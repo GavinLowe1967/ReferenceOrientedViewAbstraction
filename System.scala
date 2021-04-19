@@ -165,79 +165,132 @@ class System(fname: String, checkDeadlock: Boolean,
     * from control states to bitmaps, showing which referenced states are
     * omitted. */
   private def processOmitInfo(omitInfo: OmitInfo) = {
-    println(s"Processing $omitInfo") 
+    println(s"\nProcessing $omitInfo") 
     val OmitInfo(processName, params, omits) = omitInfo
 
-    // Bitmap showing which parameters are from distinguished types.
-    val indexingTypes = params.map{ case (p,t) => familyTypeNames.contains(t) }
-    // println(s"indexingTypes = $indexingTypes")
-    val numDistinguished = indexingTypes.count(identity)
-    // Build mapping from the indices of parameters of the resulting States to
-    // indices of params, and bitmap showing which parameters of States will
-    // be included.
-    val stateParamIxs = new Array[Int](numDistinguished)
-    val includeBitMap = new Array[Boolean](numDistinguished)
-    var i = 0; var j = 0
-    while(j < indexingTypes.length){
-      if(indexingTypes(j)){ 
-        stateParamIxs(i) = j; 
-        includeBitMap(i) = !omits.contains(params(j)._1);  i += 1 
-      }
-      j += 1
-    }
-    // println(stateParamIxs.mkString(", "))
-    // println(includeBitMap.mkString(", "))
+    // Map over parameter indices, giving the type identifier if the parameter
+    // is from a distinguished type, otherwise -1.
+    val indexingTypes = params.map{ case (p,t) => familyTypeNames.indexOf(t) }
+    //println(s"indexingTypes = $indexingTypes")
+    // Number of such parameters
+    val numDistinguished = indexingTypes.count(_ >= 0)
 
     // Check each omitted value corresponds to a distinguished type. 
     val argNames = params.map(_._1)
     for(om <- omits){
-      val ix = argNames.indexOf(om)
-      assert(indexingTypes(ix),
+      // Index of om in the parameters
+      val ix = argNames.indexOf(om) 
+      assert(ix != 0, "Cannot omit principal of process "+processName)
+      assert(indexingTypes(ix) >= 0,
         "Type "+params(ix)._2+
           " of omitted reference is not a distinguished type.")
     }
 
+    // Bitmap showing which parameters of syntactic states will be included.
+    val includeBitMap = new Array[Boolean](numDistinguished)
+    var i = 0; var j = 0
+    while(j < params.length){
+      if(indexingTypes(j) >= 0){ 
+        includeBitMap(i) = !omits.contains(params(j)._1);  i += 1 
+      }
+      j += 1
+    }
+    //println(s"includeBitMap = "+includeBitMap.mkString(", "))
+
     // The values in the types of the parameters
-    val typeValues = params.map{ case(p,t) => fdrSession.setStringToList(t) }
-    // println(s"typeValues = $typeValues")
+    val typeValues: List[List[String]] = 
+      params.map{ case(p,t) => fdrSession.getTypeValues/*setStringToList*/(t) }
+    //println(s"typeValues = $typeValues")
     // All values for the distinguished types
-    val distVals: List[List[Option[String]]] = cp(typeValues, indexingTypes)
+    val distVals: List[List[Option[String]]] = 
+      cp(typeValues, indexingTypes.map(_ >= 0))
+
+    // List of distinct values to instantiate the distinguished parameters.
+    // Used to work out which syntactic parameter ends up as which parameter
+    // of resulting states.
+    var distinctParams = List[Parameter]()
+    // Corresponding list of names of the parameters (i Some_) terms),
+    // interspersed with None in the place of non-distinguished parameters.
+    var distinctParamNames = List[Option[String]]()
+    // For each type, the index of the next value of that type to use.
+    val nextVal = new Array[Int](numTypes)
+    for(i <- params.length-1 to 0 by -1){ // build from right to left
+      val t = indexingTypes(i)
+      if(t >= 0){
+        distinctParams ::= ((t, nextVal(t))); val v = typeValues(i)(nextVal(t))
+        distinctParamNames ::= Some(v); nextVal(t) += 1
+      }
+      else distinctParamNames ::= None
+    }
+    //println(s"distinctParamNames = $distinctParamNames")
+    //println(s"distinctParams = $distinctParams")
+
     //println(distVals.mkString("\n"))
     // All values for the non-distinguished types
-    val nonDistVals = cp(typeValues, indexingTypes.map(!_))
+    val nonDistVals = cp(typeValues, indexingTypes.map(_ < 0))
     //println(nonDistVals.mkString("\n"))
 
     // Get the control state and parameters corresponding to processName with
     // parameters the merger of nd and dv.
-    def getProcInfo(nd: List[Option[String]], dv: List[Option[String]]) = {
+    def getProcInfo(nd: List[Option[String]], dv: List[Option[String]])
+        : (ControlState, List[Parameter]) = {
       val idStrings = merge(nd, dv)
       val procString = processName+idStrings.mkString("(", ",", ")")
+      if(false) print(procString+": ")
       val (cs,ids) = transMapBuilder.getProcInfo(procString)
-      // println(s"$procString: ($cs,$ids)")
+      if(false) println((cs,ids).toString)
+      println(s"$procString: ($cs,$ids)")
       (cs,ids)
     }
 
     for(nd <- nonDistVals){
-      val (cs,_) = getProcInfo(nd, distVals.head)
-      val f = State.stateTypeMap(cs)(0)
-      println(s"Storing omit information $cs (family $f) -> "+
-        includeBitMap.mkString(", "))
-      assert(passiveFamilies.contains(f), 
-        "Only passive families can have omit information.  Process "+processName+
-          " is from an active family.")
-      State.setOmitInfo(cs, includeBitMap)
-      // Check all others agree.
-      for(dv <- distVals){
-        val (cs1,ids) = getProcInfo(nd, dv); assert(cs1 == cs)
-        // Traverse through dv and ids, checking they correspond
-        var i = 0; var j = 0
-        while(j < dv.length){
-          if(dv(j).nonEmpty){
-            assert(dv(j).get == typeValues(j)(ids(i)), s"$dv $ids"); i += 1
+      val (cs,ids) = getProcInfo(nd, distinctParamNames)
+      if(State.isReachable(cs)){
+        // ids should be a permutation of distinctParams.  Build the bijection
+        // from the indices of ids (parameters of States) to the indices of
+        // distinctParams (syntactic parameters).
+        val pi = ids.map(p => distinctParams.indexOf(p))
+        assert(pi.forall(_ >= 0))
+        //println(s"pi = "+pi.mkString(", "))
+        // And the other way
+        val piInv = distinctParams.map(p => ids.indexOf(p))
+        assert(piInv.forall(_ >= 0))
+        //println(s"piInv = "+piInv.mkString(", "))
+
+        // Bit map showing which referenced parameters of this state will be
+        // included: the ith of a State component corresponds to the pi(i)'th
+        // syntactic parameter.
+        val thisBitMap = 
+          Array.tabulate(numDistinguished)(i => includeBitMap(pi(i)))
+        val f = State.stateTypeMap(cs)(0)
+        println(s"Storing omit information $cs (family $f) -> "+
+          thisBitMap.mkString(", "))
+        assert(passiveFamilies.contains(f),
+          "Only passive families can have omit information.  Process "+
+            processName+" is from an active family.")
+        State.setIncludeInfo(cs, thisBitMap)
+
+        // Check all others agree.  This is very slow
+        if(false && debugging){
+          print("Checking consistency\n")
+          for(dv <- distVals){
+            val (cs1,pids) = getProcInfo(nd, dv); assert(cs1 == cs)
+            // Traverse through dv and ids, checking they correspond
+            var i = 0; var j = 0
+            while(j < dv.length){
+              if(dv(j).nonEmpty){
+                assert(dv(j).get == typeValues(j)(pids(piInv(i))._2), 
+                  s"dv = $dv \n pids = $pids \n typeValues = $typeValues $i $j")
+                i += 1
+              }
+              j += 1
+            }
+            // print(".")
           }
-          j += 1
-        }
+          println
+        } // end of if(debugging)
       }
+      else println(s"Control state $cs not reachable")
     }
   }
 
@@ -594,6 +647,8 @@ class System(fname: String, checkDeadlock: Boolean,
             sys.exit 
           }
         for((map, renamedState) <- maps){
+          assert(renamedState.representableInScript) 
+// IMPROVE: not needed, I think
           val nexts = (
             if(e >= 0) 
               components.getTransComponent(renamedState).nexts(e, fp, idp)
@@ -664,6 +719,8 @@ class System(fname: String, checkDeadlock: Boolean,
               j += 1
             }
           }
+          if(!renamedState.representableInScript)
+            throw new UnrepresentableException(renamedState)
           mapStates(i) = (map, renamedState); i += 1
         }
         mapCache += (st, pid, servers, preCptsL) -> (mapStates, otherArgs)

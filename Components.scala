@@ -398,8 +398,13 @@ class Components(
       case e: NoSuchElementException =>
         println(s"Impossible state ${st.toString0} of type "+
           familyNames(st.family)+" encountered.\n"+
-          "This probably means that the state spaces are not symmetric.")
-        sys.exit
+          "This probably means that the script contains too few identities,\n"+
+          "or the state spaces are not symmetric.")
+        assert(!st.representableInScript)
+        // println(typeSizes.mkString(", "))
+        // println(st.isNew)
+        throw new InsufficientIdentitiesException
+        // sys.exit
     }
 }
 

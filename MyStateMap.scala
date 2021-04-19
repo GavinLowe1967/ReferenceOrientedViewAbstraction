@@ -42,7 +42,13 @@ object MyStateMap{
   /** The State with index ix. */
   @noinline def get(ix: StateIndex): State = stateStore.get(ix)
 
-  /** Replace the initial StateMap with a Trie-based one. */
+  /** Record that compilation is over. */
+  def doneCompiling = 
+    stateStore.asInstanceOf[InitialisationStateHashMap].doneCompiling
+  // IMPROVE
+
+  /** Replace the initial StateMap with a Trie-based one. 
+    * Currently disabled. */
   def renewStateStore(numCS: Int, minCS: Int) = if(false){
     print("Creating Trie-based StateMap...")
     // IMPROVE following if just tsm used

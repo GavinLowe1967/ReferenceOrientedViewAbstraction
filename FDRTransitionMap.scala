@@ -390,20 +390,21 @@ class FDRTransitionMap(
     val stateTypeMapArray = new Array[Array[Type]](maxCS-minCS+1)
     for((cs,ts) <- stateTypeMap0.iterator) stateTypeMapArray(cs-minCS) = ts
     State.setStateTypeMap(stateTypeMapArray, minCS)
-    MyStateMap.renewStateStore(stateTypeMapArray.length, minCS)
+    // MyStateMap.renewStateStore(stateTypeMapArray.length, minCS)
+    MyStateMap.doneCompiling
   }
 
   /** Given a string representing a process, get its control state and the
     * values representing its parameters. */
-  def getProcInfo(st: String): (Int, List[Int]) = {
+  def getProcInfo(st: String): (ControlState, List[ProcessIdentity]) = {
     val machine: Machine = fdrSession.evalProc(st)
     val node = machine.rootNode
     val cs = machine.stateGroup(node).toInt
     val variableVals = machine.variableValues(node).asScala.toList
     val args0: List[(Long, Int)] =
       variableVals.map(vv => (vv.getType.longValue, vv.getValue.intValue))
-    val ids = args0.map{ case (t,x) => idRemaps(t)(x) }
-    (cs, ids)
+    val pids = args0.map{ case (t,x) => (fdrTypeToType(t), idRemaps(t)(x)) }
+    (cs, pids)
   }
 
 

@@ -1,3 +1,27 @@
+- Do profiling on lazySet.  First, correct Node to allow unlocking when
+  marked.  Also send decoupling signal only for A nodes.
+
+- Check every event includes at least one active process. 
+
+- Allow user to specify that only a single referenced state is included in
+  Views.
+
+- In Unification.combineX, don't remap components with index in map fst unifs.
+  Or remap each state in turn. (low priority)
+
+- In allUnifs, if !changedServers, try to do unifiation of component that
+  changes state first.
+
+- Clear package.debugging.
+
+- Why are so many Views/Transitions not new?
+
+- In TransitionTemplates, if the missing component is not synchronising, and
+  there's a reference to it from a present component, use that fact to improve
+  searching (done?).
+
+=============
+
 Thoughts on adding concurrency.
 
 In Checker:

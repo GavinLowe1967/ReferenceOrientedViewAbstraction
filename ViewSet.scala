@@ -31,6 +31,8 @@ trait ViewSet{
 
   def summarise: String
 
+  def summarise1: String = ???
+
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 
 }
@@ -300,7 +302,28 @@ class PrincipalBasedViewSet(initSize: Int = 4){
 
   /** An iterator giving a summary for each principal. */
   def summarise: Iterator[String] = 
-    underlying.iterator.map(set => set.head.toString+": "+set.size)
+    underlying.iterator.map(set => 
+      set.head.toString0+": "+set.size// +
+        // (if(set.size > 100) 
+        //   set.iterator.toArray.map(_.toString0).sorted.mkString("\n\t")
+        // else "")
+    )
+
+  /** An iterator giving a summary for each principal. */
+  def summarise1: String = {
+    val sets = underlying.iterator.toArray
+    // Summary by principals
+    val st1 = 
+      sets.map(set => set.head.toString0+": "+set.size).sorted.mkString("\n")
+    // List the largest set
+    val max: Set[ComponentView] = sets.maxBy(_.size)
+    val st2 = max.toArray.map(_.toString0).sorted.mkString("\n\t")
+    st1+"\n\n"+st2
+  }
+
+  /** The number of elements in this.  
+    * Note: inefficient. */
+  def size = underlying.iterator.map(_.size).sum
 
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 }
@@ -372,7 +395,22 @@ class ServerPrincipalBasedViewSet(initSize: Int = 16) extends ViewSet {
     underlying.get(sv.servers).getRepresentative(sv)
   }
 
-  def summarise: String = underlying.iterator.flatMap(_.summarise).toArray.sorted.mkString("\n")
+  def summarise: String = 
+    underlying.iterator.flatMap(_.summarise).toArray.sorted.mkString("\n")
+
+  /** A brief summary. 
+    * The summary gives the number of Views for each ServerSet, and expands the largest. */
+  override def summarise1: String = {
+    val sets = underlying.iterator.toArray
+    // Summary by servers
+    val st0 = 
+      sets.map(pbvs => pbvs.iterator.next.toString+": "+pbvs.size).
+        sorted.mkString("\n")
+    // The largest such
+    val max: PrincipalBasedViewSet = sets.maxBy(_.size)
+    val st1 = max.summarise1 //.toArray.map(_.toString).sorted.mkString("\n")
+    st0+"\n\n"+st1
+  }
 
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 }

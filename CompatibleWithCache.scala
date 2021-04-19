@@ -59,10 +59,11 @@ class ResultCache(initSize: Int = 16){
 
   /** Hash States. */
   private def mkHash(sts: States): Int = {
-    var h = 0; var i = 0
+    var h = sts(0).hashCode; var i = 1
     while(i < sts.length){ h = h*73 + sts(i).hashCode; i += 1 }
-    h ^= ((h >>> 20) ^ (h >>> 12))
-    (h >>> 7) ^ (h >>> 4)
+    // h ^= ((h >>> 20) ^ (h >>> 12))
+    // (h >>> 7) ^ (h >>> 4)
+    h
   }
 
   /** Find the index in the arrays corresponding to k. */
@@ -72,7 +73,8 @@ class ResultCache(initSize: Int = 16){
   @inline private def find(k: States, h: Int): Int = {
     var i = h & mask
     while(keys(i) != null && 
-            !(hashes(i) == h && (keys(i) == k || keys(i).sameElements(k))) )
+            (hashes(i) != h || keys(i) != k && !keys(i).sameElements(k)) )
+//            !(hashes(i) == h && (keys(i) == k || keys(i).sameElements(k))) )
       i = (i+1)&mask
     i
   }
