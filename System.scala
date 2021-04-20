@@ -381,6 +381,7 @@ class System(fname: String) {
 
     val princTrans = components.getTransComponent(cv.principal)
     val (pf,pi) = cv.principal.componentProcessIdentity
+    val pParams = cv.principal.processIdentities
     // println(s"Transitions for ${(pf,pi)}")
     val serverTrans: servers.ServerTransitions = 
       servers.transitions(cv.servers.servers)
@@ -430,11 +431,15 @@ class System(fname: String) {
 
     // Case 3: events synchronising principal component and one component.
     if(activePrincipal) for(f <- passiveFamilies; id <- 0 until idSizes(f)){
+      // Synchronisations with (f,id)
       val theseTrans = princTrans.transComponent(f)(id)
       val componentIx = // index of (f,id) in components, or -1
         cv.components.indexWhere(_.componentProcessIdentity == (f,id))
       assert(componentIx != 0)
-      if(theseTrans != null){ 
+      val isOmitted = // reference to (f,id) but omitted from cv
+        componentIx < 0 && pParams.contains((f,id))
+      // if(isOmitted) println(s"Omitting transition with ${(f,id)} from $cv")
+      if(theseTrans != null && !isOmitted){ 
         val (oEs, oNs): (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = 
           theseTrans
         // Find id of relevant component; find compatible states of that

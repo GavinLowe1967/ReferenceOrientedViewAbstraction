@@ -199,6 +199,7 @@ object Remapper{
   @inline private 
   def remapParams(map: RemappingMap, nextArg: NextArgMap, st: State)
       : Array[Identity] = {
+    assert(st != null) // IMPROVE
     val cs = st.cs; val ids = st.ids; val len = ids.length; var index = 0
     val remappedParams = new Array[Identity](len) // State.getIdentityArray(len) 
     val tArray = State.stateTypeMap(cs) // array giving types of ids
@@ -272,6 +273,7 @@ object Remapper{
     * canonical form. */
   @inline def mkComponentView(
     servers: ServerStates, components: Array[State]) = {
+    assert(components.forall(_ != null)) // IMPROVE
     val (servers1, map, nextArg) = remapServerStates(servers)
     val components1 = remapStates(map, nextArg, components)
     new ComponentView(servers1, components1) // principal1, others1)

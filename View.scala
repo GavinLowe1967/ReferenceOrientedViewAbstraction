@@ -93,30 +93,51 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   /** Check all components referenced by principal are included, and no more. */
   // IMRPOVE: this is moderately expensive
   @noinline private def checkValid = if(debugging){ 
-    val len = principal.ids.length; val cptsLen = components.length; var i = 1
+    assert(components.forall(_ != null)) // IMPROVE
+    val len = principal.ids.length; val cptsLen = components.length
     val includeInfo = State.getIncludeInfo(principal.cs)
-    while(i < len){
-      val pid = principal.processIdentity(i)
-      if(!isDistinguished(pid._2) && (includeInfo == null || includeInfo(i))){
-        // Test if otherPids.contains(pid)
-        var j = 1
-        while(j < cptsLen && components(j).componentProcessIdentity != pid) 
-          j += 1
-        assert(j < cptsLen || pid == principal.componentProcessIdentity,
-          s"Not a correct ComponentView: $this")
+    if(singleRef){
+      if(cptsLen == 2){
+        // Check principal has a reference to the other component
+        val cPid = components(1).componentProcessIdentity; var i = 0
+        while(i < len && principal.processIdentity(i) != cPid) i += 1
+        assert(i < len, s"Not a correct ComponentView: $this")
+        assert(includeInfo == null || includeInfo(i),
+          s"Not a correct ComponentView, omitted component included: $this")
       }
-      i += 1
-    }
-    // Check all of others referenced by principal
-    var j = 1
-    while(j < cptsLen){
-      val otherId = components(j).componentProcessIdentity 
-      var i = 0
-      while(i < len && principal.processIdentity(i) != otherId) i += 1
-      assert(i < len, s"Not a correct ComponentView: $this")
-      assert(includeInfo == null || includeInfo(i), 
-        s"Not a correct ComponentView, omitted component included: $this")
-      j += 1
+      else{ 
+        assert(cptsLen == 1, s"Too many components in ComponentView: $this") 
+        // Note: principal might have other references here, e.g. resulting
+        // from a transition 15(T0,N0,N1) || 7(N0,N1) -getDatum.T0.N0.A->
+        // 16(T0,N1) || 7(N0,N1)], where the principal loses the reference to
+        // N0.
+      }
+    } // end of if(singleRef)
+    else{
+      var i = 1; 
+      while(i < len){
+        val pid = principal.processIdentity(i)
+        if(!isDistinguished(pid._2) && (includeInfo == null || includeInfo(i))){
+          // Test if there is a component with identity pid
+          var j = 1
+          while(j < cptsLen && components(j).componentProcessIdentity != pid)
+            j += 1
+          assert(j < cptsLen || pid == principal.componentProcessIdentity,
+            s"Not a correct ComponentView: $this")
+        }
+        i += 1
+      }
+      // Check all of others referenced by principal
+      var j = 1
+      while(j < cptsLen){
+        val otherId = components(j).componentProcessIdentity
+        var i = 0
+        while(i < len && principal.processIdentity(i) != otherId) i += 1
+        assert(i < len, s"Not a correct ComponentView: $this")
+        assert(includeInfo == null || includeInfo(i),
+          s"Not a correct ComponentView, omitted component included: $this")
+        j += 1
+      }
     }
   }
 
@@ -247,41 +268,68 @@ object View{
     if(i < cpts.length) cpts(i) else null
   }
 
-
-  /** Make new states for components, with newPrinc as principal, and other
-    * components from either postCpts or cpts. */
+  /** Make new Array[State] for components, with newPrinc as principal, and
+    * other components from either postCpts or cpts. */
   def makePostComponents(
     newPrinc: State, postCpts: Array[State], cpts: Array[State])
-      : Array[State] = {
-    val len = newPrinc.ids.length; val pids = newPrinc.processIdentities
-    var newComponents = new Array[State](len); newComponents(0) = newPrinc
+      : List[Array[State]] = {
+    assert(postCpts.forall(_ != null))
+    assert(cpts.forall(_ != null)) // IMPROVE
+    val len = newPrinc.ids.length; val pids = newPrinc.processIdentities 
+    val princId = newPrinc.componentProcessIdentity
     val includeInfo = State.getIncludeInfo(newPrinc.cs)
-    var i = 1; var k = 1; val princId = newPrinc.componentProcessIdentity
-    // Note, we might end up with fewer than len new components.
-    // Inv: we have filled newComponents0[0..k) using pids[0..i).
-    while(i < len){
+
+    // Should pids(i) be included?
+    @inline def include(i: Int) = {
       val pid = pids(i)
-      if(!isDistinguished(pid._2) && pid != princId && 
-          (includeInfo == null || includeInfo(i))){
+      if(!isDistinguished(pid._2) && pid != princId &&
+        (includeInfo == null || includeInfo(i))){
         // check this is first occurrence of pid
         var j = 1; while(j < i && pids(j) != pid) j += 1
-        if(j == i){
-          // Find the component of post or cpts with process identity pid,
-          // and add to others
-          val st1 = View.find(pid, postCpts)
-          if(st1 != null){ newComponents(k) = st1; k += 1 }
-          else{ val st2 = View.find(pid, cpts); newComponents(k) = st2; k += 1 }
-        }
+        j == i
       }
-      i += 1
+      else false
     }
-    if(k < len){ // We avoided a repeated component; trim newComponents
-      val nc = new Array[State](k); var j = 0
-      while(j < k){ nc(j) = newComponents(j); j += 1 }
-      newComponents = nc
+    // find the component with identity pid in either postCpts or cpts
+    @inline def findCpt(pid: ProcessIdentity): State = {
+      val st1 = View.find(pid, postCpts)
+      if(st1 != null) st1 else View.find(pid, cpts)
     }
-    if(debugging) View.checkDistinct(newComponents, newPrinc.toString)
-    newComponents
+
+    if(singleRef){
+      var result = List[Array[State]](); var i = 0
+      while(i < len){
+        if(include(i)){
+          // States corresponding to pids(i)
+          val st1 = findCpt(pids(i))
+          if(st1 != null) result ::= Array(newPrinc, st1)
+          else println(s"No state for ${pids(i)} in ${showStates(postCpts)} or "+
+            showStates(cpts))
+        }
+        i += 1
+      }
+      // if(result.length > 1) 
+      //   println(s"makePostComponents: "+result.map(showStates))
+      // Need to deal with the case that newPrinc has no included refs.
+      if(result.nonEmpty) result else List(Array(newPrinc))
+    }
+    else{
+      var newComponents = new Array[State](len); newComponents(0) = newPrinc
+      var i = 1; var k = 1
+      // Note, we might end up with fewer than len new components.
+      // Inv: we have filled newComponents0[0..k) using pids[0..i).
+      while(i < len){
+        if(include(i)){ newComponents(k) = findCpt(pids(i)); k += 1 }
+        i += 1
+      }
+      if(k < len){ // We avoided a repeated component; trim newComponents
+        val nc = new Array[State](k); var j = 0
+        while(j < k){ nc(j) = newComponents(j); j += 1 }
+        newComponents = nc
+      }
+      if(debugging) View.checkDistinct(newComponents, newPrinc.toString)
+      List(newComponents)
+    }
   }
 
   /** Find the index of cpts with identity (f,id).  Return -1 if no such
@@ -300,62 +348,103 @@ object View{
 /** A concretization. */
 class Concretization(val servers: ServerStates, val components: Array[State]){ 
 
-  /** Make a ComponentView from this, with components(0) as the principal
-    * component.  Note: not in canonical form IMPROVE. */
-  def toComponentView: ComponentView = getViewOf(components(0))
+  /** Make ComponentView(s) from this, with components(0) as the principal
+    * component.  NOTE: not in canonical form (needs remapping). */
+  def toComponentView: List[ComponentView] = getViewOf(components(0))
 
-  /** Get the view of this with princ as principal component.  Pre: this
-    * includes all the components referenced by princ. Note: not in canonical
-    * form IMPROVE. */
-  private def getViewOf(princ: State): ComponentView = {
+  /** Get the view(s) of this with princ as principal component.  Pre: if not
+    * singleRef then this includes all the components referenced by princ. */
+  private def getViewOf(princ: State): List[ComponentView] = {
     val princIds = princ.processIdentities; val len = princIds.length
-    var components1 = new Array[State](len); components1(0) = princ
     val includeInfo = State.getIncludeInfo(princ.cs)
-    // Other components to be included in the ComponentView: those referenced 
-    // by princ
-    var i = 1; var j = 1
-    // We have filled components1[0..j) from princIds[0..i)
-    while(i < len){
+
+    // Should pids(i) be included?
+    @inline def include(i: Int) = {
       val pid = princIds(i)
       if(!isDistinguished(pid._2) && (includeInfo == null || includeInfo(i))){
         // Test if this is the first occurrence of pid
         var k = 0; while(k < i && princIds(k) != pid) k += 1
-        if(k == i){
-          // Find pid in components
-          var k = 1
-          while(components(k).componentProcessIdentity != pid) k += 1
-          components1(j) = components(k); j += 1; k += 1
-        }
+        k == i
       }
-      i += 1
+      else false
     }
-    if(j < len){
-      // Some distinguished, repeated or omitted parameters; trim unfilled slots.
-      val nc = new Array[State](j); var k = 0
-      while(k < j){ nc(k) = components1(k); k += 1 }
-      components1 = nc
-    }
-    if(debugging){ // testing against previous version IMPROVE
-      val components1X = 
-        components.filter{ cpt =>
-          val (f,id) = cpt.componentProcessIdentity;
-          (1 until princIds.length).exists{j =>
-            princIds(j) == (f,id) && (includeInfo == null || includeInfo(j))}
+
+    if(singleRef){
+      var result = List[ComponentView](); var i = 1
+      while(i < len){
+        if(include(i)){
+          val st1 = View.find(princIds(i), components)
+          if(st1 != null){
+            val v = new ComponentView(servers, Array(princ, st1)); v.setPly(ply)
+            result ::= v
+          }
+          // else println(s"getViewOf: omitting View for ${princIds(i)}")
         }
-      val components2t = components1.tail
-      assert(components1X.sameElements(components2t) ||
-        components1X.length == components2t.length &&
-        components1X.forall(st => components2t.contains(st)),
-        s"this = $this\nprinc = $princ"+
-        "\ncomponents1X = "+components1X.map(_.toString).mkString("[",", ","]")+
-          "\ncomponents1 = "+components1.map(_.toString).mkString("[",", ","]"))
+        i += 1
+      }
+      // if(result.length > 1) println(s"getViewOf: $result")
+      if(result.nonEmpty) result 
+      else{
+        val v = new ComponentView(servers, Array(princ)); v.setPly(ply)
+        List(v)
+      }
     }
-    val v = new ComponentView(servers, components1)
-    v.setPly(ply)
-    v
+    else{
+      var components1 = new Array[State](len); components1(0) = princ
+      // Other components to be included in the ComponentView: those referenced
+      // by princ
+      var i = 1; var j = 1
+      // We have filled components1[0..j) from princIds[0..i)
+      while(i < len){
+        if(include(i)){          // Find princIds(i) in components
+          components1(j) = View.find(princIds(i), components); j += 1
+        }
+        i += 1
+      }
+      if(j < len){
+        // Some distinguished, repeated or omitted parameters; trim unfilled
+        // slots.
+        val nc = new Array[State](j); var k = 0
+        while(k < j){ nc(k) = components1(k); k += 1 }
+        components1 = nc
+      }
+      val v = new ComponentView(servers, components1); v.setPly(ply)
+      List(v)
+    }
   }
 
+    // if(debugging){ // testing against previous version IMPROVE
+    //   val components1X = 
+    //     components.filter{ cpt =>
+    //       val (f,id) = cpt.componentProcessIdentity;
+    //       (1 until princIds.length).exists{j =>
+    //         princIds(j) == (f,id) && (includeInfo == null || includeInfo(j))}
+    //     }
+    //   val components2t = components1.tail
+    //   assert(components1X.sameElements(components2t) ||
+    //     components1X.length == components2t.length &&
+    //     components1X.forall(st => components2t.contains(st)),
+    //     s"this = $this\nprinc = $princ"+
+    //     "\ncomponents1X = "+components1X.map(_.toString).mkString("[",", ","]")+
+    //       "\ncomponents1 = "+components1.map(_.toString).mkString("[",", ","]"))
+    // }
+
   def componentsList = components.toList
+
+  /** Does this have the same component process identities as that? */
+  def sameComponentPids(that: Concretization) = {
+    val thatCpts = that.components; val length = components.length
+    if(thatCpts.length != length) false
+    else{
+      var i = 0
+      while(i < length && 
+        thatCpts(i).componentProcessIdentity == 
+        components(i).componentProcessIdentity)
+          i += 1
+      i == length
+    }
+  }
+
 
   /** In the case that this was created by extending one view with a component
     * from a secondary view, that secondary view. */

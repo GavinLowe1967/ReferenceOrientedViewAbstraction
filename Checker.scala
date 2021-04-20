@@ -138,8 +138,8 @@ class Checker(system: SystemP.System){
   @inline private def processTransition(
     pre: Concretization, e: EventInt, post: Concretization, 
     outsidePid: ProcessIdentity) = {
-    if(false) 
-      println(s"processTransition: $pre \n  -${system.showEvent(e)}-> $post")
+    if(true) 
+      println(s"processTransition:\n  $pre -${system.showEvent(e)}-> $post")
     val pids0 = pre.components(0).processIdentities
     val princ1 = post.components(0)
     // Process ids of other components
@@ -352,7 +352,7 @@ class Checker(system: SystemP.System){
   @inline protected 
   def isExtendable(pre: Concretization, st: State): Array[ComponentView] = {
     // println(s"isExtendable($pre, $st)")
-    require(sysAbsViews.contains(pre.toComponentView))
+    for(v <- pre.toComponentView) require(sysAbsViews.contains(v))
     // Also every other state in conc is compatible FIXME CHECK ???
     require(pre.components.forall(
       _.componentProcessIdentity != st.componentProcessIdentity))
@@ -544,6 +544,7 @@ class Checker(system: SystemP.System){
   private 
   def effectOnOthers(pre: Concretization, e: EventInt, post: Concretization) = 
   if(pre != post){
+    if(false) println(s"effectOnOthers $pre -${system.showEvent(e)}-> $post")
     // effectOnOthersCount += 1
     val iter = sysAbsViews.iterator(pre.servers)
     while(iter.hasNext){
@@ -556,14 +557,7 @@ class Checker(system: SystemP.System){
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
   = {
     // Profiler.count("effectOn")
-    require(pre.servers == cv.servers &&
-      pre.components.length == post.components.length)
-    var i = 0
-    while(i < pre.components.length){
-      require(pre.components(i).componentProcessIdentity == 
-        post.components(i).componentProcessIdentity)
-      i += 1
-    }
+    require(pre.servers == cv.servers && pre.sameComponentPids(post))
     val cptsLen = cv.components.length; val postCpts = post.components
 
     // All remappings of cv to unify with pre, together with the list of
@@ -575,34 +569,38 @@ class Checker(system: SystemP.System){
       val (cpts, unifs) = newCpts(cptIx); cptIx += 1
       if(debugging) View.checkDistinct(cpts)
       assert(cpts.length == cptsLen)
-      // What does cpts(0) get mapped to?
+// FIXME: if singleRef and there are references between components from pre
+// and cv, then check that that combination is possible.
+      // What does cpts(0) get mapped to?  IMPROVE: we don't need all of unifs
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
-// IMPROVE: don't need all of unifs
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
-      val newComponents = View.makePostComponents(newPrinc, postCpts, cpts)
-      val nv = Remapper.mkComponentView(post.servers, newComponents)
-      newViewCount += 1 //; Profiler.count("newViewCount"+unifs.isEmpty)
-      // Mostly with unifs.nonEmpty
-      if(!sysAbsViews.contains(nv) && nextNewViews.add(nv)){
-        addedViewCount += 1 // ; Profiler.count("addedViewCount"+unifs.isEmpty)
-        if(false) println(
-          s"$pre --> $post\n  with unifications $unifs\n"+
-            s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-            s"  --> ${View.show(post.servers, newComponents)} == $nv")
-        nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
-        if(!nv.representableInScript){
-          println("Not enough identities in script to combine transition\n"+
-            s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
-          sys.exit
+      val newComponentsList = View.makePostComponents(newPrinc, postCpts, cpts)
+      for(newComponents <- newComponentsList){
+        val nv = Remapper.mkComponentView(post.servers, newComponents)
+        newViewCount += 1
+        // Mostly with unifs.nonEmpty
+        if(!sysAbsViews.contains(nv) && nextNewViews.add(nv)){
+          addedViewCount += 1
+          if(true) println(
+            s"$pre --> $post\n  with unifications $unifs\n"+
+              s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+              s"  --> ${View.show(post.servers, newComponents)} == $nv")
+          nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
+          if(!nv.representableInScript){
+            println("Not enough identities in script to combine transition\n"+
+              s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+            sys.exit
+          }
         }
-      }
-      else if(false){
-        Profiler.count("non-new view"+(pre.servers != post.servers)+unifs.isEmpty)
-        println(
-        s"$pre --> $post\n  with unifications $unifs\n"+
-          s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-          s"  --> ${View.show(post.servers, newComponents)} == $nv")
-      }
+        else if(false){
+          Profiler.count("non-new view"+(pre.servers != post.servers)+
+            unifs.isEmpty)
+          println(
+            s"$pre --> $post\n  with unifications $unifs\n"+
+              s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+              s"  --> ${View.show(post.servers, newComponents)} == $nv")
+        }
+      } // end of for loop
     } // end of while loop
   }
 
@@ -668,8 +666,11 @@ class Checker(system: SystemP.System){
         else false
       for((pre,e,post) <- newTransitions.iterator){
         assert(transitions.add(pre, e, post))
-        val v = Remapper.remapComponentView(post.toComponentView)
-        if(addView(v)) v.setCreationInfo(pre, e, post, ply)
+        // val v = Remapper.remapComponentView(post.toComponentView)
+        for(v0 <- post.toComponentView){
+          val v = Remapper.remapComponentView(v0)
+          if(addView(v)) v.setCreationInfo(pre, e, post, ply)
+        }
       }
       if(false) // print newTransitions
         println(
@@ -687,7 +688,7 @@ class Checker(system: SystemP.System){
     } // end of main loop
 
     println("\nSTEP "+ply)
-    if(false) println(sysAbsViews)
+    if(true) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")
