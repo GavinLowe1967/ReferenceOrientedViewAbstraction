@@ -9,7 +9,6 @@ object RemapperTest{
   import RemapperP.Remapper._
   import RemapperP.Unification._
   import TestStates._
-  import View.showStates
 
   // ======== Helper functions
 
@@ -348,7 +347,7 @@ object RemapperTest{
   def combineTest = {
     println("== combineTest ==***")
     def showBuffer(buff: CombineResult) =
-      buff.map{ case (states, us) => View.showStates(states)+"; "+us }.
+      buff.map{ case (states, us) => StateArray.show(states)+"; "+us }.
         mkString("\n")
 
     def test1 = {

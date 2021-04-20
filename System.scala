@@ -739,7 +739,7 @@ class System(fname: String) {
     map: RemappingMap, renamedState: State, cpts: Array[State], i: Int,
     preCpts: Array[State], otherArgs: OtherArgMap)
       : Boolean = {
-    if(View.agreesWithCommonComponent(renamedState, preCpts)){
+    if(StateArray.agreesWithCommonComponent(renamedState, preCpts)){
       // Renamed state consistent with preCpts. Check a corresponding renaming
       // of the rest of cpts agrees with cpts on common components.  IMPROVE:
       // Trivially true if singleton.

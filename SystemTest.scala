@@ -6,7 +6,7 @@ import ViewAbstraction._
 object SystemTest{
   // import SystemP.System._
   import TestStates._
-  import View.showStates
+  // import View.showStates
 
   private def consistentStatesTest(system: System) = {
     def test1 = {

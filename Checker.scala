@@ -504,7 +504,7 @@ class Checker(system: SystemP.System){
         while(j < cpts1.length &&
             (cpts1(j).family != stF || cpts1(j).id != stIdR))
           j += 1
-        assert(j < cpts1.length, s"${View.showStates(cv1.components)} $stIdR")
+        assert(j < cpts1.length, s"${StateArray.show(cv1.components)} $stIdR")
         val cpt1 = cpts1(j)    // println(s"cpt1 = $cpt1")
         // test if cpt1 is a renaming of st under an extension of map
         var map2 = Unification.unify(map, cpt1, st)  // println(map2 != null)
@@ -567,14 +567,22 @@ class Checker(system: SystemP.System){
     var cptIx = 0
     while(cptIx < newCpts.length){
       val (cpts, unifs) = newCpts(cptIx); cptIx += 1
-      if(debugging) View.checkDistinct(cpts)
+      if(debugging) StateArray.checkDistinct(cpts)
       assert(cpts.length == cptsLen)
 // FIXME: if singleRef and there are references between components from pre
 // and cv, then check that that combination is possible.
+      if(singleRef){
+        val crossRefs = StateArray.crossRefs(cpts, pre.components)
+        if(crossRefs.nonEmpty) 
+          println(s"Cross references "+crossRefs.map(StateArray.show))
+// FIXME: check if sysAbsViews contains renaming of each element of crossRefs,
+// and bail out if not.
+      }
       // What does cpts(0) get mapped to?  IMPROVE: we don't need all of unifs
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
-      val newComponentsList = View.makePostComponents(newPrinc, postCpts, cpts)
+      val newComponentsList = 
+        StateArray.makePostComponents(newPrinc, postCpts, cpts)
       for(newComponents <- newComponentsList){
         val nv = Remapper.mkComponentView(post.servers, newComponents)
         newViewCount += 1

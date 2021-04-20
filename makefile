@@ -27,6 +27,8 @@ clean:
 
 $(DIR)/State.class: $(DIR)/package.class
 
+$(DIR)/StateArray.class: $(DIR)/State.class
+
 $(DIR)/StateMap.class: $(DIR)/State.class $(DIR)/Sharding.class
 
 $(DIR)/MyTrieStateMap.class $(DIR)/StateHashMap.class: $(DIR)/StateMap.class
@@ -44,7 +46,7 @@ $(DIR)/FDRTransitionMap.class: $(DIR)/State.class $(DIR)/CSPFileParser.class	\
 
 # Views, etc.
 
-$(DIR)/View.class: $(DIR)/ServerStates.class
+$(DIR)/View.class: $(DIR)/ServerStates.class $(DIR)/StateArray.class
 
 $(DIR)/TestStates.class: $(DIR)/MyStateMap.class
 

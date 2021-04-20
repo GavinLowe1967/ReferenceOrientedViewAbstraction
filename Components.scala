@@ -367,7 +367,7 @@ class Components(
   def initViews(servers: ServerStates): Array[View] = { 
     val fInits = inits.flatten
     fInits.map(princ => 
-      new ComponentView(servers, View.referencedStates(princ, fInits)))
+      new ComponentView(servers, StateArray.referencedStates(princ, fInits)))
   }
 
   //   val iv = Views.alpha(aShapes, inits.flatten, true)

@@ -187,7 +187,7 @@ object Combiner{
       // All renamings of cpts1.
       val remappedCptss = remapRest(map, otherArgs, cpts1, i)
       // Test if any agrees with cpts2 on common components.
-      remappedCptss.exists(View.agreeOnCommonComponents(_, cpts2, i))
+      remappedCptss.exists(StateArray.agreeOnCommonComponents(_, cpts2, i))
     }
   }
 
