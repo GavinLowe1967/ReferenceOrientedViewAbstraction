@@ -3,7 +3,7 @@ package ViewAbstraction
 /** Various helper operations relating to Arrays of States. */
 
 object StateArray{
-
+  /** Convert states into a String. */
   def show(states: Array[State]) = 
     states.map(_.toString0).mkString("[", " || ", "]")
 
@@ -45,8 +45,6 @@ object StateArray{
     refed
   }
 
-
-
   /** The union of cpts1 and cpts2.  Pre: they agree on components with common
     * identities. */
   def union(cpts1: Array[State], cpts2: Array[State]): Array[State] = {
@@ -80,7 +78,6 @@ object StateArray{
       i += 1
     }
   }
-
 
   /** Find the component of cpts with process identity pid, or return null if no
     * such.  IMPROVE: combine with Unification.find */
@@ -129,21 +126,25 @@ object StateArray{
     }
 
     if(singleRef){
-      var result = List[Array[State]](); var i = 0
+      var result = List[Array[State]](); var i = 0; var otherRef = false
+      // otherRef is set to true if there is an included reference to a
+      // component not present in this view.
       while(i < len){
         if(include(i)){
           // States corresponding to pids(i)
           val st1 = findCpt(pids(i))
           if(st1 != null) result ::= Array(newPrinc, st1)
-          else println(s"No state for ${pids(i)} in ${show(postCpts)} or "+
-            show(cpts))
+          else otherRef = true
+          // else println(s"No state for ${pids(i)} in ${show(postCpts)} or "+
+          //   show(cpts))
         }
         i += 1
       }
       // if(result.length > 1) 
       //   println(s"makePostComponents: "+result.map(showStates))
-      // Need to deal with the case that newPrinc has no included refs.
-      if(result.nonEmpty) result else List(Array(newPrinc))
+      if(result.nonEmpty || otherRef) result else List(Array(newPrinc))
+      // If all the refs from newPrinc are distinguished or omitted, we need
+      // to include the singleton view.
     }
     else{
       var newComponents = new Array[State](len); newComponents(0) = newPrinc

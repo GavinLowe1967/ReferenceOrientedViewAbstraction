@@ -155,11 +155,11 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   }
 
   override def toString = 
-    s"$servers || "+components.mkString("[", " || ", "]")+s" <$ply>"
+    s"$servers || "+components.mkString("[", " || ", "]") // +s" <$ply>"
 
   def toString0 = 
     servers.toString0+" || "+
-      components.map(_.toString0).mkString("[", " || ", "]")+s" <$ply>"
+      components.map(_.toString0).mkString("[", " || ", "]") // +s" <$ply>"
 
   override def equals(that: Any) = that match{
     case cv: ComponentView => 
@@ -214,7 +214,9 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     }
 
     if(singleRef){
-      var result = List[ComponentView](); var i = 1
+      var result = List[ComponentView](); var i = 1; var otherRef = false
+      // otherRef is set to true if there is an included reference to a
+      // component not present in this view.
       while(i < len){
         if(include(i)){
           val st1 = StateArray.find(princIds(i), components)
@@ -222,12 +224,15 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
             val v = new ComponentView(servers, Array(princ, st1)); v.setPly(ply)
             result ::= v
           }
-          // else println(s"getViewOf: omitting View for ${princIds(i)}")
+          else otherRef = true
+          // println(s"getViewOf: omitting View for ${princIds(i)}")
         }
         i += 1
       }
       // if(result.length > 1) println(s"getViewOf: $result")
-      if(result.nonEmpty) result 
+      if(result.nonEmpty || otherRef) result 
+      // If all the refs from newPrinc are distinguished or omitted, we need
+      // to include the singleton view.
       else{
         val v = new ComponentView(servers, Array(princ)); v.setPly(ply)
         List(v)
@@ -390,11 +395,11 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   }
 
   override def toString = 
-    s"$servers || ${components.mkString("[", " || ", "]")}"+s" <$ply>"
+    s"$servers || ${components.mkString("[", " || ", "]")}" // +s" <$ply>"
 
   def toString0 = 
     servers.toString0+" || "+
-      components.map(_.toString0).mkString("[", " || ", "]")+s" <$ply>"
+      components.map(_.toString0).mkString("[", " || ", "]") // +s" <$ply>"
 
   /** A new concretization, extending this with component newState. */
   def extend(newState: State): Concretization =

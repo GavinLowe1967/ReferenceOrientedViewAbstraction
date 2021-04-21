@@ -553,10 +553,17 @@ class Checker(system: SystemP.System){
     }
   }
 
+  /** A mapping showing which component views might be added later.  For each
+    * cvx -> (missing, nv), once all of missing have been added, nv can also
+    * be added.  Such a maplet is stored for each cvx in missing. */
+  private val effectOnStore = 
+    new HashMap[ComponentView, (List[ComponentView], ComponentView)]
+
   protected def effectOn(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
   = {
     // Profiler.count("effectOn")
+    println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers && pre.sameComponentPids(post))
     val cptsLen = cv.components.length; val postCpts = post.components
 
@@ -567,47 +574,59 @@ class Checker(system: SystemP.System){
     var cptIx = 0
     while(cptIx < newCpts.length){
       val (cpts, unifs) = newCpts(cptIx); cptIx += 1
+      println((StateArray.show(cpts),unifs))
       if(debugging) StateArray.checkDistinct(cpts)
       assert(cpts.length == cptsLen)
-// FIXME: if singleRef and there are references between components from pre
-// and cv, then check that that combination is possible.
-      if(singleRef){
-        val crossRefs = StateArray.crossRefs(cpts, pre.components)
-        if(crossRefs.nonEmpty) 
-          println(s"Cross references "+crossRefs.map(StateArray.show))
-// FIXME: check if sysAbsViews contains renaming of each element of crossRefs,
-// and bail out if not.
+      // If singleRef and there are references between components from pre and
+      // cv, then check that that combination is possible.
+      var missing = List[ComponentView]() // missing necessary Views
+      if(singleRef) for(cpts <- StateArray.crossRefs(cpts, pre.components)){
+        val cvx = Remapper.mkComponentView(pre.servers, cpts)
+        if(!sysAbsViews.contains(cvx)) missing ::= cvx 
       }
       // What does cpts(0) get mapped to?  IMPROVE: we don't need all of unifs
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
-      val newComponentsList = 
+// FIXME: if newPrinc gains a reference, then we need to build views instantiating that reference.
+      val newComponentsList =
         StateArray.makePostComponents(newPrinc, postCpts, cpts)
       for(newComponents <- newComponentsList){
         val nv = Remapper.mkComponentView(post.servers, newComponents)
         newViewCount += 1
         // Mostly with unifs.nonEmpty
-        if(!sysAbsViews.contains(nv) && nextNewViews.add(nv)){
-          addedViewCount += 1
-          if(true) println(
-            s"$pre --> $post\n  with unifications $unifs\n"+
-              s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-              s"  --> ${View.show(post.servers, newComponents)} == $nv")
-          nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
-          if(!nv.representableInScript){
-            println("Not enough identities in script to combine transition\n"+
-              s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
-            sys.exit
+        if(!sysAbsViews.contains(nv)){
+          if(missing.isEmpty){
+            if(nextNewViews.add(nv)){
+              addedViewCount += 1
+              if(true) println(
+                s"$pre --> $post\n  with unifications $unifs\n"+
+                  s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+                  s"  --> ${View.show(post.servers, newComponents)} == $nv")
+              nv.setCreationInfoIndirect(
+                pre, cpts, cv, e, post, newComponents, ply)
+              if(!nv.representableInScript){
+                println("Not enough identities in script to combine transition\n"+
+                  s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+                sys.exit
+              }
+            }
+          } // end of if(missing.isEmpty)
+          else{
+            // Note: we create nv eagerly, even if missing is non-empty: this
+            // might not be the most efficient approach
+            println(s"Storing $missing -> $nv")
+            for(cvx <- missing) effectOnStore += cvx -> (missing, nv)
+// FIXME: do something with this subsequently
           }
-        }
-        else if(false){
-          Profiler.count("non-new view"+(pre.servers != post.servers)+
-            unifs.isEmpty)
-          println(
-            s"$pre --> $post\n  with unifications $unifs\n"+
-              s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-              s"  --> ${View.show(post.servers, newComponents)} == $nv")
-        }
+        } // end of if(!sysAbsViews.contains(nv))
+        // else if(false){
+        //   Profiler.count("non-new view"+(pre.servers != post.servers)+
+        //     unifs.isEmpty)
+        //   println(
+        //     s"$pre --> $post\n  with unifications $unifs\n"+
+        //       s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+        //       s"  --> ${View.show(post.servers, newComponents)} == $nv")
+        // }
       } // end of for loop
     } // end of while loop
   }
@@ -665,6 +684,7 @@ class Checker(system: SystemP.System){
         s"newTransitionTemplates, ${newTransitionTemplates.size}")
       val newViewsAB = new ArrayBuffer[ComponentView]
       def addView(v: ComponentView): Boolean = 
+// FIXME: probably not if there's a missing ref. 
         if(sysAbsViews.add(v)){ 
           if(false) println(v)
           assert(v.representableInScript)
@@ -689,7 +709,7 @@ class Checker(system: SystemP.System){
         transitionTemplates.add(pre, post, id, e, inc)
       for(v <- nextNewViews.iterator) addView(v)
       ply += 1; newViews = newViewsAB.toArray; 
-      if(false) 
+      if(true) 
         println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
       if(newViews.isEmpty) done.set(true)
       if(false && ply > 15) println(sysAbsViews.summarise1)

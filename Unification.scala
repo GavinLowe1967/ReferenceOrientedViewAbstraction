@@ -244,6 +244,7 @@ object Unification{
 // IMPROVE, try to identify this within allUnifs, by trying to unify
 // components that change state first.
       }
+      println(s"combine: unifs = $unifs, sufficientUnif = $sufficientUnif")
       if(sufficientUnif){
         // Create OtherArgMap containing all values not in ran map1 or
         // pre.servers, but (1) in post.servers; or (2) in post.cpts for a
