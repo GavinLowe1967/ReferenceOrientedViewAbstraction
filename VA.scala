@@ -33,7 +33,8 @@ object VA{
     var i = 0; var fname = ""
     var profiling = false; var profilingFlat = false; var interval = 20
     var profilingBoth = false
-    var verbose = false; var bound = Int.MaxValue; var timing = false
+    // var verbose = false; 
+    var bound = Int.MaxValue; var timing = false
     var testing = false
 
     while(i < args.length) args(i) match{

@@ -15,8 +15,8 @@ class Checker(system: SystemP.System){
     * This is caught within process. */
   class FoundErrorException extends Exception
 
-  private var verbose = false 
-  private var veryVerbose = false
+  // private var verbose = false 
+  // private var veryVerbose = false
 
   /** The abstract views. */
   protected var sysAbsViews: ViewSet = null
@@ -99,14 +99,14 @@ class Checker(system: SystemP.System){
     * @return true if a concrete transition on error is generated. 
     */
   private def process(v: View): Boolean = { 
-    if(verbose) println(s"\n**** Processing $v")
+    if(false) println(s"\n**** Processing $v")
     assert(v.ply < Int.MaxValue)
     v match{
       case cv: ComponentView =>
         for((pre, e, post, outsidePid) <- system.transitions(cv)){
           assert(pre.ply < Int.MaxValue)
           assert(post.ply == Int.MaxValue); post.ply = ply
-          if(verbose)
+          if(false)
             println(s"$pre -${system.showEvent(e)}-> $post ["+
               (if(outsidePid != null) State.showProcessId(outsidePid) else "")+
               "]")
@@ -138,7 +138,7 @@ class Checker(system: SystemP.System){
   @inline private def processTransition(
     pre: Concretization, e: EventInt, post: Concretization, 
     outsidePid: ProcessIdentity) = {
-    if(true) 
+    if(verbose) 
       println(s"processTransition:\n  $pre -${system.showEvent(e)}-> $post")
     val pids0 = pre.components(0).processIdentities
     val princ1 = post.components(0)
@@ -526,7 +526,7 @@ class Checker(system: SystemP.System){
       else{
         // Omitted reference, so we approximate this situation by taking cv1
         // to match.
-        if(verbose)
+        if(false)
           println(s"findReferencingView: $cv1 has omitted reference to "+
             scriptNames(stF)(stIdR))
         found = true
@@ -559,22 +559,38 @@ class Checker(system: SystemP.System){
   private val effectOnStore = 
     new HashMap[ComponentView, (List[ComponentView], ComponentView)]
 
+  /** The effect of the transition pre -e-> post on cv.  Create extra views
+    * caused by the way the transition changes cv. */
   protected def effectOn(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView)
   = {
     // Profiler.count("effectOn")
-    println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
+    if(verbose) println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers && pre.sameComponentPids(post))
     val cptsLen = cv.components.length; val postCpts = post.components
-
+    // In the case of singleRef, if the secondary component c1 changed state,
+    // find the other parameters of c1 in the post state that might reference
+    // cv.principal.  We will subsequently form views with c2 as the principal
+    // component, referencing cv.principal (renamed).
+    var c2Refs = List[Identity]()
+    if(singleRef && pre.components.length == 2 &&
+        pre.components(1) != postCpts(1)){
+      val c1 = postCpts(1); val cvPF = cv.principal.family; val c1Params = c1.ids
+      for(i <- 1 until c1Params.length; if c1.typeMap(i) == cvPF){
+        c2Refs ::= c1Params(i)
+// IMPROVE: I think we can omit params of pre.servers other than
+// cv.principal's identity
+      }
+      if(verbose) println(s"c2Refs = $c2Refs")
+    }
     // All remappings of cv to unify with pre, together with the list of
     // indices of unified components.
     val newCpts: ArrayBuffer[(Array[State], List[(Int,Int)])] =
-      Unification.combine(pre, post, cv) 
+      Unification.combine(pre, post, cv, c2Refs) 
     var cptIx = 0
     while(cptIx < newCpts.length){
       val (cpts, unifs) = newCpts(cptIx); cptIx += 1
-      println((StateArray.show(cpts),unifs))
+      if(verbose) println((StateArray.show(cpts),unifs))
       if(debugging) StateArray.checkDistinct(cpts)
       assert(cpts.length == cptsLen)
       // If singleRef and there are references between components from pre and
@@ -598,7 +614,7 @@ class Checker(system: SystemP.System){
           if(missing.isEmpty){
             if(nextNewViews.add(nv)){
               addedViewCount += 1
-              if(true) println(
+              if(verbose) println(
                 s"$pre --> $post\n  with unifications $unifs\n"+
                   s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
                   s"  --> ${View.show(post.servers, newComponents)} == $nv")
@@ -709,14 +725,14 @@ class Checker(system: SystemP.System){
         transitionTemplates.add(pre, post, id, e, inc)
       for(v <- nextNewViews.iterator) addView(v)
       ply += 1; newViews = newViewsAB.toArray; 
-      if(true) 
+      if(verbose) 
         println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
       if(newViews.isEmpty) done.set(true)
       if(false && ply > 15) println(sysAbsViews.summarise1)
     } // end of main loop
 
     println("\nSTEP "+ply)
-    if(true) println(sysAbsViews)
+    if(verbose) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")

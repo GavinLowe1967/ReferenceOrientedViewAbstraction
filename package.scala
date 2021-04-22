@@ -123,6 +123,8 @@ package object ViewAbstraction{
 
   // ------------------------------------------- Global variables
 
+  var verbose = false
+
   /** Switch to activate various assertions. */
   val debugging = true // false
 

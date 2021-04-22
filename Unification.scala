@@ -145,7 +145,6 @@ object Unification{
               val st = cpts(ii); isIdentity = st.family == f && st.id == id
               ii += 1
             }
-            // val isIdentity = cpts.exists(st => st.family == f && st.id == id)
             // Case 1: map id to an element id1 of otherArgs(f) (respecting
             // bitMap if (f,id) is an identity).
             var toDoIds = otherArgs(f); var doneIds = List[Identity]()
@@ -183,16 +182,24 @@ object Unification{
   private[RemapperP] val effectOnChangedServersCache = 
     new BasicHashSet[(ComponentView, ServerStates)]
 
-  /** All ways of unifying pre and cv.  Each parameter of cv is remapped (1) as
-    * identity function for parameters in pre.servers; (2) if a unification is
-    * done, as required by that unification; (3) otherwise either (a) to a
-    * parameter in post.servers or the post-state of a unified component, but
-    * not in pre.servers, or (b) the next fresh variable.  Also, under (a),
-    * identities cannot be mapped to identities in post.components, other than
-    * with unification.  Return remapped state, paired with a
-    * ReunificationList such that contains (j,i) whenever cv.components(j)
-    * unifies with pre.components(i).  */
-  def combine(pre: Concretization, post: Concretization, cv: ComponentView) 
+  /** All ways of unifying pre and cv.  
+    * 
+    * Each parameter of cv is remapped (1) as identity function for parameters
+    * in pre.servers; (2) if a unification is done, as required by that
+    * unification; (3) otherwise either (a) to a parameter in post.servers or
+    * the post-state of a unified component, but not in pre.servers, or (b)
+    * for the identity of the principal, an element of princRenames, or (c)
+    * the next fresh variable.  Also, under (a), identities cannot be mapped
+    * to identities in post.components, other than with unification.  The
+    * choice under 3(a) is precisely those variables that will exist in the
+    * post-state of cv (and are distinct post symmetry reduction). 
+    * 
+    * We suppress values that won't give a new view in effectOn.   
+    * 
+    * @return remapped state, paired with a ReunificationList that contains
+    * (j,i) whenever cv.components(j) unifies with pre.components(i).  */
+  def combine(pre: Concretization, post: Concretization, cv: ComponentView,
+    princRenames: List[Identity])
       : CombineResult = {
     val servers = pre.servers; require(servers == cv.servers)
     val preCpts = pre.components; val postCpts = post.components
@@ -224,6 +231,12 @@ object Unification{
 
     // Get all ways of unifying pre and cv. 
     val allUs = allUnifs(map0, pre.components, cv.components)
+
+    /** Extend map1 with unifications unifs, adding all results to result. */
+    def extendUnif(map1: RemappingMap, unifs: UnificationList) = {
+      ???
+    }
+
     var ix = 0
     while(ix < allUs.length){
       val (map1, unifs) = allUs(ix); ix += 1
@@ -244,7 +257,8 @@ object Unification{
 // IMPROVE, try to identify this within allUnifs, by trying to unify
 // components that change state first.
       }
-      println(s"combine: unifs = $unifs, sufficientUnif = $sufficientUnif")
+      if(verbose) 
+        println(s"combine: unifs = $unifs, sufficientUnif = $sufficientUnif")
       if(sufficientUnif){
         // Create OtherArgMap containing all values not in ran map1 or
         // pre.servers, but (1) in post.servers; or (2) in post.cpts for a
@@ -261,7 +275,6 @@ object Unification{
             assert(id < otherArgsBitMap(f).length, 
               s"pre = ${pre.toString0}, post = ${post.toString0}, "+
                 s"cv = ${cv.toString0}, id = $id")
-            // FIXME: throw better exception here?
             if(id >= servers.numParams(f)) otherArgsBitMap(f)(id) = true
           }
         }
