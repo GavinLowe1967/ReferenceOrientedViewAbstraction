@@ -201,10 +201,12 @@ object Unification{
   def combine(pre: Concretization, post: Concretization, cv: ComponentView,
     princRenames: List[Identity])
       : CombineResult = {
+    if(verbose) println(s"combine($pre, $post,\n  $cv, $princRenames)")
     val servers = pre.servers; require(servers == cv.servers)
     val preCpts = pre.components; val postCpts = post.components
     require(pre.components.length == postCpts.length)
     val changedServers = servers != post.servers
+    val (cvpf, cvpid) = cv.principal.componentProcessIdentity
     val map0 = servers.remappingMap
     // Create NextArgMap, greater than anything in pre or post
     val nextArg: NextArgMap = pre.getNextArgMap; post.updateNextArgMap(nextArg)
@@ -231,11 +233,57 @@ object Unification{
 
     // Get all ways of unifying pre and cv. 
     val allUs = allUnifs(map0, pre.components, cv.components)
+    if(verbose) println(s"allUs = "+allUs.map{ case(map,us) => 
+      "("+Remapper.show(map)+", "+us+")" }.mkString("; "))
 
     /** Extend map1 with unifications unifs, adding all results to result. */
     def extendUnif(map1: RemappingMap, unifs: UnificationList) = {
-      ???
-    }
+      // Create OtherArgMap containing all values not in ran map1 or
+      // pre.servers, but (1) in post.servers; or (2) in post.cpts for a
+      // unified component.  Start with a bit map.
+      val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
+      // Add values in components of post corresponding to unifs.
+      while(us.nonEmpty){
+        val i = us.head._2; us = us.tail
+        val pids = postCpts(i).processIdentities; var j = 0
+        // Add values in pids to otherArgsBitMap
+        while(j < pids.length){
+          val (f,id) = pids(j); j += 1
+          assert(id < otherArgsBitMap(f).length,
+            s"pre = ${pre.toString0}, post = ${post.toString0}, "+
+              s"cv = ${cv.toString0}, id = $id")
+          if(id >= servers.numParams(f)) otherArgsBitMap(f)(id) = true
+        }
+      }
+      // Remove values in ran map1, and convert into otherArgMap
+      val otherArgs = Remapper.newOtherArgMap; var f = 0
+      while(f < numFamilies){
+        var i = 0; val len = typeSizes(f)
+        while(i < len){
+          val id = map1(f)(i); i += 1; if(id >= 0) otherArgsBitMap(f)(id) = false
+        }
+        // Create otherArgs(f)
+        i = 0
+        while(i < len){
+          if(otherArgsBitMap(f)(i)) otherArgs(f) ::= i; i += 1
+        }
+        f += 1
+      }
+      // Find values that identities can be mapped to: values in otherArgs,
+      // but not identities of components in post; update otherArgsBitMap to
+      // record.
+      var i = 0
+      while(i < postCpts.length){
+        val st = postCpts(i); i += 1; otherArgsBitMap(st.family)(st.id) = false
+      }
+
+      if(verbose) println(s"map1 = ${Remapper.show(map1)}; otherArgs = "+
+        otherArgs.mkString(", ")+" nextArg = "+nextArg.mkString(", ")+
+        s"; unifs = $unifs")
+      combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
+        cv.components, result)
+// IMPROVE: do we need all of unifs? 
+    } // end of extendUnif
 
     var ix = 0
     while(ix < allUs.length){
@@ -259,53 +307,15 @@ object Unification{
       }
       if(verbose) 
         println(s"combine: unifs = $unifs, sufficientUnif = $sufficientUnif")
-      if(sufficientUnif){
-        // Create OtherArgMap containing all values not in ran map1 or
-        // pre.servers, but (1) in post.servers; or (2) in post.cpts for a
-        // unified component.  Start with a bit map.
-        val otherArgsBitMap = newServerIds.map(_.clone)
-        // Add values in components of post corresponding to unifs.
-        var us = unifs
-        while(us.nonEmpty){
-          val i = us.head._2; us = us.tail
-          val pids = postCpts(i).processIdentities; var j = 0
-          // Add values in pids to otherArgsBitMap
-          while(j < pids.length){
-            val (f,id) = pids(j); j += 1
-            assert(id < otherArgsBitMap(f).length, 
-              s"pre = ${pre.toString0}, post = ${post.toString0}, "+
-                s"cv = ${cv.toString0}, id = $id")
-            if(id >= servers.numParams(f)) otherArgsBitMap(f)(id) = true
-          }
-        }
-        // Remove values in ran map1, and convert into otherArgMap
-        val otherArgs = Remapper.newOtherArgMap; var f = 0
-        while(f < numFamilies){
-          var i = 0; val len = typeSizes(f)
-          while(i < len){
-            val id = map1(f)(i); i += 1
-            if(id >= 0) otherArgsBitMap(f)(id) = false
-          }
-          // Create otherArgs(f)
-          i = 0
-          while(i < len){
-            if(otherArgsBitMap(f)(i)) otherArgs(f) ::= i
-            i += 1
-          }
-          f += 1
-        }
-        // Find values that identities can be mapped to: values in otherArgs,
-        // but not identities of components in post; update otherArgsBitMap to
-        // record.
-        var i = 0
-        while(i < postCpts.length){
-          val st = postCpts(i); i += 1; otherArgsBitMap(st.family)(st.id) = false
-        }
-
-        combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs, 
-          cv.components, result)
-// IMPROVE: do we need all of unifs? 
-      } // end of if
+// IMPROVE: can we share work between the calls to extendUnif? 
+      if(sufficientUnif || singleRef) extendUnif(map1, unifs)
+// IMPROVE: why is singleRef necessary?
+      // Try renaming cv.principal to each id in princNames
+      if(map1(cvpf)(cvpid) < 0) for(newPId <- princRenames){
+        if(verbose) println(s"Combine: renaming ${(cvpf,cvpid)} to $newPId")
+        map1(cvpf)(cvpid) = newPId; extendUnif(map1, unifs)
+      }
+      else if(false) println(s"Can't rename ${(cvpf,cvpid)}"+map1(cvpf)(cvpid))
     } // end of while loop
 
     result

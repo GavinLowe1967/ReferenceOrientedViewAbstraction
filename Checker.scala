@@ -69,6 +69,20 @@ class Checker(system: SystemP.System){
     * transitionsTemplates at the end of the ply. */
   private var newTransitionTemplates: MyHashSet[TransitionTemplate] = null
 
+  /** A mapping showing which component views might be added later.  For each
+    * cvx -> (missing, nv), once all of missing have been added, nv can also
+    * be added. 
+    * 
+    * These are added in effectOn when a transition pre -> post induces a
+    * transition cv -> nv, but where the views in missing represent
+    * combinations of components from pre and cv that are not yet in the
+    * store. 
+    * 
+    * Such a maplet is stored for each cvx in missing.  This might be
+    * inefficient if missing is not a singleton: IMPROVE. */
+  private val effectOnStore = new SimpleEffectOnStore
+  //  new HashMap[ComponentView, (List[ComponentView], ComponentView)]
+
   var addTransitionCount = 0L
   // var effectOfPreviousTransitionsCount = 0
   // var effectOnOthersCount = 0
@@ -121,6 +135,7 @@ class Checker(system: SystemP.System){
         // Effect of previous transitions on this view
         effectOfPreviousTransitions(cv)
         effectOfPreviousTransitionTemplates(cv)
+        if(singleRef) completeDelayed(cv)
     }
     false
   } 
@@ -553,12 +568,6 @@ class Checker(system: SystemP.System){
     }
   }
 
-  /** A mapping showing which component views might be added later.  For each
-    * cvx -> (missing, nv), once all of missing have been added, nv can also
-    * be added.  Such a maplet is stored for each cvx in missing. */
-  private val effectOnStore = 
-    new HashMap[ComponentView, (List[ComponentView], ComponentView)]
-
   /** The effect of the transition pre -e-> post on cv.  Create extra views
     * caused by the way the transition changes cv. */
   protected def effectOn(
@@ -568,16 +577,23 @@ class Checker(system: SystemP.System){
     if(verbose) println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers && pre.sameComponentPids(post))
     val cptsLen = cv.components.length; val postCpts = post.components
-    // In the case of singleRef, if the secondary component c1 changed state,
-    // find the other parameters of c1 in the post state that might reference
-    // cv.principal.  We will subsequently form views with c2 as the principal
-    // component, referencing cv.principal (renamed).
-    var c2Refs = List[Identity]()
-    if(singleRef && pre.components.length == 2 &&
-        pre.components(1) != postCpts(1)){
-      val c1 = postCpts(1); val cvPF = cv.principal.family; val c1Params = c1.ids
-      for(i <- 1 until c1Params.length; if c1.typeMap(i) == cvPF){
-        c2Refs ::= c1Params(i)
+    val preCpts = pre.components
+    // In the case of singleRef, all pairs (i,id) such that the i'th secondary
+    // component c1 changed state, and id is a parameter of c1 in the post
+    // state that might reference c2 = cv.principal.  We will subsequently
+    // form views with c1 as the principal component, referencing c2
+    // (renamed).
+// IMPROVE: could we have more simply achieved this using cv with
+// pre.principal as principal, and c2 as secondary component?  This assumes
+// pre.principal has a reference to c2, which seems reasonable.
+    var c2Refs = List[(Int,Identity)]()
+    if(singleRef){
+      for(i <- 1 until preCpts.length; if preCpts(i) != postCpts(i)){
+        val c1 = postCpts(i); val cvPF = cv.principal.family; 
+        val c1Params = c1.ids
+        for(j <- 1 until c1Params.length; 
+            if c1.typeMap(j) == cvPF && !isDistinguished(c1Params(j)))
+          c2Refs ::= (i, c1Params(j))
 // IMPROVE: I think we can omit params of pre.servers other than
 // cv.principal's identity
       }
@@ -586,7 +602,7 @@ class Checker(system: SystemP.System){
     // All remappings of cv to unify with pre, together with the list of
     // indices of unified components.
     val newCpts: ArrayBuffer[(Array[State], List[(Int,Int)])] =
-      Unification.combine(pre, post, cv, c2Refs) 
+      Unification.combine(pre, post, cv, c2Refs.map(_._2)) // IMPROVE 
     var cptIx = 0
     while(cptIx < newCpts.length){
       val (cpts, unifs) = newCpts(cptIx); cptIx += 1
@@ -603,9 +619,20 @@ class Checker(system: SystemP.System){
       // What does cpts(0) get mapped to?  IMPROVE: we don't need all of unifs
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
-// FIXME: if newPrinc gains a reference, then we need to build views instantiating that reference.
-      val newComponentsList =
+      val newPrincId = newPrinc.ids(0)
+      var newComponentsList =
         StateArray.makePostComponents(newPrinc, postCpts, cpts)
+      // If singleRef and the secondary component of post has gained a
+      // reference to newPrinc, we also build views corresponding to those two
+      // components.
+      for((i,id) <- c2Refs; if id == newPrincId){
+        println("** Extract secondary view: "+(StateArray.show(cpts),unifs))
+        // IMPROVE: can we build this directly?  Array(postCpts(1), newPrinc)?
+        val newComponents1 = 
+          StateArray.makePostComponents(postCpts(i), postCpts, cpts)
+        println("newComponents1 = "+newComponents1.map(StateArray.show))
+        newComponentsList = append1(newComponentsList, newComponents1)
+      }
       for(newComponents <- newComponentsList){
         val nv = Remapper.mkComponentView(post.servers, newComponents)
         newViewCount += 1
@@ -630,19 +657,11 @@ class Checker(system: SystemP.System){
           else{
             // Note: we create nv eagerly, even if missing is non-empty: this
             // might not be the most efficient approach
-            println(s"Storing $missing -> $nv")
-            for(cvx <- missing) effectOnStore += cvx -> (missing, nv)
-// FIXME: do something with this subsequently
+            effectOnStore.add(missing, nv); println(s"Storing $missing -> $nv")
+            nv.setCreationInfoIndirect(
+              pre, cpts, cv, e, post, newComponents, ply)
           }
         } // end of if(!sysAbsViews.contains(nv))
-        // else if(false){
-        //   Profiler.count("non-new view"+(pre.servers != post.servers)+
-        //     unifs.isEmpty)
-        //   println(
-        //     s"$pre --> $post\n  with unifications $unifs\n"+
-        //       s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-        //       s"  --> ${View.show(post.servers, newComponents)} == $nv")
-        // }
       } // end of for loop
     } // end of while loop
   }
@@ -656,6 +675,29 @@ class Checker(system: SystemP.System){
       // println(s"considering transition $pre -> $post")
       // effectOnViaTransCount += 1
       effectOn(pre, e, post, cv)
+    }
+  }
+
+
+  /** If cv completes a delayed transition in effectOnStore, then complete it. */
+  private def completeDelayed(cv: ComponentView) = {
+    for((missing,nv) <- effectOnStore.get(cv)){
+      if(missing.forall(cvx => cvx == cv || sysAbsViews.contains(cvx))){
+        println(s"***Adding via completeDelayed $cv -> ($missing, $nv)")
+        // production info
+        if(nextNewViews.add(nv)){
+          val (pre, cpts, cv, post, newComponents) =
+            nv.getCreationIngredients
+          if(verbose) println(s"$pre --> $post\n"+
+            s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+            s"  --> ${View.show(post.servers, newComponents)} == $nv")
+          if(!nv.representableInScript){
+            println("Not enough identities in script to combine transition\n"+
+              s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+            sys.exit
+          }
+        }
+      }
     }
   }
 
@@ -732,7 +774,7 @@ class Checker(system: SystemP.System){
     } // end of main loop
 
     println("\nSTEP "+ply)
-    if(verbose) println(sysAbsViews)
+    if(true) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")

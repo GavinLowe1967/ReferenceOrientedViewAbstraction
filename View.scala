@@ -32,6 +32,8 @@ abstract class View{
       (mkExtendedPre(pre1, cpts, cv), e, mkExtendedPost(post1, newCpts))
     }
 
+  def getCreationIngredients = creationIngredients
+
   /** Record that this view was created by the extended transition 
     * pre1 -e1-> post1. */
   def setCreationInfo(
