@@ -436,9 +436,11 @@ class System(fname: String) {
       val componentIx = // index of (f,id) in components, or -1
         cv.components.indexWhere(_.componentProcessIdentity == (f,id))
       assert(componentIx != 0)
+// IMPROVE: only if !singleRef
       val isOmitted = // reference to (f,id) but omitted from cv
         componentIx < 0 && pParams.contains((f,id))
       // if(isOmitted) println(s"Omitting transition with ${(f,id)} from $cv")
+      if(isOmitted) assert(singleRef)
       if(theseTrans != null && !isOmitted){ 
         val (oEs, oNs): (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = 
           theseTrans
@@ -488,7 +490,7 @@ class System(fname: String) {
     // Case 5: events between server, principal component and one other
     // component. 
     val cptTrans2 = princTrans.transServerComponent
-    for(of <- passiveFamilies; oi <- 0 until idSizes(of)){
+    if(activePrincipal) for(of <- passiveFamilies; oi <- 0 until idSizes(of)){
       // Synchronisations between principal, other component (of,oi) and
       // server, from principal's state, and then from server's state.
       val theseCptTrans: (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) =
@@ -496,7 +498,16 @@ class System(fname: String) {
       val theseServerTrans
           : (ArrayBuffer[EventInt], ArrayBuffer[List[List[State]]]) =
         serverTrans.transSync2((pf,pi), (of,oi))
-      if(theseCptTrans != null && theseServerTrans != null){
+// IMPROVE: only if !singleRef
+      val componentIx = // index of (f,id) in components, or -1
+        cv.components.indexWhere(_.componentProcessIdentity == (of,oi))
+      assert(componentIx != 0, s"cv = $cv, ($of, $oi)")
+      val isOmitted = // reference to (f,id) but omitted from cv
+        componentIx < 0 && pParams.contains((of,oi))
+      if(isOmitted && theseCptTrans != null && theseServerTrans != null)
+        println(s"Omitting transition with ${(of,oi)} from $cv")
+      if(isOmitted) assert(singleRef)
+      if(theseCptTrans != null && theseServerTrans != null && !isOmitted){
         val (pEs,pNexts) = theseCptTrans; val (sEs, sNexts) = theseServerTrans
         // is the other component in cv?
         val otherIndices = (1 until cv.components.length).filter(i =>

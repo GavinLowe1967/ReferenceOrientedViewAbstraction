@@ -16,6 +16,8 @@ trait EffectOnStore{
 
   /** Get all pairs (missing, nv) in the store with cv in missing. */
   def get(cv: ComponentView): List[MissingInfo] 
+
+  def size: Int
 }
 
 // =======================================================
@@ -39,4 +41,6 @@ class SimpleEffectOnStore extends EffectOnStore{
   /** Get all pairs (missing, nv) in the store with cv in missing. */
   def get(cv: ComponentView): List[MissingInfo] =
     store.getOrElse(cv, List[MissingInfo]())
+
+  def size = store.size
 }

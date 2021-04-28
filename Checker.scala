@@ -154,7 +154,8 @@ class Checker(system: SystemP.System){
     pre: Concretization, e: EventInt, post: Concretization, 
     outsidePid: ProcessIdentity) = {
     if(verbose) 
-      println(s"processTransition:\n  $pre -${system.showEvent(e)}-> $post")
+      println(s"processTransition:\n  $pre -${system.showEvent(e)}-> $post"+
+        s" ($outsidePid)")
     val pids0 = pre.components(0).processIdentities
     val princ1 = post.components(0)
     // Process ids of other components
@@ -166,7 +167,7 @@ class Checker(system: SystemP.System){
     val newPids: Array[ProcessIdentity] =
       princ1.processIdentities.tail.filter(p =>
         !isDistinguished(p._2) && !otherIds.contains(p) && !pids0.contains(p))
-    // println(s"newPids = "+newPids.mkString(","))
+    if(verbose) println(s"newPids = "+newPids.mkString(","))
     assert(newPids.length <= 1,    // simplifying assumption
       s"$pre -${system.showEvent(e)}-> $post:\n"+
         s"otherIds = ${otherIds.mkString(", ")}; "+
@@ -475,6 +476,7 @@ class Checker(system: SystemP.System){
   protected[Checker] 
   def findReferencingView(pre: Concretization, st: State, j : Int)
       : ComponentView = {
+    println(s"findReferencingView($pre, $st, $j)")
     val servers = pre.servers; val pCpt = pre.components(j)
     // Find index of st within pCpt's references
     val stPid = st.componentProcessIdentity; val (stF, stId) = stPid
@@ -576,29 +578,21 @@ class Checker(system: SystemP.System){
     // Profiler.count("effectOn")
     if(verbose) println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers && pre.sameComponentPids(post))
-    val cptsLen = cv.components.length; val postCpts = post.components
-    val preCpts = pre.components
-    // In the case of singleRef, all pairs (i,id) such that the i'th secondary
-    // component c1 changed state, and id is a parameter of c1 in the post
-    // state that might reference c2 = cv.principal.  We will subsequently
-    // form views with c1 as the principal component, referencing c2
-    // (renamed).
+    val postCpts = post.components; val preCpts = pre.components
+    // In the case of singleRef, identify which components might gain a
+    // reference to c2 = cv.principal (without unification): all pairs (i,id)
+    // such that the i'th secondary component c1 changed state, and id is a
+    // parameter of c1 in the post state that might reference c2, distinct
+    // from any component identity in pre, post.  We will subsequently form
+    // views with c1 as the principal component, referencing c2 (renamed).
+// IMPROVE: I think we can omit params of pre.servers other than
+// cv.principal's identity
 // IMPROVE: could we have more simply achieved this using cv with
 // pre.principal as principal, and c2 as secondary component?  This assumes
 // pre.principal has a reference to c2, which seems reasonable.
-    var c2Refs = List[(Int,Identity)]()
-    if(singleRef){
-      for(i <- 1 until preCpts.length; if preCpts(i) != postCpts(i)){
-        val c1 = postCpts(i); val cvPF = cv.principal.family; 
-        val c1Params = c1.ids
-        for(j <- 1 until c1Params.length; 
-            if c1.typeMap(j) == cvPF && !isDistinguished(c1Params(j)))
-          c2Refs ::= (i, c1Params(j))
-// IMPROVE: I think we can omit params of pre.servers other than
-// cv.principal's identity
-      }
-      if(verbose) println(s"c2Refs = $c2Refs")
-    }
+    val c2Refs = 
+      if(singleRef) getCrossReferences(preCpts, postCpts, cv.principal.family)
+      else List[(Int,Identity)]()
     // All remappings of cv to unify with pre, together with the list of
     // indices of unified components.
     val newCpts: ArrayBuffer[(Array[State], List[(Int,Int)])] =
@@ -607,8 +601,10 @@ class Checker(system: SystemP.System){
     while(cptIx < newCpts.length){
       val (cpts, unifs) = newCpts(cptIx); cptIx += 1
       if(verbose) println((StateArray.show(cpts),unifs))
-      if(debugging) StateArray.checkDistinct(cpts)
-      assert(cpts.length == cptsLen)
+      if(debugging){
+        StateArray.checkDistinct(cpts)
+        assert(cpts.length == cv.components.length)
+      }
       // If singleRef and there are references between components from pre and
       // cv, then check that that combination is possible.
       var missing = List[ComponentView]() // missing necessary Views
@@ -619,19 +615,19 @@ class Checker(system: SystemP.System){
       // What does cpts(0) get mapped to?  IMPROVE: we don't need all of unifs
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
-      val newPrincId = newPrinc.ids(0)
       var newComponentsList =
         StateArray.makePostComponents(newPrinc, postCpts, cpts)
       // If singleRef and the secondary component of post has gained a
       // reference to newPrinc, we also build views corresponding to those two
       // components.
+      val newPrincId = newPrinc.ids(0)
       for((i,id) <- c2Refs; if id == newPrincId){
-        println("** Extract secondary view: "+(StateArray.show(cpts),unifs))
-        // IMPROVE: can we build this directly?  Array(postCpts(1), newPrinc)?
-        val newComponents1 = 
-          StateArray.makePostComponents(postCpts(i), postCpts, cpts)
-        println("newComponents1 = "+newComponents1.map(StateArray.show))
-        newComponentsList = append1(newComponentsList, newComponents1)
+        // val newComponents1 = 
+        //   StateArray.makePostComponents(postCpts(i), postCpts, cpts)
+        val newComponents1 = Array(postCpts(i), newPrinc)
+        if(verbose)
+          println("Extracted secondary view "+StateArray.show(newComponents1))
+        newComponentsList ::= newComponents1
       }
       for(newComponents <- newComponentsList){
         val nv = Remapper.mkComponentView(post.servers, newComponents)
@@ -657,7 +653,8 @@ class Checker(system: SystemP.System){
           else{
             // Note: we create nv eagerly, even if missing is non-empty: this
             // might not be the most efficient approach
-            effectOnStore.add(missing, nv); println(s"Storing $missing -> $nv")
+            effectOnStore.add(missing, nv)
+            if(verbose) println(s"Storing $missing -> $nv")
             nv.setCreationInfoIndirect(
               pre, cpts, cv, e, post, newComponents, ply)
           }
@@ -665,6 +662,30 @@ class Checker(system: SystemP.System){
       } // end of for loop
     } // end of while loop
   }
+
+  /** Identify components that can gain a reference to a component of type f.
+    * All pairs (i,id) such that the i'th secondary component c1 changes state
+    * between preCpts and postCpts, and id is a non-distinguished parameter of
+    * c1 of family f in the post state, other than an identity in
+    * preCpts/postCpts. */
+  @inline private 
+  def getCrossReferences(
+    preCpts: Array[State], postCpts: Array[State], f: Family)
+      : List[(Int,Identity)] = {
+    // Identities in pre: improve
+    val ids = preCpts.filter(c => c.family == f).map(_.ids(0))
+    var result = List[(Int,Identity)]() 
+    for(i <- 1 until preCpts.length; if preCpts(i) != postCpts(i)){
+      val c1 = postCpts(i); val c1Params = c1.ids
+      for(j <- 1 until c1Params.length; if c1.typeMap(j) == f){
+        val p = c1Params(j)
+        if(!isDistinguished(p) && !ids.contains(p)) result ::= (i, p)
+      }
+      }
+    if(verbose) println(s"getCrossReferences: $result")
+    result
+  }
+
 
   /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
@@ -779,6 +800,7 @@ class Checker(system: SystemP.System){
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")
     println(s"#transition templates = ${printLong(transitionTemplates.size)}")
+    println(s"effectOnStore size = "+effectOnStore.size)
   }
 }
 

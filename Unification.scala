@@ -90,8 +90,9 @@ object Unification{
         if(ix >= 0) tryUnify(ix) 
         else{
           // Try to unify with each component in turn, but don't unify the two
-          // principals (that would just recreate the same transition).
-          var i = if(from == 0) 1 else 0
+          // principals if !singleRef (that would just recreate the same
+          // transition).
+          var i = if(from == 0 && !singleRef) 1 else 0
           while(i < preCpts.length){ tryUnify(i); i += 1 }
           // No unifications for c
           allUnifsRec(map, from+1, unifs)
