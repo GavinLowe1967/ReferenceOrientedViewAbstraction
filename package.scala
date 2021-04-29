@@ -61,6 +61,14 @@ package object ViewAbstraction{
     * be mapped to. */
   type OtherArgMap = Array[List[Identity]]
 
+  // ------- bitmaps over parameters
+
+  @inline def newBitMap: Array[Array[Boolean]] = {
+    val newIds = new Array[Array[Boolean]](numTypes); var f = 0
+    while(f < numTypes){ newIds(f) = new Array[Boolean](typeSizes(f)); f += 1 }
+    newIds
+  }
+
   // --------------------------- Various useful functions
 
   /** Append two lists together: more efficient than API version. */

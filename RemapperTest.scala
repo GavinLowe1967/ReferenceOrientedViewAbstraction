@@ -316,7 +316,7 @@ object RemapperTest{
     }
 
     def test4 = {
-      println("test4")
+      // println("test4")
       val buffer = 
         allUnifs(newRemappingMap, 
           Array(initNodeSt(T0,N0), aNode(N0,N1), aNode(N1,N2)),
@@ -345,13 +345,13 @@ object RemapperTest{
 
   /** Test of Unification.combine. */
   def combineTest = {
-    println("== combineTest ==***")
+    println("== combineTest ==")
     def showBuffer(buff: CombineResult) =
       buff.map{ case (states, us) => StateArray.show(states)+"; "+us }.
         mkString("\n")
 
     def test1 = {
-      println("=test1=")
+      // println("=test1=")
       val pre = new Concretization(servers0, 
         Array(initNodeSt(T0,N0), aNode(N0,N1)))
       val post = new Concretization(servers2, Array(unlock(T0), bNode(N0,N2)))
@@ -359,7 +359,7 @@ object RemapperTest{
       // val cv = new ComponentView(servers0, Array(aNode(N2,N3)))
       // servers0 contains no ids, servers2 contains T0, N0
       val buffer = combine(pre, post, cv, List()) // , true
-      println(showBuffer(buffer))
+      // println(showBuffer(buffer))
       // Unifying, N0 -> N0, N1 -> N1
       assert(buffer.exists{case (states, unifs) =>
         unifs == List((0,1)) && 
@@ -374,7 +374,7 @@ object RemapperTest{
       effectOnChangedServersCache.clear
       val buffer2 = combine(pre, post, cv, List()) // , false
       // Unifying, N0 -> N0, N1 -> N1
-      println(showBuffer(buffer2))
+      // println(showBuffer(buffer2))
       assert(buffer2.exists{case (states, unifs) =>
         unifs == List((0,1)) && 
         states.sameElements(Array(aNode(N0,N1), cNode(N1,Null)))
@@ -387,7 +387,7 @@ object RemapperTest{
     }
 
     def test2 = {
-      println("\n=test2=")
+      //println("\n=test2=")
       effectOnChangedServersCache.clear
       val pre = new Concretization(servers0, 
         Array(getDatumSt(T0,N0,N1), aNode(N0,N2), bNode(N1,N3)) )
@@ -411,7 +411,7 @@ object RemapperTest{
     }
 
     def test3 = {
-      println("=test3=")
+      //println("=test3=")
       val pre = new Concretization(servers1, 
         Array(getDatumSt(T0,N0,N1), aNode(N0,N2), bNode(N1,N3)) )
       val post = 
@@ -426,7 +426,7 @@ object RemapperTest{
     }
 
     def test4 = {
-      println("=test4=")
+      //println("=test4=")
       // val pre = new Concretization(servers1, 
       //   Array(getDatumSt(T0,N0,N2), aNode(N0,N1), bNode(N2,N3)) )
       // val post = 
@@ -441,7 +441,7 @@ object RemapperTest{
       val cv = new ComponentView(servers1, 
         Array(getDatumSt(T1,N0,N2), aNode(N0,N1), cNode(N2,N3)))
       val buffer = combine(pre, post, cv, List()) // , false
-      println("\n"+showBuffer(buffer))
+      // println("\n"+showBuffer(buffer))
       assert(buffer.forall{case (states, unifs) =>
         unifs == List((1,1)) && ( 
           // N0 -> N0, N1 -> N2, T1 -> T1, N2 -> fresh (can't map to N1),
@@ -476,20 +476,54 @@ object RemapperTest{
     }
 
     def test5 = {
-      println("\n=test5**=")
+      //println("\n=test5=")
       val pre = new Concretization(servers1, 
         Array(initNodeSt(T0,Null), initNode(N0)))
       val post = new Concretization(servers1, 
         Array(setTopB(T0,N0), bNode(N0,Null)))
       val cv = new ComponentView(servers1, Array(initNodeSt(T0,Null)))
       val buffer = combine(pre, post, cv, List()) // , false
-      println(showBuffer(buffer))
-
-      // assert(false)
+// FIXME: test here
+      //println(showBuffer(buffer))
     }
 
     test1; test2; test3; test4; test5
 
+  }
+
+  def remapToJoinTest = {
+    println("== remapToJoinTest ==")
+    def test1 = {
+      println("= test1 =")
+      val result = 
+        remapToJoin(servers2, pushSt(T0,N1), pushSt(T1,N2), aNode(N1,N3))
+      // println(result.mkString(", "))
+      // N1 -> N1, N3 -> N2|N3
+      assert(result.contains(aNode(N1,N2)) && result.contains(aNode(N1,N3)) &&
+        result.length == 2)
+    }
+
+    def test2 = { 
+      println("= test2 =")
+      val result = 
+        remapToJoin(servers2, popSt(T0,N0,N1), popSt(T1,N2,N3), aNode(N1,N2))
+      println(result.mkString(", "))
+      // N1 -> N1, N3 -> N2|N3|N4
+      assert(result.contains(aNode(N1,N2)) && result.contains(aNode(N1,N3)) &&
+        result.contains(aNode(N1,N4)) && result.length == 3)
+    }
+
+    def test3 = { 
+      println("= test3 =")
+      val result = 
+        remapToJoin(servers2, popSt(T0,N0,N1), popSt(T1,N0,N2), aNode(N1,N2))
+      println(result.mkString(", "))
+      // N1 -> N1, N3 -> N2|N3
+      assert(result.contains(aNode(N1,N2)) && result.contains(aNode(N1,N3)) &&
+        result.length == 2)
+    }
+
+    test1; test2; test3
   }
 
   def test = {
@@ -502,6 +536,7 @@ object RemapperTest{
     remapToPrincipalTest
     allUnifsTest
     combineTest
+    remapToJoinTest
   }
 
 }

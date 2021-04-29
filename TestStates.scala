@@ -1,7 +1,7 @@
 package ViewAbstraction
 
 /** A definition of various States, Views, etc., for use in tests.  These are
-  * consistent with the file test3.csp. */
+  * consistent with the file test-file.csp. */
 object TestStates{
   // Create some states
   // The lock, not held and held
@@ -32,6 +32,8 @@ object TestStates{
   def initSt(t: Int) = MyStateMap(1, 10, Array(t))
   // Thread with lock, doing push; getTop.me?top -> ...
   def gotLock(t: Int) = MyStateMap(1, 11, Array(t))
+  // Thread with two refs to node, doing a pop, I think
+  def popSt(t: Int, n1: Int, n2: Int) = MyStateMap(1, 15, Array(t,n1,n2))
   //  push.me?v -> ...
   def pushSt(t: Int, n: Int) = MyStateMap(1, 20, Array(t,n))
   // State of thread t about to do initNode.t?node!A.n -> ...

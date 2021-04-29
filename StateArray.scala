@@ -183,4 +183,26 @@ object StateArray{
     }
     result
   }
+
+  /** Remove identities of components in cpts from bitMap. */
+  def removeIdsFromBitMap(cpts: Array[State], bitMap: Array[Array[Boolean]]) = {
+    var i = 0
+    while(i < cpts.length){
+      val st = cpts(i); i += 1; bitMap(st.family)(st.id) = false
+    }
+  }
+
+  /** All components referenced by cpts(0) but not in cpts. */
+  def missingRefs(cpts: Array[State]): List[ProcessIdentity] = {
+    val princ = cpts(0); val refs = princ.processIdentities
+    var missing = List[ProcessIdentity](); var i = 1
+    while(i < refs.length){
+      val ref = refs(i); i += 1
+      if(!isDistinguished(ref._2) && 
+          !cpts.exists(c => c.componentProcessIdentity == ref)) // IMPROVE
+        missing ::= ref
+    }
+    missing
+  }
+
 }

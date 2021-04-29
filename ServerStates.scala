@@ -89,6 +89,21 @@ object ServerStates{
     // ssMap.getOrAdd(servers)
     ssMap.getOrElseUpdate(servers, new ServerStates(servers))
   }
+
+  /** All the new parameters in post, but not in pre, as a bit map. */
+  def newParamsBitMap(pre: ServerStates, post: ServerStates)
+      : Array[Array[Boolean]] = {
+    val newIds = newBitMap; var sts: List[State] = post.servers
+    while(sts.nonEmpty){
+      val pids = sts.head.processIdentities; sts = sts.tail; var i = 0
+      while(i < pids.length){
+        val (f,id) = pids(i); i += 1
+        if(id >= pre.numParams(f)) newIds(f)(id) = true
+      }
+    }
+    newIds
+  }
+
 }
 
 // =======================================================

@@ -91,6 +91,7 @@ object Remapper{
     result
   }
 
+
   // ------ NextArgMaps
 
   /** The type of maps giving the next argument to map a parameter of
@@ -111,6 +112,29 @@ object Remapper{
   def newOtherArgMap: OtherArgMap = Array.fill(numTypes)(List[Identity]())
 
   def show(otherArgs: OtherArgMap) = otherArgs.mkString("[", ";", "]")
+
+  /** Remove ran map from bitMap. */
+  def removeFromBitMap(map: RemappingMap, bitMap: Array[Array[Boolean]]) = {
+    var f = 0
+    while(f < numFamilies){
+      var i = 0; val len = map(f).length
+      while(i < len){
+        val id = map(f)(i); i += 1; if(id >= 0) bitMap(f)(id) = false
+      }
+      f += 1
+    }
+  }
+
+  /** Create an OtherArgMap from a bitmap. */
+  def makeOtherArgMap(bitMap: Array[Array[Boolean]]): OtherArgMap = {
+    val otherArgs = newOtherArgMap; var f = 0
+    while(f < numFamilies){
+      var i = 0; val len = bitMap(f).size
+      while(i < len){ if(bitMap(f)(i)) otherArgs(f) ::= i; i += 1 }
+      f += 1
+    }
+    otherArgs
+  }
 
   /** Create maps suitable for remapping: (1) a RemappingMap that is the
     * identity on servers; (2) the identities of components that are not

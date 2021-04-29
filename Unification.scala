@@ -44,6 +44,9 @@ object Unification{
 
   type AllUnifsResult =  ArrayBuffer[(RemappingMap, UnificationList)]
 
+  private def show(allUs: AllUnifsResult) = 
+    allUs.map{case(map,us) => "("+Remapper.show(map)+", "+us+")"}.mkString("; ")
+
   /** All ways of extending map0 to a mapping map so that for each component c =
     * cpts(j) whose identity is in dom map, map(c) agrees with any component
     * preC = preCpts(i) with the same identity.  Also include the pair (j,i)
@@ -211,20 +214,9 @@ object Unification{
     val map0 = servers.remappingMap
     // Create NextArgMap, greater than anything in pre or post
     val nextArg: NextArgMap = pre.getNextArgMap; post.updateNextArgMap(nextArg)
-    // Find all ids in post.servers but not in pre.servers, as a bitmap.
-    val newServerIds = new Array[Array[Boolean]](numTypes); var f = 0
-    while(f < numTypes){ 
-      newServerIds(f) = new Array[Boolean](typeSizes(f)); f += 1
-// Is above size enough?
-    }
-    var sts: List[State] = post.servers.servers
-    while(sts.nonEmpty){
-      val pids = sts.head.processIdentities; sts = sts.tail; var i = 0
-      while(i < pids.length){
-        val (f,id) = pids(i); i += 1
-        if(id >= servers.numParams(f)) newServerIds(f)(id) = true
-      }
-    }
+    // All ids in post.servers but not in pre.servers, as a bitmap.
+    val newServerIds: Array[Array[Boolean]] = 
+      ServerStates.newParamsBitMap(servers, post.servers)
     // Bit map indicating which components have changed state.
     val changedStateBitMap = new Array[Boolean](preCpts.length); var i = 0
     while(i < preCpts.length){
@@ -234,56 +226,32 @@ object Unification{
 
     // Get all ways of unifying pre and cv. 
     val allUs = allUnifs(map0, pre.components, cv.components)
-    if(verbose) println(s"allUs = "+allUs.map{ case(map,us) => 
-      "("+Remapper.show(map)+", "+us+")" }.mkString("; "))
+    if(verbose) println(s"allUs = "+show(allUs))
 
     /** Extend map1 with unifications unifs, adding all results to result. */
     def extendUnif(map1: RemappingMap, unifs: UnificationList) = {
+      if(debugging) assert(Remapper.isInjective(map1), Remapper.show(map1))
       // Create OtherArgMap containing all values not in ran map1 or
       // pre.servers, but (1) in post.servers; or (2) in post.cpts for a
-      // unified component.  Start with a bit map.
+      // unified component.  newServerIds satisfies (1).
       val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
-      // Add values in components of post corresponding to unifs.
+      // Add parameters of components of post corresponding to unifs.
       while(us.nonEmpty){
         val i = us.head._2; us = us.tail
-        val pids = postCpts(i).processIdentities; var j = 0
-        // Add values in pids to otherArgsBitMap
-        while(j < pids.length){
-          val (f,id) = pids(j); j += 1
-          assert(id < otherArgsBitMap(f).length,
-            s"pre = ${pre.toString0}, post = ${post.toString0}, "+
-              s"cv = ${cv.toString0}, id = $id")
-          if(id >= servers.numParams(f)) otherArgsBitMap(f)(id) = true
-        }
+        postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.numParams)
       }
-      // Remove values in ran map1, and convert into otherArgMap
-      val otherArgs = Remapper.newOtherArgMap; var f = 0
-      while(f < numFamilies){
-        var i = 0; val len = typeSizes(f)
-        while(i < len){
-          val id = map1(f)(i); i += 1; if(id >= 0) otherArgsBitMap(f)(id) = false
-        }
-        // Create otherArgs(f)
-        i = 0
-        while(i < len){
-          if(otherArgsBitMap(f)(i)) otherArgs(f) ::= i; i += 1
-        }
-        f += 1
-      }
-      // Find values that identities can be mapped to: values in otherArgs,
-      // but not identities of components in post; update otherArgsBitMap to
-      // record.
-      var i = 0
-      while(i < postCpts.length){
-        val st = postCpts(i); i += 1; otherArgsBitMap(st.family)(st.id) = false
-      }
-
-      if(verbose) println(s"map1 = ${Remapper.show(map1)}; otherArgs = "+
+      // Remove values in ran map1
+      Remapper.removeFromBitMap(map1, otherArgsBitMap)
+      // Convert to OtherArgMap
+      val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
+      // Values that identities can be mapped to: values in otherArgs, but not
+      // identities of components in post; update otherArgsBitMap to record.
+      StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
+      if(false) println(s"map1 = ${Remapper.show(map1)}; otherArgs = "+
         otherArgs.mkString(", ")+" nextArg = "+nextArg.mkString(", ")+
         s"; unifs = $unifs")
       combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
         cv.components, result)
-// IMPROVE: do we need all of unifs? 
     } // end of extendUnif
 
     var ix = 0
@@ -303,23 +271,59 @@ object Unification{
         while(!sufficientUnif && us.nonEmpty){
           sufficientUnif = changedStateBitMap(us.head._2); us = us.tail
         }
-// IMPROVE, try to identify this within allUnifs, by trying to unify
-// components that change state first.
       }
       if(verbose) 
         println(s"combine: unifs = $unifs, sufficientUnif = $sufficientUnif")
-// IMPROVE: can we share work between the calls to extendUnif? 
       if(sufficientUnif || singleRef) extendUnif(map1, unifs)
-// IMPROVE: why is singleRef necessary?
+// IMPROVE: why is singleRef necessary above?
       // Try renaming cv.principal to each id in princNames
-      if(map1(cvpf)(cvpid) < 0) for(newPId <- princRenames){
-        if(verbose) println(s"Combine: renaming ${(cvpf,cvpid)} to $newPId")
-        map1(cvpf)(cvpid) = newPId; extendUnif(map1, unifs)
+      if(map1(cvpf)(cvpid) < 0) 
+        for(newPId <- princRenames; if !map1(cvpf).contains(newPId)){
+          if(verbose) println(s"Combine: renaming ${(cvpf,cvpid)} to $newPId")
+          map1(cvpf)(cvpid) = newPId; extendUnif(map1, unifs)
       }
       else if(false) println(s"Can't rename ${(cvpf,cvpid)}"+map1(cvpf)(cvpid))
     } // end of while loop
 
     result
   }
+// IMPROVE: do we need all of unifs?
+// IMPROVE, try to identify second case for sufficientUnifs within allUnifs,
+// by trying to unify components that change state first.
+// IMPROVE: can we share work between the calls to extendUnif? 
+
+  /** Remap c, as identity function on parameters of servers and princ1, but
+    * mapping other parameters either to other parameters of princ2, or to
+    * fresh values.
+    * 
+    * There is an existing view servers || princ1 || c, and we want to find if
+    * there is a view servers || princ2 || c' for c' a renaming of c. 
+    * 
+    * Pre: princ1 has a reference to c. */ 
+  def remapToJoin(servers: ServerStates, princ1: State, princ2: State, c: State)
+      : ArrayBuffer[State] = {
+    require(princ1.processIdentities.contains(c.componentProcessIdentity))
+    // We look to use combine1, although some of the parameters there aren't
+    // used.  IMPROVE?
+    // Identity map on parameters of servers and princ1
+    val map0 = servers.remappingMap
+    for((f,id) <- princ1.processIdentities) map0(f)(id) = id
+    // Next args to use
+    val nextArgMap = servers.nextArgMap
+    // Make otherArgMap, with parameters of princ2 not in map0, maintaining
+    // otherArgMap
+    val otherArgs = Remapper.newOtherArgMap; val ids2 = princ2.processIdentities
+    for((f,id) <- ids2; if !isDistinguished(id) && map0(f)(id) < 0){
+      otherArgs(f) ::= id; nextArgMap(f) = nextArgMap(f) max (id+1)
+    }
+    // println(s"otherArgs = "+otherArgs.mkString(", "))
+    val result = new CombineResult
+    // the bitmap is empty: c's id should not be remapped, by precondition.
+    combine1(map0, otherArgs, newBitMap, nextArgMap, 
+      List[(Int,Int)](), Array(c), result)
+    result.map{ case(cs, _) => cs(0) }
+
+  }
+
 
 }

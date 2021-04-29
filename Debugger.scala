@@ -162,8 +162,8 @@ class Debugger(
       for(i <- 0 until len) println(s"$i. ${options(i)}")
       var done = false
       def help = 
-        println(s"Type a number from 0 to ${len-1} to expand that view, "+
-          "or 'u' to go up a level.")
+        println(s"Type: a number from 0 to ${len-1} to expand that view;\n"+
+          "'u' to go up a level; or 'q' to quit.")
       while(!done){
         val input = scala.io.StdIn.readLine("> ")
         if(input.nonEmpty && input.forall(_.isDigit)){
@@ -172,6 +172,7 @@ class Debugger(
           else help
         }
         else if(input == "u") done = true
+        else if(input == "q") { println("Goodbye."); sys.exit }
         else help
       }
     }

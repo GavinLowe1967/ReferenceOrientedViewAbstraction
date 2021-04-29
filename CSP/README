@@ -58,6 +58,19 @@ that at most one thread has created a new node.
 TreiberStack1.csp: this works, but is less efficient, as it doesn't have the
 POR.  7408 states, ~28 sec (with profiling)
 
+TreiberStackSingleRef.csp: file designed to work wth the --singleRef option.
+Contains a fixed component that tracks the B node (if any).  Without this, we
+can obtain the following two views:
+- A view containing a popping thread T0 with a reference to the top node N0
+  (containing B), and an omitted reference to the second node N1 (presumably
+  containing A).
+- A view containing a popping thread T0, with an omitted reference to N1
+  (presumably contaiing C here), and a reference to the next node N2
+  (containing B).
+There two views are compatible.  But from there merger, T0 can pop B, and then
+T1 can pop C, giving a false error.
+
+
 Lock-Free Queue
 ===============
 

@@ -65,6 +65,19 @@ class State(val family: Family, val cs: ControlState,
 // FIXME: include following
   // if(!isNew) checkTypeSizes()
 
+  /** Add each identity (f,id) of this, with id >= serverNumParams(f), to
+    * bitmap. */
+  def addIdsToBitMap(bitmap: Array[Array[Boolean]], serversNumParams: Array[Int])
+  = {
+    var j = 0
+    while(j < ids.length){
+      val f = typeMap(j); val id = ids(j); j += 1
+      assert(id < bitmap(f).length)
+      if(id >= serversNumParams(f)) bitmap(f)(id) = true
+    }
+  }
+
+
   // Equality test.
   // Equality is now reference equality, as we avoid creating duplicate states.
   // @inline override def equals(that: Any) = that match{

@@ -476,7 +476,7 @@ class Checker(system: SystemP.System){
   protected[Checker] 
   def findReferencingView(pre: Concretization, st: State, j : Int)
       : ComponentView = {
-    println(s"findReferencingView($pre, $st, $j)")
+    // println(s"findReferencingView($pre, $st, $j)")
     val servers = pre.servers; val pCpt = pre.components(j)
     // Find index of st within pCpt's references
     val stPid = st.componentProcessIdentity; val (stF, stId) = stPid
@@ -517,28 +517,32 @@ class Checker(system: SystemP.System){
         // Test if cv1 contains a component that is a renaming of st under
         // an extension of map
         var j = 0; val cpts1 = cv1.components
-// IMPROVE: pre-calculate the index where (stF,stIdR) should appear
+        // Search for (stF, stIdR) in cpts1
         while(j < cpts1.length &&
             (cpts1(j).family != stF || cpts1(j).id != stIdR))
           j += 1
-        assert(j < cpts1.length, s"${StateArray.show(cv1.components)} $stIdR")
-        val cpt1 = cpts1(j)    // println(s"cpt1 = $cpt1")
-        // test if cpt1 is a renaming of st under an extension of map
-        var map2 = Unification.unify(map, cpt1, st)  // println(map2 != null)
-        if(map2 != null){
-          // Check that all components referenced by pCpt in pre are matched
-          // by a corresponding component in cv1.  map2 != null if true for
-          // all components so far.
-          var k = 1
-          while(k < pLen && map2 != null){
-            if(pRefs(k) != null){
-              // println(s"k = $k, "+cv1.components(k)+", "+pRefs(k))
-              map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
-            }
-            k += 1
-          } // end of inner while
-          found = map2 != null
-        } // end of if(map2 != null)
+        if(j < cpts1.length){ 
+          val cpt1 = cpts1(j)    // println(s"cpt1 = $cpt1")
+          // test if cpt1 is a renaming of st under an extension of map
+          var map2 = Unification.unify(map, cpt1, st)  // println(map2 != null)
+          if(map2 != null){
+            // Check that all components referenced by pCpt in pre are matched
+            // by a corresponding component in cv1.  map2 != null if true for
+            // all components so far.
+            var k = 1
+            while(k < pLen && map2 != null){
+              if(pRefs(k) != null){
+                // println(s"k = $k, "+cv1.components(k)+", "+pRefs(k))
+                map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
+              }
+              k += 1
+            } // end of inner while
+            found = map2 != null
+          } // end of if(map2 != null)
+        } // end of if(j < cpts1.length)
+        else assert(singleRef) 
+          //println(s"Not found ($stF, $stIdR) in "+
+          //   StateArray.show(cv1.components))
       } // end of if(includeRef)
       else{
         // Omitted reference, so we approximate this situation by taking cv1
@@ -585,11 +589,6 @@ class Checker(system: SystemP.System){
     // parameter of c1 in the post state that might reference c2, distinct
     // from any component identity in pre, post.  We will subsequently form
     // views with c1 as the principal component, referencing c2 (renamed).
-// IMPROVE: I think we can omit params of pre.servers other than
-// cv.principal's identity
-// IMPROVE: could we have more simply achieved this using cv with
-// pre.principal as principal, and c2 as secondary component?  This assumes
-// pre.principal has a reference to c2, which seems reasonable.
     val c2Refs = 
       if(singleRef) getCrossReferences(preCpts, postCpts, cv.principal.family)
       else List[(Int,Identity)]()
@@ -600,7 +599,11 @@ class Checker(system: SystemP.System){
     var cptIx = 0
     while(cptIx < newCpts.length){
       val (cpts, unifs) = newCpts(cptIx); cptIx += 1
-      if(verbose) println((StateArray.show(cpts),unifs))
+      val commonMissing: List[ProcessIdentity] = 
+        if(singleRef && !pre.components.sameElements(cv.components)) 
+          checkCompatibleMissing(pre.servers, preCpts, cpts)
+        else List()
+      // if(verbose) println((StateArray.show(cpts),unifs))
       if(debugging){
         StateArray.checkDistinct(cpts)
         assert(cpts.length == cv.components.length)
@@ -622,46 +625,49 @@ class Checker(system: SystemP.System){
       // components.
       val newPrincId = newPrinc.ids(0)
       for((i,id) <- c2Refs; if id == newPrincId){
-        // val newComponents1 = 
-        //   StateArray.makePostComponents(postCpts(i), postCpts, cpts)
-        val newComponents1 = Array(postCpts(i), newPrinc)
-        if(verbose)
-          println("Extracted secondary view "+StateArray.show(newComponents1))
-        newComponentsList ::= newComponents1
+        val newCpts = Array(postCpts(i), newPrinc)
+        if(verbose) println("Extracted secondary view "+StateArray.show(newCpts))
+        newComponentsList ::= newCpts
       }
       for(newComponents <- newComponentsList){
         val nv = Remapper.mkComponentView(post.servers, newComponents)
-        newViewCount += 1
-        // Mostly with unifs.nonEmpty
+        newViewCount += 1        // Mostly with unifs.nonEmpty
         if(!sysAbsViews.contains(nv)){
-          if(missing.isEmpty){
-            if(nextNewViews.add(nv)){
-              addedViewCount += 1
-              if(verbose) println(
-                s"$pre --> $post\n  with unifications $unifs\n"+
-                  s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-                  s"  --> ${View.show(post.servers, newComponents)} == $nv")
-              nv.setCreationInfoIndirect(
-                pre, cpts, cv, e, post, newComponents, ply)
-              if(!nv.representableInScript){
-                println("Not enough identities in script to combine transition\n"+
-                  s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
-                sys.exit
-              }
-            }
-          } // end of if(missing.isEmpty)
-          else{
-            // Note: we create nv eagerly, even if missing is non-empty: this
-            // might not be the most efficient approach
-            effectOnStore.add(missing, nv)
-            if(verbose) println(s"Storing $missing -> $nv")
+          if(missing.isEmpty && commonMissing.isEmpty && nextNewViews.add(nv)){
+            addedViewCount += 1
+            if(verbose) println(
+              s"$pre --> $post\n  with unifications $unifs\n"+
+                s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+                s"  --> ${View.show(post.servers, newComponents)} == $nv")
             nv.setCreationInfoIndirect(
               pre, cpts, cv, e, post, newComponents, ply)
+            if(!nv.representableInScript){
+              println("Not enough identities in script to combine transition\n"+
+                s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+              sys.exit
+            }
+          } // end of if(missing.isEmpty && nextNewViews.add(nv))
+          else if(missing.nonEmpty || commonMissing.nonEmpty){
+            // Note: we create nv eagerly, even if missing is non-empty: this
+            // might not be the most efficient approach
+            if(missing.nonEmpty){
+              effectOnStore.add(missing, nv)
+              if(verbose) println(s"Storing $missing -> $nv")
+              nv.setCreationInfoIndirect(
+                pre, cpts, cv, e, post, newComponents, ply)
+            }
+            else println(s"FIXME: not adding $nv because of missing common "+
+              commonMissing)
           }
         } // end of if(!sysAbsViews.contains(nv))
       } // end of for loop
     } // end of while loop
   }
+// IMPROVE: in the calculation of c2Refs, I think we can omit params of
+// pre.servers other than cv.principal's identity.
+// IMPROVE: could we have more simply achieved the effect of c2Refs by using
+// cv with pre.principal as principal, and c2 as secondary component?  This
+// assumes pre.principal has a reference to c2, which seems reasonable.
 
   /** Identify components that can gain a reference to a component of type f.
     * All pairs (i,id) such that the i'th secondary component c1 changes state
@@ -682,9 +688,60 @@ class Checker(system: SystemP.System){
         if(!isDistinguished(p) && !ids.contains(p)) result ::= (i, p)
       }
       }
-    if(verbose) println(s"getCrossReferences: $result")
+    if(false) println(s"getCrossReferences: $result")
     result
   }
+
+  /** Test whether, if the principal components of cpts1 and cpts2 both have a
+    * reference to the same missing component then there is a way of
+    * instantiating that component, consistent with the current set of views.
+    * @return the identities of all such missing components. */ 
+  private def checkCompatibleMissing(
+    servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
+      : List[ProcessIdentity] = {
+    require(singleRef)
+    val princ1 = cpts1(0); val princ2 = cpts2(0)
+    val missingRefs1 = StateArray.missingRefs(cpts1)
+    val missingRefs2 = StateArray.missingRefs(cpts2)
+    // The common references considered so far for which there is no way of
+    // instantiating the referenced component.
+    var missingCommonRefs = List[ProcessIdentity]()
+    for(pid <- missingRefs1; if missingRefs2.contains(pid)){
+      // Test if sysAbsViews contains a component with identity pid in
+      // combination with each of princ1 and princ2.
+      // println(s"checkCompatibleMissing($servers, ${StateArray.show(cpts1)}, "+
+      //  s"${StateArray.show(cpts2)}, $unifs)")
+      // println(s"common missing reference $pid")
+      val iter = sysAbsViews.iterator(servers, princ1); var found = false
+      while(iter.hasNext && !found){
+        val cv1 = iter.next
+        val cpt1 = StateArray.find(pid, cv1.components)
+        if(cpt1 != null){
+          // println(s"  found $cv1")
+          // All relevant renamings of cpt1: identity on params of servers and
+          // princ1, but otherwise either to other params of princ2 or to
+          // fresh values.
+          val renames = Unification.remapToJoin(servers, princ1, princ2, cpt1)
+          for(cv2 <- renames){
+            val cvx = Remapper.mkComponentView(servers, Array(princ2, cv2))
+            // print(s"  Renamed to $cvx.  ")
+            if(sysAbsViews.contains(cvx)) found = true // ; println("Found")
+            // else println("Not found.")
+          }
+        }
+      } // end of while(iter.hasNext && !found)
+      if(!found){
+        if(verbose){
+          println(s"checkCompatibleMissing($servers, ${StateArray.show(cpts1)},"+
+          s" ${StateArray.show(cpts2)})")
+          println(s"Failed to find states to instantiate common reference $pid")
+        }
+        missingCommonRefs ::= pid
+      }
+    } // end of for loop
+    missingCommonRefs
+  }
+
 
 
   /** The effect of previously found extended transitions on the view cv. */
@@ -699,12 +756,11 @@ class Checker(system: SystemP.System){
     }
   }
 
-
   /** If cv completes a delayed transition in effectOnStore, then complete it. */
   private def completeDelayed(cv: ComponentView) = {
     for((missing,nv) <- effectOnStore.get(cv)){
       if(missing.forall(cvx => cvx == cv || sysAbsViews.contains(cvx))){
-        println(s"***Adding via completeDelayed $cv -> ($missing, $nv)")
+        if(verbose) println(s"Adding via completeDelayed $cv -> ($missing, $nv)")
         // production info
         if(nextNewViews.add(nv)){
           val (pre, cpts, cv, post, newComponents) =
@@ -795,7 +851,7 @@ class Checker(system: SystemP.System){
     } // end of main loop
 
     println("\nSTEP "+ply)
-    if(true) println(sysAbsViews)
+    if(verbose) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")

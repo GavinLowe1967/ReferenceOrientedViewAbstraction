@@ -504,8 +504,8 @@ class System(fname: String) {
       assert(componentIx != 0, s"cv = $cv, ($of, $oi)")
       val isOmitted = // reference to (f,id) but omitted from cv
         componentIx < 0 && pParams.contains((of,oi))
-      if(isOmitted && theseCptTrans != null && theseServerTrans != null)
-        println(s"Omitting transition with ${(of,oi)} from $cv")
+      // if(isOmitted && theseCptTrans != null && theseServerTrans != null)
+      //   println(s"Omitting transition with ${(of,oi)} from $cv")
       if(isOmitted) assert(singleRef)
       if(theseCptTrans != null && theseServerTrans != null && !isOmitted){
         val (pEs,pNexts) = theseCptTrans; val (sEs, sNexts) = theseServerTrans
