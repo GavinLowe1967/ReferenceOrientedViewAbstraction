@@ -226,7 +226,7 @@ object Unification{
 
     // Get all ways of unifying pre and cv. 
     val allUs = allUnifs(map0, pre.components, cv.components)
-    if(verbose) println(s"allUs = "+show(allUs))
+    if(false) println(s"allUs = "+show(allUs))
 
     /** Extend map1 with unifications unifs, adding all results to result. */
     def extendUnif(map1: RemappingMap, unifs: UnificationList) = {
@@ -272,14 +272,14 @@ object Unification{
           sufficientUnif = changedStateBitMap(us.head._2); us = us.tail
         }
       }
-      if(verbose) 
+      if(false) 
         println(s"combine: unifs = $unifs, sufficientUnif = $sufficientUnif")
       if(sufficientUnif || singleRef) extendUnif(map1, unifs)
 // IMPROVE: why is singleRef necessary above?
       // Try renaming cv.principal to each id in princNames
       if(map1(cvpf)(cvpid) < 0) 
         for(newPId <- princRenames; if !map1(cvpf).contains(newPId)){
-          if(verbose) println(s"Combine: renaming ${(cvpf,cvpid)} to $newPId")
+          if(false) println(s"Combine: renaming ${(cvpf,cvpid)} to $newPId")
           map1(cvpf)(cvpid) = newPId; extendUnif(map1, unifs)
       }
       else if(false) println(s"Can't rename ${(cvpf,cvpid)}"+map1(cvpf)(cvpid))
