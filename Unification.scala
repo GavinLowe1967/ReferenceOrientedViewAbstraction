@@ -205,7 +205,7 @@ object Unification{
   def combine(pre: Concretization, post: Concretization, cv: ComponentView,
     princRenames: List[Identity])
       : CombineResult = {
-    if(verbose) println(s"combine($pre, $post,\n  $cv, $princRenames)")
+    if(false) println(s"combine($pre, $post,\n  $cv, $princRenames)")
     val servers = pre.servers; require(servers == cv.servers)
     val preCpts = pre.components; val postCpts = post.components
     require(pre.components.length == postCpts.length)

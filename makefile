@@ -87,7 +87,9 @@ $(DIR)/CompatibleWithCache.class: $(DIR)/BasicHashMap.class
 
 $(DIR)/Debugger.class: $(DIR)/SystemP/System.class
 
-$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/RemapperP/Unification.class  $(DIR)/Debugger.class $(DIR)/CompatibleWithCache.class $(DIR)/EffectOnStore.class
+$(DIR)/Extendability.class: $(DIR)/RemapperP/Unification.class 
+
+$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/RemapperP/Unification.class  $(DIR)/Debugger.class $(DIR)/CompatibleWithCache.class $(DIR)/EffectOnStore.class $(DIR)/Extendability.class
 
 $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 

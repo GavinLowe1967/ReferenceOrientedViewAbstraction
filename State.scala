@@ -12,13 +12,13 @@ class InsufficientIdentitiesException extends Exception
   * @param cs the control state of this state.
   * @ids the identity parameters of this state.
   * @param isNew is this state being created during the compilation stage, 
-  * in which case checking the type sizes are big enough is not necessary. */
+  * in which case checking the type sizes are big enough is not necessary. 
+  */
 class State(val family: Family, val cs: ControlState, 
             val ids: Array[Identity], isNew: Boolean = false){
 
   /** The component process identity. */
   val componentProcessIdentity: ProcessIdentity = {
-    // assert(family >= 0)
     if(family >= 0) (family, ids(0)) else null
   }
 
@@ -39,6 +39,9 @@ class State(val family: Family, val cs: ControlState,
     pIds
   }
 
+  /** The number of parameters of this. */
+  def length = ids.length
+
   /** Check the type sizes from the script are large enough for all the
     * parameters in this State.  This is not done during compilation, because
     * typeMap is not yet initialised, and the State is bound to pass the test,
@@ -46,12 +49,12 @@ class State(val family: Family, val cs: ControlState,
   @inline private def checkTypeSizes() = {
     val tm = typeMap
     for(i <- 0 until ids.length){
-      if(/*ids(i) < State.SplitFreshVal && */ ids(i) >= typeSizes(tm(i))) 
+      if(ids(i) >= typeSizes(tm(i))) 
         synchronized{
           val t = tm(i)
           println("Not enough identities of type "+typeNames(t)+" in script ("+
                     typeSizes(t)+") to represent system view\n"+toString0)
-          throw new InsufficientIdentitiesException // assert(false) // sys.exit // IMPROVE
+          throw new InsufficientIdentitiesException 
         }
     }
   }
@@ -77,18 +80,22 @@ class State(val family: Family, val cs: ControlState,
     }
   }
 
+  // Note: Equality is reference equality, as we avoid creating duplicate
+  // states.
 
-  // Equality test.
-  // Equality is now reference equality, as we avoid creating duplicate states.
-  // @inline override def equals(that: Any) = that match{
-  //   case st: State => (st eq this) || st.cs == cs && st.ids.sameElements(ids)
-  // }
-  // assert(-1 <= family && family < 2) 
   assert(family == -1 || ids.nonEmpty) // components have an identity
 
   override val hashCode = mkHash
 
   def id = { assert(family >= 0); ids(0) }
+
+  /** Index of (f,id) in the references of this, or length if it doesn't
+    * appear. */
+  def indexOf(f: Family, id: Identity): Int = {
+    var j = 0
+    while(j < length && (typeMap(j) != f || ids(j) != id)) j += 1
+    j
+  }
 
   /** Hash function over states. */
   @inline private def mkHash: Int = {
@@ -335,7 +342,14 @@ object State{
   def setIncludeInfo(cs: ControlState, includeInfo: Array[Boolean]) =
     includeInformation(cs-minCS) = includeInfo
 
+  /** Get the include information for cs. */
   @inline def getIncludeInfo(cs: ControlState) = includeInformation(cs-minCS)
+
+  /** Should the i'th references component from cs be included in views? */
+  @inline def shouldInclude(cs: ControlState, i: Int) = {
+    val includeInfo = getIncludeInfo(cs)
+    includeInfo == null || includeInfo(i)
+  }
 
   /** The script name for pid. */
   def showProcessId(pid: ProcessIdentity) = {

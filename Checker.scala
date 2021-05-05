@@ -273,7 +273,7 @@ class Checker(system: SystemP.System){
     pre: Concretization, post: Concretization, 
     newPid: ProcessIdentity, e: EventInt, include: Boolean, cv: ComponentView)
   = {
-    if(verbose) 
+    if(false && verbose) 
       println(s"instantiateTransitionTemplateBy:\n "+
         s"  $pre \n -${system.showEvent(e)}-> $post\n  $cv $newPid")
     Profiler.count("instantiateTransitionTemplateBy")
@@ -283,7 +283,7 @@ class Checker(system: SystemP.System){
     // pre; also the next-states of outsideSt after e (if e >= 0).
     val extenders = 
       system.consistentStates(pre, newPid, if(include) e else -1, cv)
-    if(verbose) println(s"extenders = $extenders")
+    if(false) println(s"extenders = $extenders")
     var i = 0
     while(i < extenders.length){
       val (outsideSt, outsidePosts) = extenders(i); i += 1
@@ -302,12 +302,12 @@ class Checker(system: SystemP.System){
     pre: Concretization, post: Concretization, e: EventInt, 
     outsideSt: State, outsidePosts: List[State], cv: ComponentView) 
   = {
-    if(verbose) 
+    if(false && verbose) 
       println(s"extendTransitionTemplateBy($pre, $post, ${system.showEvent(e)},"+
         s" $outsideSt)")
     // Profiler.count("instantiateTT1")
     val referencingViews = isExtendable(pre, outsideSt)
-    if(verbose) println(s"referencingViews = $referencingViews")
+    if(false) println(s"referencingViews = $referencingViews")
     if(referencingViews != null){
       // Profiler.count("instantiateTT2")
       val extendedPre = pre.extend(outsideSt)
@@ -487,11 +487,9 @@ class Checker(system: SystemP.System){
       : ComponentView = {
     if(verbose) println(s"findReferencingView($pre, $st, $j)")
     val servers = pre.servers; val pCpt = pre.components(j)
-    // Find index of st within pCpt's references
-    val stPid = st.componentProcessIdentity; val (stF, stId) = stPid
-    val pIds = pCpt.processIdentities; val pLen = pIds.length; var stIx = 1
-    while(stIx < pLen && pIds(stIx) != stPid) stIx += 1
-    assert(stIx < pLen) // precondition
+    val stF = st.family; val stId = st.id; val pLen = pCpt.length
+    // Index of st within pCpt's references
+    val stIx = pCpt.indexOf(stF, stId); assert(stIx < pLen) // precondition
     // Find if pCpt's reference to st should be included
     val includeInfo = State.getIncludeInfo(pCpt.cs)
     val includeRef = includeInfo == null || includeInfo(stIx)
@@ -500,24 +498,21 @@ class Checker(system: SystemP.System){
     val pCptR = Remapper.remapState(map, nextArgs, pCpt)
     // st.id gets renamed to stIdR
     val stIdR = map(stF)(stId)
-    // Check pCpt references st, i.e.  precondition.
+    // Check pCpt references st, i.e. precondition.
     assert(pCptR.processIdentities(stIx) == (stF,stIdR))
     // Find other components of pre that are referenced by pCpt, and included
     // in views with pCpt as principal.
     val pRefs = new Array[State](pLen)
     for(i <- 0 until pre.components.length; if i != j){
-      val cpt = pre.components(i); var ix = 1
-      // Find index of cpt.componentProcessIdentity in pIds 
-      while(ix < pLen && pIds(ix) != cpt.componentProcessIdentity) ix += 1
-      if(ix < pLen){
-        if(includeInfo == null || includeInfo(ix)) pRefs(ix) = cpt
-      }
+      val cpt = pre.components(i) 
+      // Index of cpt.componentProcessIdentity in pCpt's parameters
+      val ix = pCpt.indexOf(cpt.family, cpt.id)
+      if(ix < pLen && (includeInfo == null || includeInfo(ix))) pRefs(ix) = cpt
     }
 
     // Test whether sysAbsViews contains a view cv1 matching servers, with
-    // cptR as the principal component, and containing component stIx with
-    // identity idR in control state cs1.  map (and map2) tries to map pre
-    // onto cv1.  
+    // cptR as the principal component, and containing component with identity
+    // (stF,stIdR) unifiable with st.  map (and map2) tries to map pre onto cv1.
     if(verbose) println(s"Searching for $servers, $pCptR, ($stF, $stIdR)")
     val iter = sysAbsViews.iterator(servers, pCptR); var found = false
     var cv1: ComponentView = null
@@ -525,19 +520,16 @@ class Checker(system: SystemP.System){
       cv1 = iter.next; assert(cv1.principal == pCptR) 
       if(verbose) println(s"cv1 = $cv1")
       if(includeRef){
-        // Test if cv1 contains a component that is a renaming of st under
-        // an extension of map
-        var j = 0; val cpts1 = cv1.components
-        // Search for (stF, stIdR) in cpts1
-        while(j < cpts1.length &&
-            (cpts1(j).family != stF || cpts1(j).id != stIdR))
-          j += 1
-        if(j < cpts1.length){ 
-          val cpt1 = cpts1(j)    
+        // Test if cv1 contains a component that is a renaming of st under an
+        // extension of map. Find component with identity (stF, stIdR) in cv1
+        val cpt1 = StateArray.find(cv1.components, stF, stIdR)
+        if(cpt1 != null){
           if(verbose) println(s"cpt1 = $cpt1")
           // test if cpt1 is a renaming of st under an extension of map
-          var map2 = Unification.unify(map, cpt1, st)  // println(map2 != null)
-          if(map2 != null){
+          var map2 = Unification.unify(map, cpt1, st)
+          if(singleRef) found = map2 != null
+          else if(map2 != null){
+// FIXME: I'm not sure this is correct when we have some excluded refs.
             // Check that all components referenced by pCpt in pre are matched
             // by a corresponding component in cv1.  map2 != null if true for
             // all components so far.
@@ -545,16 +537,15 @@ class Checker(system: SystemP.System){
             while(k < pLen && map2 != null){
               if(pRefs(k) != null){
                 if(verbose) println(s"k = $k, "+cv1.components(k)+", "+pRefs(k))
+// FIXME: do those components correspond if there are excluded refs?
                 map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
               }
               k += 1
             } // end of inner while
             found = map2 != null
           } // end of if(map2 != null)
-        } // end of if(j < cpts1.length)
+        } // end of if(cpt1 != null)
         else assert(singleRef) 
-          //println(s"Not found ($stF, $stIdR) in "+
-          //   StateArray.show(cv1.components))
       } // end of if(includeRef)
       else{
         // Omitted reference, so we approximate this situation by taking cv1
@@ -877,7 +868,7 @@ class Checker(system: SystemP.System){
     } // end of main loop
 
     println("\nSTEP "+ply)
-    if(true) println(sysAbsViews)
+    if(verbose) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")

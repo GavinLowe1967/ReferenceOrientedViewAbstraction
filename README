@@ -1,3 +1,7 @@
+Trace sequence of calls process -> processTransition ->
+instantiateTransitionTemplateBy -> extendTransitionTemplateBy -> isExtendable
+-> findReferencingView: is there repeated work here?
+
 Within effectOn, we might need to dealy adding Views for a number of reasons.
 
 1. If one of preCpts or cpts has a missing reference to a component in the

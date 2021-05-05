@@ -88,6 +88,15 @@ object StateArray{
     if(i < cpts.length) cpts(i) else null
   }
 
+  /** Find the component of cpts with process identity (f,id), or return null if
+    * no such.  */
+  @inline def find(cpts: Array[State], f: Family, id: Identity): State = {
+    var i = 0
+    while(i < cpts.length && !cpts(i).hasPID(f, id)) i += 1
+    if(i < cpts.length) cpts(i) else null
+  }
+
+
   /** Find the index of cpts with identity (f,id).  Return -1 if no such
     * index. */
   @inline def findIndex(cpts: Array[State], f: Family, id: Identity) = {
