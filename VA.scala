@@ -95,7 +95,9 @@ object VA{
       if(testing){ 
         system = new SystemP.System("CSP/test-file.csp")
         RemapperP.RemapperTest.test; CombinerP.CombinerTest.test
-        SystemP.SystemTest.test(system); new CheckerTest(system).test
+        SystemP.SystemTest.test(system); 
+        new ExtendabilityP.ExtendabilityTest(system).test
+        new CheckerTest(system).test
       }
       else if(profiling || profilingFlat || profilingBoth) profiler(run()) 
       else run()

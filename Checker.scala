@@ -3,6 +3,7 @@ package ViewAbstraction
 import ox.gavin.profiling.Profiler
 import ViewAbstraction.RemapperP.{Remapper,Unification}
 import ViewAbstraction.CombinerP.Combiner
+import ViewAbstraction.ExtendabilityP.Extendability
 import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap}
 import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
 
@@ -353,211 +354,6 @@ class Checker(system: SystemP.System){
     }
   }
 
-  /** A cache of results of previous calls to isExtendable.  If a value isn't in
-    * the mapping, then that indicates that compatibleWith previously gave
-    * only false.  A result of (k,rv) with k >= 0 indicates that
-    * compatibleWith gave true, that calls to containsReferencingView gave
-    * true for all relevant j in [0..k), and rv[0..k) gives the corresponding
-    * referencing views. */
-  // private val isExtendableCache = 
-  //   new HashMap[(Concretization, State), (Int, Array[ComponentView])]
-
-  /** Is pre extendable by state st, given the current set of views?  (1) Is
-    * there an existing view with st as principal component, and agreeing with
-    * pre on servers and common components?  And (2) for each component cpt of
-    * pre that references st, is there an existing view with cpt as principal
-    * and containing st (modulo renaming).  If so, return an array of those
-    * referencing views found under (2).
-    * 
-    * PRE: pre is compatible with SysAbsViews, and pre does not include
-    * st.identity.  This means it is enough to check the condition for cpt =
-    * st or a non-principal component of pre that references st. ??????
-    */
-//   @inline protected 
-//   def isExtendable(pre: Concretization, st: State): Array[ComponentView] = {
-//     if(verbose) println(s"isExtendable($pre, $st)")
-//     for(v <- pre.toComponentView) require(sysAbsViews.contains(v))
-//     // Also every other state in conc is compatible FIXME CHECK ???
-//     require(pre.components.forall(
-//       _.componentProcessIdentity != st.componentProcessIdentity))
-//     val servers = pre.servers; val components = pre.components
-//     val (k, rv) = isExtendableCache.getOrElse((pre, st), (-1, null))
-//     if(verbose) println("isExtendableCache: "+k)
-
-//     // Does SysAbsViews contain a view consistent with pre and with a
-//     // renaming of st as principal component?
-//     var found = k >= 0 || compatibleWith(pre, st)
-//     if(verbose) println(s"found = $found")
-//     if(found){
-//       // If any component cpt of pre references st, then search for a
-//       // suitable view with a renaming of cpt and st. 
-//       val id = st.componentProcessIdentity
-//       // Test whether any component of pre references st
-//       var j = k max 0; val length = components.length
-//       val referencingViews = 
-//         (if(rv != null) rv else new Array[ComponentView](length))
-// // IMPROVE: does this always hold for j = 0, i.e. is this a preconditon? 
-// // IMPROVE: this seems inefficient if we got here via instantiatetransitionTemplateViaRef
-//       while(j < length && found){
-//         if(components(j).processIdentities.contains(id)){
-//           if(false) println(s"isExtendable($pre) with reference to $st from $j")
-//           referencingViews(j) = findReferencingView(pre, st, j)
-//           if(verbose) println(referencingViews(j))
-//           found = referencingViews(j) != null
-//         }
-//         j += 1
-//       }
-//       isExtendableCache += (pre,st) -> (if(found) j else j-1, referencingViews)
-//       if(found) referencingViews else null
-//     }
-//     else null
-//   }
-
-  /** Cached results of calls to Combiner.areUnifiable.  Effectively a map
-    * (List[State], List[List[Identity]], List[List[Identity]]) =>
-    *  Array[State] => Boolean.   */
-//  private val compatibleWithCache = new CompatibleWithCache
-
-  /** Is `st` compatible with `pre` given the current views?  Does some renaming
-    * of an existing view match `pre.servers`, have `st` as principal
-    * component, and agree with `pre.components` on common components?
-    * Equivalently, is there a view containing `pre.servers`, with a renaming
-    * of `st` as principal component, and such that some renaming of the other
-    * components agrees with `pre.components` on common components? */ 
-  // @inline protected 
-  // def compatibleWith(pre: Concretization, st: State): Boolean = {
-  //   val servers = pre.servers; val components = pre.components
-  //   // Remap st so it can be the principal component with servers.
-  //   val map = servers.remappingMap; val nextArgs = servers.nextArgMap
-  //   var st1 = Remapper.remapState(map, nextArgs, st)
-  //   // IMPROVE: compare with Remapper.remapToPrincipal(servers, st)
-
-  //   val otherArgs = Remapper.newOtherArgMap
-  //   // Create map as identity function on `server` ids and mapping `st1` back
-  //   // to `st`.  This is the base of the renaming applied to a view in
-  //   // `sysAbsViews`, to try to produce a view that matches `servers`, has
-  //   // `st` as principal component, and agrees with `components` on common
-  //   // components
-  //   val map1 = servers.remappingMap; val typeMap = st1.typeMap
-  //   val ids1 = st1.ids; var j = 0
-  //   while(j < ids1.length){
-  //     val id = ids1(j)
-  //     if(id >= 0){ 
-  //       val id1 = map1(typeMap(j))(id); assert(id1 < 0 || id1 == st.ids(j))
-  //       map1(typeMap(j))(id) = st.ids(j)
-  //     }
-  //     j += 1
-  //   }
-
-  //   // Get cache corresponding to components, map1 and otherArgs.
-  //   val cache = compatibleWithCache.get( 
-  //     (pre.componentsList, map1.map(_.toList).toList, otherArgs.toList)) 
-  //   // Test whether there is an existing view with a renaming of st as
-  //   // principal component, and the same servers as conc.  
-  //   var found = false; val iter = sysAbsViews.iterator(servers, st1)
-  //   while(iter.hasNext && !found){
-  //     val cv1 = iter.next; assert(cv1.principal == st1)
-  //     // Does a renaming of the other components of cv1 (consistent with
-  //     // servers and st1) also agree with components on common components?
-  //     // Try to get cached result.
-  //     val cpts1 = cv1.components // List
-  //     cache.get(cpts1) match{
-  //       case Some(b) => // Profiler.count("compatibleWith"+b); 
-  //         found = b
-  //       case None =>
-  //         // Profiler.count("compatibleWith-null")
-  //         found =
-  //           Combiner.areUnifiable(cv1.components, components, map1, 0, otherArgs)
-  //         cache.add(cpts1,found)
-  //     } // end of match
-  //   } // end of while ... match
-  //   // Profiler.count("compatibleWith"+found)  
-  //   found
-  // }
-
-  /** Does `sysAbsViews` contain a view with `pre.servers`, `pre.components(j)`
-    * (renamed) as principal component, and including a renaming of `st`?  If
-    * so, return that view; otherwise return null.
-    * 
-    * Pre: `pre.components(j)` references `st`.
-    * Test case: pre.components = initNodeSt(T0,N0) || aNode(N0,N1), st =
-    * initNode(N1), would need a view aNode(N0,N1) || initNode(N1). */
-//   protected[Checker] 
-//   def findReferencingView(pre: Concretization, st: State, j : Int)
-//       : ComponentView = {
-//     if(verbose) println(s"findReferencingView($pre, $st, $j)")
-//     val servers = pre.servers; val pCpt = pre.components(j)
-//     val stF = st.family; val stId = st.id; val pLen = pCpt.length
-//     // Index of st within pCpt's references
-//     val stIx = pCpt.indexOf(stF, stId); assert(stIx < pLen) // precondition
-//     // Find if pCpt's reference to st should be included
-//     val includeInfo = State.getIncludeInfo(pCpt.cs)
-//     val includeRef = includeInfo == null || includeInfo(stIx)
-//     // Rename pCpt to be principal component
-//     val map = servers.remappingMap; val nextArgs = servers.nextArgMap
-//     val pCptR = Remapper.remapState(map, nextArgs, pCpt)
-//     // st.id gets renamed to stIdR
-//     val stIdR = map(stF)(stId)
-//     // Check pCpt references st, i.e. precondition.
-//     assert(pCptR.processIdentities(stIx) == (stF,stIdR))
-//     // Find other components of pre that are referenced by pCpt, and included
-//     // in views with pCpt as principal.
-//     val pRefs = new Array[State](pLen)
-//     for(i <- 0 until pre.components.length; if i != j){
-//       val cpt = pre.components(i) 
-//       // Index of cpt.componentProcessIdentity in pCpt's parameters
-//       val ix = pCpt.indexOf(cpt.family, cpt.id)
-//       if(ix < pLen && (includeInfo == null || includeInfo(ix))) pRefs(ix) = cpt
-//     }
-
-//     // Test whether sysAbsViews contains a view cv1 matching servers, with
-//     // cptR as the principal component, and containing component with identity
-//     // (stF,stIdR) unifiable with st.  map (and map2) tries to map pre onto cv1.
-//     if(verbose) println(s"Searching for $servers, $pCptR, ($stF, $stIdR)")
-//     val iter = sysAbsViews.iterator(servers, pCptR); var found = false
-//     var cv1: ComponentView = null
-//     while(iter.hasNext && !found){
-//       cv1 = iter.next; assert(cv1.principal == pCptR) 
-//       if(verbose) println(s"cv1 = $cv1")
-//       if(includeRef){
-//         // Test if cv1 contains a component that is a renaming of st under an
-//         // extension of map. Find component with identity (stF, stIdR) in cv1
-//         val cpt1 = StateArray.find(cv1.components, stF, stIdR)
-//         if(cpt1 != null){
-//           if(verbose) println(s"cpt1 = $cpt1")
-//           // test if cpt1 is a renaming of st under an extension of map
-//           var map2 = Unification.unify(map, cpt1, st)
-//           if(singleRef) found = map2 != null
-//           else if(map2 != null){
-// // FIXME: I'm not sure this is correct when we have some excluded refs.
-//             // Check that all components referenced by pCpt in pre are matched
-//             // by a corresponding component in cv1.  map2 != null if true for
-//             // all components so far.
-//             var k = 1
-//             while(k < pLen && map2 != null){
-//               if(pRefs(k) != null){
-//                 if(verbose) println(s"k = $k, "+cv1.components(k)+", "+pRefs(k))
-// // FIXME: do those components correspond if there are excluded refs?
-//                 map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
-//               }
-//               k += 1
-//             } // end of inner while
-//             found = map2 != null
-//           } // end of if(map2 != null)
-//         } // end of if(cpt1 != null)
-//         else assert(singleRef) 
-//       } // end of if(includeRef)
-//       else{
-//         // Omitted reference, so we approximate this situation by taking cv1
-//         // to match.
-//         if(false)
-//           println(s"findReferencingView: $cv1 has omitted reference to "+
-//             scriptNames(stF)(stIdR))
-//         found = true
-//       }
-//     } // end of while(iter.hasNext && !found)
-//     if(found) cv1 else null
-//   }
 
   // ========= Effect of transitions on other views
 
@@ -586,9 +382,9 @@ class Checker(system: SystemP.System){
     if(verbose) println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers && pre.sameComponentPids(post))
     val postCpts = post.components; val preCpts = pre.components
-    // In the case of singleRef, identify which components might gain a
+    // In the case of singleRef, secondary components that might gain a
     // reference to c2 = cv.principal (without unification): all pairs (i,id)
-    // such that the i'th secondary component c1 changed state, and id is a
+    // (i >= 1) such that the i'th  component c1 changes state, and id is a
     // parameter of c1 in the post state that might reference c2, distinct
     // from any component identity in pre, post.  We will subsequently form
     // views with c1 as the principal component, referencing c2 (renamed).
@@ -600,24 +396,24 @@ class Checker(system: SystemP.System){
     val newCpts: ArrayBuffer[(Array[State], List[(Int,Int)])] =
       Unification.combine(pre, post, cv, c2Refs.map(_._2)) // IMPROVE 
     var cptIx = 0
+
     while(cptIx < newCpts.length){
       val (cpts, unifs) = newCpts(cptIx); cptIx += 1
+      if(debugging){
+        StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
+      }
+      // If singleRef, identities of components referenced by both principals,
+      // but not included in the views, and such that there is no way of
+      // instantiating them consistently within sysAbsViews.
       val commonMissing: List[ProcessIdentity] = 
         if(singleRef && !pre.components.sameElements(cv.components)) 
           checkCompatibleMissing(pre.servers, preCpts, cpts)
         else List()
-      // if(verbose) println((StateArray.show(cpts),unifs))
-      if(debugging){
-        StateArray.checkDistinct(cpts)
-        assert(cpts.length == cv.components.length)
-      }
       // If singleRef and there are references between components from pre and
-      // cv, then check that that combination is possible.
-      var missing = List[ComponentView]() // missing necessary Views
-      if(singleRef) for(cpts <- StateArray.crossRefs(cpts, pre.components)){
-        val cvx = Remapper.mkComponentView(pre.servers, cpts)
-        if(!sysAbsViews.contains(cvx)) missing ::= cvx 
-      }
+      // cv, then check that that combination is possible in sysAbsViews:
+      // those that are missing.
+      val missing: List[ComponentView] =
+        if(singleRef) missingCrossRefs(pre.servers, cpts, preCpts) else List()
       // What does cpts(0) get mapped to?  IMPROVE: we don't need all of unifs
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
@@ -626,12 +422,8 @@ class Checker(system: SystemP.System){
       // If singleRef and the secondary component of post has gained a
       // reference to newPrinc, we also build views corresponding to those two
       // components.
-      val newPrincId = newPrinc.ids(0)
-      for((i,id) <- c2Refs; if id == newPrincId){
-        val newCpts = Array(postCpts(i), newPrinc)
-        if(false) println("Extracted secondary view "+StateArray.show(newCpts))
-        newComponentsList ::= newCpts
-      }
+      for((i,id) <- c2Refs; if id == newPrinc.ids(0))
+        newComponentsList ::= Array(postCpts(i), newPrinc)
       for(newComponents <- newComponentsList){
         val nv = Remapper.mkComponentView(post.servers, newComponents)
         newViewCount += 1        // Mostly with unifs.nonEmpty
@@ -655,15 +447,16 @@ class Checker(system: SystemP.System){
             // might not be the most efficient approach
             val commonMissingTuples = 
               commonMissing.map(pid => (pre.servers, preCpts(0), cpts(0), pid))
-            if(missing.nonEmpty){
+// FIXME
+            if(true || missing.nonEmpty){
               effectOnStore.add(missing, commonMissingTuples, nv)
-              if(commonMissing.nonEmpty) 
+              if(verbose && commonMissing.nonEmpty) 
                 println(s"Storing $missing, $commonMissingTuples -> $nv")
               nv.setCreationInfoIndirect(
                 pre, cpts, cv, e, post, newComponents, ply)
             }
-            else println(s"FIXME: not adding $nv because of missing common "+
-              commonMissing)
+            // else println(s"FIXME: not adding $nv because of missing common "+
+            //   commonMissing)
           }
         } // end of if(!sysAbsViews.contains(nv))
       } // end of for loop
@@ -675,11 +468,11 @@ class Checker(system: SystemP.System){
 // cv with pre.principal as principal, and c2 as secondary component?  This
 // assumes pre.principal has a reference to c2, which seems reasonable.
 
-  /** Identify components that can gain a reference to a component of type f.
-    * All pairs (i,id) such that the i'th secondary component c1 changes state
-    * between preCpts and postCpts, and id is a non-distinguished parameter of
-    * c1 of family f in the post state, other than an identity in
-    * preCpts/postCpts. */
+  /** Identify secondary components that can gain a reference to a component of
+    * type f.  All pairs (i,id) (with i >= 1) such that the i'th component c1
+    * changes state between preCpts and postCpts, and id is a
+    * non-distinguished parameter of c1 of family f in the post state, other
+    * than an identity in preCpts/postCpts. */
   @inline private 
   def getCrossReferences(
     preCpts: Array[State], postCpts: Array[State], f: Family)
@@ -752,6 +545,23 @@ class Checker(system: SystemP.System){
     found
   }
 
+  /** Missing cross references, if singleRef.  For each reference from a
+    * component c1 of cpts2 to a component c2 of cpts2, or vice versa, test if
+    * sysAbsViews contains the view servers || c1 || c2.  Return all such
+    * missing views.  */
+  @inline private def missingCrossRefs(
+    servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
+      : List[ComponentView] = {
+    assert(singleRef)
+    var missing = List[ComponentView]() // missing necessary Views
+    for(cptsx <- StateArray.crossRefs(cpts1, cpts2)){
+      val cvx = Remapper.mkComponentView(servers, cptsx)
+      if(!sysAbsViews.contains(cvx)) missing ::= cvx
+    }
+    missing
+  }
+
+
   /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
     // effectOfPreviousTransitionsCount += 1
@@ -767,11 +577,28 @@ class Checker(system: SystemP.System){
   /** If cv completes a delayed transition in effectOnStore, then complete it. */
   private def completeDelayed(cv: ComponentView) = {
     for((missing,missingCommon,nv) <- effectOnStore.get(cv)){
+      // Test if missing and missingCommon now satisfied.
+      var ok = true; var missing1 = missing
+      while(ok && missing1.nonEmpty){
+        val cvx = missing1.head; missing1 = missing1.tail
+        ok = cvx == cv || sysAbsViews.contains(cvx)
+      }
+// FIXME
+if(true){
+      var missingCommon1 = missingCommon
+      while(ok && missingCommon1.nonEmpty){
+        val (servers, princ1, princ2, pid) = missingCommon1.head
+        missingCommon1 = missingCommon1.tail
+        ok = hasCommonRef(servers, princ1, princ2, pid)
+        if(ok) println(s"${(servers, princ1, princ2, pid)} now satisfied")
+      }
+}
+
 // FIXME: use missingCommon
-      if(missing.isEmpty)
-        println(s"***completeDelayed ${(missing,missingCommon,cv)}")
-      if(missing.forall(cvx => cvx == cv || sysAbsViews.contains(cvx))){
-        if(verbose) println(s"Adding via completeDelayed $cv -> ($missing, $nv)")
+      // if(missing.isEmpty)
+      //   println(s"***completeDelayed ${(missing,missingCommon,cv)}")
+      if(ok){ // missing.forall(cvx => cvx == cv || sysAbsViews.contains(cvx))){
+        if(true || verbose) println(s"Adding via completeDelayed $cv -> ($missing, $nv)")
         // production info
         if(nextNewViews.add(nv)){
           val (pre, cpts, cv, post, newComponents) =
@@ -868,7 +695,7 @@ class Checker(system: SystemP.System){
     } // end of main loop
 
     println("\nSTEP "+ply)
-    if(verbose) println(sysAbsViews)
+    if(true) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")

@@ -1,9 +1,14 @@
-package ViewAbstraction
+package ViewAbstraction.ExtendabilityP
 
+import ViewAbstraction._
 import ViewAbstraction.RemapperP.{Remapper,Unification}
 import ViewAbstraction.CombinerP.Combiner
 import scala.collection.mutable.{HashMap}
 
+/** Utility object, encapsulating the isExtendable function, to test whether a
+  * Concretization pre is extendable by a state st given the current set of
+  * views. */
+// IMPROVE: pass views as parameter
 object Extendability{ 
   /** A cache of results of previous calls to isExtendable.  If a value isn't in
     * the mapping, then that indicates that compatibleWith previously gave
@@ -30,7 +35,7 @@ object Extendability{
       : Array[ComponentView] = {
     if(verbose) println(s"isExtendable($pre, $st)")
     for(v <- pre.toComponentView) require(views.contains(v))
-    // Also every other state in conc is compatible FIXME CHECK ???
+    // Also every other state in conc is compatible FIXME CHECK ??? 
     require(pre.components.forall(
       _.componentProcessIdentity != st.componentProcessIdentity))
     val servers = pre.servers; val components = pre.components
@@ -78,9 +83,9 @@ object Extendability{
     * Equivalently, is there a view containing `pre.servers`, with a renaming
     * of `st` as principal component, and such that some renaming of the other
     * components agrees with `pre.components` on common components? */ 
-  @inline // protected
-// FIXME: visibility 
-  def compatibleWith(pre: Concretization, st: State, views: ViewSet): Boolean = {
+  @inline protected[ExtendabilityP]
+  def compatibleWith(pre: Concretization, st: State, views: ViewSet)
+      : Boolean = {
     val servers = pre.servers; val components = pre.components
     // Remap st so it can be the principal component with servers.
     val map = servers.remappingMap; val nextArgs = servers.nextArgMap
@@ -137,8 +142,7 @@ object Extendability{
     * Pre: `pre.components(j)` references `st`.
     * Test case: pre.components = initNodeSt(T0,N0) || aNode(N0,N1), st =
     * initNode(N1), would need a view aNode(N0,N1) || initNode(N1). */
-// FIXME: visibility
-  // private // protected[Checker] 
+  protected[ExtendabilityP] 
   def findReferencingView(
     pre: Concretization, st: State, j : Int, views: ViewSet)
       : ComponentView = {

@@ -7,7 +7,12 @@ import ViewAbstraction.RemapperP.Remapper
   * State, ProcessIdentity) tuples; and nv is a view.  If
   * 
   * (1) all the views in missing are added; and
-  * (2) views are added so all elements of missingCommon satisfy hasCommonRef
+
+  * (2) views are added so all elements of missingCommon satisfy
+  * hasCommonRef; i.e. for each (servers, princ1, princ2, pid) in
+  * missingCommon, there is a component state c with identity pid such that
+  * servers || princ1 || c and servers || princ2 || c are both in sysAbsViews
+  * (up to renaming);
   * 
   * then nv can also be added.
   * 
@@ -59,9 +64,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     }
     for((servers,princ1,princ2,_) <- missingCommon; p <- List(princ1, princ2)){
       val pR = Remapper.remapToPrincipal(servers, p) // IMPROVE: only for princ2
-      if(p != pR){
-        assert(p != princ1) // println(s"Remapped $p with $servers to $pR"); 
-      }
+      if(p != pR) assert(p != princ1) // IMPROVE
       val prev = commonStore.getOrElse((servers,pR), List[MissingInfo]())
       if(!prev.contains(missingInfo)) 
         commonStore += (servers,pR) -> (missingInfo::prev)
@@ -74,7 +77,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     val mi1 = store.getOrElse(cv, List[MissingInfo]())
     val mi2 =
       commonStore.getOrElse((cv.servers, cv.principal), List[MissingInfo]())
-    if(mi2.nonEmpty) println(s"***$cv -> $mi1,\n  ${mi2.mkString("\n  ")}")
+    // if(mi2.nonEmpty) println(s"***$cv -> $mi1,\n  ${mi2.mkString("\n  ")}")
     append1(mi1,mi2)
 // IMPROVE if latter empty
   }

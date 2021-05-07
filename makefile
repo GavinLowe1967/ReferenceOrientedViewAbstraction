@@ -14,6 +14,7 @@ DIR = ViewAbstraction
 
 COMBINERP = $(DIR)/CombinerP
 REMAPPERP = $(DIR)/RemapperP
+EXTENDERP = $(DIR)/ExtendabilityP
 
 FSC = fsc -deprecation -cp $(CP)
 
@@ -87,19 +88,21 @@ $(DIR)/CompatibleWithCache.class: $(DIR)/BasicHashMap.class
 
 $(DIR)/Debugger.class: $(DIR)/SystemP/System.class
 
-$(DIR)/Extendability.class: $(DIR)/RemapperP/Unification.class 
+$(EXTENDERP)/Extendability.class: $(DIR)/RemapperP/Unification.class $(DIR)/CompatibleWithCache.class
 
-$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/RemapperP/Unification.class  $(DIR)/Debugger.class $(DIR)/CompatibleWithCache.class $(DIR)/EffectOnStore.class $(DIR)/Extendability.class
+$(EXTENDERP)/ExtendabilityTest.class: $(EXTENDERP)/Extendability.class 
+
+$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/RemapperP/Unification.class  $(DIR)/Debugger.class  $(DIR)/EffectOnStore.class $(EXTENDERP)/Extendability.class
 
 $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 
 # $(DIR)/NewViewExtender.class $(DIR)/Debugger.class $(DIR)/Concurrency.class
 
-$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class $(COMBINERP)/CombinerTest.class $(DIR)/SystemP/SystemTest.class $(DIR)/CheckerTest.class
+$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class $(COMBINERP)/CombinerTest.class $(DIR)/SystemP/SystemTest.class $(DIR)/CheckerTest.class $(EXTENDERP)/ExtendabilityTest.class
 
 # # Standard recipe
 
-$(DIR)/RemapperP/%.class $(DIR)/SystemP/%.class $(COMBINERP)/%.class:	%.scala
+$(DIR)/RemapperP/%.class $(DIR)/SystemP/%.class $(COMBINERP)/%.class $(EXTENDERP)/%.class:	%.scala
 	$(FSC) $<
 
 $(DIR)/%.class:     %.scala
