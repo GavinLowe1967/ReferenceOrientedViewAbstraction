@@ -447,16 +447,10 @@ class Checker(system: SystemP.System){
             // might not be the most efficient approach
             val commonMissingTuples = 
               commonMissing.map(pid => (pre.servers, preCpts(0), cpts(0), pid))
-// FIXME
-            if(true || missing.nonEmpty){
-              effectOnStore.add(missing, commonMissingTuples, nv)
-              if(verbose && commonMissing.nonEmpty) 
-                println(s"Storing $missing, $commonMissingTuples -> $nv")
-              nv.setCreationInfoIndirect(
-                pre, cpts, cv, e, post, newComponents, ply)
-            }
-            // else println(s"FIXME: not adding $nv because of missing common "+
-            //   commonMissing)
+            effectOnStore.add(missing, commonMissingTuples, nv)
+            if(verbose) println(s"Storing $missing, $commonMissingTuples -> $nv")
+            nv.setCreationInfoIndirect(
+              pre, cpts, cv, e, post, newComponents, ply)
           }
         } // end of if(!sysAbsViews.contains(nv))
       } // end of for loop
@@ -583,39 +577,30 @@ class Checker(system: SystemP.System){
         val cvx = missing1.head; missing1 = missing1.tail
         ok = cvx == cv || sysAbsViews.contains(cvx)
       }
-// FIXME
-if(true){
       var missingCommon1 = missingCommon
       while(ok && missingCommon1.nonEmpty){
         val (servers, princ1, princ2, pid) = missingCommon1.head
         missingCommon1 = missingCommon1.tail
         ok = hasCommonRef(servers, princ1, princ2, pid)
-        if(ok) println(s"${(servers, princ1, princ2, pid)} now satisfied")
+        if(verbose && ok) 
+          println(s"${(servers, princ1, princ2, pid)} now satisfied")
       }
-}
 
-// FIXME: use missingCommon
-      // if(missing.isEmpty)
-      //   println(s"***completeDelayed ${(missing,missingCommon,cv)}")
-      if(ok){ // missing.forall(cvx => cvx == cv || sysAbsViews.contains(cvx))){
-        if(true || verbose) println(s"Adding via completeDelayed $cv -> ($missing, $nv)")
-        // production info
-        if(nextNewViews.add(nv)){
-          val (pre, cpts, cv, post, newComponents) =
-            nv.getCreationIngredients
-          if(missing.isEmpty){
-            println(s"$pre --> $post\n"+
-              s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-              s"  --> ${View.show(post.servers, newComponents)} == $nv")
-            }
-          if(!nv.representableInScript){
-            println("Not enough identities in script to combine transition\n"+
-              s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
-            sys.exit
-          }
+      if(ok && nextNewViews.add(nv)){
+        val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
+        if(verbose){
+          println(s"Adding via completeDelayed $cv -> ($missing, $nv)\n"+
+            s"$pre --> $post\n"+
+            s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+            s"  --> ${View.show(post.servers, newComponents)} == $nv")
         }
-      }
-    }
+        if(!nv.representableInScript){
+          println("Not enough identities in script to combine transition\n"+
+            s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+          sys.exit
+        }
+      } // end of outer if
+    } // end of for loop
   }
 
   // ========= Main function
@@ -695,7 +680,7 @@ if(true){
     } // end of main loop
 
     println("\nSTEP "+ply)
-    if(true) println(sysAbsViews)
+    if(verbose) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")

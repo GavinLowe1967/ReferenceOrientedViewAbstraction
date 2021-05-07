@@ -434,13 +434,15 @@ class System(fname: String) {
       // Synchronisations with (f,id)
       val theseTrans = princTrans.transComponent(f)(id)
       val componentIx = // index of (f,id) in components, or -1
-        cv.components.indexWhere(_.componentProcessIdentity == (f,id))
+        StateArray.findIndex(cv.components, f, id)
+        // cv.components.indexWhere(_.componentProcessIdentity == (f,id))
       assert(componentIx != 0)
-// IMPROVE: only if !singleRef
       val isOmitted = // reference to (f,id) but omitted from cv
         componentIx < 0 && pParams.contains((f,id))
       // if(isOmitted) println(s"Omitting transition with ${(f,id)} from $cv")
-      if(isOmitted) assert(singleRef)
+      if(isOmitted) assert(singleRef) // IMPROVE
+      // If isOmitted, we suppress these transitions: we'll find them from a
+      // different view including (f,id)
       if(theseTrans != null && !isOmitted){ 
         val (oEs, oNs): (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = 
           theseTrans
