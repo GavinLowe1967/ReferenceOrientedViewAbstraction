@@ -27,6 +27,8 @@ class Checker(system: SystemP.System){
   /** The new views to be considered on the next ply. */
   protected var nextNewViews: MyHashSet[ComponentView] = null
 
+  private var extendability: Extendability = _
+
   private def showTransition(
     pre: Concretization, e: EventInt, post: Concretization) =
     s"$pre -${system.showEvent(e)}-> $post"
@@ -307,7 +309,7 @@ class Checker(system: SystemP.System){
       println(s"extendTransitionTemplateBy($pre, $post, ${system.showEvent(e)},"+
         s" $outsideSt)")
     // Profiler.count("instantiateTT1")
-    val referencingViews = Extendability.isExtendable(pre, outsideSt, sysAbsViews)
+    val referencingViews = extendability.isExtendable(pre, outsideSt)
     if(false) println(s"referencingViews = $referencingViews")
     if(referencingViews != null){
       // Profiler.count("instantiateTT2")
@@ -614,6 +616,7 @@ class Checker(system: SystemP.System){
     println("initViews = "+initViews.mkString("; "))
     for(v <- initViews) assert(v.ply == 0)
     var newViews: Array[View] = initViews
+    extendability = new Extendability(sysAbsViews)
 
     while(!done.get && ply <= bound){
       println("\nSTEP "+ply) 

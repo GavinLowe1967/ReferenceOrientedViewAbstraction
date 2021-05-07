@@ -7,9 +7,10 @@ import scala.collection.mutable.{HashMap}
 
 /** Utility object, encapsulating the isExtendable function, to test whether a
   * Concretization pre is extendable by a state st given the current set of
-  * views. */
-// IMPROVE: pass views as parameter
-object Extendability{ 
+  * views. 
+  * 
+  * @param views the current set of views. */
+class Extendability(views: ViewSet){ 
   /** A cache of results of previous calls to isExtendable.  If a value isn't in
     * the mapping, then that indicates that compatibleWith previously gave
     * only false.  A result of (k,rv) with k >= 0 indicates that
@@ -31,7 +32,7 @@ object Extendability{
     * st or a non-principal component of pre that references st. ??????
     */
   @inline // protected 
-  def isExtendable(pre: Concretization, st: State, views: ViewSet)
+  def isExtendable(pre: Concretization, st: State)
       : Array[ComponentView] = {
     if(verbose) println(s"isExtendable($pre, $st)")
     for(v <- pre.toComponentView) require(views.contains(v))
@@ -44,7 +45,7 @@ object Extendability{
 
     // Does SysAbsViews contain a view consistent with pre and with a
     // renaming of st as principal component?
-    var found = k >= 0 || compatibleWith(pre, st, views)
+    var found = k >= 0 || compatibleWith(pre, st)
     if(verbose) println(s"found = $found")
     if(found){
       // If any component cpt of pre references st, then search for a
@@ -59,7 +60,7 @@ object Extendability{
       while(j < length && found){
         if(components(j).processIdentities.contains(id)){
           if(false) println(s"isExtendable($pre) with reference to $st from $j")
-          referencingViews(j) = findReferencingView(pre, st, j, views)
+          referencingViews(j) = findReferencingView(pre, st, j)
           if(verbose) println(referencingViews(j))
           found = referencingViews(j) != null
         }
@@ -84,7 +85,7 @@ object Extendability{
     * of `st` as principal component, and such that some renaming of the other
     * components agrees with `pre.components` on common components? */ 
   @inline protected[ExtendabilityP]
-  def compatibleWith(pre: Concretization, st: State, views: ViewSet)
+  def compatibleWith(pre: Concretization, st: State)
       : Boolean = {
     val servers = pre.servers; val components = pre.components
     // Remap st so it can be the principal component with servers.
@@ -143,8 +144,7 @@ object Extendability{
     * Test case: pre.components = initNodeSt(T0,N0) || aNode(N0,N1), st =
     * initNode(N1), would need a view aNode(N0,N1) || initNode(N1). */
   protected[ExtendabilityP] 
-  def findReferencingView(
-    pre: Concretization, st: State, j : Int, views: ViewSet)
+  def findReferencingView(pre: Concretization, st: State, j : Int)
       : ComponentView = {
     if(verbose) println(s"findReferencingView($pre, $st, $j)")
     val servers = pre.servers; val pCpt = pre.components(j)
