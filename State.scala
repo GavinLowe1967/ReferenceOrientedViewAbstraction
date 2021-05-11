@@ -65,9 +65,6 @@ class State(val family: Family, val cs: ControlState,
   val representableInScript = 
     isNew || (0 until ids.length).forall(i => ids(i) < typeSizes(typeMap(i)))
 
-// FIXME: include following
-  // if(!isNew) checkTypeSizes()
-
   /** Add each identity (f,id) of this, with id >= serverNumParams(f), to
     * bitmap. */
   def addIdsToBitMap(bitmap: Array[Array[Boolean]], serversNumParams: Array[Int])

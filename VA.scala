@@ -113,12 +113,12 @@ object VA{
       //   printLong(checker.effectOnOthersCount))
       // println(s"checker.effectOfPreviousTransitionsCount = "+
       //   checker.effectOfPreviousTransitionsCount)
-      println(s"checker.newViewCount = "+printLong(checker.newViewCount))
-      println("checker.addedViewCount = "+printLong(checker.addedViewCount))
+      // println(s"checker.newViewCount = "+printLong(checker.newViewCount))
+      // println("checker.addedViewCount = "+printLong(checker.addedViewCount))
       println("checker.addTransitionCount = "+
         printLong(checker.addTransitionCount))
-      println("checker.instantiateTransitionTemplateCount = "+
-        printLong(checker.instantiateTransitionTemplateCount))
+      // println("checker.instantiateTransitionTemplateCount = "+
+      //   printLong(checker.instantiateTransitionTemplateCount))
     }
   }
 

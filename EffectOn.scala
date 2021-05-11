@@ -4,29 +4,35 @@ import ViewAbstraction.RemapperP.{Remapper,Unification}
 
 import scala.collection.mutable.{ArrayBuffer}
 
-/** A utility object, encapsulating the effectOn function. */
-
+/** A utility object, encapsulating the effectOn and completeDelayed
+  * functions.  These describe the effect that one transition has on another
+  * View. */
 class EffectOn(views: ViewSet, system: SystemP.System){
 
-
-  /** A mapping showing which component views might be added later.  For each
-    * cvx -> (missing, nv), once all of missing have been added, nv can also
-    * be added. 
+  /** A mapping showing which component views might be added later.
+    * Abstractly it stores tuples (missing, missingCommon, nv) such that:
+    * missing is a set of views; missingCommon is a set of (ServerStates, State,
+    * State, ProcessIdentity) tuples; and nv is a view.  If
     * 
-    * These are added in effectOn when a transition pre -> post induces a
-    * transition cv -> nv, but where the views in missing represent
-    * combinations of components from pre and cv that are not yet in the
-    * store. 
+    * (1) all the views in missing are added; and
     * 
-    * Such a maplet is stored for each cvx in missing.  This might be
-    * inefficient if missing is not a singleton: IMPROVE. */
+    * (2) views are added so all elements of missingCommon satisfy
+    * hasCommonRef; i.e. for each (servers, princ1, princ2, pid) in
+    * missingCommon, there is a component state c with identity pid such that
+    * servers || princ1 || c and servers || princ2 || c are both in sysAbsViews
+    * (up to renaming);
+    * 
+    * then nv can also be added.
+    * 
+    * Tuples are added to the store in apply when a transition is prevented
+    * because relevant views are not yet in the store.  completeDelayed
+    * subsequently tries to complete the transitions.  */
   private val effectOnStore = new SimpleEffectOnStore
-// IMPROVE description
 
   /** The effect of the transition pre -e-> post on cv.  Create extra views
     * caused by the way the transition changes cv, and add them to
     * nextNewViews. */
-  def effectOn(
+  def apply(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView, 
     ply: Int, nextNewViews: MyHashSet[ComponentView])
   = {
@@ -154,6 +160,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     var missingCommonRefs = List[ProcessIdentity]()
     for(pid <- missingRefs1; if missingRefs2.contains(pid)){
       if(!hasCommonRef(servers, princ1, princ2, pid)){
+// FIXME: if the component c has a reference to one of the present secondary
+// components, or vice versa, check that that combination is also possible.
         if(verbose){
           println(s"checkCompatibleMissing($servers, ${StateArray.show(cpts1)},"+
           s" ${StateArray.show(cpts2)})")
@@ -176,14 +184,12 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       val cv1 = iter.next
       val cpt1 = StateArray.find(pid, cv1.components)
       if(cpt1 != null){
-        // println(s"  found $cv1")
         // All relevant renamings of cpt1: identity on params of servers and
         // princ1, but otherwise either to other params of princ2 or to
         // fresh values.
         val renames = Unification.remapToJoin(servers, princ1, princ2, cpt1)
         for(cv2 <- renames){ // IMPROVE
           val cvx = Remapper.mkComponentView(servers, Array(princ2, cv2))
-          // print(s"  Renamed to $cvx.  ")
           if(views.contains(cvx)) found = true
           // else println("Not found.")
         }

@@ -127,9 +127,8 @@ class System(fname: String) {
       components.getEventMap
     val serverAlphaMap: Array[Boolean] = servers.alphaBitMap
 
-    // Set max sizes of maps needed in remappings.  IMPROVE: I suspect we can do
-    // better than this.
-    remapSizes = typeSizes.map(_+4)
+    // Set max sizes of maps needed in remappings.  This is a bit arbitrary.
+    remapSizes = typeSizes.map(_+2)
 
     // find three-way synchronisations
     assert(cptEventMap.length == eventsSize, 
@@ -588,7 +587,7 @@ class System(fname: String) {
       : Boolean = {
     // iterate through pre and post, recording which parameters are used.
     val bitMap = 
-// FIXME: size below
+      // FIXME: size below is a bit arbitrary
       Array.tabulate(numFamilies)(f => new Array[Boolean](remapSizes(f)))
     // Record the parameters in bitMap 
     @inline def recordIds(st: State) = {

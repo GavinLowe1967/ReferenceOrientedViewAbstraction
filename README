@@ -2,6 +2,8 @@ Trace sequence of calls process -> processTransition ->
 instantiateTransitionTemplateBy -> extendTransitionTemplateBy -> isExtendable
 -> findReferencingView: is there repeated work here?
 
+* Look at the FIXMEs in Extendability.scala
+
 * Avoid repeated work within calls to extendUnif
 
 * With singleRef, in effectOn, if a secondary component c1 gains a reference

@@ -31,12 +31,10 @@ class Extendability(views: ViewSet){
     * st.identity.  This means it is enough to check the condition for cpt =
     * st or a non-principal component of pre that references st. ??????
     */
-  @inline // protected 
-  def isExtendable(pre: Concretization, st: State)
+  @inline def isExtendable(pre: Concretization, st: State)
       : Array[ComponentView] = {
     if(verbose) println(s"isExtendable($pre, $st)")
     for(v <- pre.toComponentView) require(views.contains(v))
-    // Also every other state in conc is compatible FIXME CHECK ??? 
     require(pre.components.forall(
       _.componentProcessIdentity != st.componentProcessIdentity))
     val servers = pre.servers; val components = pre.components

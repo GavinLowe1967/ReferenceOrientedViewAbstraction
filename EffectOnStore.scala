@@ -7,7 +7,7 @@ import ViewAbstraction.RemapperP.Remapper
   * State, ProcessIdentity) tuples; and nv is a view.  If
   * 
   * (1) all the views in missing are added; and
-
+  * 
   * (2) views are added so all elements of missingCommon satisfy
   * hasCommonRef; i.e. for each (servers, princ1, princ2, pid) in
   * missingCommon, there is a component state c with identity pid such that
