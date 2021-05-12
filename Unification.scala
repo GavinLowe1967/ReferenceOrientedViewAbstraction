@@ -300,22 +300,26 @@ object Unification{
     * there is a view servers || princ2 || c' for c' a renaming of c. 
     * 
     * Pre: princ1 has a reference to c. */ 
-  def remapToJoin(servers: ServerStates, princ1: State, princ2: State, c: State)
+// IMPROVE comment
+  def remapToJoin(
+    servers: ServerStates, princ1: State, cpts2: Array[State], c: State)
       : ArrayBuffer[State] = {
+    require(singleRef)
     require(princ1.processIdentities.contains(c.componentProcessIdentity))
     // We look to use combine1, although some of the parameters there aren't
     // used.  IMPROVE?
-    // Identity map on parameters of servers and princ1
-    val map0 = servers.remappingMap
-    for((f,id) <- princ1.processIdentities) map0(f)(id) = id
-    // Next args to use
-    val nextArgMap = servers.nextArgMap
+    // Identity map on parameters of servers and princ1; and next args to use
+    val map0 = servers.remappingMap; val nextArgMap = servers.nextArgMap
+    for((f,id) <- princ1.processIdentities){
+      map0(f)(id) = id; nextArgMap(f) = nextArgMap(f) max (id+1)
+    }
     // Make otherArgMap, with parameters of princ2 not in map0, maintaining
     // otherArgMap
-    val otherArgs = Remapper.newOtherArgMap; val ids2 = princ2.processIdentities
-    for((f,id) <- ids2; if !isDistinguished(id) && map0(f)(id) < 0){
-      otherArgs(f) ::= id; nextArgMap(f) = nextArgMap(f) max (id+1)
-    }
+    val otherArgs = Remapper.newOtherArgMap
+    for(cpt2 <- cpts2; (f,id) <- cpt2.processIdentities)
+      if(!isDistinguished(id) && map0(f)(id) < 0){
+        otherArgs(f) ::= id; nextArgMap(f) = nextArgMap(f) max (id+1)
+      }
     // println(s"otherArgs = "+otherArgs.mkString(", "))
     val result = new CombineResult
     // the bitmap is empty: c's id should not be remapped, by precondition.

@@ -202,6 +202,20 @@ object Remapper{
     newOtherArgs
   }
 
+  // /** An OtherArgMap, contaiing all the parameters in states that are not mapped
+  //   * by map. */
+  // def otherArgsFromStates(map: RemappingMap, states: Array[State])
+  //     : OtherArgMap = {
+  //   val otherArgs = newOtherArgMap; var i = 0
+  //   while(i < states.length){
+  //     val st = states(i); val ids = st.ids; val typeMap = st.typeMap; var j = 0
+  //     while(j < ids.length){
+  //       val f = typeMap(j); val id = ids(j)
+  //       if(!isDistinguished(id) && map(f)(id) < 0){
+
+  //   }
+  // }
+
   // ======================================================= Helper functions
 
   /** Remap the parameter (t,arg), either following map, or by the next value
