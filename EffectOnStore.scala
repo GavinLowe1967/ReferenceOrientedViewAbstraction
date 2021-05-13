@@ -7,35 +7,38 @@ import ViewAbstraction.RemapperP.Remapper
  * the parameters are not in the ViewSet.  If those required views are
  * subsequently added, we can add newView. */
 
-/** The representation of the obligation to find a component state c with
-  * identity pid such that (1) servers || cpts1(0) || c is in the ViewSet; (2)
-  * servers || cpts2(0) || c is in the ViewSet; (3) if c has a reference to a
-  * secondary component c2 of cpts1 or cpts2, then servers || c || c2 is in
-  * ViewSet (modulo renaming).  This corresponds to case 2 on p. 113 of the
-  * notebook. */
-class MissingCommonX(
-    servers: ServerStates, cpts1: Array[State], cpts2: Array[State],
-    pid: ProcessIdentity){
-  require(cpts1(0).processIdentities.contains(pid) && 
-    cpts2(0).processIdentities.contains(pid))
+// /** The representation of the obligation to find a component state c with
+//   * identity pid such that (1) servers || cpts1(0) || c is in the ViewSet; (2)
+//   * servers || cpts2(0) || c is in the ViewSet; (3) if c has a reference to a
+//   * secondary component c2 of cpts1 or cpts2, then servers || c || c2 is in
+//   * ViewSet (modulo renaming).  This corresponds to case 2 on p. 113 of the
+//   * notebook. */
+// class MissingCommon(
+//     val servers: ServerStates, val cpts1: Array[State], val cpts2: Array[State],
+//     val pid: ProcessIdentity){
+//   require(cpts1(0).processIdentities.contains(pid) && 
+//     cpts2(0).processIdentities.contains(pid))
 
-  /** Each value cands of type MissingCandidates represents that if all the
-    * elements of cands are added to the ViewSet, then this obligation will be
-    * discharged. */
-  type MissingCandidates = List[ComponentView]
+//   /** Each value cands of type MissingCandidates represents that if all the
+//     * elements of cands are added to the ViewSet, then this obligation will be
+//     * discharged. */
+//   type MissingCandidates = List[ComponentView]
 
-  /** When any element of missingCandidates is satisfied, then this obligation
-    * will be discharged. */
-  var missingCandidates = List[MissingCandidates]()
-}
+//   /** When any element of missingCandidates is satisfied, then this obligation
+//     * will be discharged. */
+//   var missingCandidates = List[MissingCandidates]()
+
+//   override def toString = s"MissingCommon($servers, $cpts1, $cpts2, $pid)"
+// }
 
 // =======================================================
 
-/** Information capturing when newView might be added to the ViewSet, once
-  * other views have also been encountered. */
-class MissingInfoX(
+/** Information capturing when newView might be added to the ViewSet: once all
+  * of missingViews0 have been added, and all the obligations represented by
+  * missingCommon0 have been satisfied. */
+class MissingInfo(
   val newView: ComponentView, missingViews0: List[ComponentView],
-  missingCommon0: List[MissingCommonX]
+  missingCommon0: List[MissingCommon]
 ){
   /** Lists of component views necessary to satisfy this constraint: all must be
     * added to the ViewSet.  cf. item 1 on page 113 of notebook. */
@@ -45,46 +48,28 @@ class MissingInfoX(
     * represents an obligation to instantiate a component with a particular
     * identity.  cf. item 2 on page 113 of the notebook.  All must be
     * satisfied in order to satisfy this constraint.  */
-  var missingCommon: List[MissingCommonX] = missingCommon0
+  var missingCommon: List[MissingCommon] = missingCommon0
 // IMPROVE, all the above share the same servers, cpts1, cpts2
+
+  override def toString =
+    s"MissingInfo($newView, $missingViews0, $missingCommon)"
 }
 
 // =======================================================
 
 /** Objects that record information about which views might be added later.
-  * Abstractly it stores tuples (missing, missingCommon, nv) such that:
-  * missing is a set of views; missingCommon is a set of (ServerStates, State,
-  * State, ProcessIdentity) tuples; and nv is a view.  If
-  * 
-  * (1) all the views in missing are added; and
-  * 
-  * (2) views are added so all elements of missingCommon satisfy
-  * hasCommonRef; i.e. for each (servers, cmpts1, cmpts2, pid) in
-  * missingCommon, there is a component state c with identity pid such that
-  * each of the following is in sysAbsViews (up to renaming): (1) servers ||
-  * cmpts1(0) || c; (2) servers || cmpts2(0) || c; and servers || c || c2 for
-  * any secondary component c2 referenced by c.
-  * 
-  * then nv can also be added.
+  * Abstractly it stores a set of MissingInfo objects.
   * 
   * These are added in effectOn when a transition are not yet in the store. */ 
 trait EffectOnStore{
-  /** Each tuple (servers, princ1, princ2, pid): MissingCommon represents a
-    * requirement for views servers || princ1 || c and servers || princ2 || c
-    * for some component state c with identity pid. */
-// IMPROVE COMMENT
-  type MissingCommon = 
-    (ServerStates, Array[State], Array[State], ProcessIdentity)
 
-  /** Add the tuple (missing, missingCommon, nv) to the store. */
+  /** Add MissingInfo(nv, missing, missingCommon) to the store. */
   def add(missing: List[ComponentView], missingCommon: List[MissingCommon], 
     nv: ComponentView): Unit
 
-  type MissingInfo = (List[ComponentView], List[MissingCommon], ComponentView)
-
-  /** Get all tuples (missing, missingCommon, nv) in the store for which cv is
-    * relevant: either cv is in missing, or matches an element of
-    * missingCommon. */
+  /** Get all MissingInfo values in the store for which cv is relevant: either
+    * cv is in missingViews, or in an element of
+    * missingCommon.missingCandidates, or ........ . */
   def get(cv: ComponentView): List[MissingInfo]
 
   def size: (Int, Int)
@@ -95,34 +80,34 @@ trait EffectOnStore{
 import scala.collection.mutable.HashMap
 
 class SimpleEffectOnStore extends EffectOnStore{
-  /** The underlying store concerning missing values.  For each tuple (missing,
-    * missingCommon, nv) in the abstract set, and for each cv in missing,
-    * store(cv) contains (missing, missingCommon, nv). */
+  /** The underlying store concerning missing values.  For each mi: MissingInfo
+    * in the abstract set, and for each cv in mi.missingViews, store(cv)
+    * contains mi. */
   private val store = new HashMap[ComponentView, List[MissingInfo]]
 
-  /** The underlying store concerning MissingCommon values.  For each tuple
-    * (missing, missingCommon, nv) in the abstract set, and for each
-    * (servers,princ,_,_) or (servers,_,princ,_) in missingCommon, commonStore
-    * contains (servers,princ) -> (missing, missingCommon, nv). */
+  /** The underlying store concerning MissingCommon values.  For each mi:
+    * MissingInfo in the abstract set, and for each
+    * MissingCommon(servers,cpts,_,_) or (servers,_,cpts,_) in
+    * mi.missingCommon, commonStore(servers,cpts(0)) contains mi. */
   private val commonStore = new HashMap[(ServerStates, State), List[MissingInfo]]
 
   /** Add the pair (missing, missingCommon, nv) to the store. */
   def add(missing: List[ComponentView], missingCommon: List[MissingCommon], 
     nv: ComponentView)
       : Unit = {
-    val missingInfo: MissingInfo = (missing,missingCommon,nv)
+    val missingInfo: MissingInfo = new MissingInfo(nv, missing, missingCommon)
     for(cv <- missing){
       val prev = store.getOrElse(cv, List[MissingInfo]())
       if(!prev.contains(missingInfo)) store += cv -> (missingInfo::prev)
     }
-    for((servers,cpts1,cpts2,_) <- missingCommon){
-      val princ1 = cpts1(0); val princ2 = cpts2(0)
+    for(mc <- missingCommon){
+      val princ1 = mc.cpts1(0); val princ2 = mc.cpts2(0)
       for(p <- List(princ1, princ2)){
-        val pR = Remapper.remapToPrincipal(servers, p)// IMPROVE: only for princ2
+        val pR = Remapper.remapToPrincipal(mc.servers, p)// IMPROVE: only for princ2
         if(p != pR) assert(p != princ1) // IMPROVE
-        val prev = commonStore.getOrElse((servers,pR), List[MissingInfo]())
+        val prev = commonStore.getOrElse((mc.servers,pR), List[MissingInfo]())
         if(!prev.contains(missingInfo))
-          commonStore += (servers,pR) -> (missingInfo::prev)
+          commonStore += (mc.servers,pR) -> (missingInfo::prev)
       }
     }
   }

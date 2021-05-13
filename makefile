@@ -92,6 +92,10 @@ $(EXTENDERP)/Extendability.class: $(DIR)/RemapperP/Unification.class $(DIR)/Comp
 
 $(EXTENDERP)/ExtendabilityTest.class: $(EXTENDERP)/Extendability.class 
 
+$(DIR)/MissingCommon.class: $(REMAPPERP)/Unification.class
+
+$(DIR)/EffectOnStore.class: $(DIR)/MissingCommon.class
+
 $(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(REMAPPERP)/Unification.class
 
 $(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/RemapperP/Unification.class  $(DIR)/Debugger.class  $(DIR)/EffectOn.class $(EXTENDERP)/Extendability.class
