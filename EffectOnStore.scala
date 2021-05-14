@@ -1,5 +1,6 @@
 package ViewAbstraction
 import ViewAbstraction.RemapperP.Remapper
+import ox.gavin.profiling.Profiler
 
 /* Classes in this file record information about when a particular View,
  * newView, can be added, under singleRef.  Each instance arises from a call
@@ -51,6 +52,30 @@ class MissingInfo(
   var missingCommon: List[MissingCommon] = missingCommon0
 // IMPROVE, all the above share the same servers, cpts1, cpts2
 
+  /** Update this, based on new view cv.
+    * @return true if all constraints are now satisfied.  */
+  def update(cv: ComponentView, views: ViewSet): Boolean = {
+    // missingViews = missingViews.filter(v1 => v1 != v && !views.contains(v1))
+    var mv = missingViews; missingViews = List[ComponentView]()
+    while(mv.nonEmpty){
+      val v1 = mv.head; mv = mv.tail
+      if(v1 != cv && !views.contains(v1)) 
+// IMPROVE: do we need the latter condition?
+        missingViews ::= v1
+    }
+
+    // missingCommon = missingCommon.filter(!_.update(views))
+    var mcs = missingCommon; missingCommon = List[MissingCommon]()
+    while(mcs.nonEmpty){
+      val mc = mcs.head; mcs = mcs.tail
+      if(!mc.update(views)) missingCommon ::= mc
+    }
+
+    missingViews.isEmpty && missingCommon.isEmpty
+  }
+
+  // def done = missingViews.isEmpty && missingCommon.isEmpty
+
   override def toString =
     s"MissingInfo($newView, $missingViews0, $missingCommon)"
 }
@@ -91,10 +116,11 @@ class SimpleEffectOnStore extends EffectOnStore{
     * mi.missingCommon, commonStore(servers,cpts(0)) contains mi. */
   private val commonStore = new HashMap[(ServerStates, State), List[MissingInfo]]
 
-  /** Add the pair (missing, missingCommon, nv) to the store. */
+  /** Add MissingInfo(nv, missing, missingCommon) to the store. */
   def add(missing: List[ComponentView], missingCommon: List[MissingCommon], 
     nv: ComponentView)
       : Unit = {
+    Profiler.count("EffectOnStore.add")
     val missingInfo: MissingInfo = new MissingInfo(nv, missing, missingCommon)
     for(cv <- missing){
       val prev = store.getOrElse(cv, List[MissingInfo]())

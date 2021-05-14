@@ -82,7 +82,7 @@ $(DIR)/SystemP/System.class: $(DIR)/FDRTransitionMap.class		\
 
 $(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.class
 
-# # Checker and main program
+# # Helper modules for Checker.
 
 $(DIR)/CompatibleWithCache.class: $(DIR)/BasicHashMap.class
 
@@ -97,6 +97,8 @@ $(DIR)/MissingCommon.class: $(REMAPPERP)/Unification.class
 $(DIR)/EffectOnStore.class: $(DIR)/MissingCommon.class
 
 $(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(REMAPPERP)/Unification.class
+
+# # Checker and main program
 
 $(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/RemapperP/Unification.class  $(DIR)/Debugger.class  $(DIR)/EffectOn.class $(EXTENDERP)/Extendability.class
 

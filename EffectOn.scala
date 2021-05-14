@@ -1,5 +1,6 @@
 package ViewAbstraction
 
+import ox.gavin.profiling.Profiler
 import ViewAbstraction.RemapperP.{Remapper,Unification}
 
 import scala.collection.mutable.{ArrayBuffer}
@@ -247,7 +248,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
   = {
     for(mi <- effectOnStore.get(cv)){
+      Profiler.count("completeDelayed")
       // Test if missing and missingCommon now satisfied.
+/*
       var ok = true; var missing = mi.missingViews
       while(ok && missing.nonEmpty){
         val cvx = missing.head; missing = missing.tail
@@ -260,7 +263,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         //   mc.servers, mc.cpts1, mc.cpts2, mc.pid, views)
         // if(verbose && ok) println(s"$mc now satisfied")
       }
-
+ */
+      val ok = mi.update(cv, views)
       val nv = mi.newView
       if(ok && nextNewViews.add(nv)){
         val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
@@ -279,19 +283,19 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     } // end of for loop
   }
 
-  /** Update mi, based on new view cv. */
-  private def updateMissingInfo(mi: MissingInfo, cv: ComponentView) = {
-    // missingViews = missingViews.filter(v1 => v1 != v && !views.contains(v1))
-    var mv = mi.missingViews; var newMV = List[ComponentView]()
-    while(mv.nonEmpty){
-      val v1 = mv.head; mv = mv.tail
-      if(v1 != cv){
-        assert(!views.contains(v1)) // FIXME
-        newMV ::= v1
-      }
-    }
-    mi.missingViews = newMV
-  }
+  // /** Update mi, based on new view cv. */
+  // private def updateMissingInfo(mi: MissingInfo, cv: ComponentView) = {
+  //   // missingViews = missingViews.filter(v1 => v1 != v && !views.contains(v1))
+  //   var mv = mi.missingViews; var newMV = List[ComponentView]()
+  //   while(mv.nonEmpty){
+  //     val v1 = mv.head; mv = mv.tail
+  //     if(v1 != cv){
+  //       assert(!views.contains(v1)) // FIXME
+  //       newMV ::= v1
+  //     }
+  //   }
+  //   mi.missingViews = newMV
+  // }
   
 
 }
