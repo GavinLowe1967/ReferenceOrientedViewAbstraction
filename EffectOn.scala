@@ -64,7 +64,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       // If singleRef, identities of components referenced by both principals,
       // but not included in the views, and such that there is no way of
       // instantiating them consistently within sysAbsViews.
-      val commonMissing: List[ProcessIdentity] = 
+      // val commonMissing: List[ProcessIdentity] = 
+      val missingCommons: List[MissingCommon] = 
         if(singleRef && !pre.components.sameElements(cv.components)) 
           checkCompatibleMissing(pre.servers, preCpts, cpts)
         else List()
@@ -87,7 +88,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         val nv = Remapper.mkComponentView(post.servers, newComponents)
         // newViewCount += 1        // Mostly with unifs.nonEmpty
         if(!views.contains(nv)){
-          if(missing.isEmpty && commonMissing.isEmpty && nextNewViews.add(nv)){
+          if(missing.isEmpty && /*commonMissing*/missingCommons.isEmpty && nextNewViews.add(nv)){
             // addedViewCount += 1
             if(verbose) println(
               s"$pre --> $post\n  with unifications $unifs\n"+
@@ -101,14 +102,16 @@ class EffectOn(views: ViewSet, system: SystemP.System){
               sys.exit
             }
           } // end of if(missing.isEmpty && nextNewViews.add(nv))
-          else if(missing.nonEmpty || commonMissing.nonEmpty){
+          else if(missing.nonEmpty || missingCommons/*commonMissing*/.nonEmpty){
             // Note: we create nv eagerly, even if missing is non-empty: this
             // might not be the most efficient approach
-            val commonMissingTuples = 
-              commonMissing.map(pid => 
-                new MissingCommon(pre.servers, preCpts, cpts, pid))
-            effectOnStore.add(missing, commonMissingTuples, nv)
-            if(verbose) println(s"Storing $missing, $commonMissingTuples -> $nv")
+            // val commonMissingTuples = 
+            //   commonMissing.map(pid => 
+            //     new MissingCommon(pre.servers, preCpts, cpts, pid))
+            // effectOnStore.add(missing, commonMissingTuples, nv)
+            effectOnStore.add(missing, missingCommons, nv)
+            if(verbose) println(s"Storing $missing, $missingCommons -> $nv")
+            //if(verbose) println(s"Storing $missing, $commonMissingTuples -> $nv")
             nv.setCreationInfoIndirect(
               pre, cpts, cv, e, post, newComponents, ply)
           }
@@ -152,7 +155,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     * @return the identities of all such missing components. */ 
   private def checkCompatibleMissing(
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
-      : List[ProcessIdentity] = {
+      : List[MissingCommon] /* [ProcessIdentity] */ = {
     require(singleRef)
     //val princ1 = cpts1(0); val princ2 = cpts2(0)
     val missingRefs1 = StateArray.missingRefs(cpts1)
@@ -160,8 +163,13 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     // The common references considered so far for which there is no way of
     // instantiating the referenced component.
     var missingCommonRefs = List[ProcessIdentity]()
+    var missingCommons = List[MissingCommon]()
     for(pid <- missingRefs1; if missingRefs2.contains(pid)){
-      if(!MissingCommon.hasCommonRef(servers, cpts1, cpts2, pid, views)){
+// IMPROVE: following unneeded
+      val ok = MissingCommon.hasCommonRef(servers, cpts1, cpts2, pid, views)
+      val mc = MissingCommon.makeMissingCommon(servers, cpts1, cpts2, pid, views)
+      assert(ok == (mc == null))
+      if(!ok){
 // FIXME: if the component c has a reference to one of the present secondary
 // components, or vice versa, check that that combination is also possible.
         if(verbose){
@@ -169,64 +177,13 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           s" ${StateArray.show(cpts2)})")
           println(s"Failed to find states to instantiate common reference $pid")
         }
-        missingCommonRefs ::= pid
+        // missingCommonRefs ::= pid
+        missingCommons ::= mc
       }
     } // end of for loop
-    missingCommonRefs
+    // missingCommonRefs
+    missingCommons
   }
-
-  /** Is there a component state c with identity pid such that sysAbsViews
-    * contains each of the following (up to renaming): (1) servers || princ1
-    * || c; (2) servers || princ2 || c; (3) if c has a reference to a
-    * component c2 of cpts2 then servers || c || c2? */
-// IMPROVE comments
-//   @inline private def hasCommonRef(
-//     servers: ServerStates, cpts1: Array[State], cpts2: Array[State], 
-//     pid: ProcessIdentity)
-//       : Boolean = {
-//     assert(singleRef)
-//     assert(cpts1.length == 2, StateArray.show(cpts1))
-//     assert(cpts2.length == 2, StateArray.show(cpts2))
-//     val princ1 = cpts1(0); val princ2 = cpts2(0)
-//     val iter = views.iterator(servers, princ1); var found = false
-//     while(iter.hasNext && !found){
-//       val cv1 = iter.next; val cptsX = cv1.components
-//       assert(cptsX.length == 2, cv1); val cpt1 = cptsX(1)
-//       if(cpt1.hasPID(pid)){
-//         // All relevant renamings of cpt1: identity on params of servers and
-//         // princ1, but otherwise either to other params of cpts2 or to
-//         // fresh values.
-//         val renames = Unification.remapToJoin(servers, princ1, cpts2, cpt1)
-//         var i = 0
-//         while(i < renames.length && !found){
-//           val c = renames(i); i += 1
-//           val cvx = Remapper.mkComponentView(servers, Array(princ2, c))
-//           if(views.contains(cvx)){
-//             found = true; var j = 1
-//             // Test if there is a view with c as principal, with a reference
-//             // to a secondary component of cpts1 or cpts2
-//             while(j < c.length){ // && found ? 
-//               val pid2 = c.processIdentities(j); j += 1
-//               val c2 = StateArray.find(pid2, cpts2) 
-// // FIXME: also cpts1?
-//               if(c2 != null){
-//                 val cvx2 = Remapper.mkComponentView(servers, Array(c, c2))
-//                 if(views.contains(cvx2)){ } //  println(s"Contains $cvx2")
-//                 else{ 
-//                   found = false
-//                   println(s"hasCommonRef($servers, ${StateArray.show(cpts1)}, "+
-//                     s"${StateArray.show(cpts2)}): ${c.toString0} -> "+
-//                     c2.toString0)
-//                   println(s"Not contains $cvx2") }
-//               }
-//             }
-
-//           }
-//         } // end of for(c <- renames)
-//       }
-//     } // end of while
-//     found
-//   }
 
   /** Missing cross references, if singleRef.  For each reference from a
     * component c1 of cpts2 to a component c2 of cpts2, or vice versa, test if
@@ -247,23 +204,10 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   /** If cv completes a delayed transition in effectOnStore, then complete it. */
   def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
   = {
+    effectOnStore.complete(cv, views)
     for(mi <- effectOnStore.get(cv)){
       Profiler.count("completeDelayed")
       // Test if missing and missingCommon now satisfied.
-/*
-      var ok = true; var missing = mi.missingViews
-      while(ok && missing.nonEmpty){
-        val cvx = missing.head; missing = missing.tail
-        ok = cvx == cv || views.contains(cvx)
-      }
-      var missingCommon = mi.missingCommon
-      while(ok && missingCommon.nonEmpty){
-        val mc = missingCommon.head; missingCommon = missingCommon.tail
-        ok = mc.update(views) // MissingCommon.hasCommonRef(
-        //   mc.servers, mc.cpts1, mc.cpts2, mc.pid, views)
-        // if(verbose && ok) println(s"$mc now satisfied")
-      }
- */
       val ok = mi.update(cv, views)
       val nv = mi.newView
       if(ok && nextNewViews.add(nv)){
@@ -283,19 +227,5 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     } // end of for loop
   }
 
-  // /** Update mi, based on new view cv. */
-  // private def updateMissingInfo(mi: MissingInfo, cv: ComponentView) = {
-  //   // missingViews = missingViews.filter(v1 => v1 != v && !views.contains(v1))
-  //   var mv = mi.missingViews; var newMV = List[ComponentView]()
-  //   while(mv.nonEmpty){
-  //     val v1 = mv.head; mv = mv.tail
-  //     if(v1 != cv){
-  //       assert(!views.contains(v1)) // FIXME
-  //       newMV ::= v1
-  //     }
-  //   }
-  //   mi.missingViews = newMV
-  // }
-  
 
 }

@@ -8,30 +8,6 @@ import ox.gavin.profiling.Profiler
  * the parameters are not in the ViewSet.  If those required views are
  * subsequently added, we can add newView. */
 
-// /** The representation of the obligation to find a component state c with
-//   * identity pid such that (1) servers || cpts1(0) || c is in the ViewSet; (2)
-//   * servers || cpts2(0) || c is in the ViewSet; (3) if c has a reference to a
-//   * secondary component c2 of cpts1 or cpts2, then servers || c || c2 is in
-//   * ViewSet (modulo renaming).  This corresponds to case 2 on p. 113 of the
-//   * notebook. */
-// class MissingCommon(
-//     val servers: ServerStates, val cpts1: Array[State], val cpts2: Array[State],
-//     val pid: ProcessIdentity){
-//   require(cpts1(0).processIdentities.contains(pid) && 
-//     cpts2(0).processIdentities.contains(pid))
-
-//   /** Each value cands of type MissingCandidates represents that if all the
-//     * elements of cands are added to the ViewSet, then this obligation will be
-//     * discharged. */
-//   type MissingCandidates = List[ComponentView]
-
-//   /** When any element of missingCandidates is satisfied, then this obligation
-//     * will be discharged. */
-//   var missingCandidates = List[MissingCandidates]()
-
-//   override def toString = s"MissingCommon($servers, $cpts1, $cpts2, $pid)"
-// }
-
 // =======================================================
 
 /** Information capturing when newView might be added to the ViewSet: once all
@@ -50,6 +26,7 @@ class MissingInfo(
     * identity.  cf. item 2 on page 113 of the notebook.  All must be
     * satisfied in order to satisfy this constraint.  */
   var missingCommon: List[MissingCommon] = missingCommon0
+  // It will be unusual for the list to contain more than one element, I think. 
 // IMPROVE, all the above share the same servers, cpts1, cpts2
 
   /** Update this, based on new view cv.
@@ -65,16 +42,34 @@ class MissingInfo(
     }
 
     // missingCommon = missingCommon.filter(!_.update(views))
-    var mcs = missingCommon; missingCommon = List[MissingCommon]()
+    var mcs = missingCommon; var missingCommonX = List[MissingCommon]()
     while(mcs.nonEmpty){
       val mc = mcs.head; mcs = mcs.tail
-      if(!mc.update(views)) missingCommon ::= mc
+      if(!mc.update(views)) missingCommonX ::= mc
     }
+    // assert(missingCommon.length <= 1) Not true 
+// IMPROVE: pass cv to mc.update, and test whether this allows a new component.
 
-    missingViews.isEmpty && missingCommon.isEmpty
+    missingViews.isEmpty && missingCommonX.isEmpty
   }
 
   // def done = missingViews.isEmpty && missingCommon.isEmpty
+
+  /** Update the MissingCommon entries in this, based on cv being a possible
+    * match to the first clause of the obligation.  Pre: cv is a possible
+    * match to at least one. */
+  def updateMC(cv: ComponentView, views: ViewSet) = {
+    var matched = false // have we found a MissingCommon entry that matches?
+    for(mc <- missingCommon){
+      if(mc.matches(cv)){
+        matched = true
+        mc.updateMC(cv, views)
+// TODO: if cv.components(1) has pid = mc.pid, then update mc based on that. 
+      }
+    }
+    assert(matched, s"\nupdateMC($cv):\n  $missingCommon")
+
+  }
 
   override def toString =
     s"MissingInfo($newView, $missingViews0, $missingCommon)"
@@ -116,19 +111,22 @@ class SimpleEffectOnStore extends EffectOnStore{
     * mi.missingCommon, commonStore(servers,cpts(0)) contains mi. */
   private val commonStore = new HashMap[(ServerStates, State), List[MissingInfo]]
 
+  private def addToStore(cv: ComponentView, missingInfo: MissingInfo) = {
+    val prev = store.getOrElse(cv, List[MissingInfo]())
+    if(!prev.contains(missingInfo)) store += cv -> (missingInfo::prev)
+  }
+
   /** Add MissingInfo(nv, missing, missingCommon) to the store. */
   def add(missing: List[ComponentView], missingCommon: List[MissingCommon], 
     nv: ComponentView)
       : Unit = {
     Profiler.count("EffectOnStore.add")
     val missingInfo: MissingInfo = new MissingInfo(nv, missing, missingCommon)
-    for(cv <- missing){
-      val prev = store.getOrElse(cv, List[MissingInfo]())
-      if(!prev.contains(missingInfo)) store += cv -> (missingInfo::prev)
-    }
+    for(cv <- missing) addToStore(cv, missingInfo)
+    for(mc <- missingCommon; cv <- mc.allCandidates) addToStore(cv, missingInfo)
     for(mc <- missingCommon){
       val princ1 = mc.cpts1(0); val princ2 = mc.cpts2(0)
-      for(p <- List(princ1, princ2)){
+      for(p <- List(princ1 /*, princ2 */)){  // IMPROVE
         val pR = Remapper.remapToPrincipal(mc.servers, p)// IMPROVE: only for princ2
         if(p != pR) assert(p != princ1) // IMPROVE
         val prev = commonStore.getOrElse((mc.servers,pR), List[MissingInfo]())
@@ -147,6 +145,17 @@ class SimpleEffectOnStore extends EffectOnStore{
     // if(mi2.nonEmpty) println(s"***$cv -> $mi1,\n  ${mi2.mkString("\n  ")}")
     append1(mi1,mi2)
 // IMPROVE if latter empty
+  }
+
+  /** Try to complete values in the store, based on the addition of cv, and with
+    * views as the ViewSet.  Return the Views that can now be added.  */
+  def complete(cv: ComponentView, views: ViewSet): List[ComponentView] = {
+    val mis: List[MissingInfo] = 
+      commonStore.getOrElse((cv.servers, cv.principal), List[MissingInfo]())
+    for(mi <- mis){
+      mi.updateMC(cv, views)
+    }
+    null
   }
 
 

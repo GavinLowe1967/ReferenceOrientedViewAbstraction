@@ -293,11 +293,11 @@ object Unification{
 // IMPROVE: can we share work between the calls to extendUnif? 
 
   /** Remap c, as identity function on parameters of servers and princ1, but
-    * mapping other parameters either to other parameters of princ2, or to
+    * mapping other parameters either to other parameters of cpts2, or to
     * fresh values.
     * 
     * There is an existing view servers || princ1 || c, and we want to find if
-    * there is a view servers || princ2 || c' for c' a renaming of c. 
+    * there is a view servers || cpts2(0) || c' for c' a renaming of c. 
     * 
     * Pre: princ1 has a reference to c. */ 
 // IMPROVE comment
