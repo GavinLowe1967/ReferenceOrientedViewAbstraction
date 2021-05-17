@@ -13,7 +13,9 @@ import ViewAbstraction.RemapperP.{Remapper,Unification}
 class MissingCommon(
     val servers: ServerStates, val cpts1: Array[State], val cpts2: Array[State],
     val pid: ProcessIdentity){
-  require(cpts1(0).processIdentities.contains(pid) && 
+  val princ1 = cpts1(0)
+
+  require(princ1.processIdentities.contains(pid) && 
     cpts2(0).processIdentities.contains(pid))
 
   /** Each value cands of type MissingCandidates represents that if all the
@@ -64,8 +66,6 @@ class MissingCommon(
 // =======================================================
 
 object MissingCommon{
-
-
   /** Is there a component state c with identity pid such that sysAbsViews
     * contains each of the following (up to renaming): (1) servers || princ1
     * || c; (2) servers || princ2 || c; (3) if c has a reference to a
@@ -145,37 +145,45 @@ object MissingCommon{
     while(matches.nonEmpty && !found){
       val cv1 = matches.head; matches = matches.tail
       val cpt1 = cv1.components(1); assert(cpt1.hasPID(pid))
-      // All relevant renamings of cpt1: identity on params of servers and
-      // princ1, but otherwise either to other params of cpts2 or to fresh
-      // values.
-// FIXME: also rename to other params of cpts1?
-      val renames = Unification.remapToJoin(servers, princ1, cpts2, cpt1)
-      var i = 0; 
-      while(i < renames.length && !found){
-        val c = renames(i); i += 1
-        val missing = getMissingCandidates(servers, cpts2, c, views)
-//         var missing = List[ComponentView]() // missing necessary views
-//         val cvx = Remapper.mkComponentView(servers, Array(princ2, c))
-//         if(!views.contains(cvx)) missing ::= cvx
-//         // If c has a reference to a secondary component c2 of cpts2 or FIXME
-//         // cpts1, then the View servers || c || c2 is necessary.
-//         var j = 1
-//         while(j < c.length){ 
-//           val pid2 = c.processIdentities(j); j += 1
-//           val c2 = StateArray.find(pid2, cpts2)
-// // FIXME: also cpts1?
-//           if(c2 != null){
-//             val cvx2 = Remapper.mkComponentView(servers, Array(c, c2))
-//             if(!views.contains(cvx2)) missing ::= cvx2
-//           }
-//         }
-        if(missing.isEmpty) found = true
-        else mc.missingCandidates ::= missing
-      } // end of while(i < renames.length && !found)
+      found = updateMissingCandidates(mc, cpt1, views)
+//       // All relevant renamings of cpt1: identity on params of servers and
+//       // princ1, but otherwise either to other params of cpts2 or to fresh
+//       // values.
+// // FIXME: also rename to other params of cpts1?
+//       val renames = Unification.remapToJoin(servers, princ1, cpts2, cpt1)
+//       var i = 0; 
+//       while(i < renames.length && !found){
+//         val c = renames(i); i += 1
+//         val missing = getMissingCandidates(servers, cpts2, c, views)
+//         if(missing.isEmpty) found = true
+//         else mc.missingCandidates ::= missing
+//      } // end of while(i < renames.length && !found)
     } // end of outer while loop
 
     if(found) null 
     else{ Profiler.count("MissingCandidateSize"+mc.allCandidates.length); mc }
+  }
+
+  /** Update mc.missingCandidates to include those list of missing views
+    * corresponding to instantiating c with a renaming of cpt1.  
+    * @return true if mc is now complete. */
+  @inline private 
+  def updateMissingCandidates(mc: MissingCommon, cpt1: State, views: ViewSet)
+      : Boolean = {
+    assert(cpt1.hasPID(mc.pid))
+    // All relevant renamings of cpt1: identity on params of servers and
+    // princ1, but otherwise either to other params of cpts2 or to fresh
+    // values.
+// FIXME: also rename to other params of cpts1?
+    val renames = Unification.remapToJoin(mc.servers, mc.princ1, mc.cpts2, cpt1)
+    var i = 0; var found = false
+    while(i < renames.length && !found){
+      val c = renames(i); i += 1
+      val missing = getMissingCandidates(mc.servers, mc.cpts2, c, views)
+      if(missing.isEmpty) found = true
+      else mc.missingCandidates ::= missing
+    } // end of while llop
+    found
   }
 
   /** Find the missing Views that are necessary to complete a MissingCommon for
@@ -184,8 +192,7 @@ object MissingCommon{
     * and (2) if c has a reference to a secondary component c2 of cpts1 or
     * cpts2, then servers || c || c2 (renamed). */
 // IMPROVE: not currently cpts1
-  @inline private 
-  def getMissingCandidates(
+  @inline private def getMissingCandidates(
     servers: ServerStates, cpts2: Array[State], c: State, views: ViewSet)
   : List[ComponentView] = {
     var missing = List[ComponentView]() // missing necessary views
