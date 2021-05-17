@@ -166,10 +166,11 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     var missingCommons = List[MissingCommon]()
     for(pid <- missingRefs1; if missingRefs2.contains(pid)){
 // IMPROVE: following unneeded
-      val ok = MissingCommon.hasCommonRef(servers, cpts1, cpts2, pid, views)
+      //val ok = MissingCommon.hasCommonRef(servers, cpts1, cpts2, pid, views)
       val mc = MissingCommon.makeMissingCommon(servers, cpts1, cpts2, pid, views)
-      assert(ok == (mc == null))
-      if(!ok){
+      //assert(ok == (mc == null))
+      // if(!ok){
+      if(mc != null){
 // FIXME: if the component c has a reference to one of the present secondary
 // components, or vice versa, check that that combination is also possible.
         if(verbose){
