@@ -39,20 +39,52 @@ class MissingCommon(
     done
   }
 
+  /** Update missingCandidates based on the addition of cv. */
+  def update1(cv: ComponentView) = {
+    // missingCandidates = missingCandidates.map(_.filter(_ != cv))
+    // return true if any empty.
+    // set found = true if we find a match
+    var mcs = missingCandidates; missingCandidates = List(); var found = false
+    while(mcs.nonEmpty){
+      var mc = mcs.head; mcs = mcs.tail; var newMc = List[ComponentView]()
+      while(mc.nonEmpty){
+        val cv1 = mc.head; mc = mc.tail
+        if(cv1 != cv) newMc ::= cv1 else found = true
+      }
+      if(newMc.isEmpty) println(s"update1: $this")
+      else missingCandidates ::= newMc
+    }
+    assert(found)
+  }
+
   @inline def done = isDone
 
   /** Is cv a possible match to clause (1), i.e. does it match servers ||
     * cpts1(0) || c? */
   def matches(cv: ComponentView) = 
-    cv.servers == servers && cv.components(0) == cpts1(0)
+    cv.servers == servers && cv.components(0) == princ1
   // IMPROVE: can we also ensure that cv.components(1).processIdentity == pid?
 
-  def updateMC(cv: ComponentView, views: ViewSet) = {
+  /** Update this based on using cv to instantiate servers || princ1 || c. */
+  def updateMC(cv: ComponentView, views: ViewSet): Boolean = {
     require(matches(cv))
-    if(cv.components(1).hasPID(pid)){
-      println(s"updateMC($cv):\n  $this")
-// .................................................
+    val cpt1 = cv.components(1)
+    if(cpt1.hasPID(pid)){
+      val oldMissingCandidates = missingCandidates
+      if(MissingCommon.updateMissingCandidates(this, cpt1, views)){
+        // println(s"updateMC($cv):\n  $this\nCompleted!")
+        isDone = true
+      }
+      if(missingCandidates != oldMissingCandidates){
+        // Should have added at the front
+        val lenDiff = missingCandidates.length - oldMissingCandidates.length
+        assert(missingCandidates.drop(lenDiff) == oldMissingCandidates)
+        // println("Added: "+missingCandidates.take(lenDiff))
+        // println(s"missingCandidates = $missingCandidates;\n"+
+        //   s"oldMissingcandidates == $oldMissingCandidates")
+      }
     }
+    isDone
   }
 
   def allCandidates: List[ComponentView] = missingCandidates.flatten.distinct
@@ -144,33 +176,19 @@ object MissingCommon{
     var matches = matchesFor(servers, princ1, pid, views)
     while(matches.nonEmpty && !found){
       val cv1 = matches.head; matches = matches.tail
-      val cpt1 = cv1.components(1); assert(cpt1.hasPID(pid))
-      found = updateMissingCandidates(mc, cpt1, views)
-//       // All relevant renamings of cpt1: identity on params of servers and
-//       // princ1, but otherwise either to other params of cpts2 or to fresh
-//       // values.
-// // FIXME: also rename to other params of cpts1?
-//       val renames = Unification.remapToJoin(servers, princ1, cpts2, cpt1)
-//       var i = 0; 
-//       while(i < renames.length && !found){
-//         val c = renames(i); i += 1
-//         val missing = getMissingCandidates(servers, cpts2, c, views)
-//         if(missing.isEmpty) found = true
-//         else mc.missingCandidates ::= missing
-//      } // end of while(i < renames.length && !found)
-    } // end of outer while loop
-
+      found = updateMissingCandidates(mc, cv1.components(1), views)
+    } // end of while loop
     if(found) null 
     else{ Profiler.count("MissingCandidateSize"+mc.allCandidates.length); mc }
   }
 
-  /** Update mc.missingCandidates to include those list of missing views
-    * corresponding to instantiating c with a renaming of cpt1.  
+  /** Update mc.missingCandidates to include lists of missing views
+    * corresponding to instantiating c with a renaming of cpt1.
     * @return true if mc is now complete. */
   @inline private 
   def updateMissingCandidates(mc: MissingCommon, cpt1: State, views: ViewSet)
       : Boolean = {
-    assert(cpt1.hasPID(mc.pid))
+    require(cpt1.hasPID(mc.pid))
     // All relevant renamings of cpt1: identity on params of servers and
     // princ1, but otherwise either to other params of cpts2 or to fresh
     // values.
@@ -182,7 +200,7 @@ object MissingCommon{
       val missing = getMissingCandidates(mc.servers, mc.cpts2, c, views)
       if(missing.isEmpty) found = true
       else mc.missingCandidates ::= missing
-    } // end of while llop
+    } // end of while loop
     found
   }
 

@@ -205,27 +205,52 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   /** If cv completes a delayed transition in effectOnStore, then complete it. */
   def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
   = {
-    effectOnStore.complete(cv, views)
+    for(mi <- effectOnStore.complete(cv, views)){
+      println(s"Adding ${mi.newView}")
+      tryAddView(mi, nextNewViews)
+    }
     for(mi <- effectOnStore.get(cv)){
       Profiler.count("completeDelayed")
       // Test if missing and missingCommon now satisfied.
       val ok = mi.update(cv, views)
-      val nv = mi.newView
-      if(ok && nextNewViews.add(nv)){
-        val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
-        if(verbose){
-          println(s"Adding via completeDelayed $cv -> ($mi, $nv)\n"+
-            s"$pre --> $post\n"+
-            s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-            s"  --> ${View.show(post.servers, newComponents)} == $nv")
-        }
-        if(!nv.representableInScript){
-          println("Not enough identities in script to combine transition\n"+
-            s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
-          sys.exit
-        }
-      } // end of outer if
+      if(ok) tryAddView(mi, nextNewViews)
+      // val nv = mi.newView
+      // if(ok && nextNewViews.add(nv)){
+      //   val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
+      //   if(verbose){
+      //     println(s"Adding via completeDelayed $cv -> ($mi, $nv)\n"+
+      //       s"$pre --> $post\n"+
+      //       s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+      //       s"  --> ${View.show(post.servers, newComponents)} == $nv")
+      //   }
+      //   if(!nv.representableInScript){
+      //     println("Not enough identities in script to combine transition\n"+
+      //       s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+      //     sys.exit
+      //   }
+      // } // end of outer if
     } // end of for loop
+  }
+
+  /** Add mi.nextNewViews to nextNewViews. */
+  @inline private 
+  def tryAddView(mi: MissingInfo, nextNewViews: MyHashSet[ComponentView]) = {
+    require(mi.done)
+    val nv = mi.newView
+    if(nextNewViews.add(nv)){
+      val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
+      if(verbose){
+        println(s"Adding via completeDelayed $cv -> ($mi, $nv)\n"+
+          s"$pre --> $post\n"+
+          s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+          s"  --> ${View.show(post.servers, newComponents)} == $nv")
+      }
+      if(!nv.representableInScript){
+        println("Not enough identities in script to combine transition\n"+
+          s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+        sys.exit
+      }
+    } // end of outer if
   }
 
 

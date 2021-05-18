@@ -1,6 +1,7 @@
 package ViewAbstraction
 import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
+import scala.collection.mutable.ArrayBuffer
 
 /* Classes in this file record information about when a particular View,
  * newView, can be added, under singleRef.  Each instance arises from a call
@@ -42,33 +43,39 @@ class MissingInfo(
     }
 
     // missingCommon = missingCommon.filter(!_.update(views))
-    var mcs = missingCommon; var missingCommonX = List[MissingCommon]()
+    var mcs = missingCommon; missingCommon = List() //  var missingCommonX = List[MissingCommon]()
     while(mcs.nonEmpty){
       val mc = mcs.head; mcs = mcs.tail
-      if(!mc.update(views)) missingCommonX ::= mc
+      if(!mc.update(views)) missingCommon ::= mc
     }
     // assert(missingCommon.length <= 1) Not true 
 // IMPROVE: pass cv to mc.update, and test whether this allows a new component.
-
-    missingViews.isEmpty && missingCommonX.isEmpty
+    //missingCommon = missingCommonX
+// TIDY UP
+    missingViews.isEmpty && missingCommon.isEmpty
   }
 
-  // def done = missingViews.isEmpty && missingCommon.isEmpty
+  def done = missingViews.isEmpty && missingCommon.isEmpty
 
   /** Update the MissingCommon entries in this, based on cv being a possible
     * match to the first clause of the obligation.  Pre: cv is a possible
     * match to at least one. */
+// FIXME: return the new Views added to missingCommon, against which this should be registered in EffectOnStore
   def updateMC(cv: ComponentView, views: ViewSet) = {
+    val ab = new ArrayBuffer[ComponentView]
     var matched = false // have we found a MissingCommon entry that matches?
-    for(mc <- missingCommon){
+    var mcs = missingCommon; missingCommon = List()
+    while(mcs.nonEmpty){
+      val mc = mcs.head; mcs = mcs.tail
       if(mc.matches(cv)){
         matched = true
-        mc.updateMC(cv, views)
-// TODO: if cv.components(1) has pid = mc.pid, then update mc based on that. 
+        if(!mc.updateMC(cv, views)) missingCommon ::= mc
+        else println(s"Removed $mc from $this")
       }
     }
-    assert(matched, s"\nupdateMC($cv):\n  $missingCommon")
-
+// FIXME: add following: not true when also using update
+    //assert(matched, s"\nupdateMC($cv):\n  $missingCommon")
+    //missingViews.isEmpty && missingCommon.isEmpty
   }
 
   override def toString =
@@ -148,14 +155,21 @@ class SimpleEffectOnStore extends EffectOnStore{
   }
 
   /** Try to complete values in the store, based on the addition of cv, and with
-    * views as the ViewSet.  Return the Views that can now be added.  */
-  def complete(cv: ComponentView, views: ViewSet): List[ComponentView] = {
+    * views as the ViewSet.  Return the MissingInfo that are now complete.  */
+  def complete(cv: ComponentView, views: ViewSet): List[MissingInfo] = {
+    var result = List[MissingInfo]()
     val mis: List[MissingInfo] = 
       commonStore.getOrElse((cv.servers, cv.principal), List[MissingInfo]())
     for(mi <- mis){
       mi.updateMC(cv, views)
+      if(mi.done){
+        println(s"$mi complete")
+        result ::= mi
+// IMPROVE: remove mi from mapping
+      }
     }
-    null
+// Remove cv from each entry in store
+    result
   }
 
 
