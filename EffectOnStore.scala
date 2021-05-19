@@ -68,29 +68,41 @@ class MissingInfo(
       if(mc.matches(cv)){
         matched = true
         if(!mc.updateMC(cv, views, ab)) missingCommon ::= mc
-        else println(s"Removed $mc from $this")
+        // else println(s"Removed $mc from $this")
       }
     }
 // FIXME: add following: not true when also using update
     //assert(matched, s"\nupdateMC($cv):\n  $missingCommon")
-
-    // Profiler.count(s"updateMC"+missingCommon.length) // Never seen more than 1
-
-    // Find those ComponentViews with which this has to be registered in the
-    // store.
-    // if(missingCommon.isEmpty) ArrayBuffer[ComponentView]()
-    // else if(missingCommon.length == 1) missingCommon.head.getToRegister
-    // else{
-    //   // Expensive but rare case; improve?
-    //   val ab = missingCommon.head.getToRegister
-    //   for(mc <- missingCommon.tail) ab ++= mc.getToRegister
-    //   ab
-    // } 
   }
+
+  /** Update this based on the addition of cv, which matches a missing view
+    * either in missingViews or missingCommon. */
+  def update1(cv: ComponentView) = {
+    // Remove cv from each element of missingCommon.
+    var mcs = missingCommon; missingCommon = List()
+    while(mcs.nonEmpty){
+      val mc = mcs.head; mcs = mcs.tail
+      if(! mc.update1(cv)) missingCommon ::= mc
+      // else println(s"MissingInfo.update1($mc)")
+    }
+
+    // Remove cv from missingViews
+    var mvs = missingViews; missingViews = List()
+    while(mvs.nonEmpty){
+      val mv = mvs.head; mvs = mvs.tail
+      if(mv != cv) missingViews ::= mv
+      // else println(s"MissingInfo.update1($cv)") 
+    }
+
+    // if(done) println(s"$this now done")
+  }
+
+// IMPROVE: maybe EffectOnStore should store MissingInfos separately,
+// depending on which of the phases of update1 is relevant.
 
 
   override def toString =
-    s"MissingInfo($newView, $missingViews0, $missingCommon)"
+    s"MissingInfo($newView, $missingViews0, $missingCommon0)"
 }
 
 // =======================================================
@@ -169,9 +181,11 @@ class SimpleEffectOnStore extends EffectOnStore{
     * views as the ViewSet.  Return the MissingInfo that are now complete.  */
   def complete(cv: ComponentView, views: ViewSet): List[MissingInfo] = {
     var result = List[MissingInfo]()
+
+    // Remove cv from each relevant entry in commonStore
     val mis: List[MissingInfo] = 
       commonStore.getOrElse((cv.servers, cv.principal), List[MissingInfo]())
-    for(mi <- mis){
+    for(mi <- mis; if !mi.done){
       val vb = new ViewBuffer; mi.updateMC(cv, views, vb)
       if(mi.done){
         println(s"$mi complete")
@@ -186,7 +200,13 @@ class SimpleEffectOnStore extends EffectOnStore{
         }
       }
     }
-// Remove cv from each entry in store
+
+    // Remove cv from each entry in store
+    val mis2 = store.getOrElse(cv, List[MissingInfo]())
+    for(mi <- mis2; if !mi.done){
+      mi.update1(cv)
+      if(mi.done){ println(s"complete: $mi now done via $cv"); result ::= mi }
+    }
     result
   }
 

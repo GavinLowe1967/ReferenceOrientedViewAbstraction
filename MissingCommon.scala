@@ -46,21 +46,19 @@ class MissingCommon(
     * each; if any is now empty, then mark this as satisfied and return
     * true. */
   def update1(cv: ComponentView): Boolean = {
-    // missingCandidates = missingCandidates.map(_.filter(_ != cv))
-    // return true if any empty.
-    // set found = true if we find a match
-    var mcs = missingCandidates; missingCandidates = List(); var found = false
+    // Remove cv from each element of missingCandidates.  Mark this as done if
+    // any is then empty.
+    var mcs = missingCandidates; missingCandidates = List()
     while(mcs.nonEmpty){
       var mc = mcs.head; mcs = mcs.tail; var newMc = List[ComponentView]()
       // Remove cv from mc; add resulting list to missingCandidates
       while(mc.nonEmpty){
         val cv1 = mc.head; mc = mc.tail
-        if(cv1 != cv) newMc ::= cv1 else found = true
+        if(cv1 != cv) newMc ::= cv1 
       }
-      if(newMc.isEmpty){ isDone = true; println(s"********update1: $this") }
+      if(newMc.isEmpty) isDone = true //; println(s"update1($cv):\n  $this") 
       else missingCandidates ::= newMc
     }
-    assert(found)
     done
   }
 
