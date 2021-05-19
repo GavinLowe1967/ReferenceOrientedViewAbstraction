@@ -43,40 +43,51 @@ class MissingInfo(
     }
 
     // missingCommon = missingCommon.filter(!_.update(views))
-    var mcs = missingCommon; missingCommon = List() //  var missingCommonX = List[MissingCommon]()
+    var mcs = missingCommon; missingCommon = List() 
     while(mcs.nonEmpty){
       val mc = mcs.head; mcs = mcs.tail
       if(!mc.update(views)) missingCommon ::= mc
     }
-    // assert(missingCommon.length <= 1) Not true 
 // IMPROVE: pass cv to mc.update, and test whether this allows a new component.
-    //missingCommon = missingCommonX
-// TIDY UP
     missingViews.isEmpty && missingCommon.isEmpty
   }
 
   def done = missingViews.isEmpty && missingCommon.isEmpty
 
+  import MissingCommon.ViewBuffer
+
   /** Update the MissingCommon entries in this, based on cv being a possible
     * match to the first clause of the obligation.  Pre: cv is a possible
-    * match to at least one. */
-// FIXME: return the new Views added to missingCommon, against which this should be registered in EffectOnStore
-  def updateMC(cv: ComponentView, views: ViewSet) = {
-    val ab = new ArrayBuffer[ComponentView]
+    * match to at least one.  Add to ab all Views that this needs to be
+    * registered against in the store. */
+  def updateMC(cv: ComponentView, views: ViewSet, ab: ViewBuffer) = {
     var matched = false // have we found a MissingCommon entry that matches?
     var mcs = missingCommon; missingCommon = List()
     while(mcs.nonEmpty){
       val mc = mcs.head; mcs = mcs.tail
       if(mc.matches(cv)){
         matched = true
-        if(!mc.updateMC(cv, views)) missingCommon ::= mc
+        if(!mc.updateMC(cv, views, ab)) missingCommon ::= mc
         else println(s"Removed $mc from $this")
       }
     }
 // FIXME: add following: not true when also using update
     //assert(matched, s"\nupdateMC($cv):\n  $missingCommon")
-    //missingViews.isEmpty && missingCommon.isEmpty
+
+    // Profiler.count(s"updateMC"+missingCommon.length) // Never seen more than 1
+
+    // Find those ComponentViews with which this has to be registered in the
+    // store.
+    // if(missingCommon.isEmpty) ArrayBuffer[ComponentView]()
+    // else if(missingCommon.length == 1) missingCommon.head.getToRegister
+    // else{
+    //   // Expensive but rare case; improve?
+    //   val ab = missingCommon.head.getToRegister
+    //   for(mc <- missingCommon.tail) ab ++= mc.getToRegister
+    //   ab
+    // } 
   }
+
 
   override def toString =
     s"MissingInfo($newView, $missingViews0, $missingCommon)"
@@ -132,14 +143,12 @@ class SimpleEffectOnStore extends EffectOnStore{
     for(cv <- missing) addToStore(cv, missingInfo)
     for(mc <- missingCommon; cv <- mc.allCandidates) addToStore(cv, missingInfo)
     for(mc <- missingCommon){
-      val princ1 = mc.cpts1(0); val princ2 = mc.cpts2(0)
-      for(p <- List(princ1 /*, princ2 */)){  // IMPROVE
-        val pR = Remapper.remapToPrincipal(mc.servers, p)// IMPROVE: only for princ2
-        if(p != pR) assert(p != princ1) // IMPROVE
-        val prev = commonStore.getOrElse((mc.servers,pR), List[MissingInfo]())
-        if(!prev.contains(missingInfo))
-          commonStore += (mc.servers,pR) -> (missingInfo::prev)
-      }
+      val princ1 = mc.cpts1(0) // ; val princ2 = mc.cpts2(0)
+      if(debugging)
+        assert(Remapper.remapToPrincipal(mc.servers, princ1) == princ1)
+      val prev = commonStore.getOrElse((mc.servers, princ1), List[MissingInfo]())
+      if(!prev.contains(missingInfo))
+        commonStore += (mc.servers, princ1) -> (missingInfo::prev)
     }
   }
 
@@ -154,6 +163,8 @@ class SimpleEffectOnStore extends EffectOnStore{
 // IMPROVE if latter empty
   }
 
+  import MissingCommon.ViewBuffer
+
   /** Try to complete values in the store, based on the addition of cv, and with
     * views as the ViewSet.  Return the MissingInfo that are now complete.  */
   def complete(cv: ComponentView, views: ViewSet): List[MissingInfo] = {
@@ -161,11 +172,18 @@ class SimpleEffectOnStore extends EffectOnStore{
     val mis: List[MissingInfo] = 
       commonStore.getOrElse((cv.servers, cv.principal), List[MissingInfo]())
     for(mi <- mis){
-      mi.updateMC(cv, views)
+      val vb = new ViewBuffer; mi.updateMC(cv, views, vb)
       if(mi.done){
         println(s"$mi complete")
         result ::= mi
 // IMPROVE: remove mi from mapping
+      }
+      else{
+        // Register mi against each view in vb
+        for(cv1 <- vb){
+          // println(s"Adding $cv1 -> $mi")
+          addToStore(cv1, mi)
+        }
       }
     }
 // Remove cv from each entry in store

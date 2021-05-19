@@ -88,7 +88,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         val nv = Remapper.mkComponentView(post.servers, newComponents)
         // newViewCount += 1        // Mostly with unifs.nonEmpty
         if(!views.contains(nv)){
-          if(missing.isEmpty && /*commonMissing*/missingCommons.isEmpty && nextNewViews.add(nv)){
+          if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){
             // addedViewCount += 1
             if(verbose) println(
               s"$pre --> $post\n  with unifications $unifs\n"+
@@ -102,7 +102,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
               sys.exit
             }
           } // end of if(missing.isEmpty && nextNewViews.add(nv))
-          else if(missing.nonEmpty || missingCommons/*commonMissing*/.nonEmpty){
+          else if(missing.nonEmpty || missingCommons.nonEmpty){
             // Note: we create nv eagerly, even if missing is non-empty: this
             // might not be the most efficient approach
             // val commonMissingTuples = 
@@ -110,6 +110,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
             //     new MissingCommon(pre.servers, preCpts, cpts, pid))
             // effectOnStore.add(missing, commonMissingTuples, nv)
             effectOnStore.add(missing, missingCommons, nv)
+// IMPROVE: 
             if(verbose) println(s"Storing $missing, $missingCommons -> $nv")
             //if(verbose) println(s"Storing $missing, $commonMissingTuples -> $nv")
             nv.setCreationInfoIndirect(
@@ -155,7 +156,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     * @return the identities of all such missing components. */ 
   private def checkCompatibleMissing(
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
-      : List[MissingCommon] /* [ProcessIdentity] */ = {
+      : List[MissingCommon]  = {
     require(singleRef)
     //val princ1 = cpts1(0); val princ2 = cpts2(0)
     val missingRefs1 = StateArray.missingRefs(cpts1)
@@ -165,11 +166,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     var missingCommonRefs = List[ProcessIdentity]()
     var missingCommons = List[MissingCommon]()
     for(pid <- missingRefs1; if missingRefs2.contains(pid)){
-// IMPROVE: following unneeded
-      //val ok = MissingCommon.hasCommonRef(servers, cpts1, cpts2, pid, views)
       val mc = MissingCommon.makeMissingCommon(servers, cpts1, cpts2, pid, views)
-      //assert(ok == (mc == null))
-      // if(!ok){
       if(mc != null){
 // FIXME: if the component c has a reference to one of the present secondary
 // components, or vice versa, check that that combination is also possible.
@@ -178,11 +175,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           s" ${StateArray.show(cpts2)})")
           println(s"Failed to find states to instantiate common reference $pid")
         }
-        // missingCommonRefs ::= pid
         missingCommons ::= mc
       }
     } // end of for loop
-    // missingCommonRefs
     missingCommons
   }
 
