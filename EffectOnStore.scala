@@ -32,25 +32,25 @@ class MissingInfo(
 
   /** Update this, based on new view cv.
     * @return true if all constraints are now satisfied.  */
-  def update(cv: ComponentView, views: ViewSet): Boolean = {
-    // missingViews = missingViews.filter(v1 => v1 != v && !views.contains(v1))
-    var mv = missingViews; missingViews = List[ComponentView]()
-    while(mv.nonEmpty){
-      val v1 = mv.head; mv = mv.tail
-      if(v1 != cv && !views.contains(v1)) 
-// IMPROVE: do we need the latter condition?
-        missingViews ::= v1
-    }
+//   def update(cv: ComponentView, views: ViewSet): Boolean = {
+//     // missingViews = missingViews.filter(v1 => v1 != v && !views.contains(v1))
+//     var mv = missingViews; missingViews = List[ComponentView]()
+//     while(mv.nonEmpty){
+//       val v1 = mv.head; mv = mv.tail
+//       if(v1 != cv && !views.contains(v1)) 
+// // IMPROVE: do we need the latter condition?
+//         missingViews ::= v1
+//     }
 
-    // missingCommon = missingCommon.filter(!_.update(views))
-    var mcs = missingCommon; missingCommon = List() 
-    while(mcs.nonEmpty){
-      val mc = mcs.head; mcs = mcs.tail
-      if(!mc.update(views)) missingCommon ::= mc
-    }
-// IMPROVE: pass cv to mc.update, and test whether this allows a new component.
-    missingViews.isEmpty && missingCommon.isEmpty
-  }
+//     // missingCommon = missingCommon.filter(!_.update(views))
+//     var mcs = missingCommon; missingCommon = List() 
+//     while(mcs.nonEmpty){
+//       val mc = mcs.head; mcs = mcs.tail
+//       if(!mc.update(views)) missingCommon ::= mc
+//     }
+// // IMPROVE: pass cv to mc.update, and test whether this allows a new component.
+//     missingViews.isEmpty && missingCommon.isEmpty
+//   }
 
   def done = missingViews.isEmpty && missingCommon.isEmpty
 
@@ -179,8 +179,10 @@ class SimpleEffectOnStore extends EffectOnStore{
 
   /** Try to complete values in the store, based on the addition of cv, and with
     * views as the ViewSet.  Return the MissingInfo that are now complete.  */
-  def complete(cv: ComponentView, views: ViewSet): List[MissingInfo] = {
-    var result = List[MissingInfo]()
+  def complete(cv: ComponentView, views: ViewSet): List[ComponentView] = {
+    var result = List[ComponentView]()
+    // Add nv to result if not already there
+    def maybeAdd(nv: ComponentView) = if(!result.contains(nv)) result ::= nv
 
     // Remove cv from each relevant entry in commonStore
     val mis: List[MissingInfo] = 
@@ -188,8 +190,8 @@ class SimpleEffectOnStore extends EffectOnStore{
     for(mi <- mis; if !mi.done){
       val vb = new ViewBuffer; mi.updateMC(cv, views, vb)
       if(mi.done){
-        println(s"$mi complete")
-        result ::= mi
+        // println(s"$mi complete")
+        maybeAdd(mi.newView) // result ::= mi.newView
 // IMPROVE: remove mi from mapping
       }
       else{
@@ -205,10 +207,15 @@ class SimpleEffectOnStore extends EffectOnStore{
     val mis2 = store.getOrElse(cv, List[MissingInfo]())
     for(mi <- mis2; if !mi.done){
       mi.update1(cv)
-      if(mi.done){ println(s"complete: $mi now done via $cv"); result ::= mi }
+      if(mi.done){ 
+        // println(s"complete: $mi now done via $cv")
+        maybeAdd(mi.newView) // result ::= mi.newView
+      }
     }
     result
   }
+  // Note: there seems to be a lot of repeated work above, reconsidering
+  // MissingInfos for which the view is already in views.  IMPROVE
 
 
   def size = (store.size, commonStore.size)

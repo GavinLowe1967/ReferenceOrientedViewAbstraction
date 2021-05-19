@@ -200,9 +200,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   /** If cv completes a delayed transition in effectOnStore, then complete it. */
   def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
   = {
-    for(mi <- effectOnStore.complete(cv, views)){
-      println(s"Adding ${mi.newView}")
-      tryAddView(mi.newView, nextNewViews)
+    for(nv <- effectOnStore.complete(cv, views)){
+      if(verbose) println(s"Adding $nv")
+      tryAddView(nv, nextNewViews)
     }
     // for(mi <- effectOnStore.get(cv)){
     //   Profiler.count("completeDelayed")
