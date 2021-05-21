@@ -131,7 +131,11 @@ package object ViewAbstraction{
 
   // ------------------------------------------- Global variables
 
+  /** Are we running in verbose mode, giving more output? */
   var verbose = false
+
+  /** Should the final ViewSet be printed? */
+  var showViews = false
 
   /** Switch to activate various assertions. */
   val debugging = true // false

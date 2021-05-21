@@ -453,7 +453,8 @@ class Checker(system: SystemP.System){
     } // end of main loop
 
     println("\nSTEP "+ply)
-    if(verbose) println(sysAbsViews)
+    if(singleRef) effectOn.sanityCheck
+    if(showViews) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")

@@ -27,27 +27,15 @@ class MissingCommon(
     * will be discharged. */
   var missingCandidates = List[MissingCandidates]()
 
-// IMPROVE: use missingCandidates, as in notebook
-
   private var isDone = false
 
   /** Is this constraint satisfied? */
   @inline def done = isDone
 
-  /** Test whether this is now satisfied. */
-  // def update(views: ViewSet): Boolean = {
-  //   isDone = MissingCommon.hasCommonRef(servers, cpts1, cpts2, pid, views)
-  //   if(verbose && done) println(s"$this now satisfied")
-  //   // else println(s"$this not satisfied")
-  //   done
-  // }
-
   /** Update missingCandidates based on the addition of cv.  Remove cv from
     * each; if any is now empty, then mark this as satisfied and return
     * true. */
-  def update1(cv: ComponentView): Boolean = {
-    // Remove cv from each element of missingCandidates.  Mark this as done if
-    // any is then empty.
+  def updateMissingViews(cv: ComponentView): Boolean = {
     var mcs = missingCandidates; missingCandidates = List()
     while(mcs.nonEmpty){
       var mc = mcs.head; mcs = mcs.tail; var newMc = List[ComponentView]()
@@ -56,7 +44,7 @@ class MissingCommon(
         val cv1 = mc.head; mc = mc.tail
         if(cv1 != cv) newMc ::= cv1 
       }
-      if(newMc.isEmpty) isDone = true //; println(s"update1($cv):\n  $this") 
+      if(newMc.isEmpty) isDone = true
       else missingCandidates ::= newMc
     }
     done
@@ -72,27 +60,31 @@ class MissingCommon(
 
   /** Update this based on using cv to instantiate servers || princ1 || c.
     * Add to vb those Views against which this needs to be registered. */
-  def updateMC(cv: ComponentView, views: ViewSet, vb: ViewBuffer): Boolean = {
+  def updateMissingCommon(cv: ComponentView, views: ViewSet, vb: ViewBuffer)
+      : Boolean = {
     require(matches(cv)); val cpt1 = cv.components(1) 
     if(cpt1.hasPID(pid)){
-      val oldMissingCandidates = missingCandidates
+      // val oldMissingCandidates = missingCandidates
       if(MissingCommon.updateMissingCandidates(this, cpt1, views, vb)){
         // println(s"updateMC($cv):\n  $this\nCompleted!")
         isDone = true
       }
-      if(missingCandidates != oldMissingCandidates){
-        // Should have added at the front
-        val lenDiff = missingCandidates.length - oldMissingCandidates.length
-        assert(missingCandidates.drop(lenDiff) == oldMissingCandidates)
-        // println("Added: "+missingCandidates.take(lenDiff))
-        // println(s"missingCandidates = $missingCandidates;\n"+
-        //   s"oldMissingcandidates == $oldMissingCandidates")
-      }
+      // if(missingCandidates != oldMissingCandidates){
+      //   // Should have added at the front
+      //   val lenDiff = missingCandidates.length - oldMissingCandidates.length
+      //   assert(missingCandidates.drop(lenDiff) == oldMissingCandidates)
+      // }
     }
     isDone
   }
 
   def allCandidates: List[ComponentView] = missingCandidates.flatten.distinct
+
+  /** Sanity check that no elements of views remain in missingCandidates. */
+  def sanityCheck(views: ViewSet) = {
+    assert(!done)
+    for(mcs <- missingCandidates; v <- mcs) assert(!views.contains(v))
+  }
 
   override def toString = 
     s"MissingCommon($servers, ${StateArray.show(cpts1)},"+
@@ -107,59 +99,6 @@ object MissingCommon{
     * registered in the EffectOnStore. */
   type ViewBuffer = ArrayBuffer[ComponentView]
 
-  /** Is there a component state c with identity pid such that sysAbsViews
-    * contains each of the following (up to renaming): (1) servers || princ1
-    * || c; (2) servers || princ2 || c; (3) if c has a reference to a
-    * component c2 of cpts2 then servers || c || c2? */
-// IMPROVE comments
-//   @inline def hasCommonRef(
-//     servers: ServerStates, cpts1: Array[State], cpts2: Array[State], 
-//     pid: ProcessIdentity, views: ViewSet)
-//       : Boolean = {
-//     assert(singleRef)
-//     assert(cpts1.length == 2, StateArray.show(cpts1))
-//     assert(cpts2.length == 2, StateArray.show(cpts2))
-//     val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
-//     // All elements of views of the form servers || princ1 || c where c has
-//     // identity pid
-//     var matches = matchesFor(servers, princ1, pid, views)
-//     while(matches.nonEmpty && !found){
-//       val cv1 = matches.head; matches = matches.tail
-//       val cpt1 = cv1.components(1); assert(cpt1.hasPID(pid))
-//       // All relevant renamings of cpt1: identity on params of servers and
-//       // princ1, but otherwise either to other params of cpts2 or to fresh
-//       // values.
-// // FIXME: also rename to other params of cpts1?
-//       val renames = Unification.remapToJoin(servers, princ1, cpts2, cpt1)
-//       var i = 0
-//       while(i < renames.length && !found){
-//         val c = renames(i); i += 1
-//         val cvx = Remapper.mkComponentView(servers, Array(princ2, c))
-//         if(views.contains(cvx)){
-//           found = true; var j = 1
-//           // Test if there is a view with c as principal, with a reference
-//           // to a secondary component of cpts1 or cpts2
-//           while(j < c.length){ // && found ?
-//             val pid2 = c.processIdentities(j); j += 1
-//             val c2 = StateArray.find(pid2, cpts2)
-// // FIXME: also cpts1?
-//             if(c2 != null){
-//               val cvx2 = Remapper.mkComponentView(servers, Array(c, c2))
-//               if(views.contains(cvx2)){ } //  println(s"Contains $cvx2")
-//               else{
-//                 found = false
-//                 if(false) println(
-//                   s"hasCommonRef($servers, ${StateArray.show(cpts1)}, "+
-//                     s"${StateArray.show(cpts2)}): ${c.toString0} -> "+
-//                     c2.toString0+s"\nNot contains $cvx2")
-//               }
-//             }
-//           }
-//         }
-//       } // end of inner while
-//     } // end of outer while
-//     found
-//   }
 
   /** A MissingCommon object, corresponding to servers, cpts1, cpts2 and pid, or
     * null if the obligation is already satisfied.
@@ -188,8 +127,8 @@ object MissingCommon{
       val cv1 = matches.head; matches = matches.tail
       found = updateMissingCandidates(mc, cv1.components(1), views, ab)
     } // end of while loop
-    if(found) null 
-    else{ Profiler.count("MissingCandidateSize"+mc.allCandidates.length); mc }
+    // Profiler.count("MissingCandidateSize"+mc.allCandidates.length)
+    if(found) null else mc 
     // Note: we don't need to do anything with ab here, as mc.allcandidates
     // will store the same Views.  IMPROVE?
   }
@@ -224,13 +163,12 @@ object MissingCommon{
     * has a reference to a secondary component c2 of cpts1 or cpts2, then
     * servers || c || c2 (renamed).  Add to vb the views that mc needs to be
     * registered against in the EffectOnStore.*/
-// IMPROVE: not currently cpts1
   @inline private 
   def getMissingCandidates(
     mc: MissingCommon, c: State, views: ViewSet, vb: ViewBuffer)
       : List[ComponentView] = {
     var missing = List[ComponentView]() // missing necessary views
-    val servers = mc.servers; val cpts2 = mc.cpts2
+    val servers = mc.servers; val cpts1 = mc.cpts1; val cpts2 = mc.cpts2
     // Add servers || cptsx, if not in views
     @inline def maybeAdd(cptsx: Array[State]) = { 
       val cvx = Remapper.mkComponentView(servers, cptsx)
@@ -238,14 +176,15 @@ object MissingCommon{
     }
 
     maybeAdd(Array(cpts2(0), c))
-    // If c has a reference to a secondary component c2 of cpts2 or FIXME
-    // cpts1, then the View servers || c || c2 is necessary.
+    // If c has a reference to a secondary component c2 of cpts2 or cpts1,
+    // then the View servers || c || c2 is necessary.
     var j = 1
     while(j < c.length){
       val pid2 = c.processIdentities(j); j += 1
       val c2 = StateArray.find(pid2, cpts2)
-// FIXME: also cpts1?
       if(c2 != null) maybeAdd(Array(c, c2))
+      val c1 = StateArray.find(pid2, cpts1)
+      if(c1 != null) maybeAdd(Array(c, c1))
     }
     missing
   }

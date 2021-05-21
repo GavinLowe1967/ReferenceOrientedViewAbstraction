@@ -49,6 +49,7 @@ object VA{
       case "--noDebug" => debuggable = false; i += 1
       case "--test" => testing = true; i += 1
       case "--singleRef" => singleRef = true; i += 1
+      case "--showViews" => showViews = true; i += 1
       case "-p" => numThreads = args(i+1).toInt; i += 2
       case fn => fname = fn; i += 1
     }

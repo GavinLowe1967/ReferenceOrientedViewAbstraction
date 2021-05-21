@@ -310,7 +310,7 @@ object Unification{
     // used.  IMPROVE?
     // Identity map on parameters of servers and princ1; and next args to use
     val map0 = servers.remappingMap; val nextArgMap = servers.nextArgMap
-    for((f,id) <- princ1.processIdentities){
+    for((f,id) <- princ1.processIdentities; if !isDistinguished(id)){
       map0(f)(id) = id; nextArgMap(f) = nextArgMap(f) max (id+1)
     }
     // Make otherArgMap, with parameters of princ2 not in map0, maintaining

@@ -30,60 +30,44 @@ class MissingInfo(
   // It will be unusual for the list to contain more than one element, I think. 
 // IMPROVE, all the above share the same servers, cpts1, cpts2
 
-  /** Update this, based on new view cv.
-    * @return true if all constraints are now satisfied.  */
-//   def update(cv: ComponentView, views: ViewSet): Boolean = {
-//     // missingViews = missingViews.filter(v1 => v1 != v && !views.contains(v1))
-//     var mv = missingViews; missingViews = List[ComponentView]()
-//     while(mv.nonEmpty){
-//       val v1 = mv.head; mv = mv.tail
-//       if(v1 != cv && !views.contains(v1)) 
-// // IMPROVE: do we need the latter condition?
-//         missingViews ::= v1
-//     }
-
-//     // missingCommon = missingCommon.filter(!_.update(views))
-//     var mcs = missingCommon; missingCommon = List() 
-//     while(mcs.nonEmpty){
-//       val mc = mcs.head; mcs = mcs.tail
-//       if(!mc.update(views)) missingCommon ::= mc
-//     }
-// // IMPROVE: pass cv to mc.update, and test whether this allows a new component.
-//     missingViews.isEmpty && missingCommon.isEmpty
-//   }
-
   def done = missingViews.isEmpty && missingCommon.isEmpty
 
   import MissingCommon.ViewBuffer
 
   /** Update the MissingCommon entries in this, based on cv being a possible
-    * match to the first clause of the obligation.  Pre: cv is a possible
-    * match to at least one.  Add to ab all Views that this needs to be
-    * registered against in the store. */
-  def updateMC(cv: ComponentView, views: ViewSet, ab: ViewBuffer) = {
+    * match to the first clause of the obligation.  Add to ab all Views that
+    * this needs to be registered against in the store.  cv is expected to be
+    * a possible match to at least one member of missingCommon0. 
+    * @return true if this is now complete. */
+  def updateMissingCommon(cv: ComponentView, views: ViewSet, ab: ViewBuffer)
+      : Boolean = {
     var matched = false // have we found a MissingCommon entry that matches?
     var mcs = missingCommon; missingCommon = List()
     while(mcs.nonEmpty){
       val mc = mcs.head; mcs = mcs.tail
       if(mc.matches(cv)){
         matched = true
-        if(!mc.updateMC(cv, views, ab)) missingCommon ::= mc
+        if(!mc.updateMissingCommon(cv, views, ab)) missingCommon ::= mc
         // else println(s"Removed $mc from $this")
       }
+      else missingCommon ::= mc
     }
-// FIXME: add following: not true when also using update
-    //assert(matched, s"\nupdateMC($cv):\n  $missingCommon")
+    if(debugging && !matched) // check precondition
+      assert(missingCommon0.exists(mc => mc.matches(cv)),
+        s"\nupdateMC($cv):\n  $missingCommon\n $missingCommon0")
+    done
   }
 
-  /** Update this based on the addition of cv, which matches a missing view
-    * either in missingViews or missingCommon. */
-  def update1(cv: ComponentView) = {
+  /** Update this based on the addition of cv.  cv is expected to match a
+    * missing view that was added to missingViews or missingCommon (maybe
+    * subsequently removed).
+    * @return true if this is now complete. */
+  def updateMissingViews(cv: ComponentView): Boolean = {
     // Remove cv from each element of missingCommon.
     var mcs = missingCommon; missingCommon = List()
     while(mcs.nonEmpty){
       val mc = mcs.head; mcs = mcs.tail
-      if(! mc.update1(cv)) missingCommon ::= mc
-      // else println(s"MissingInfo.update1($mc)")
+      if(! mc.updateMissingViews(cv)) missingCommon ::= mc
     }
 
     // Remove cv from missingViews
@@ -91,15 +75,19 @@ class MissingInfo(
     while(mvs.nonEmpty){
       val mv = mvs.head; mvs = mvs.tail
       if(mv != cv) missingViews ::= mv
-      // else println(s"MissingInfo.update1($cv)") 
     }
 
-    // if(done) println(s"$this now done")
+    done
   }
-
 // IMPROVE: maybe EffectOnStore should store MissingInfos separately,
 // depending on which of the phases of update1 is relevant.
 
+  /** Check that this contains no element of views remains in missingViews. */
+  def sanityCheck(views: ViewSet) = {
+    assert(!done)
+    for(v <- missingViews) assert(!views.contains(v))
+    for(mc <- missingCommon) mc.sanityCheck(views)
+  }
 
   override def toString =
     s"MissingInfo($newView, $missingViews0, $missingCommon0)"
@@ -120,7 +108,14 @@ trait EffectOnStore{
   /** Get all MissingInfo values in the store for which cv is relevant: either
     * cv is in missingViews, or in an element of
     * missingCommon.missingCandidates, or ........ . */
-  def get(cv: ComponentView): List[MissingInfo]
+  // def get(cv: ComponentView): List[MissingInfo]
+
+  /** Try to complete values in the store, based on the addition of cv, and with
+    * views as the ViewSet.  Return the Views that can now be added.  */
+  def complete(cv: ComponentView, views: ViewSet): List[ComponentView]
+
+  /** Sanity check performed at the end of a run. */
+  def sanityCheck(views: ViewSet): Unit
 
   def size: (Int, Int)
 }
@@ -155,7 +150,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     for(cv <- missing) addToStore(cv, missingInfo)
     for(mc <- missingCommon; cv <- mc.allCandidates) addToStore(cv, missingInfo)
     for(mc <- missingCommon){
-      val princ1 = mc.cpts1(0) // ; val princ2 = mc.cpts2(0)
+      val princ1 = mc.cpts1(0)
       if(debugging)
         assert(Remapper.remapToPrincipal(mc.servers, princ1) == princ1)
       val prev = commonStore.getOrElse((mc.servers, princ1), List[MissingInfo]())
@@ -166,57 +161,57 @@ class SimpleEffectOnStore extends EffectOnStore{
 
   /** Get all pairs (missing, missingCommon, nv) in the store for which cv in
     * relevant. */
-  def get(cv: ComponentView): List[MissingInfo] = {
-    val mi1 = store.getOrElse(cv, List[MissingInfo]())
-    val mi2 =
-      commonStore.getOrElse((cv.servers, cv.principal), List[MissingInfo]())
-    // if(mi2.nonEmpty) println(s"***$cv -> $mi1,\n  ${mi2.mkString("\n  ")}")
-    append1(mi1,mi2)
-// IMPROVE if latter empty
-  }
+//   def get(cv: ComponentView): List[MissingInfo] = { ???
+//     val mi1 = store.getOrElse(cv, List[MissingInfo]())
+//     val mi2 =
+//       commonStore.getOrElse((cv.servers, cv.principal), List[MissingInfo]())
+//     // if(mi2.nonEmpty) println(s"***$cv -> $mi1,\n  ${mi2.mkString("\n  ")}")
+//     append1(mi1,mi2)
+// // IMPROVE if latter empty
+//   }
 
   import MissingCommon.ViewBuffer
 
   /** Try to complete values in the store, based on the addition of cv, and with
-    * views as the ViewSet.  Return the MissingInfo that are now complete.  */
+    * views as the ViewSet.  Return the Views that can now be added.  */
   def complete(cv: ComponentView, views: ViewSet): List[ComponentView] = {
     var result = List[ComponentView]()
     // Add nv to result if not already there
     def maybeAdd(nv: ComponentView) = if(!result.contains(nv)) result ::= nv
 
-    // Remove cv from each relevant entry in commonStore
+    // For each relevant entry in commonStore, try to match the MissingCommon
+    // entries against cv.
     val mis: List[MissingInfo] = 
       commonStore.getOrElse((cv.servers, cv.principal), List[MissingInfo]())
     for(mi <- mis; if !mi.done){
-      val vb = new ViewBuffer; mi.updateMC(cv, views, vb)
-      if(mi.done){
-        // println(s"$mi complete")
-        maybeAdd(mi.newView) // result ::= mi.newView
-// IMPROVE: remove mi from mapping
-      }
-      else{
-        // Register mi against each view in vb
-        for(cv1 <- vb){
-          // println(s"Adding $cv1 -> $mi")
-          addToStore(cv1, mi)
-        }
-      }
+      val vb = new ViewBuffer; 
+      if(mi.updateMissingCommon(cv, views, vb)) maybeAdd(mi.newView)
+      else // Register mi against each view in vb
+        for(cv1 <- vb) addToStore(cv1, mi)
     }
 
     // Remove cv from each entry in store
     val mis2 = store.getOrElse(cv, List[MissingInfo]())
     for(mi <- mis2; if !mi.done){
-      mi.update1(cv)
-      if(mi.done){ 
-        // println(s"complete: $mi now done via $cv")
-        maybeAdd(mi.newView) // result ::= mi.newView
-      }
+      if(mi.updateMissingViews(cv)) maybeAdd(mi.newView) 
     }
     result
   }
   // Note: there seems to be a lot of repeated work above, reconsidering
-  // MissingInfos for which the view is already in views.  IMPROVE
+  // MissingInfos for which the view is already in views.  Maybe remove
+  // entries, and/or check whether the corresponding newView is already in
+  // views, earlier. IMPROVE
 
 
   def size = (store.size, commonStore.size)
+
+  /** Check that every stored MissingInfo is either done or contains no element
+    * of views. */
+  def sanityCheck(views: ViewSet) = {
+    println("Sanity check")
+    for(mis <- store.valuesIterator; mi <- mis; if !mi.done){
+      mi.sanityCheck(views)
+    }
+
+  }
 }

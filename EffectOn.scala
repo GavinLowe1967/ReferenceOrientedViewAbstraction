@@ -28,7 +28,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     * Tuples are added to the store in apply when a transition is prevented
     * because relevant views are not yet in the store.  completeDelayed
     * subsequently tries to complete the transitions.  */
-  private val effectOnStore = new SimpleEffectOnStore
+  private val effectOnStore: EffectOnStore = new SimpleEffectOnStore
 
   /** The effect of the transition pre -e-> post on cv.  Create extra views
     * caused by the way the transition changes cv, and add them to
@@ -204,12 +204,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       if(verbose) println(s"Adding $nv")
       tryAddView(nv, nextNewViews)
     }
-    // for(mi <- effectOnStore.get(cv)){
-    //   Profiler.count("completeDelayed")
-    //   // Test if missing and missingCommon now satisfied.
-    //   val ok = mi.update(cv, views)
-    //   if(ok) tryAddView(mi.newView, nextNewViews)
-    //} // end of for loop
   }
 
   /** Add mi.nextNewViews to nextNewViews. */
@@ -231,6 +225,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       }
     } // end of outer if
   }
+
+  def sanityCheck = effectOnStore.sanityCheck(views)
 
 
 }
