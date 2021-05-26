@@ -58,6 +58,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
     while(cptIx < newCpts.length){
       val (cpts, unifs) = newCpts(cptIx); cptIx += 1
+      if(verbose) println("cpts = "+StateArray.show(cpts))
       if(debugging){
         StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
       }
@@ -194,6 +195,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       val cvx = Remapper.mkComponentView(servers, cptsx)
       if(!views.contains(cvx)) missing ::= cvx
     }
+    if(missing.nonEmpty) 
+      println(s"missingCrossRefs(${StateArray.show(cpts1)}, "+
+        s"${StateArray.show(cpts2)}):\n  $missing")
     missing
   }
 

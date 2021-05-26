@@ -228,7 +228,7 @@ object Unification{
     val allUs = allUnifs(map0, pre.components, cv.components)
     if(false) println(s"allUs = "+show(allUs))
 
-    /** Extend map1 with unifications unifs, adding all results to result. */
+    /* Extend map1 with unifications unifs, adding all results to result. */
     def extendUnif(map1: RemappingMap, unifs: UnificationList) = {
       if(debugging) assert(Remapper.isInjective(map1), Remapper.show(map1))
       // Create OtherArgMap containing all values not in ran map1 or

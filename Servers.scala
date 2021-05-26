@@ -115,6 +115,8 @@ class Servers(
       alphaBitMap(e) = true
       if(activeServer(i)) activeServerEvent(e) = true
     }
+    // for(e <- 0 until eventsSize) 
+    //   if(activeServerEvent(e)) println("Active event "+showEvent(e))
     // Build transitions
     val initStates: Array[State] = new Array[State](numServers)
     for(i <- indices){
@@ -246,7 +248,11 @@ class Servers(
     while(!done){
       val e = es.min // next event to consider
       if(e != Int.MaxValue){
+        // val eString = showEvent(e)
+        // val isConst = eString.startsWith("initNode.Constr") && eString.contains(".Infty.Null")
+        // if(isConst) println(showEvent(e))
         var serverIndices = eventMap(e) // indices of servers that synch on e
+        //if(isConst) println(serverIndices.mkString(","))
         assert(e != Tau && serverIndices.nonEmpty, fdrSession.eventToString(e))
         // Calculate (in cptDsts) states after e, for each server in
         // serverIndices
@@ -264,6 +270,7 @@ class Servers(
           else canSync = false // This event is blocked
           j += 1
         }
+        //if(isConst) println(canSync)
         // Advance over other events if j < serverIndices.size, so !canSync
         while(j < serverIndices.size){
           val c = serverIndices(j); val index = indices(c)

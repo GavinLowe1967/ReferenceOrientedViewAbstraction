@@ -480,6 +480,7 @@ class System(fname: String) {
     val sEsSolo = serverTrans.eventsSolo; val sNsSolo = serverTrans.nextsSolo
     var index = 0; var e = sEsSolo(0)
     while(e < Sentinel){
+      // println("System.transitions"+showEvent(e))
       for(newServers <- sNsSolo(index)){
         val post = new Concretization(ServerStates(newServers), cv.components)
         maybeAdd(conc0, e, post, null)

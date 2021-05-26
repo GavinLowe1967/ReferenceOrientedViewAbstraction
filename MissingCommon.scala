@@ -103,11 +103,12 @@ object MissingCommon{
   /** A MissingCommon object, corresponding to servers, cpts1, cpts2 and pid, or
     * null if the obligation is already satisfied.
     * 
-    * For each component state c such that servers || cpts1(0) || c is in
-    * views, missingCandidates contains the list of Views that are needed to
-    * satisfy the obligation but are currently missing from views: (1) servers
-    * || cpts2(0) || c; and (2) if c has a reference to a secondary component
-    * c2 of cpts1 or cpts2, then servers || c || c2 (renamed).
+    * For each component state c with identity pid such that servers ||
+    * cpts1(0) || c is in views, missingCandidates contains the list of Views
+    * that are needed to satisfy the obligation but are currently missing from
+    * views: (1) servers || cpts2(0) || c; and (2) if c has a reference to a
+    * secondary component c2 of cpts1 or cpts2, then servers || c || c2
+    * (renamed).
     */
   def makeMissingCommon(
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State], 
@@ -115,11 +116,11 @@ object MissingCommon{
       : MissingCommon = {
     Profiler.count("makeMissingCommon")
     assert(singleRef)
-    assert(cpts1.length == 2, StateArray.show(cpts1))
+    // assert(cpts1.length == 2, StateArray.show(cpts1)) // not true
     assert(cpts2.length == 2, StateArray.show(cpts2))
     val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
     val mc = new MissingCommon(servers, cpts1, cpts2, pid)
-    val ab = new MissingCommon.ViewBuffer
+    val ab = new ViewBuffer
     // All elements of views of the form servers || princ1 || c where c has
     // identity pid
     var matches = matchesFor(servers, princ1, pid, views)
