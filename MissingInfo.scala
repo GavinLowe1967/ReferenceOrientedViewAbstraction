@@ -9,23 +9,31 @@ import scala.collection.mutable.ArrayBuffer
   * missingCommon0 have been satisfied. */
 class MissingInfo(
   val newView: ComponentView, missingViews0: List[ComponentView],
-  missingCommon0: List[MissingCommon]
+  private var missingCommon: Array[MissingCommon]
 ){
   /** Lists of component views necessary to satisfy this constraint: all must be
     * added to the ViewSet.  cf. item 1 on page 113 of notebook. */
   private var missingViews: List[ComponentView] = missingViews0
 
-  /** Information about views necessary to satisfy this constraint.  Each
-    * represents an obligation to instantiate a component with a particular
-    * identity.  cf. item 2 on page 113 of the notebook.  All must be
-    * satisfied in order to satisfy this constraint.  */
-  private var missingCommon: List[MissingCommon] = missingCommon0
-  // It will be unusual for the list to contain more than one element, I think. 
+  /* missingCommon stores information about views necessary to satisfy this
+   * constraint.  Each represents an obligation to instantiate a component
+   * with a particular identity.  cf. item 2 on page 113 of the notebook.
+   * All must be satisfied in order to satisfy this constraint.  
+   * 
+   * Each is replaced by null when satisfied. It will be unusual for the array
+   * to contain more than one element. */
+
+  // private var missingCommon: Array[MissingCommon] = missingCommon0.toArray
+  //  
 // IMPROVE, all the above share the same servers, cpts1, cpts2
 
   assert(missingCommon.length <= 1) // FIXME: not true in general
 
-  def done = missingViews.isEmpty && missingCommon.isEmpty
+  /** Number of non-null entries in missingCommon. */
+  private var remainingMissingCommon = missingCommon.length
+
+  def done = missingViews.isEmpty && remainingMissingCommon == 0 
+  // missingCommon.forall(_ == null) // isEmpty
 
   import MissingCommon.ViewBuffer
 
@@ -37,16 +45,26 @@ class MissingInfo(
   def updateMissingCommon(cv: ComponentView, views: ViewSet, ab: ViewBuffer)
       : Boolean = {
     // var matched = false // have we found a MissingCommon entry that matches?
-    var mcs = missingCommon; missingCommon = List()
-    while(mcs.nonEmpty){
-      val mc = mcs.head; mcs = mcs.tail
-      if(mc.matches(cv)){
-        // matched = true
-        if(!mc.updateMissingCommon(cv, views, ab)) missingCommon ::= mc
-        // else println(s"Removed $mc from $this")
-      }
-      else missingCommon ::= mc
+    var i = 0
+    while(i < missingCommon.length){
+      val mc = missingCommon(i)
+      if(mc != null && mc.matches(cv))
+        if(mc.updateMissingCommon(cv, views, ab)){
+          missingCommon(i) = null; remainingMissingCommon -= 1
+        }
+      i += 1
     }
+
+    // var mcs = missingCommon; missingCommon = List()
+    // while(mcs.nonEmpty){
+    //   val mc = mcs.head; mcs = mcs.tail
+    //   if(mc.matches(cv)){
+    //     // matched = true
+    //     if(!mc.updateMissingCommon(cv, views, ab)) missingCommon ::= mc
+    //     // else println(s"Removed $mc from $this")
+    //   }
+    //   else missingCommon ::= mc
+    // }
     // if(debugging && !matched) // check precondition
     //   assert(missingCommon0.exists(mc => mc.matches(cv)),
     //     s"\nupdateMC($cv):\n  $missingCommon\n $missingCommon0")
@@ -59,11 +77,20 @@ class MissingInfo(
     * @return true if this is now complete. */
   def updateMissingViews(cv: ComponentView): Boolean = {
     // Remove cv from each element of missingCommon.
-    var mcs = missingCommon; missingCommon = List()
-    while(mcs.nonEmpty){
-      val mc = mcs.head; mcs = mcs.tail
-      if(! mc.updateMissingViews(cv)) missingCommon ::= mc
+    var i = 0
+    while(i < missingCommon.length){
+      val mc = missingCommon(i)
+      if(mc != null && mc.updateMissingViews(cv)){
+        missingCommon(i) = null; remainingMissingCommon -= 1
+      }
+      i += 1
     }
+
+    // var mcs = missingCommon; missingCommon = List()
+    // while(mcs.nonEmpty){
+    //   val mc = mcs.head; mcs = mcs.tail
+    //   if(! mc.updateMissingViews(cv)) missingCommon ::= mc
+    // }
 
     // Remove cv from missingViews
     var mvs = missingViews; missingViews = List()
@@ -81,11 +108,12 @@ class MissingInfo(
   def sanityCheck(views: ViewSet) = {
     assert(!done)
     for(v <- missingViews) assert(!views.contains(v))
-    for(mc <- missingCommon) mc.sanityCheck(views)
+    for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)
   }
 
   override def toString =
-    s"MissingInfo($newView, $missingViews0, $missingCommon0)"
+    s"MissingInfo($newView, $missingViews0, "+
+      missingCommon.mkString("<",",",">")
 
   override def equals(that: Any) = that match{
     case mi: MissingInfo => 
@@ -93,5 +121,6 @@ class MissingInfo(
       mi.missingCommon == missingCommon
   }
 
-  def size = missingViews.length + missingCommon.map(_.size).sum
+  def size = 
+    missingViews.length + missingCommon.filter(_ != null).map(_.size).sum
 }

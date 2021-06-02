@@ -157,7 +157,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     nv: ComponentView)
       : Unit = {
     Profiler.count("EffectOnStore.add")
-    val missingInfo: MissingInfo = new MissingInfo(nv, missing, missingCommon)
+    val missingInfo: MissingInfo = new MissingInfo(nv, missing, missingCommon.toArray)
     for(cv <- missing) addToStore(cv, missingInfo)
     for(mc <- missingCommon; cv <- mc.allCandidates) addToStore(cv, missingInfo)
     for(mc <- missingCommon){

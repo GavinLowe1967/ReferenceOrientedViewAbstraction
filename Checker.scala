@@ -452,7 +452,7 @@ class Checker(system: SystemP.System){
       if(false && ply > 15) println(sysAbsViews.summarise1)
     } // end of main loop
 
-    println("\nSTEP "+ply)
+    println("\nSTEP "+ply+"\n")
     if(singleRef && bound == Int.MaxValue) effectOn.sanityCheck
     if(singleRef) effectOn.report
     if(showViews) println(sysAbsViews)
