@@ -57,6 +57,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     var cptIx = 0
 
     while(cptIx < newCpts.length){
+      Profiler.count("EffectOn step")
       val (cpts, unifs) = newCpts(cptIx); cptIx += 1
       if(verbose) println("cpts = "+StateArray.show(cpts))
       if(debugging){
@@ -195,7 +196,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       val cvx = Remapper.mkComponentView(servers, cptsx)
       if(!views.contains(cvx)) missing ::= cvx
     }
-    if(missing.nonEmpty) 
+    if(verbose && missing.nonEmpty) 
       println(s"missingCrossRefs(${StateArray.show(cpts1)}, "+
         s"${StateArray.show(cpts2)}):\n  $missing")
     missing
@@ -232,5 +233,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   def sanityCheck = effectOnStore.sanityCheck(views)
 
+  def report = effectOnStore.report
 
 }

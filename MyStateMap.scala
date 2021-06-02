@@ -67,6 +67,11 @@ object MyStateMap{
     println(".  Done.")
   }
 
+  // import ox.gavin.profiling.MemoryProfiler.traverse  
+  // def memoryProfile = {
+  //   println(s"MyStateMap: $stateCount states")
+  //   traverse("stateStore", stateStore, maxPrint = 2)
+  // }
 
 
 }

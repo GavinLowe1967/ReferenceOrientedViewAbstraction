@@ -413,4 +413,11 @@ class ServerPrincipalBasedViewSet(initSize: Int = 16) extends ViewSet {
   }
 
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
+
+  // import java.lang.reflect.Modifier
+  // import ox.gavin.profiling._
+  // import ox.gavin.profiling.MemoryProfiler.traverse  
+  // def memoryProfile = {
+  //   traverse("sysAbsViews", underlying)
+  // }
 }

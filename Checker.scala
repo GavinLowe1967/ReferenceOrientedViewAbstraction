@@ -453,13 +453,49 @@ class Checker(system: SystemP.System){
     } // end of main loop
 
     println("\nSTEP "+ply)
-    if(singleRef) effectOn.sanityCheck
+    if(singleRef && bound == Int.MaxValue) effectOn.sanityCheck
+    if(singleRef) effectOn.report
     if(showViews) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")
     println(s"#transition templates = ${printLong(transitionTemplates.size)}")
+    
     // println(s"effectOnStore size = "+effectOnStore.size)
+  }
+
+  //import java.lang.reflect.Modifier
+  // import ox.gavin.profiling._
+  import ox.gavin.profiling.MemoryProfiler.traverse  
+
+  // def printObjectSize(obj: Object) = {
+  //   println("Object type: " + obj.getClass() +
+  //             ", size: " + InstrumentationAgent.getObjectSize(obj) + " bytes")
+  // }
+
+  /** Perform a memory profile of this. */
+  def memoryProfile = {
+    println("Memory profile"); println
+
+    traverse("MyStateMap", MyStateMap, maxPrint = 0); println
+
+    traverse("ServerStates", ServerStates, maxPrint = 0); println
+
+    traverse("first view", sysAbsViews.iterator.next, maxPrint = 0); println
+
+    traverse("sysAbsViews", sysAbsViews, maxPrint = 0); println
+
+    traverse("transitions", transitions, maxPrint = 0); println
+
+    traverse("transitionTemplates", transitionTemplates, maxPrint = 0); println
+
+    traverse("extendability", extendability, maxPrint = 0); println
+
+    traverse("system", system, maxPrint = 1); println
+
+    traverse("effectOn", effectOn, maxPrint = 2); println
+
+    traverse("checker", this, maxPrint = 0); println
   }
 }
 

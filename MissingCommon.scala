@@ -89,6 +89,15 @@ class MissingCommon(
   override def toString = 
     s"MissingCommon($servers, ${StateArray.show(cpts1)},"+
       s"  ${StateArray.show(cpts2)}, $pid)"
+
+  override def equals(that: Any) = that match{
+    case mc: MissingCommon =>
+      mc.servers == servers && mc.cpts1.sameElements(cpts1) &&
+      mc.cpts2.sameElements(cpts2) && mc.pid == pid
+  }
+
+  /** A measure of the size of this: the number of ComponentViews stored. */
+  def size = missingCandidates.map(_.length).sum
 }
 
 

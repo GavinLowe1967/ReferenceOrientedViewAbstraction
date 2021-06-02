@@ -19,7 +19,7 @@ EXTENDERP = $(DIR)/ExtendabilityP
 FSC = fsc -deprecation -cp $(CP)
 
 # all:	$(DIR)/VA.class Instrumentation.class Experiment.class
-all:   $(DIR)/VA.class
+all:   $(DIR)/VA.class Instrumentation.class
 
 clean:
 	rm $(DIR)/*.class $(DIR)/*/*.class; fsc -shutdown
@@ -123,12 +123,12 @@ $(DIR)/%.class:     %.scala
 # Experiment.class: Experiment.scala
 # 	$(FSC) Experiment.scala
 
-# # Instrumentation
+# Instrumentation
 
-# ScalaInstrumentation.class: ScalaInstrumentation.scala
-# 	$(FSC) ScalaInstrumentation.scala
+ScalaInstrumentation.class: ScalaInstrumentation.scala
+	$(FSC) ScalaInstrumentation.scala
 
-# ICP = .:$(UTIL):$(SCALAHOME)/lib/scala-library.jar
+ICP = .:$(UTIL):$(SCALAHOME)/lib/scala-library.jar
 
-# Instrumentation.class: Instrumentation.java ScalaInstrumentation.class
-# 	javac -cp $(ICP) Instrumentation.java
+Instrumentation.class: Instrumentation.java ScalaInstrumentation.class
+	javac -cp $(ICP) Instrumentation.java

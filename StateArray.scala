@@ -174,20 +174,31 @@ object StateArray{
     }
   }
 
+  /** Does cpts contain cpt? */
+  @inline private def contains(cpts: Array[State], cpt: State): Boolean = {
+    var i = 0
+    while(i < cpts.length && cpts(i) != cpt) i += 1
+    i < cpts.length
+  }
+
   /** Find all references from a component c1 of cpts1 to a component c2 of
     * cpts2 (with neither in the other), or vice versa.  Return Array(c1, c2)
     * for each such pair found. */
   def crossRefs(cpts1: Array[State], cpts2: Array[State])
       : List[Array[State]] = {
-    require(singleRef) // not sure if this is necessary
-    var result = List[Array[State]]()
-    for(c1 <- cpts1; if !(cpts2.contains(c1))){
-      val c1Params = c1.processIdentities
-      for(c2 <- cpts2; if !(cpts1.contains(c2))){
-        if(c1Params.contains(c2.componentProcessIdentity))
-          result ::= Array(c1,c2)
-        if(c2.processIdentities.contains(c1.componentProcessIdentity))
-          result ::= Array(c2,c1)
+    require(singleRef)
+    var result = List[Array[State]](); var i = 0
+    while(i < cpts1.length){
+      val c1 = cpts1(i); i += 1
+      if(! contains(cpts2, c1)){
+        var j = 0
+        while(j < cpts2.length){
+          val c2 = cpts2(j); j += 1
+          if(! contains(cpts1, c2)){
+            if(c1.hasParam(c2.family, c2.id)) result ::= Array(c1,c2)
+            if(c2.hasParam(c1.family, c1.id)) result ::= Array(c2,c1)
+          }
+        }
       }
     }
     result

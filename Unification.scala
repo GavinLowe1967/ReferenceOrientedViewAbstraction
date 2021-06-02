@@ -189,14 +189,16 @@ object Unification{
   /** All ways of unifying pre and cv.  
     * 
     * Each parameter of cv is remapped (1) as identity function for parameters
-    * in pre.servers; (2) if a unification is done, as required by that
-    * unification; (3) otherwise either (a) to a parameter in post.servers or
-    * the post-state of a unified component, but not in pre.servers, or (b)
-    * for the identity of the principal, an element of princRenames, or (c)
-    * the next fresh variable.  Also, under (a), identities cannot be mapped
-    * to identities in post.components, other than with unification.  The
-    * choice under 3(a) is precisely those variables that will exist in the
-    * post-state of cv (and are distinct post symmetry reduction). 
+    * in pre.servers; (2) if a unification of components is done, as required
+    * by that unification; (3) otherwise either (a) to a parameter in
+    * post.servers or the post-state of a unified component, but not in
+    * pre.servers, or (b) for the identity of the principal, an element of
+    * princRenames, or (c) the next fresh variable.  Also, under (a),
+    * identities cannot be mapped to identities in post.components, other than
+    * with unification.  The choice under 3(a) is precisely those variables
+    * that will exist in the post-state of cv (and are distinct post symmetry
+    * reduction).
+// FIXME: if singleRef then under 3(a), also to parameters in pre.components.
     * 
     * We suppress values that won't give a new view in effectOn.   
     * 
@@ -214,19 +216,21 @@ object Unification{
     val map0 = servers.remappingMap
     // Create NextArgMap, greater than anything in pre or post
     val nextArg: NextArgMap = pre.getNextArgMap; post.updateNextArgMap(nextArg)
-    // All ids in post.servers but not in pre.servers, as a bitmap.
+    // All params in post.servers but not in pre.servers, as a bitmap.
     val newServerIds: Array[Array[Boolean]] = 
       ServerStates.newParamsBitMap(servers, post.servers)
+// IMPROVE: following slows down lockFreeQueue a lot -- increases # return
+// values by factor of 3.  I think this is necessary only when there's a cross
+// reference (?)
+    if(/* false && */ singleRef)     // Add params of pre.cpts that are not in servers
+      for(cpt <- preCpts) cpt.addIdsToBitMap(newServerIds, servers.numParams)
     // Bit map indicating which components have changed state.
-    val changedStateBitMap = new Array[Boolean](preCpts.length); var i = 0
-    while(i < preCpts.length){
-      changedStateBitMap(i) = preCpts(i) != postCpts(i); i += 1
-    }
+    val changedStateBitMap = getChangedStateBitMap(preCpts, postCpts)
     val result = new CombineResult
 
     // Get all ways of unifying pre and cv. 
     val allUs = allUnifs(map0, pre.components, cv.components)
-    if(false) println(s"allUs = "+show(allUs))
+    // if(false) println(s"allUs = "+show(allUs))
 
     /* Extend map1 with unifications unifs, adding all results to result. */
     def extendUnif(map1: RemappingMap, unifs: UnificationList) = {
@@ -235,7 +239,8 @@ object Unification{
       // pre.servers, but (1) in post.servers; or (2) in post.cpts for a
       // unified component.  newServerIds satisfies (1).
       val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
-      // Add parameters of components of post corresponding to unifs.
+      // Add parameters of post.components corresponding to unifs, not shared
+      // with servers.
       while(us.nonEmpty){
         val i = us.head._2; us = us.tail
         postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.numParams)
@@ -247,9 +252,9 @@ object Unification{
       // Values that identities can be mapped to: values in otherArgs, but not
       // identities of components in post; update otherArgsBitMap to record.
       StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
-      if(false) println(s"map1 = ${Remapper.show(map1)}; otherArgs = "+
-        otherArgs.mkString(", ")+" nextArg = "+nextArg.mkString(", ")+
-        s"; unifs = $unifs")
+      // if(false) println(s"map1 = ${Remapper.show(map1)}; otherArgs = "+
+      //   otherArgs.mkString(", ")+" nextArg = "+nextArg.mkString(", ")+
+      //   s"; unifs = $unifs")
       combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
         cv.components, result)
     } // end of extendUnif
@@ -257,32 +262,24 @@ object Unification{
     var ix = 0
     while(ix < allUs.length){
       val (map1, unifs) = allUs(ix); ix += 1
-      // Test if either (1) the servers changed, and either (a) we have some
-      // unification, or (b) this is the first time for no unification with
-      // this combination of cv, pre.servers and post.servers; or (2) the
-      // servers are unchanged but we unify with a component that does change
-      // state.  If not, we can ignore this combination.
-      var sufficientUnif = false
-      if(changedServers)
-        sufficientUnif = unifs.nonEmpty ||
-          effectOnChangedServersCache.add((cv, post.servers))
-      else{
-        var us = unifs
-        while(!sufficientUnif && us.nonEmpty){
-          sufficientUnif = changedStateBitMap(us.head._2); us = us.tail
-        }
-      }
-      if(false) 
-        println(s"combine: unifs = $unifs, sufficientUnif = $sufficientUnif")
+      // Do we need to consider this combination?  Either (1) the servers
+      // changed, and either (a) we have some unification, or (b) this is the
+      // first time for no unification with this combination of cv,
+      // pre.servers and post.servers; or (2) the servers are unchanged but we
+      // unify with a component that does change state.
+      val sufficientUnif = isSufficientUnif(
+        changedServers, unifs, post.servers, cv, changedStateBitMap)
+      // if(false) 
+      //   println(s"combine: unifs = $unifs, sufficientUnif = $sufficientUnif")
       if(sufficientUnif || singleRef) extendUnif(map1, unifs)
 // IMPROVE: why is singleRef necessary above?
       // Try renaming cv.principal to each id in princNames
       if(map1(cvpf)(cvpid) < 0) 
         for(newPId <- princRenames; if !map1(cvpf).contains(newPId)){
-          if(false) println(s"Combine: renaming ${(cvpf,cvpid)} to $newPId")
+          // if(false) println(s"Combine: renaming ${(cvpf,cvpid)} to $newPId")
           map1(cvpf)(cvpid) = newPId; extendUnif(map1, unifs)
       }
-      else if(false) println(s"Can't rename ${(cvpf,cvpid)}"+map1(cvpf)(cvpid))
+      //else if(false) println(s"Can't rename ${(cvpf,cvpid)}"+map1(cvpf)(cvpid))
     } // end of while loop
 
     result
@@ -291,6 +288,38 @@ object Unification{
 // IMPROVE, try to identify second case for sufficientUnifs within allUnifs,
 // by trying to unify components that change state first.
 // IMPROVE: can we share work between the calls to extendUnif? 
+
+  /** Test if the current combination in combine needs to be considered.  Either
+    * (1) the servers changed, and either (a) we have some unification, or (b)
+    * this is the first time for no unification with this combination of cv,
+    * pre.servers and post.servers; or (2) the servers are unchanged but we
+    * unify with a component that does change state. */
+  @inline private def isSufficientUnif(
+    changedServers: Boolean, unifs: UnificationList, postServers: ServerStates, 
+    cv: ComponentView, changedStateBitMap: Array[Boolean])
+      : Boolean = {
+    if(changedServers)
+      unifs.nonEmpty || effectOnChangedServersCache.add((cv, postServers))
+    else{
+      var us = unifs; var sufficientUnif = false
+      while(!sufficientUnif && us.nonEmpty){
+        sufficientUnif = changedStateBitMap(us.head._2); us = us.tail
+      }
+      sufficientUnif
+    }
+  }
+
+  /** Bitmap showing which components changed state between preCpts and
+    * postCpts. */
+  @inline private 
+  def getChangedStateBitMap(preCpts: Array[State], postCpts: Array[State])
+      : Array[Boolean] = {
+    val changedStateBitMap = new Array[Boolean](preCpts.length); var i = 0
+    while(i < preCpts.length){
+      changedStateBitMap(i) = preCpts(i) != postCpts(i); i += 1
+    }
+    changedStateBitMap
+  }
 
   /** Remap c, as identity function on parameters of servers and princ1, but
     * mapping other parameters either to other parameters of cpts2, or to

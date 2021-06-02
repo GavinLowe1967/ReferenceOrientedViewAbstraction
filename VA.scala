@@ -12,10 +12,12 @@ object VA{
   var checker: Checker = null
 
   /** Run a check.  Called by ScalaInstrumentation. */
-  def check(fname: String, bound: Int) : Unit = {
+  def check(fname: String, bound: Int, singleRefX: Boolean) : Unit = {
+    singleRef = singleRefX
     system = new SystemP.System(fname); println("Created system")
     // Create and run the checker
     checker = new Checker(system); checker(bound = bound)
+    memoryProfile
   }
 
   /** Print a time given in nanoseconds. */
@@ -32,7 +34,7 @@ object VA{
     // Parse arguments
     var i = 0; var fname = ""
     var profiling = false; var profilingFlat = false; var interval = 20
-    var profilingBoth = false
+    var profilingBoth = false; var memoryProfile = false
     // var verbose = false; 
     var bound = Int.MaxValue; var timing = false
     var testing = false
@@ -50,6 +52,7 @@ object VA{
       case "--test" => testing = true; i += 1
       case "--singleRef" => singleRef = true; i += 1
       case "--showViews" => showViews = true; i += 1
+      case "--memoryProfile" => memoryProfile = true; i += 1
       case "-p" => numThreads = args(i+1).toInt; i += 2
       case fn => fname = fn; i += 1
     }
@@ -109,6 +112,7 @@ object VA{
  
     if(!timing) println("goodbye")
     ox.gavin.profiling.Profiler.report 
+    if(memoryProfile) checker.memoryProfile
     if(!testing){ // checker is null when testing
       // println(s"checker.effectOnOthersCount = "+
       //   printLong(checker.effectOnOthersCount))
@@ -121,6 +125,16 @@ object VA{
       // println("checker.instantiateTransitionTemplateCount = "+
       //   printLong(checker.instantiateTransitionTemplateCount))
     }
+  }
+
+  // import java.lang.reflect.Modifier
+  import ox.gavin.profiling.MemoryProfiler.traverse
+  // import MemoryProfiler.traverse
+
+  def memoryProfile = {
+    checker.memoryProfile
+    // traverse("Combiner", CombinerP.Combiner, maxPrint = 0); println
+    traverse("VA", this, maxPrint = 0)
   }
 
 }

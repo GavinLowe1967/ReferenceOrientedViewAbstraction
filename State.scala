@@ -45,6 +45,20 @@ class State(val family: Family, val cs: ControlState,
   /** The number of parameters of this. */
   def length = ids.length
 
+  /** Bit map giving parameters. */
+  private var paramBitMap: Array[Array[Boolean]] = null
+
+  def hasParam(f: Family, id: Identity) = {
+    if(paramBitMap == null){
+      paramBitMap = 
+        // FIXME: the +2 is a hack
+        Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)))
+      for(i <- 0 until length) 
+        if(!isDistinguished(ids(i))) paramBitMap(typeMap(i))(ids(i)) = true
+    }
+    paramBitMap(f)(id)
+  }
+
   /** Check the type sizes from the script are large enough for all the
     * parameters in this State.  This is not done during compilation, because
     * typeMap is not yet initialised, and the State is bound to pass the test,

@@ -91,6 +91,14 @@ class MissingInfo(
 
   override def toString =
     s"MissingInfo($newView, $missingViews0, $missingCommon0)"
+
+  override def equals(that: Any) = that match{
+    case mi: MissingInfo => 
+      mi.newView == newView && mi.missingViews == missingViews &&
+      mi.missingCommon == missingCommon
+  }
+
+  def size = missingViews.length + missingCommon.map(_.size).sum
 }
 
 // =======================================================
@@ -118,6 +126,8 @@ trait EffectOnStore{
   def sanityCheck(views: ViewSet): Unit
 
   def size: (Int, Int)
+
+  def report: Unit
 }
 
 // =======================================================
@@ -138,7 +148,8 @@ class SimpleEffectOnStore extends EffectOnStore{
 
   private def addToStore(cv: ComponentView, missingInfo: MissingInfo) = {
     val prev = store.getOrElse(cv, List[MissingInfo]())
-    if(!prev.contains(missingInfo)) store += cv -> (missingInfo::prev)
+    //if(!prev.contains(missingInfo))
+    store += cv -> (missingInfo::prev)
   }
 
   /** Add MissingInfo(nv, missing, missingCommon) to the store. */
@@ -151,13 +162,17 @@ class SimpleEffectOnStore extends EffectOnStore{
     for(mc <- missingCommon; cv <- mc.allCandidates) addToStore(cv, missingInfo)
     for(mc <- missingCommon){
       val princ1 = mc.cpts1(0)
-      if(debugging)
+      if(false && debugging)
         assert(Remapper.remapToPrincipal(mc.servers, princ1) == princ1)
       val prev = commonStore.getOrElse((mc.servers, princ1), List[MissingInfo]())
-      if(!prev.contains(missingInfo))
-        commonStore += (mc.servers, princ1) -> (missingInfo::prev)
+      // if(!contains(prev,missingInfo)) // needs equality test
+      commonStore += (mc.servers, princ1) -> (missingInfo::prev)
+      // else println("Already stored "+missingInfo)
     }
   }
+
+  private def contains(cvs: List[MissingInfo], cv: MissingInfo): Boolean = 
+    cvs.nonEmpty && (cvs.head == cv || cvs.tail.contains(cv))
 
   /** Get all pairs (missing, missingCommon, nv) in the store for which cv in
     * relevant. */
@@ -212,6 +227,21 @@ class SimpleEffectOnStore extends EffectOnStore{
     for(mis <- store.valuesIterator; mi <- mis; if !mi.done){
       mi.sanityCheck(views)
     }
-
   }
+
+  /** Report on size. */
+  def report = {
+    println
+    println("store.size = "+store.size)
+    // # items in store, and sum of their sizes
+    var storeEls = 0; var storeElsSize = 0
+    for(mis <- store.valuesIterator){
+      storeEls += mis.length
+      for(mi <- mis) storeElsSize += mi.size
+    }
+    println("store # MissingInfos = "+storeEls)
+    println("store MissingInfos size = "+storeElsSize)
+    println("commonStore.size = "+commonStore.size)
+  }
+
 }

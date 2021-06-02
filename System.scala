@@ -413,7 +413,7 @@ class System(fname: String) {
           while(pE < sE){ cptIndex += 1; pE = pEs(cptIndex) }
           if(sE == pE){ // can synchronise
             if(activePrincipal || servers.isActiveServerEvent(sE)){
-              if(!activePrincipal) println("server-only event: "+showEvent(sE))
+              //if(!activePrincipal) println("server-only event: "+showEvent(sE))
               // println(s"Server-principal sync on ${showEvent(pE)}")
               for(pNext <- pNexts(cptIndex); sNext <- sNexts(serverIndex)){
                 val newCpts = cv.components.clone; newCpts(0) = pNext

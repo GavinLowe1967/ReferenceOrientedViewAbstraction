@@ -79,6 +79,13 @@ package object ViewAbstraction{
   def append1[A](xs: List[A], ys: List[A]): List[A] =
     if(xs.isEmpty) ys else xs.head :: append1(xs.tail, ys)
 
+  /** Does xs contain x? */
+  @inline def contains[A](xs: Array[A], x: A): Boolean = {
+    var i = 0
+    while(i < xs.length && xs(i) != x) i += 1
+    i < xs.length
+  }
+
   /** Flatten (concat) a list of lists: more efficient than API version. */
   def flatten(xss: List[List[Int]]): List[Int] =
     if(xss.isEmpty) List[Int]()

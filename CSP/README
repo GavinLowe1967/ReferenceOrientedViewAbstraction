@@ -79,6 +79,14 @@ lockFreeQueue.csp: 2272 states, ~7 s (about half compilation).
 Lazy Set
 ========
 
+lazySetY.csp: incorrect version, with incorrect assumption made about nodes:
+that they can't be unlocked once decoupled.  Error found on ply 36, ~260K
+abstractions.
+
+lazySetZ.csp: similar to above, but with process to force error trace. 
+
+--------
+
 lazySet.csp: Each node has reference to locking thread.  Finds false error on
 step 29, 31,364 abstractions.  There seem to be two nodes containing B.  Added
 BTracker.
