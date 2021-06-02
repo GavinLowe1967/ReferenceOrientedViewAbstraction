@@ -94,7 +94,9 @@ $(EXTENDERP)/ExtendabilityTest.class: $(EXTENDERP)/Extendability.class
 
 $(DIR)/MissingCommon.class: $(REMAPPERP)/Unification.class
 
-$(DIR)/EffectOnStore.class: $(DIR)/MissingCommon.class
+$(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
+
+$(DIR)/EffectOnStore.class: $(DIR)/MissingInfo.class
 
 $(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(REMAPPERP)/Unification.class
 

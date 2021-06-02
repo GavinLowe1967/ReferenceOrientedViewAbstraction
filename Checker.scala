@@ -493,7 +493,7 @@ class Checker(system: SystemP.System){
 
     traverse("system", system, maxPrint = 1); println
 
-    traverse("effectOn", effectOn, maxPrint = 2); println
+    traverse("effectOn", effectOn, maxPrint = 4); println
 
     traverse("checker", this, maxPrint = 0); println
   }

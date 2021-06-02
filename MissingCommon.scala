@@ -25,7 +25,7 @@ class MissingCommon(
 
   /** When any element of missingCandidates is satisfied, then this obligation
     * will be discharged. */
-  var missingCandidates = List[MissingCandidates]()
+  private var missingCandidates = List[MissingCandidates]()
 
   private var isDone = false
 
@@ -63,18 +63,9 @@ class MissingCommon(
   def updateMissingCommon(cv: ComponentView, views: ViewSet, vb: ViewBuffer)
       : Boolean = {
     require(matches(cv)); val cpt1 = cv.components(1) 
-    if(cpt1.hasPID(pid)){
-      // val oldMissingCandidates = missingCandidates
-      if(MissingCommon.updateMissingCandidates(this, cpt1, views, vb)){
-        // println(s"updateMC($cv):\n  $this\nCompleted!")
+    if(cpt1.hasPID(pid))
+      if(MissingCommon.updateMissingCandidates(this, cpt1, views, vb))
         isDone = true
-      }
-      // if(missingCandidates != oldMissingCandidates){
-      //   // Should have added at the front
-      //   val lenDiff = missingCandidates.length - oldMissingCandidates.length
-      //   assert(missingCandidates.drop(lenDiff) == oldMissingCandidates)
-      // }
-    }
     isDone
   }
 
@@ -108,7 +99,6 @@ object MissingCommon{
     * registered in the EffectOnStore. */
   type ViewBuffer = ArrayBuffer[ComponentView]
 
-
   /** A MissingCommon object, corresponding to servers, cpts1, cpts2 and pid, or
     * null if the obligation is already satisfied.
     * 
@@ -130,13 +120,19 @@ object MissingCommon{
     val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
     val mc = new MissingCommon(servers, cpts1, cpts2, pid)
     val ab = new ViewBuffer
-    // All elements of views of the form servers || princ1 || c where c has
-    // identity pid
-    var matches = matchesFor(servers, princ1, pid, views)
-    while(matches.nonEmpty && !found){
-      val cv1 = matches.head; matches = matches.tail
-      found = updateMissingCandidates(mc, cv1.components(1), views, ab)
-    } // end of while loop
+    // Search for elements of views of the form servers || princ1 || c where c
+    // has identity pid
+    val iter = views.iterator(servers, princ1)
+    while(iter.hasNext && !found){
+      val cv = iter.next; val cpts = cv.components; assert(cpts.length == 2, cv)
+      val cpt1 = cpts(1)
+      if(cpt1.hasPID(pid)) found = updateMissingCandidates(mc, cpt1, views, ab)
+    }
+    // var matches = matchesFor(servers, princ1, pid, views)
+    // while(matches.nonEmpty && !found){
+    //   val cv1 = matches.head; matches = matches.tail
+    //   found = updateMissingCandidates(mc, cv1.components(1), views, ab)
+    // } // end of while loop
     // Profiler.count("MissingCandidateSize"+mc.allCandidates.length)
     if(found) null else mc 
     // Note: we don't need to do anything with ab here, as mc.allcandidates
@@ -201,16 +197,16 @@ object MissingCommon{
 
   /** All elements of views of the form servers || princ || c where c has
     * identity pid. */
-  @inline private def matchesFor(
-    servers: ServerStates, princ: State, pid: ProcessIdentity, views: ViewSet)
-      : List[ComponentView] = {
-    var result = List[ComponentView]()
-    val iter = views.iterator(servers, princ)
-    while(iter.hasNext){
-      val cv = iter.next; val cpts = cv.components; assert(cpts.length == 2, cv)
-      if(cpts(1).hasPID(pid)) result ::= cv
-    }
-    result
-  }
+  // @inline private def matchesFor(
+  //   servers: ServerStates, princ: State, pid: ProcessIdentity, views: ViewSet)
+  //     : List[ComponentView] = {
+  //   var result = List[ComponentView]()
+  //   val iter = views.iterator(servers, princ)
+  //   while(iter.hasNext){
+  //     val cv = iter.next; val cpts = cv.components; assert(cpts.length == 2, cv)
+  //     if(cpts(1).hasPID(pid)) result ::= cv
+  //   }
+  //   result
+  // }
 
 }
