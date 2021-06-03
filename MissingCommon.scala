@@ -84,7 +84,9 @@ class MissingCommon(
   override def equals(that: Any) = that match{
     case mc: MissingCommon =>
       mc.servers == servers && mc.cpts1.sameElements(cpts1) &&
-      mc.cpts2.sameElements(cpts2) && mc.pid == pid
+      mc.cpts2.sameElements(cpts2) && mc.pid == pid &&
+      mc.missingCandidates.length == missingCandidates.length &&
+      mc.missingCandidates.forall(mc => missingCandidates.contains(mc))
   }
 
   /** A measure of the size of this: the number of ComponentViews stored. */

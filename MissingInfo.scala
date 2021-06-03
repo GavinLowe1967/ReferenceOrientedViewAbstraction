@@ -26,8 +26,6 @@ class MissingInfo(
    * missingCommon to contain more than one element.  So we don't compact the
    * arrays.  */
 
-  // private var missingViews: Array[ComponentView] = missingViews0.toArray
-
   // Profiler.count("MissingInfo"+missingViews.length)
 
   assert(missingCommon.length <= 1 && missingViews.length <= 4) 
@@ -36,10 +34,14 @@ class MissingInfo(
   /** Number of non-null entries in missingCommon and missingView. */
   private var remainingCount = missingCommon.length+missingViews.length
 
+  /** Has newView been found already? */
+  private var newViewFound = false
+
+  /** Record that newView has already been seen, so this is redundant. */
+  def markNewViewFound = newViewFound = true
+
   /** Is this complete? */
-  def done = remainingCount == 0
-    // missingViews.forall(_ == null) && remainingMissingCommon == 0
-  // IMPROVE
+  @inline def done = remainingCount == 0 || newViewFound
 
   import MissingCommon.ViewBuffer
 
@@ -76,20 +78,12 @@ class MissingInfo(
       }
       i += 1
     }
-
     // Remove cv from missingViews
     i = 0
     while(i < missingViews.length){
       if(missingViews(i) == cv){ missingViews(i) = null; remainingCount -= 1 }
       i += 1
     }
-
-    // var mvs = missingViews; missingViews = List()
-    // while(mvs.nonEmpty){
-    //   val mv = mvs.head; mvs = mvs.tail
-    //   if(mv != cv) missingViews ::= mv
-    // }
-
     done
   }
 // IMPROVE: maybe EffectOnStore should store MissingInfos separately,
@@ -107,9 +101,20 @@ class MissingInfo(
       missingCommon.mkString("<",",",">")
 
   override def equals(that: Any) = that match{ 
-    case mi: MissingInfo => assert(false)
-      mi.newView == newView && mi.missingViews == missingViews &&
-      mi.missingCommon == missingCommon
+    case mi: MissingInfo => 
+      val mvLen = missingViews.length; val mcLen = missingCommon.length
+      if(mi.newView == newView && mi.missingViews.length == mvLen &&
+          mi.missingCommon.length == mcLen){
+        var i = 0
+        while(i < mvLen && mi.missingViews(i) == missingViews(i)) i += 1
+        if(i < mvLen) false
+        else{
+          i = 0
+          while(i < mcLen && mi.missingCommon(i) == missingCommon(i)) i += 1
+          i == mcLen
+        }
+      }
+      else false
   }
 
   def size = 

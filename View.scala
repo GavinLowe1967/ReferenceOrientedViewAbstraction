@@ -163,9 +163,26 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     servers.toString0+" || "+
       components.map(_.toString0).mkString("[", " || ", "]") // +s" <$ply>"
 
-  override def equals(that: Any) = that match{
-    case cv: ComponentView => 
-      servers == cv.servers && components.sameElements(cv.components)
+  override def equals(that: Any) = {
+    if(that != null){
+      val cv = that.asInstanceOf[ComponentView]
+      servers == cv.servers && sameCpts(cv.components) // components.sameElements(cv.components)
+    }
+    else false
+    //   that match{
+    // case cv: ComponentView => 
+    //   servers == cv.servers && components.sameElements(cv.components)
+    // case null => false
+  }
+
+  @inline private def sameCpts(cpts: Array[State]) = {
+    val len = components.length
+    if(cpts.length == len){
+      var i = 0
+      while(i < len && components(i) == cpts(i)) i += 1
+      i == len
+    }
+    else false
   }
 
   /** Create hash code. */
