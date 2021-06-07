@@ -225,4 +225,20 @@ object StateArray{
     missing
   }
 
+  @inline def mkHash(cpts: Array[State]) = {
+    var h = cpts(0).hashCode; var i = 1; var n = cpts.length
+    while(i < n){ h = h*71+cpts(i).hashCode; i += 1 }    
+    h
+  }
+
+  /** Comparison function. */
+  def compare(cpts1: Array[State], cpts2: Array[State]) = {
+    val len = cpts1.length; val lenComp = len - cpts2.length
+    if(lenComp != 0) lenComp
+    else{
+      var i = 0
+      while(i < len && cpts1(i) == cpts2(i)) i += 1
+      if(i == len) 0 else cpts1(i).compare(cpts2(i))
+    }
+  }
 }

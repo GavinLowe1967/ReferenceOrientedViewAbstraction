@@ -1,7 +1,7 @@
 package ViewAbstraction
 import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
-import scala.collection.mutable.{ArrayBuffer,HashMap}
+import scala.collection.mutable.{ArrayBuffer,HashMap,HashSet}
 
 /* Classes in this file record information about when a particular View,
  * newView, can be added, under singleRef.  Each instance arises from a call
@@ -39,7 +39,7 @@ class SimpleEffectOnStore extends EffectOnStore{
   /** The underlying store concerning missing values.  For each mi: MissingInfo
     * in the abstract set, and for each cv in mi.missingViews, store(cv)
     * contains mi. */
-  private val store = new HashMap[ComponentView, List[MissingInfo]]
+  private val store = new HashMap[ComponentView, ArrayBuffer[MissingInfo]]
 
   /** The underlying store concerning MissingCommon values.  For each mi:
     * MissingInfo in the abstract set, and for each
@@ -48,10 +48,18 @@ class SimpleEffectOnStore extends EffectOnStore{
   private val commonStore = new HashMap[(ServerStates, State), List[MissingInfo]]
 
   private def addToStore(cv: ComponentView, missingInfo: MissingInfo) = {
-    val prev = store.getOrElse(cv, List[MissingInfo]())
-    if(!prev.contains(missingInfo))
-      store += cv -> (missingInfo::prev)
-    // else println("Already stored "+missingInfo)
+    store.get(cv) match{
+      case Some(ab) => 
+        if(!containsAB(ab, missingInfo)) ab += missingInfo
+      case None =>
+        val ab = new ArrayBuffer[MissingInfo]; ab += missingInfo
+        store += cv -> ab
+    }
+
+    // val prev = store.getOrElse(cv, ArrayBuffer[MissingInfo]())
+    // if(!prev.contains(missingInfo))
+    //   store += cv -> (missingInfo::prev)
+    // // else println("Already stored "+missingInfo)
   }
 
   /** Add MissingInfo(nv, missing, missingCommon) to the store. */
@@ -71,6 +79,12 @@ class SimpleEffectOnStore extends EffectOnStore{
         commonStore += (mc.servers, princ1) -> (missingInfo::prev)
       //else println("Already stored "+missingInfo)
     }
+  }
+
+  @inline def containsAB[A](xs: ArrayBuffer[A], x: A): Boolean = {
+    var i = 0
+    while(i < xs.length && xs(i) != x) i += 1
+    i < xs.length
   }
 
   private def contains(cvs: List[MissingInfo], cv: MissingInfo): Boolean = 
@@ -115,11 +129,11 @@ class SimpleEffectOnStore extends EffectOnStore{
     // that are done or for which the newView has been found.
     store.get(cv) match{
       case Some(mis) =>
-        var newMis = List[MissingInfo]()
+        var newMis = new ArrayBuffer[MissingInfo] // List[MissingInfo]()
         for(mi <- mis; if !mi.done){
           if(views.contains(mi.newView)) mi.markNewViewFound
           else if(mi.updateMissingViews(cv)) maybeAdd(mi.newView)
-          else newMis ::= mi
+          else newMis += mi
         }
         // Profiler.count("store changed"+(newMis.length == mis.length))
         // Profiler.count("EffectOnStore"+newMis.length)
@@ -151,7 +165,10 @@ class SimpleEffectOnStore extends EffectOnStore{
     var storeEls = 0L; var storeElsSize = 0L
     for(mis <- store.valuesIterator){
       storeEls += mis.length
-      for(mi <- mis) storeElsSize += mi.size
+      for(mi <- mis){ 
+        storeElsSize += mi.size; 
+        Profiler.count("MissingCommon length "+mi.mcCount) 
+      }
     }
     println("store # MissingInfos = "+printLong(storeEls))
     println("store MissingInfos size = "+printLong(storeElsSize))

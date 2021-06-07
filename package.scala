@@ -86,6 +86,7 @@ package object ViewAbstraction{
     i < xs.length
   }
 
+
   /** Flatten (concat) a list of lists: more efficient than API version. */
   def flatten(xss: List[List[Int]]): List[Int] =
     if(xss.isEmpty) List[Int]()
@@ -127,6 +128,11 @@ package object ViewAbstraction{
     // h ^= ((h >>> 20) ^ (h >>> 12))
     // h ^= (h >>> 7) ^ (h >>> 4)
     if(h == 0) 12344577 else h
+  }
+
+  /** Comparison of hash values. */
+  @inline def compareHash(h1: Int, h2: Int) = {
+    if(h1 < h2) -1 else if(h1 == h2) 0 else 1
   }
 
   private val formatter = java.text.NumberFormat.getNumberInstance

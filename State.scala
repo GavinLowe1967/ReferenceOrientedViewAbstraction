@@ -16,6 +16,8 @@ class InsufficientIdentitiesException extends Exception
   */
 class State(val family: Family, val cs: ControlState, 
             val ids: Array[Identity], isNew: Boolean = false){
+  /** The number of parameters of this. */
+  def length = ids.length
 
   /** The component process identity. */
   val componentProcessIdentity: ProcessIdentity = {
@@ -41,9 +43,6 @@ class State(val family: Family, val cs: ControlState,
     if(pIds == null) pIds = Array.tabulate(ids.length)(i => (typeMap(i), ids(i)))
     pIds
   }
-
-  /** The number of parameters of this. */
-  def length = ids.length
 
   /** Bit map giving parameters. */
   private var paramBitMap: Array[Array[Boolean]] = null
@@ -144,6 +143,27 @@ class State(val family: Family, val cs: ControlState,
   }  
 
   def toString00 = s"$cs[$family]"+ids.mkString("(", ",", ")")
+
+  /** Ordering on ServerStates values.  Return a value x s.t.: x < 0 if this <
+    * that; x == 0 when this == that; x > 0 when this > that. */
+  def compare(that: State) = {
+    if(this == that) 0
+    else{
+      val hashComp = compareHash(hashCode, that.hashCode)
+      if(hashComp != 0) hashComp
+      else{
+        val stateDiff = cs - that.cs // both are non-negative, so this is sound
+        if(stateDiff != 0) stateDiff
+        else{
+          assert(family == that.family); var i = 0
+          // They must have a different id
+          while(ids(i) != that.ids(i)) i += 1
+          ids(i) - that.ids(i) // both non-negative
+        }
+      }
+    }
+  }
+
 } // End of State class
 
 // ------------------------------------------------ Companion object

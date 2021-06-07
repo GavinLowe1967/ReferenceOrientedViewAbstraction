@@ -81,12 +81,48 @@ class MissingCommon(
     s"MissingCommon($servers, ${StateArray.show(cpts1)},"+
       s"  ${StateArray.show(cpts2)}, $pid)"
 
+  /** Equality test.  The constraint this represents is logically captured by
+    * its initial parameters, so we use equality of parameters as the notion
+    * of equality. */
   override def equals(that: Any) = that match{
     case mc: MissingCommon =>
+      mc.hashCode == hashCode && // optimisation
       mc.servers == servers && mc.cpts1.sameElements(cpts1) &&
-      mc.cpts2.sameElements(cpts2) && mc.pid == pid &&
-      mc.missingCandidates.length == missingCandidates.length &&
-      mc.missingCandidates.forall(mc => missingCandidates.contains(mc))
+      mc.cpts2.sameElements(cpts2) && mc.pid == pid //  &&
+      // mc.missingCandidates.length == missingCandidates.length &&
+      // mc.missingCandidates.forall(mc => missingCandidates.contains(mc))
+    case null => false
+  }
+
+  /** Hash code, based on the same principle as equality. */
+  override val hashCode = {
+    @inline def f(x:Int, y: Int) = x*97+y
+    f(f(f(f(servers.hashCode, StateArray.mkHash(cpts1)), 
+      StateArray.mkHash(cpts2)), pid._1), pid._2)
+  }
+
+  /** Ordering on MissingCommon values.  Return a value x s.t.: x < 0 if this <
+    * that; x == 0 when this == that; x > 0 when this > that. */
+  def compare(that: MissingCommon) = {
+    val hashComp = compareHash(hashCode, that.hashCode)
+    if(hashComp != 0) hashComp
+    else{
+      val ssComp = servers.compare(that.servers)
+      if(ssComp != 0) ssComp
+      else{
+        val cmp1 = StateArray.compare(cpts1, that.cpts1)
+        if(cmp1 != 0) cmp1
+        else{
+          val cmp2 = StateArray.compare(cpts2, that.cpts2)
+          if(cmp2 != 0) cmp2
+          else{
+            val familyDiff = pid._1 - that.pid._1
+            if(familyDiff != 0) familyDiff
+            else pid._2 - that.pid._2
+          }
+        }
+      }
+    }
   }
 
   /** A measure of the size of this: the number of ComponentViews stored. */

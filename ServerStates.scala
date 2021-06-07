@@ -68,6 +68,19 @@ class ServerStates(val servers: List[State]){
 
   /** Convert to string, safe version. */
   def toString0 = servers.map(_.toString0).mkString("[", " || ", "]")
+
+  /** Ordering on ServerStates values.  Return a value x s.t.: x < 0 if this <
+    * that; x == 0 when this == that; x > 0 when this > that. */
+  def compare(that: ServerStates) = {
+    val hashComp = compareHash(hashCode, that.hashCode)
+    if(hashComp != 0) hashComp
+    else if(this == that) 0
+    else{
+      var i = 0
+      while(servers(i) != that.servers(i)) i += 1
+      servers(i).compare(that.servers(i))
+    }
+  }
 }
 
 // =======================================================

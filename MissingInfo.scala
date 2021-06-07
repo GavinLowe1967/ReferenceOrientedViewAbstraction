@@ -28,8 +28,20 @@ class MissingInfo(
 
   // Profiler.count("MissingInfo"+missingViews.length)
 
-  assert(missingCommon.length <= 1 && missingViews.length <= 4) 
+  assert(missingCommon.length <= 2, 
+    "missingCommon.length = "+missingCommon.length)
+  assert(missingViews.length <= 7, "missingViews.length = "+missingViews.length)
   // FIXME: not true in general
+
+  // Sort missingCommon
+  if(missingCommon.length == 2){
+    val cmp = missingCommon(0).compare(missingCommon(1))
+    assert(cmp != 0)
+    if(cmp > 0){ 
+      val t = missingCommon(0); missingCommon(0) = missingCommon(1); 
+      missingCommon(1) = t 
+    }
+  }
 
   /** Number of non-null entries in missingCommon and missingView. */
   private var remainingCount = missingCommon.length+missingViews.length
@@ -105,10 +117,12 @@ class MissingInfo(
       val mvLen = missingViews.length; val mcLen = missingCommon.length
       if(mi.newView == newView && mi.missingViews.length == mvLen &&
           mi.missingCommon.length == mcLen){
+        // Test if missingViews agree
         var i = 0
         while(i < mvLen && mi.missingViews(i) == missingViews(i)) i += 1
         if(i < mvLen) false
         else{
+          // test if missingCommon agree
           i = 0
           while(i < mcLen && mi.missingCommon(i) == missingCommon(i)) i += 1
           i == mcLen
@@ -120,4 +134,57 @@ class MissingInfo(
   def size = 
     missingViews.filter(_ != null).length + 
       missingCommon.filter(_ != null).map(_.size).sum
+
+  def mcCount = missingCommon.length
+}
+
+// ==================================================================
+
+/** A set of MissingInfo. */
+class MissingInfoSet{
+  /* We store MissingInfos in a HashMap, keyed by their MissingCommon values. */
+
+  /** The type of keys. */
+  private type Key = Array[MissingCommon]
+  // Most will be of length 0 or 1; I believe none will be longer that 2. */
+
+  private def mkHash(mcs: Key): Int = {
+    var h = 0; var i = 0
+    while(i < mcs.length){ h = h*89+mcs(i).hashCode; i += 1 }
+    h
+  }
+
+  /** The type of entries. */
+  private type Entry = List[MissingInfo]
+
+  /** The current size of the arrays. */
+  private var n = 4
+
+  private var keys = new Array[Key](n)
+
+  private var entries = new Array[Entry](n)
+
+  /** The current number of keys. */
+  private var count = 0
+
+  /* DTI: for all i in [0..size), if keys(i) != null, then for all mi in
+   * entries(i), mi.missingCommon.sameElements(keys(i)).  In fact, maybe the
+   * latter should be reference equality. */
+
+
+
+
+  /** Add missingInfo to this. */
+  def add(missingInfo: MissingInfo): Unit = {
+
+
+
+  }
+
+
+  /** For each MissingInfo mi in this: (1) if mi is done or its newView is in
+    * views, then remove mi; (2) update mi's missing views based on views, and
+    * if it is now done, add its newView to result and remove mi from this. */
+  def update(views: ViewSet, result: ArrayBuffer[ComponentView]) = ???
+
 }
