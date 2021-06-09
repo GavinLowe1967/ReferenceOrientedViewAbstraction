@@ -110,9 +110,7 @@ class MissingCommon(
     case mc: MissingCommon =>
       mc.hashCode == hashCode && // optimisation
       mc.servers == servers && mc.cpts1.sameElements(cpts1) &&
-      mc.cpts2.sameElements(cpts2) && mc.pid == pid //  &&
-      // mc.missingCandidates.length == missingCandidates.length &&
-      // mc.missingCandidates.forall(mc => missingCandidates.contains(mc))
+      mc.cpts2.sameElements(cpts2) && mc.pid == pid
     case null => false
   }
 
@@ -175,7 +173,6 @@ object MissingCommon{
       : MissingCommon = {
     Profiler.count("makeMissingCommon")
     assert(singleRef)
-    // assert(cpts1.length == 2, StateArray.show(cpts1)) // not true
     assert(cpts2.length == 2, StateArray.show(cpts2))
     val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
     val mc = new MissingCommon(servers, cpts1, cpts2, pid)
@@ -188,12 +185,6 @@ object MissingCommon{
       val cpt1 = cpts(1)
       if(cpt1.hasPID(pid)) found = updateMissingCandidates(mc, cpt1, views, ab)
     }
-    // var matches = matchesFor(servers, princ1, pid, views)
-    // while(matches.nonEmpty && !found){
-    //   val cv1 = matches.head; matches = matches.tail
-    //   found = updateMissingCandidates(mc, cv1.components(1), views, ab)
-    // } // end of while loop
-    // Profiler.count("MissingCandidateSize"+mc.allCandidates.length)
     if(found) null else mc 
     // Note: we don't need to do anything with ab here, as mc.allcandidates
     // will store the same Views.  IMPROVE?
@@ -253,18 +244,5 @@ object MissingCommon{
     missing
   }
 
-  /** All elements of views of the form servers || princ || c where c has
-    * identity pid. */
-  // @inline private def matchesFor(
-  //   servers: ServerStates, princ: State, pid: ProcessIdentity, views: ViewSet)
-  //     : List[ComponentView] = {
-  //   var result = List[ComponentView]()
-  //   val iter = views.iterator(servers, princ)
-  //   while(iter.hasNext){
-  //     val cv = iter.next; val cpts = cv.components; assert(cpts.length == 2, cv)
-  //     if(cpts(1).hasPID(pid)) result ::= cv
-  //   }
-  //   result
-  // }
 
 }

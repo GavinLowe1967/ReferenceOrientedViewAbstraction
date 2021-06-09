@@ -121,40 +121,41 @@ class SimpleEffectOnStore extends EffectOnStore{
     def maybeAdd(nv: ComponentView) = if(!result.contains(nv)) result ::= nv
 
     // Update based upon the MissingCommon entries in mi being all completed.
-    // Update its missingViews; return true if now done; otherwise add to
-    // store.
+    // Update its missingViews; if now done, then add the newView to result;
+    // otherwise add to store.
     def mcDone(mi: MissingInfo) = {
       require(mi.mcDone)
       if(mi.updateMissingViews(views)) maybeAdd(mi.newView)
       else for(cv <- mi.missingViews; if cv != null) addToStore(store, cv, mi)
     }
 
-    // In each phase below, we also purge all MissingInfos that are done or
-    // for which the newView has been found.
+    // In each phase below, we also purge all MissingInfos for which the
+    // newView has been found, or are done.  In the first two cases, we also
+    // purge those whose MissingCommon are done.
 
     // For each relevant entry in commonStore, try to match the MissingCommon
     // entries against cv. 
     val key = (cv.servers, cv.principal)
     commonStore.get(key) match{
       case Some(mis) => 
-        var newMis = List[MissingInfo]()
-        for(mi <- mis; if !mi.done){
+        var newMis = List[MissingInfo]() // those to retain in commonStore(key)
+        for(mi <- mis; if !mi.mcDone){
           if(views.contains(mi.newView)) mi.markNewViewFound
           else{
             val vb = new ViewBuffer
-            if(mi.updateMissingCommon(cv, views, vb)) maybeAdd(mi.newView)
+            mi.updateMissingCommon(cv, views, vb)
+            if(mi.done) maybeAdd(mi.newView)
             else if(mi.mcDone) mcDone(mi)
-            // IMPROVE: remove from commonStore?
             else{
-              // Register mi against each view in vb
+              // Register mi against each view in vb, and retain in commonStore
               for(cv1 <- vb) addToStore(mcMissingCandidatesStore, cv1, mi)
               newMis ::= mi
             }
           }
-          if(newMis.length != mis.length){
-            if(newMis.nonEmpty) commonStore += key -> newMis
-            else commonStore.remove(key)
-          }
+        } // end of for loop
+        if(newMis.length != mis.length){
+          if(newMis.nonEmpty) commonStore += key -> newMis
+          else commonStore.remove(key)
         }
       case None => {}
     }
@@ -164,7 +165,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     mcMissingCandidatesStore.get(cv) match{
       case Some(mis) =>
         mcMissingCandidatesStore.remove(cv) // remove old entry
-        for(mi <- mis; if !mi.done){
+        for(mi <- mis; if !mi.mcDone){
           if(views.contains(mi.newView)) mi.markNewViewFound
           else{
             val ab = mi.updateMCMissingViews(cv, views) 
@@ -204,11 +205,13 @@ class SimpleEffectOnStore extends EffectOnStore{
     * of views. */
   def sanityCheck(views: ViewSet) = {
     println("Sanity check")
-    def doCheck(iter: Iterator[Iterable[MissingInfo]]) = 
-      for(mis <- iter; mi <- mis; if !mi.done) mi.sanityCheck(views)
-    doCheck(store.valuesIterator)
-    doCheck(mcMissingCandidatesStore.valuesIterator)
-    doCheck(commonStore.valuesIterator)
+    // Do sanity check on all entries of iter.  If flag then they are expected
+    // to satisfy mcDone.
+    def doCheck(iter: Iterator[Iterable[MissingInfo]], flag: Boolean) = 
+      for(mis <- iter; mi <- mis; if !mi.done) mi.sanityCheck(views, flag)
+    doCheck(store.valuesIterator, true)
+    doCheck(mcMissingCandidatesStore.valuesIterator, false)
+    doCheck(commonStore.valuesIterator, false)
   }
 
   /** Report on size. */

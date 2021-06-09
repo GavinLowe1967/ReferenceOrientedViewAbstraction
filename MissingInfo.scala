@@ -100,10 +100,8 @@ class MissingInfo(
   /** Update the MissingCommon entries in this, based on cv being a possible
     * match to the first clause of the obligation.  Add to ab all Views that
     * this needs to be registered against in the store.  cv is expected to be
-    * a possible match to at least one member of missingCommon0. 
-    * @return true if this is now complete. */
-  def updateMissingCommon(cv: ComponentView, views: ViewSet, ab: ViewBuffer)
-      : Boolean = {
+    * a possible match to at least one member of missingCommon0. */
+  def updateMissingCommon(cv: ComponentView, views: ViewSet, ab: ViewBuffer) = {
     var i = 0
     while(i < missingCommon.length){
       val mc = missingCommon(i)
@@ -111,7 +109,6 @@ class MissingInfo(
         if(mc.updateMissingCommon(cv, views, ab)) mcNull(i)
       i += 1
     }
-    done
   }
 
   /** Update the MissingCommon fields of this based upon the addition of cv. cv
@@ -151,7 +148,6 @@ class MissingInfo(
     * removed).
     * @return true if its state changes. */
   def updateMissingViews(cv: ComponentView) = {
-    // Remove cv from missingViews
     var i = 0
     while(i < missingViews.length){
       if(missingViews(i) == cv){ 
@@ -160,14 +156,14 @@ class MissingInfo(
       i += 1
     }
   }
-// IMPROVE: maybe EffectOnStore should store MissingInfos separately,
-// depending on which of the phases of update1 is relevant.
 
   /** Check that: (1) if all the MissingCommon objects are done, then
     * missingViews contains no element of views; (2) otherwise no
-    * MissingCommon object has a head missingView in views. */
-  def sanityCheck(views: ViewSet) = {
+    * MissingCommon object has a head missingView in views; (3) if flag, then
+    * all MissingCommon objects are done (but not necessarily vice versa). */
+  def sanityCheck(views: ViewSet, flag: Boolean) = {
     assert(!done)
+    if(flag) assert(mcDone)
     if(mcDone){
       assert(missingCommon.forall(_ == null))
       for(v <- missingViews; if v != null)

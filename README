@@ -22,8 +22,9 @@ Missingcandidates list whose head matches cv, remove longest prefix of values
 in ViewSet; return list of new head views against which it should be stored
 (or special value if the MissingCommon is done).
 
-3. When first MissingCommon done, update second MissingCommon (if any), and
-re-store in commonStore and mcMissingCandidateStore, as above.
+3. When first MissingCommon done (via updateMissingCommon or
+updateMCMissingViews), update second MissingCommon (if any), and re-store in
+commonStore and mcMissingCandidateStore, as above.
 
 4. When all MissingCommon done, update missingViews by removing longest prefix
 of views now in the ViewSet, and re-store against the next in the list.
@@ -56,6 +57,18 @@ commonStore: size = 42
 mcMissingCandidatesStore: size = 721
   # MissingInfos = 10,468
   MissingInfos size = 25,942
+
+After step C:
+
+store: size = 3574
+  # MissingInfos = 201,668
+  MissingInfos size = 470,283
+commonStore: size = 42
+  # MissingInfos = 5,568
+  MissingInfos size = 11,783
+mcMissingCandidatesStore: size = 621
+  # MissingInfos = 9,823
+  MissingInfos size = 24,206
 
 
 
