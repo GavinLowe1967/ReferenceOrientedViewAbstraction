@@ -9,7 +9,7 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
   * missingCommon0 have been satisfied. */
 class MissingInfo(
   val newView: ComponentView, 
-  private var missingViews: Array[ComponentView],
+  var missingViews: Array[ComponentView], // IMPROVE: make private
   private var missingCommon: Array[MissingCommon]
 ){
   /* missingViews contains component views that are necessary to satisfy this
@@ -38,11 +38,14 @@ class MissingInfo(
     * missingCommon[0..mcIndex).forall(_ == null). */
   private var mcIndex = 0
 
-  /** Record */
+  /** Record missingCommon(i) as being completed. */
   @inline private def mcNull(i: Int) = {
     require(missingCommon(i).done)
     missingCommon(i) = null; remainingCount -= 1; mcIndex += 1
   }
+
+  /** Are all the missingCommon entries done? */
+  def mcDone = mcIndex == missingCommon.length
 
   private def sort = {
     // Sort missingCommon
@@ -105,9 +108,7 @@ class MissingInfo(
     while(i < missingCommon.length){
       val mc = missingCommon(i)
       if(mc != null && mc.matches(cv))
-        if(mc.updateMissingCommon(cv, views, ab)) mcNull(i)//  {
-        //   missingCommon(i) = null; remainingCount -= 1
-        // }
+        if(mc.updateMissingCommon(cv, views, ab)) mcNull(i)
       i += 1
     }
     done
@@ -125,12 +126,24 @@ class MissingInfo(
       val mc = missingCommon(i)
       if(mc != null){
         ab = mc.updateMissingViews(cv, views)
-        if(mc.done) mcNull(i) // { missingCommon(i) = null; remainingCount -= 1 }
+        if(mc.done) mcNull(i) 
       }
       i += 1
     }
     assert(ab != null || missingCommon.forall(_ == null))
     ab
+  }
+
+  /** Update missingViews based upon views.  Return true if this is now done. */
+  def updateMissingViews(views: ViewSet): Boolean = {
+    var i = 0
+    while(i < missingViews.length){
+      if(views.contains(missingViews(i))){
+        missingViews(i) = null; remainingCount -= 1
+      }
+      i += 1
+    }
+    done
   }
 
   /** Update this based on the addition of cv.  cv is expected to match a
@@ -150,11 +163,17 @@ class MissingInfo(
 // IMPROVE: maybe EffectOnStore should store MissingInfos separately,
 // depending on which of the phases of update1 is relevant.
 
-  /** Check that this contains no element of views remains in missingViews. */
+  /** Check that: (1) if all the MissingCommon objects are done, then
+    * missingViews contains no element of views; (2) otherwise no
+    * MissingCommon object has a head missingView in views. */
   def sanityCheck(views: ViewSet) = {
     assert(!done)
-    for(v <- missingViews; if v != null) assert(!views.contains(v))
-    for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)
+    if(mcDone){
+      assert(missingCommon.forall(_ == null))
+      for(v <- missingViews; if v != null)
+        assert(!views.contains(v), this.toString+" still contains "+v)
+    }
+    else for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)
   }
 
   override def toString =

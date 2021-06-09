@@ -90,7 +90,7 @@ class MissingCommon(
     isDone
   }
 
-  /** Sanity check that no elements of views remain in missingCandidates. */
+  /** Sanity check that no head element of missingCandidates is in views. */
   def sanityCheck(views: ViewSet) = {
     assert(!done)
     for(mcs <- missingCandidates){ 
