@@ -32,22 +32,53 @@ class MissingCommon(
   /** Is this constraint satisfied? */
   @inline def done = isDone
 
-  /** Update missingCandidates based on the addition of cv.  Remove cv from
-    * each; if any is now empty, then mark this as satisfied and return
-    * true. */
-  def updateMissingViews(cv: ComponentView): Boolean = {
-    var mcs = missingCandidates; missingCandidates = List()
-    while(mcs.nonEmpty){
-      var mc = mcs.head; mcs = mcs.tail; var newMc = List[ComponentView]()
-      // Remove cv from mc; add resulting list to missingCandidates
-      while(mc.nonEmpty){
-        val cv1 = mc.head; mc = mc.tail
-        if(cv1 != cv) newMc ::= cv1 
-      }
-      if(newMc.isEmpty) isDone = true
-      else missingCandidates ::= newMc
+  def missingHeads = missingCandidates.map(_.head)
+
+  // private var prevUpdateMissing = List[ComponentView]() // FIXME
+
+  /** Update mc based on the addition of cv.  If cv matches mc.head, remove it,
+    * and the maximal prefix from views. */
+  private def updateMissingCandidates(mc: MissingCandidates, cv: ComponentView, 
+    views: ViewSet, toRegister: ArrayBuffer[ComponentView])
+      : MissingCandidates = {
+    if(mc.head == cv){
+      var mc1 = mc
+      while(mc1.nonEmpty && views.contains(mc1.head)) mc1 = mc1.tail
+      if(mc1.isEmpty) isDone = true
+      else toRegister += mc1.head
+      mc1
     }
-    done
+    else mc
+  }
+
+  /** Update missingCandidates based on the addition of cv.  Remove cv from
+    * each; if any is now empty, then mark this as satisfied.  Return views
+    * against which this should now be registered, or null if done. */
+  def updateMissingViews(cv: ComponentView, views: ViewSet)
+      : ArrayBuffer[ComponentView] = {
+    // prevUpdateMissing ::= cv
+    val toRegister = new ArrayBuffer[ComponentView]
+    missingCandidates = 
+      missingCandidates.map(mc => 
+        updateMissingCandidates(mc, cv, views, toRegister))
+    assert(done || toRegister.nonEmpty, 
+      s"updateMissingViews($cv) with\n${missingCandidates.mkString("\n")}")
+    if(done) null else toRegister
+//        s"prevUpdateMissing = $prevUpdateMissing")
+// FIXME: return new value to register against
+
+    // var mcs = missingCandidates; missingCandidates = List()
+    // while(mcs.nonEmpty){
+    //   var mc = mcs.head; mcs = mcs.tail; var newMc = List[ComponentView]()
+    //   // Remove cv from mc; add resulting list to missingCandidates
+    //   while(mc.nonEmpty){
+    //     val cv1 = mc.head; mc = mc.tail
+    //     if(cv1 != cv) newMc ::= cv1 
+    //   }
+    //   if(newMc.isEmpty) isDone = true
+    //   else missingCandidates ::= newMc
+    // }
+ //   done
   }
 
   /** Is cv a possible match to clause (1), i.e. does it match servers ||
@@ -69,12 +100,15 @@ class MissingCommon(
     isDone
   }
 
-  def allCandidates: List[ComponentView] = missingCandidates.flatten.distinct
+  // def allCandidates: List[ComponentView] = missingCandidates.flatten.distinct
 
   /** Sanity check that no elements of views remain in missingCandidates. */
   def sanityCheck(views: ViewSet) = {
     assert(!done)
-    for(mcs <- missingCandidates; v <- mcs) assert(!views.contains(v))
+    for(mcs <- missingCandidates){ // ; v <- mcs) 
+      val v = mcs.head
+      assert(!views.contains(v), this.toString+" still contains "+v)
+    }
   }
 
   override def toString = 
@@ -194,9 +228,9 @@ object MissingCommon{
     var i = 0; var found = false
     while(i < renames.length && !found){
       val c = renames(i); i += 1
-      val missing = getMissingCandidates(mc, c, views, vb)
+      val missing = getMissingCandidates(mc, c, views, vb) // IMPROVE vb not needed
       if(missing.isEmpty) found = true
-      else mc.missingCandidates ::= missing
+      else{ mc.missingCandidates ::= missing; vb += missing.head }
     } // end of while loop
     found
   }
@@ -216,7 +250,7 @@ object MissingCommon{
     // Add servers || cptsx, if not in views
     @inline def maybeAdd(cptsx: Array[State]) = { 
       val cvx = Remapper.mkComponentView(servers, cptsx)
-      if(!views.contains(cvx)){ missing ::= cvx; vb += cvx }
+      if(!views.contains(cvx)){ missing ::= cvx /*; vb += cvx */ }
     }
 
     maybeAdd(Array(cpts2(0), c))

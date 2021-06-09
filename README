@@ -1,3 +1,66 @@
+Plan for improving EffectOnStore.
+
+0. Split store into two parts:
+
+  - mcMissingCandidatesStore: for MissingInfo objects with at least one
+    incomplete MissingCommon object, storing the MissingInfo against the head
+    of each MissingCandidates list;
+
+  - store, for MissingInfo objects for which all the MissingCommon objects are
+    complete, storing the MissingInfo against the head of missingViews.
+
+1. Initially store each MissingInfo according to its first MissingCommon value
+(if any):
+
+  - In commonStore, against the parameters of the MissingCommon;
+
+  - In mcMissingCandidatesStore, against the heads of each of the
+    MissingCandidates lists of the MissingCommon.
+
+2. In MissingCommon.updateMissingViews, pass in current ViewSet.  In each
+Missingcandidates list whose head matches cv, remove longest prefix of values
+in ViewSet; return list of new head views against which it should be stored
+(or special value if the MissingCommon is done).
+
+3. When first MissingCommon done, update second MissingCommon (if any), and
+re-store in commonStore and mcMissingCandidateStore, as above.
+
+4. When all MissingCommon done, update missingViews by removing longest prefix
+of views now in the ViewSet, and re-store against the next in the list.
+
+Order of implementation: 
+
+A. Split store as in 0 (but still store against all keys); split
+  MissingInfo.updateMissingViews according to the two cases, and change the
+  calls from EffectOnStore.complete; update sanityCheck; update report.
+
+B. In mcMissingCandidateStore, only store against heads, as in 1 (but still
+  include in store); make changes as in 2.
+
+C. Delay adding to store until all MissingCommon done (as in 4); assume at most
+  one MissingCommon for the moment; but store against all of missingViews.
+
+D. Update to store in store only against head missingViews, as in 4; change
+  MissingInfo.updateMissingViews appropriately.
+
+E. Extend to allow multiple MissingCommon, as in 3. 
+
+Result of EffectOnStore.report after step A.
+
+store: size = 3574
+  # MissingInfos = 203,154
+  MissingInfos size = 474,290
+commonStore: size = 42
+  # MissingInfos = 5,503
+  MissingInfos size = 11,334
+mcMissingCandidatesStore: size = 721
+  # MissingInfos = 10,468
+  MissingInfos size = 25,942
+
+
+
+=======
+
 Trace sequence of calls process -> processTransition ->
 instantiateTransitionTemplateBy -> extendTransitionTemplateBy -> isExtendable
 -> findReferencingView: is there repeated work here?

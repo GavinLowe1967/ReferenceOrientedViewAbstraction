@@ -194,6 +194,14 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   }
 
   override val hashCode = mkHashCode
+
+  /** Ordering on ComponentViews.  Return a value x s.t.: x < 0 if this < that;
+    * x == 0 when this == that; x > 0 when this > that. */
+  def compare(that: ComponentView) = {
+    val serverComp = servers.compare(that.servers)
+    if(serverComp != 0) serverComp
+    else StateArray.compare(components, that.components)
+  }
 }
 
 
