@@ -32,12 +32,15 @@ class MissingCommon(
   /** Is this constraint satisfied? */
   @inline def done = isDone
 
+  /** The heads of the missing candidates.  The corresponding MissingInfo should
+    * be registered against these in
+    * EffectOnStore.mcMissingCandidatesStore. */
   def missingHeads = missingCandidates.map(_.head)
 
-  // private var prevUpdateMissing = List[ComponentView]() // FIXME
-
   /** Update mc based on the addition of cv.  If cv matches mc.head, remove it,
-    * and the maximal prefix from views. */
+    * and the maximal prefix from views.  If then done, record this.
+    * Otherwise add to toRegister the next view, against which this should be
+    * registered. */
   private def updateMissingCandidates(mc: MissingCandidates, cv: ComponentView, 
     views: ViewSet, toRegister: ArrayBuffer[ComponentView])
       : MissingCandidates = {
@@ -56,29 +59,16 @@ class MissingCommon(
     * against which this should now be registered, or null if done. */
   def updateMissingViews(cv: ComponentView, views: ViewSet)
       : ArrayBuffer[ComponentView] = {
-    // prevUpdateMissing ::= cv
     val toRegister = new ArrayBuffer[ComponentView]
     missingCandidates = 
       missingCandidates.map(mc => 
         updateMissingCandidates(mc, cv, views, toRegister))
-    assert(done || toRegister.nonEmpty, 
-      s"updateMissingViews($cv) with\n${missingCandidates.mkString("\n")}")
-    if(done) null else toRegister
-//        s"prevUpdateMissing = $prevUpdateMissing")
-// FIXME: return new value to register against
-
-    // var mcs = missingCandidates; missingCandidates = List()
-    // while(mcs.nonEmpty){
-    //   var mc = mcs.head; mcs = mcs.tail; var newMc = List[ComponentView]()
-    //   // Remove cv from mc; add resulting list to missingCandidates
-    //   while(mc.nonEmpty){
-    //     val cv1 = mc.head; mc = mc.tail
-    //     if(cv1 != cv) newMc ::= cv1 
-    //   }
-    //   if(newMc.isEmpty) isDone = true
-    //   else missingCandidates ::= newMc
-    // }
- //   done
+    if(done) null 
+    else{ 
+      assert(toRegister.nonEmpty,
+        s"updateMissingViews($cv) with\n${missingCandidates.mkString("\n")}")
+      toRegister
+    }
   }
 
   /** Is cv a possible match to clause (1), i.e. does it match servers ||
@@ -100,12 +90,10 @@ class MissingCommon(
     isDone
   }
 
-  // def allCandidates: List[ComponentView] = missingCandidates.flatten.distinct
-
   /** Sanity check that no elements of views remain in missingCandidates. */
   def sanityCheck(views: ViewSet) = {
     assert(!done)
-    for(mcs <- missingCandidates){ // ; v <- mcs) 
+    for(mcs <- missingCandidates){ 
       val v = mcs.head
       assert(!views.contains(v), this.toString+" still contains "+v)
     }
@@ -228,7 +216,7 @@ object MissingCommon{
     var i = 0; var found = false
     while(i < renames.length && !found){
       val c = renames(i); i += 1
-      val missing = getMissingCandidates(mc, c, views, vb) // IMPROVE vb not needed
+      val missing = getMissingCandidates(mc, c, views) 
       if(missing.isEmpty) found = true
       else{ mc.missingCandidates ::= missing; vb += missing.head }
     } // end of while loop
@@ -239,11 +227,9 @@ object MissingCommon{
     * candidate state c.  Return a list containing each of the following that
     * is not currently in views: (1) servers || cpts2(0) || c; and (2) if c
     * has a reference to a secondary component c2 of cpts1 or cpts2, then
-    * servers || c || c2 (renamed).  Add to vb the views that mc needs to be
-    * registered against in the EffectOnStore.*/
+    * servers || c || c2 (renamed). */
   @inline private 
-  def getMissingCandidates(
-    mc: MissingCommon, c: State, views: ViewSet, vb: ViewBuffer)
+  def getMissingCandidates(mc: MissingCommon, c: State, views: ViewSet)
       : List[ComponentView] = {
     var missing = List[ComponentView]() // missing necessary views
     val servers = mc.servers; val cpts1 = mc.cpts1; val cpts2 = mc.cpts2

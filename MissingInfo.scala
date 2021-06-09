@@ -33,6 +33,17 @@ class MissingInfo(
   assert(missingViews.length <= 7, "missingViews.length = "+missingViews.length)
   // FIXME: not true in general
 
+  /** Index of the first non-null entry in missingCommon, or
+    * missingCommon.length if all are null.  Invariant:
+    * missingCommon[0..mcIndex).forall(_ == null). */
+  private var mcIndex = 0
+
+  /** Record */
+  @inline private def mcNull(i: Int) = {
+    require(missingCommon(i).done)
+    missingCommon(i) = null; remainingCount -= 1; mcIndex += 1
+  }
+
   private def sort = {
     // Sort missingCommon
     if(missingCommon.length == 2){
@@ -60,10 +71,11 @@ class MissingInfo(
       else missingViews(j) = null
     }
     // IMPROVE: remove following
-    for(i <- 0 until missingViews.length-1)
-      if(missingViews(i) != null && missingViews(i+1) != null)
-        assert(missingViews(i).compare(missingViews(i+1)) < 0,
-          "\n"+missingViews.map(_.toString).mkString("\n"))
+    if(debugging)
+      for(i <- 0 until missingViews.length-1)
+        if(missingViews(i) != null && missingViews(i+1) != null)
+          assert(missingViews(i).compare(missingViews(i+1)) < 0,
+            "\n"+missingViews.map(_.toString).mkString("\n"))
   }
 
   sort
@@ -93,9 +105,9 @@ class MissingInfo(
     while(i < missingCommon.length){
       val mc = missingCommon(i)
       if(mc != null && mc.matches(cv))
-        if(mc.updateMissingCommon(cv, views, ab)){
-          missingCommon(i) = null; remainingCount -= 1
-        }
+        if(mc.updateMissingCommon(cv, views, ab)) mcNull(i)//  {
+        //   missingCommon(i) = null; remainingCount -= 1
+        // }
       i += 1
     }
     done
@@ -105,15 +117,15 @@ class MissingInfo(
     * is expected to match the head of a MissingCommon value.  Return the
     * views against which this should now be registered, or null if all the
     * missingCommon entries are satisfied.  */ 
-  def updateMCMissingViews(cv: ComponentView, views: ViewSet): ArrayBuffer[ComponentView] = {
-    // Remove cv from each element of missingCommon.
+  def updateMCMissingViews(cv: ComponentView, views: ViewSet)
+      : ArrayBuffer[ComponentView] = {
     var i = 0; var ab: ArrayBuffer[ComponentView] = null
     assert(missingCommon.length == 1) // FIXME
     while(i < missingCommon.length){
       val mc = missingCommon(i)
       if(mc != null){
         ab = mc.updateMissingViews(cv, views)
-        if(mc.done){ missingCommon(i) = null; remainingCount -= 1 }
+        if(mc.done) mcNull(i) // { missingCommon(i) = null; remainingCount -= 1 }
       }
       i += 1
     }
@@ -127,14 +139,13 @@ class MissingInfo(
     * @return true if its state changes. */
   def updateMissingViews(cv: ComponentView) = {
     // Remove cv from missingViews
-    var i = 0 //; var changed = false
+    var i = 0
     while(i < missingViews.length){
       if(missingViews(i) == cv){ 
-        missingViews(i) = null; remainingCount -= 1 // ; changed = true
+        missingViews(i) = null; remainingCount -= 1
       }
       i += 1
     }
-    // changed
   }
 // IMPROVE: maybe EffectOnStore should store MissingInfos separately,
 // depending on which of the phases of update1 is relevant.
@@ -171,21 +182,6 @@ class MissingInfo(
     case mi: MissingInfo => 
       mi.newView == newView && equalExceptNull(mi.missingViews, missingViews) &&
       equalExceptNull(mi.missingCommon, missingCommon)
-      // val mvLen = missingViews.length; val mcLen = missingCommon.length
-      // if(mi.newView == newView && mi.missingViews.length == mvLen &&
-      //     mi.missingCommon.length == mcLen){
-      //   // Test if missingViews agree
-      //   var i = 0
-      //   while(i < mvLen && mi.missingViews(i) == missingViews(i)) i += 1
-      //   if(i < mvLen) false
-      //   else{
-      //     // test if missingCommon agree
-      //     i = 0
-      //     while(i < mcLen && mi.missingCommon(i) == missingCommon(i)) i += 1
-      //     i == mcLen
-      //   }
-      // }
-      // else false
   }
 
   private var theHashCode = -1

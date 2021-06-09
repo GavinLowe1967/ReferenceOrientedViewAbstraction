@@ -78,24 +78,25 @@ class SimpleEffectOnStore extends EffectOnStore{
     Profiler.count("EffectOnStore.add")
     val missingInfo = new MissingInfo(nv, missing.toArray, missingCommon.toArray)
     // Add entries to store
+// FIXME: only if missingCommon.isEmpty
     for(cv <- missing) addToStore(store, cv, missingInfo)
     // Add entries to mcMissingCandidates
     assert(missingCommon.length <= 1) // FIXME
-    if(missingCommon.nonEmpty)
+    if(missingCommon.nonEmpty){
       for(cv <- missingCommon(0).missingHeads)
         addToStore(mcMissingCandidatesStore, cv, missingInfo)
-    // for(mc <- missingCommon; cv <- mc.allCandidates) 
-    //   addToStore(mcMissingCandidatesStore, cv, missingInfo)
-    // Add entries to commonStore
-    for(mc <- missingCommon){
+      // Add entries to commonStore
+      for(mc <- missingCommon){
 // FIXME: also cpts2? 
-      val princ1 = mc.cpts1(0)
-      if(false && debugging)
-        assert(Remapper.remapToPrincipal(mc.servers, princ1) == princ1)
-      val prev = commonStore.getOrElse((mc.servers, princ1), List[MissingInfo]())
-      //if(!contains(prev,missingInfo)) // needs equality test
+        val princ1 = mc.cpts1(0)
+        if(false && debugging)
+          assert(Remapper.remapToPrincipal(mc.servers, princ1) == princ1)
+        val prev = 
+          commonStore.getOrElse((mc.servers, princ1), List[MissingInfo]())
+        //if(!contains(prev,missingInfo)) // needs equality test
         commonStore += (mc.servers, princ1) -> (missingInfo::prev)
-      //else println("Already stored "+missingInfo)
+        //else println("Already stored "+missingInfo)
+      }
     }
   }
 
@@ -133,8 +134,7 @@ class SimpleEffectOnStore extends EffectOnStore{
             if(mi.updateMissingCommon(cv, views, vb)) maybeAdd(mi.newView)
             else{
               // Register mi against each view in vb
-              for(cv1 <- vb) 
-                addToStore(mcMissingCandidatesStore, cv1, mi)
+              for(cv1 <- vb) addToStore(mcMissingCandidatesStore, cv1, mi)
               newMis ::= mi
             }
           }
@@ -150,22 +150,17 @@ class SimpleEffectOnStore extends EffectOnStore{
     // mcMissingCandidateStore.
     mcMissingCandidatesStore.get(cv) match{
       case Some(mis) =>
-        // var newMis = new ArrayBuffer[MissingInfo]
+        mcMissingCandidatesStore.remove(cv) // remove old entry
         for(mi <- mis; if !mi.done){
           if(views.contains(mi.newView)) mi.markNewViewFound
           else{
             val ab = mi.updateMCMissingViews(cv, views) 
-            if(mi.done) maybeAdd(mi.newView) // else newMis += mi
+            if(mi.done) maybeAdd(mi.newView) 
             else if(ab != null)
               for(cv1 <- ab) addToStore(mcMissingCandidatesStore, cv1, mi)
             // Note: if ab = null, all the MissingCommon entries are satisfied.
           }
         }
-        mcMissingCandidatesStore.remove(cv)
-        // if(newMis.length != mis.length){
-        //   if(newMis.nonEmpty) mcMissingCandidatesStore += cv -> newMis 
-        //   else mcMissingCandidatesStore.remove(cv)
-        // }
       case None => {}
     }
 
