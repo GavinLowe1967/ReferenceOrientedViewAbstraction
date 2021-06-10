@@ -29,6 +29,8 @@ class MissingInfo(
   // We keep missingCommon and missingViews sorted. 
   MissingInfo.sort(missingCommon, missingViews)
 
+  import MissingCommon.ViewBuffer // ArrayBuffer[ComponentView]
+
   assert(missingCommon.length <= 2, 
     "missingCommon.length = "+missingCommon.length)
   assert(missingViews.length <= 7, "missingViews.length = "+missingViews.length)
@@ -42,7 +44,24 @@ class MissingInfo(
   /** Record missingCommon(i) as being completed. */
   @inline private def mcNull(i: Int) = {
     require(missingCommon(i).done)
-    missingCommon(i) = null; mcIndex += 1 
+    missingCommon(i) = null // ; mcIndex += 1 
+// FIXME: if mcIndex < missingCommon.length, update next missingCommon
+  }
+
+  /** Advance to the next MissingCommon value (if any).  
+    * @return a ViewBuffer containing views against which this should now be 
+    * registered, or null if all MissingCommon are done. */
+  @inline private 
+  def advanceMC(views: ViewSet): ViewBuffer = {
+    require(missingCommon(mcIndex) == null)
+    mcIndex += 1
+    if(mcIndex < missingCommon.length){
+      assert(mcIndex == 1 && missingCommon.length == 2)
+      val mc = missingCommon(mcIndex)
+      if(mc == null){ mcIndex += 1; null } // this one is also done
+      else mc.updateMissingViews(views)
+    }
+    else null
   }
 
   /** Are all the missingCommon entries done? */
@@ -66,21 +85,52 @@ class MissingInfo(
   /** Is this complete? */
   @inline def done = mcDone && mvIndex == missingViews.length || newViewFound
 
-  import MissingCommon.ViewBuffer
+
+// FIXME: for each of following, if the current missingCommon is now complete,
+// we need to return a value indicating re-registration is needed.
 
   /** Update the MissingCommon entries in this, based on cv being a possible
-    * match to the first clause of the obligation.  Add to ab all Views that
-    * this needs to be registered against in the store.  cv is expected to be
-    * a possible match to at least one member of missingCommon0. */
-  def updateMissingCommon(cv: ComponentView, views: ViewSet, ab: ViewBuffer) = {
-// IMPROVE: just the first?
-    var i = 0
-    while(i < missingCommon.length){
-      val mc = missingCommon(i)
-      if(mc != null && mc.matches(cv))
-        if(mc.updateMissingCommon(cv, views, ab)) mcNull(i)
-      i += 1
+    * match to the first clause of the obligation.  cv is expected to be a
+    * possible match to at least one member of missingCommon.
+    * @return a ViewBuffer containing all views that this needs to be registered
+    * against in the store, or null if all MissingCommon are done. */
+  def updateMissingCommon(cv: ComponentView, views: ViewSet): ViewBuffer = {
+    // IMPROVE (F): just the one in position mcIndex
+    var vb = new ViewBuffer
+    // Deal with the current MissingCommon
+    val mc = missingCommon(mcIndex)
+    assert(mc != null)
+    if(mc.matches(cv)){
+      if(mc.updateMissingCommon(cv, views, vb)){
+        mcNull(mcIndex); vb = advanceMC(views)
+        if(mcIndex < missingCommon.length){
+          assert(mcIndex == 1); return vb
+        }
+      }
     }
+    if(mcIndex+1 < missingCommon.length){
+      // Deal with the other MissingCommon
+      assert(mcIndex == 0)
+      val mc1 = missingCommon(1)
+      if(mc1 != null && mc1.matches(cv)){
+        if(mc1.updateMissingCommon(cv, views, new ViewBuffer)) mcNull(1)
+      }
+    }
+// FIXME: assert that one matches
+
+//     while(i < missingCommon.length){
+//       val mc = missingCommon(i)
+//       if(mc != null && mc.matches(cv))
+// // FIXME: Assert that it matches
+//         if(mc.updateMissingCommon(cv, views, vb)){
+//           mcNull(i)
+//           if(i == mcIndex) vb = advanceMC(views)
+//         }
+// // FIXME: only if i == mcIndex
+// // FIXME: return heads of missingViews for next MissingCommon
+//       i += 1
+//     }
+    vb
   }
 
   /** Update the MissingCommon fields of this based upon the addition of cv. cv
@@ -89,20 +139,26 @@ class MissingInfo(
 // FIXME: assert this
     * Return the views against which this should now be registered, or
     * null if all the missingCommon entries are satisfied.  */ 
-  def updateMCMissingViews(cv: ComponentView, views: ViewSet)
-      : ArrayBuffer[ComponentView] = {
-    var i = 0; var ab: ArrayBuffer[ComponentView] = null
-    assert(missingCommon.length == 1) // FIXME
-    while(i < missingCommon.length){
-      val mc = missingCommon(i)
-      if(mc != null){
-        ab = mc.updateMissingViews(cv, views)
-        if(mc.done) mcNull(i) 
-      }
-      i += 1
-    }
-    assert(ab != null || missingCommon.forall(_ == null))
-    ab
+  def updateMCMissingViews(cv: ComponentView, views: ViewSet): ViewBuffer = {
+    val mc = missingCommon(mcIndex)
+    val vb: ViewBuffer = mc.updateMissingViewsBy(cv, views)
+    if(mc.done){ mcNull(mcIndex); advanceMC(views) }
+    else vb
+
+// FIXME: just the one in position mcIndex
+//     var i = 0; var ab: ViewBuffer = null
+//     assert(missingCommon.length == 1) // FIXME
+//     while(i < missingCommon.length){
+//       val mc = missingCommon(i)
+//       if(mc != null){
+//         ab = mc.updateMissingViewsBy(cv, views)
+//         if(mc.done){ mcNull(i); ab = advanceMC(views) } 
+// // FIXME: return heads of missingViews for next MissingCommon
+//       }
+//       i += 1
+//     }
+//     assert(ab != null || missingCommon.forall(_ == null))
+//     ab
   }
 
   /** Update missingViews and mvIndex based upon views.  This is called either

@@ -37,28 +37,43 @@ class MissingCommon(
     * EffectOnStore.mcMissingCandidatesStore. */
   def missingHeads = missingCandidates.map(_.head)
 
+  import MissingCommon.ViewBuffer // ArrayBuffer[ComponentView]
+
   /** Update mc based on the addition of cv.  If cv matches mc.head, remove it,
     * and the maximal prefix from views.  If then done, record this.
     * Otherwise add to toRegister the next view, against which this should be
     * registered. */
   private def updateMissingCandidates(mc: MissingCandidates, cv: ComponentView, 
-    views: ViewSet, toRegister: ArrayBuffer[ComponentView])
+    views: ViewSet, toRegister: ViewBuffer)
       : MissingCandidates = {
     if(mc.head == cv){
-      var mc1 = mc
-      while(mc1.nonEmpty && views.contains(mc1.head)) mc1 = mc1.tail
-      if(mc1.isEmpty) isDone = true
-      else toRegister += mc1.head
-      mc1
+      removeViews(mc.tail, views, toRegister)
+      // var mc1 = mc.tail
+      // while(mc1.nonEmpty && views.contains(mc1.head)) mc1 = mc1.tail
+      //if(mc1.isEmpty) isDone = true
+      //else toRegister += mc1.head
+      // mc1
     }
     else mc
+  }
+
+  /** Remove the maximum prefix of mc consisting of elements of views.  If any
+    * is empty, record that this is done; otherwise add the next view to
+    * toRegister. */
+  @inline private def removeViews(mc: MissingCandidates, views: ViewSet,
+    toRegister: ViewBuffer)
+      : MissingCandidates = {
+    var mc1 = mc
+    while(mc1.nonEmpty && views.contains(mc1.head)) mc1 = mc1.tail
+    if(mc1.isEmpty) isDone = true
+    else toRegister += mc1.head
+    mc1
   }
 
   /** Update missingCandidates based on the addition of cv.  Remove cv from
     * each; if any is now empty, then mark this as satisfied.  Return views
     * against which this should now be registered, or null if done. */
-  def updateMissingViews(cv: ComponentView, views: ViewSet)
-      : ArrayBuffer[ComponentView] = {
+  def updateMissingViewsBy(cv: ComponentView, views: ViewSet): ViewBuffer = {
     val toRegister = new ArrayBuffer[ComponentView]
     missingCandidates = 
       missingCandidates.map(mc => 
@@ -71,13 +86,27 @@ class MissingCommon(
     }
   }
 
+  /** Update missingCandidates based views.  Remove elements of views from the
+    * front of each.  If any is now empty, then mark this as satisfied.
+    * Return views against which this should now be registered, or null if
+    * done. */
+  def updateMissingViews(views: ViewSet): ArrayBuffer[ComponentView] = {
+    val toRegister = new ArrayBuffer[ComponentView]
+    missingCandidates = 
+      missingCandidates.map(mc => removeViews(mc, views, toRegister))
+    if(done) null 
+    else{ 
+      assert(toRegister.nonEmpty,
+        s"updateMissingViews with\n${missingCandidates.mkString("\n")}")
+      toRegister
+    }
+  }
+
   /** Is cv a possible match to clause (1), i.e. does it match servers ||
     * cpts1(0) || c? */
   def matches(cv: ComponentView) = 
     cv.servers == servers && cv.components(0) == princ1
   // IMPROVE: can we also ensure that cv.components(1).processIdentity == pid?
-
-  import MissingCommon.ViewBuffer
 
   /** Update this based on using cv to instantiate servers || princ1 || c.
     * Add to vb those Views against which this needs to be registered. */

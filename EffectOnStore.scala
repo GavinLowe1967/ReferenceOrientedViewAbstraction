@@ -87,6 +87,7 @@ class SimpleEffectOnStore extends EffectOnStore{
       for(cv <- missingCommon(0).missingHeads)
         addToStore(mcMissingCandidatesStore, cv, missingInfo)
       // Add entries to commonStore
+      // IMPROVE (F): just the first
       for(mc <- missingCommon){
 // FIXME: also cpts2? 
         val princ1 = mc.cpts1(0)
@@ -146,8 +147,8 @@ class SimpleEffectOnStore extends EffectOnStore{
         for(mi <- mis; if !mi.mcDone){
           if(views.contains(mi.newView)) mi.markNewViewFound
           else{
-            val vb = new ViewBuffer
-            mi.updateMissingCommon(cv, views, vb)
+            //val vb = new ViewBuffer
+            val vb : ViewBuffer =  mi.updateMissingCommon(cv, views)
             if(mi.done) maybeAdd(mi.newView)
             else if(mi.mcDone) mcDone(mi)
             else{
