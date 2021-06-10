@@ -78,9 +78,6 @@ class SimpleEffectOnStore extends EffectOnStore{
     Profiler.count("EffectOnStore.add")
     val missingInfo = new MissingInfo(nv, missing.toArray, missingCommon.toArray)
     if(missingCommon.isEmpty){
-// FIXME: only missing.head
-      // Add entries to store
-      // for(cv <- missing) addToStore(store, cv, missingInfo)
       assert(missing.nonEmpty)
       addToStore(store, missingInfo.missingHead, missingInfo)
     }
@@ -130,12 +127,10 @@ class SimpleEffectOnStore extends EffectOnStore{
       require(mi.mcDone)
       mi.updateMissingViews(views)
       if(mi.done) maybeAdd(mi.newView)
-// FIXME: only against first such
       else{ 
-        assert(!views.contains(mi.missingHead)) // IMPROVE
+        // assert(!views.contains(mi.missingHead)) 
         addToStore(store, mi.missingHead, mi)
       }
-      //  for(cv <- mi.missingViews; if cv != null) addToStore(store, cv, mi)
     }
 
     // In each phase below, we also purge all MissingInfos for which the
@@ -191,23 +186,17 @@ class SimpleEffectOnStore extends EffectOnStore{
     store.get(cv) match{
       case Some(mis) =>
         store.remove(cv) // remove old entry
-        // var newMis = new ArrayBuffer[MissingInfo] 
         for(mi <- mis; if !mi.done){
           if(views.contains(mi.newView)) mi.markNewViewFound
           else{
             mi.updateMissingViewsBy(cv, views)
             if(mi.done) maybeAdd(mi.newView)
-// FIXME: re-store against next missingView
             else{
-              assert(!views.contains(mi.missingHead)) // IMPROVE
+              // assert(!views.contains(mi.missingHead))
               addToStore(store, mi.missingHead, mi)
             }
-              // newMis += mi
           }
         }
-        // if(newMis.length != mis.length){
-        //   if(newMis.nonEmpty) store += cv -> newMis else store.remove(cv)
-        // }
       case None => {}
     }
 

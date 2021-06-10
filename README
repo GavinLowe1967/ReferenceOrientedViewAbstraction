@@ -70,6 +70,19 @@ mcMissingCandidatesStore: size = 621
   # MissingInfos = 9,823
   MissingInfos size = 24,206
 
+After Step D:
+
+store: size = 2110
+  # MissingInfos = 90,805
+  MissingInfos size = 197,335
+commonStore: size = 42
+  # MissingInfos = 5,568
+  MissingInfos size = 11,783
+mcMissingCandidatesStore: size = 621
+  # MissingInfos = 9,823
+  MissingInfos size = 24,206
+
+
 
 
 =======

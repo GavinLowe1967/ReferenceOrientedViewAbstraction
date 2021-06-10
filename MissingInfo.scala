@@ -29,8 +29,6 @@ class MissingInfo(
   // We keep missingCommon and missingViews sorted. 
   MissingInfo.sort(missingCommon, missingViews)
 
-  // Profiler.count("MissingInfo"+missingViews.length)
-
   assert(missingCommon.length <= 2, 
     "missingCommon.length = "+missingCommon.length)
   assert(missingViews.length <= 7, "missingViews.length = "+missingViews.length)
@@ -44,7 +42,7 @@ class MissingInfo(
   /** Record missingCommon(i) as being completed. */
   @inline private def mcNull(i: Int) = {
     require(missingCommon(i).done)
-    missingCommon(i) = null; mcIndex += 1 // remainingCount -= 1; 
+    missingCommon(i) = null; mcIndex += 1 
   }
 
   /** Are all the missingCommon entries done? */
@@ -115,11 +113,7 @@ class MissingInfo(
         views.contains(missingViews(mvIndex))){
       missingViews(mvIndex) = null; mvIndex += 1
     }
-    // done
   }
-
-// FIXME: expect just to match next missingView; pass in views and null-out
-// each subsequent one in views.
 
   /** Update missingViews and mvIndex based on the addition of cv.  cv is
     * expected to match the next missing view. */
@@ -129,13 +123,6 @@ class MissingInfo(
         missingViews.mkString("\n"))
     missingViews(mvIndex) = null; mvIndex += 1
     updateMissingViews(views)
-    // var i = 0
-    // while(i < missingViews.length){
-    //   if(missingViews(i) == cv){ 
-    //     missingViews(i) = null; remainingCount -= 1
-    //   }
-    //   i += 1
-    // }
   }
 
   /** Check that: (1) if all the MissingCommon objects are done, then
@@ -148,8 +135,6 @@ class MissingInfo(
     if(mcDone){
       assert(missingCommon.forall(_ == null))
       assert(!views.contains(missingHead), s"$this\nstill contains $missingHead")
-      // for(v <- missingViews; if v != null)
-      //   assert(!views.contains(v), this.toString+" still contains "+v)
     }
     else for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)
   }
@@ -158,27 +143,13 @@ class MissingInfo(
     s"MissingInfo($newView, ${missingViews.mkString("<",",",">")}, "+
       missingCommon.mkString("<",",",">")
 
-  /** Do xs and ys hold the same non-null values? */
-  @inline private def equalExceptNull[A](xs: Array[A], ys: Array[A]) = {
-    var i = 0; var j = 0
-    while(i < xs.length && xs(i) == null) i += 1
-    while(j < ys.length && ys(j) == null) j += 1
-    // Inv: xs[0..i) and ys[0..j) contain same non-null values, and i, j are
-    // at end of array or point to non-null values.
-    while(i < xs.length && j < ys.length && xs(i) == ys(j)){
-      i += 1; j += 1
-      while(i < xs.length && xs(i) == null) i += 1
-      while(j < ys.length && ys(j) == null) j += 1
-    }
-    i == xs.length && j == ys.length 
-  }
-
   /** Equality: same newView, missingViews and missingCommon (up to equality,
     * ignoring nulls. */
   override def equals(that: Any) = that match{ 
     case mi: MissingInfo => 
-      mi.newView == newView && equalExceptNull(mi.missingViews, missingViews) &&
-      equalExceptNull(mi.missingCommon, missingCommon)
+      mi.newView == newView && 
+      MissingInfo.equalExceptNull(mi.missingViews, missingViews) &&
+      MissingInfo.equalExceptNull(mi.missingCommon, missingCommon)
   }
 
   private var theHashCode = -1
@@ -213,8 +184,8 @@ class MissingInfo(
 
 // ==================================================================
 
+/** Companion object. */
 object MissingInfo{
-
   /** Sort missingCommon and missingViews. */
   private def sort(
     missingCommon: Array[MissingCommon], missingViews: Array[ComponentView])
@@ -246,13 +217,27 @@ object MissingInfo{
       else missingViews(j) = null // ; remainingCount -= 1 
     }
     // IMPROVE: remove following
-    if(debugging)
-      for(i <- 0 until missingViews.length-1)
-        if(missingViews(i) != null && missingViews(i+1) != null)
-          assert(missingViews(i).compare(missingViews(i+1)) < 0,
-            "\n"+missingViews.map(_.toString).mkString("\n"))
+    // if(debugging)
+    //   for(i <- 0 until missingViews.length-1)
+    //     if(missingViews(i) != null && missingViews(i+1) != null)
+    //       assert(missingViews(i).compare(missingViews(i+1)) < 0,
+    //         "\n"+missingViews.map(_.toString).mkString("\n"))
   }
 
+  /** Do xs and ys hold the same non-null values? */
+  @inline private def equalExceptNull[A](xs: Array[A], ys: Array[A]) = {
+    var i = 0; var j = 0
+    while(i < xs.length && xs(i) == null) i += 1
+    while(j < ys.length && ys(j) == null) j += 1
+    // Inv: xs[0..i) and ys[0..j) contain same non-null values, and i, j are
+    // at end of array or point to non-null values.
+    while(i < xs.length && j < ys.length && xs(i) == ys(j)){
+      i += 1; j += 1
+      while(i < xs.length && xs(i) == null) i += 1
+      while(j < ys.length && ys(j) == null) j += 1
+    }
+    i == xs.length && j == ys.length 
+  }
 }
 
 
