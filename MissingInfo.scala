@@ -9,7 +9,7 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
   * missingCommon0 have been satisfied. */
 class MissingInfo(
   val newView: ComponentView, 
-  var missingViews: Array[ComponentView], // IMPROVE: make private
+  private var missingViews: Array[ComponentView], 
   private var missingCommon: Array[MissingCommon]
 ){
   /* missingViews contains component views that are necessary to satisfy this
@@ -26,6 +26,9 @@ class MissingInfo(
    * missingCommon to contain more than one element.  So we don't compact the
    * arrays.  */
 
+  // We keep missingCommon and missingViews sorted. 
+  MissingInfo.sort(missingCommon, missingViews)
+
   // Profiler.count("MissingInfo"+missingViews.length)
 
   assert(missingCommon.length <= 2, 
@@ -41,50 +44,20 @@ class MissingInfo(
   /** Record missingCommon(i) as being completed. */
   @inline private def mcNull(i: Int) = {
     require(missingCommon(i).done)
-    missingCommon(i) = null; remainingCount -= 1; mcIndex += 1
+    missingCommon(i) = null; mcIndex += 1 // remainingCount -= 1; 
   }
 
   /** Are all the missingCommon entries done? */
   def mcDone = mcIndex == missingCommon.length
 
-  private def sort = {
-    // Sort missingCommon
-    if(missingCommon.length == 2){
-      val cmp = missingCommon(0).compare(missingCommon(1))
-      assert(cmp != 0)
-      if(cmp > 0){
-        val t = missingCommon(0); missingCommon(0) = missingCommon(1);
-        missingCommon(1) = t
-      }
-    }
-    // Sort missingViews.  Also replace duplicates by null.  Use insertion
-    // sort, as the array is small.
-    var i = 1 // Inv: sorted missingViews[0..i)
-    while(i < missingViews.length){
-      val mv = missingViews(i); var j = i; i += 1
-      // Inv missingViews[j+1..i) > mv; missingViews(j) is a duplicate or
-      // equals mv, so missingViews[0..j)++missingViews[j+1..i)++[mv] is a
-      // permutation of missingViews[0..i) at the start of this iteration.
-      while(j > 0 && 
-          (missingViews(j-1) == null || mv.compare(missingViews(j-1)) < 0)){
-        missingViews(j) = missingViews(j-1); j -= 1
-      }
-      // Copy mv into position, unless duplicted by missingViews(j-1)
-      if(j == 0 || missingViews(j-1) != mv) missingViews(j) = mv
-      else missingViews(j) = null
-    }
-    // IMPROVE: remove following
-    if(debugging)
-      for(i <- 0 until missingViews.length-1)
-        if(missingViews(i) != null && missingViews(i+1) != null)
-          assert(missingViews(i).compare(missingViews(i+1)) < 0,
-            "\n"+missingViews.map(_.toString).mkString("\n"))
-  }
+  /** Index of first non-null missingView.  Once all MissingCommon are complete,
+    * this will be registered against missingViews(mvIndex) in
+    * EffectOnStore.store.  */
+  private var mvIndex = 0
 
-  sort
-
-  /** Number of non-null entries in missingCommon and missingView. */
-  private var remainingCount = missingCommon.length+missingViews.length
+  /** The first missing view, against which this should be registered once all
+    * the MissingCommon are done. */
+  def missingHead = missingViews(mvIndex)
 
   /** Has newView been found already? */
   private var newViewFound = false
@@ -93,7 +66,7 @@ class MissingInfo(
   def markNewViewFound = newViewFound = true
 
   /** Is this complete? */
-  @inline def done = remainingCount == 0 || newViewFound
+  @inline def done = mcDone && mvIndex == missingViews.length || newViewFound
 
   import MissingCommon.ViewBuffer
 
@@ -102,6 +75,7 @@ class MissingInfo(
     * this needs to be registered against in the store.  cv is expected to be
     * a possible match to at least one member of missingCommon0. */
   def updateMissingCommon(cv: ComponentView, views: ViewSet, ab: ViewBuffer) = {
+// IMPROVE: just the first?
     var i = 0
     while(i < missingCommon.length){
       val mc = missingCommon(i)
@@ -112,9 +86,11 @@ class MissingInfo(
   }
 
   /** Update the MissingCommon fields of this based upon the addition of cv. cv
-    * is expected to match the head of a MissingCommon value.  Return the
-    * views against which this should now be registered, or null if all the
-    * missingCommon entries are satisfied.  */ 
+    * is expected to match the head of the missing views of a MissingCommon
+    * value. 
+// FIXME: assert this
+    * Return the views against which this should now be registered, or
+    * null if all the missingCommon entries are satisfied.  */ 
   def updateMCMissingViews(cv: ComponentView, views: ViewSet)
       : ArrayBuffer[ComponentView] = {
     var i = 0; var ab: ArrayBuffer[ComponentView] = null
@@ -131,30 +107,35 @@ class MissingInfo(
     ab
   }
 
-  /** Update missingViews based upon views.  Return true if this is now done. */
-  def updateMissingViews(views: ViewSet): Boolean = {
-    var i = 0
-    while(i < missingViews.length){
-      if(views.contains(missingViews(i))){
-        missingViews(i) = null; remainingCount -= 1
-      }
-      i += 1
+  /** Update missingViews and mvIndex based upon views.  This is called either
+    * when all MissingCommon are first complete, or from missingCommonViewsBy,
+    * to advance over subsequent missing views in views.  */
+  def updateMissingViews(views: ViewSet) = {
+    while(mvIndex < missingViews.length && 
+        views.contains(missingViews(mvIndex))){
+      missingViews(mvIndex) = null; mvIndex += 1
     }
-    done
+    // done
   }
 
-  /** Update this based on the addition of cv.  cv is expected to match a
-    * missing view that was added to missingViews (maybe subsequently
-    * removed).
-    * @return true if its state changes. */
-  def updateMissingViews(cv: ComponentView) = {
-    var i = 0
-    while(i < missingViews.length){
-      if(missingViews(i) == cv){ 
-        missingViews(i) = null; remainingCount -= 1
-      }
-      i += 1
-    }
+// FIXME: expect just to match next missingView; pass in views and null-out
+// each subsequent one in views.
+
+  /** Update missingViews and mvIndex based on the addition of cv.  cv is
+    * expected to match the next missing view. */
+  def updateMissingViewsBy(cv: ComponentView, views: ViewSet): Unit = {
+    assert(mvIndex < missingViews.length && missingViews(mvIndex) == cv,
+      s"mvIndex = $mvIndex, cv = $cv, missingViews = \n"+
+        missingViews.mkString("\n"))
+    missingViews(mvIndex) = null; mvIndex += 1
+    updateMissingViews(views)
+    // var i = 0
+    // while(i < missingViews.length){
+    //   if(missingViews(i) == cv){ 
+    //     missingViews(i) = null; remainingCount -= 1
+    //   }
+    //   i += 1
+    // }
   }
 
   /** Check that: (1) if all the MissingCommon objects are done, then
@@ -166,8 +147,9 @@ class MissingInfo(
     if(flag) assert(mcDone)
     if(mcDone){
       assert(missingCommon.forall(_ == null))
-      for(v <- missingViews; if v != null)
-        assert(!views.contains(v), this.toString+" still contains "+v)
+      assert(!views.contains(missingHead), s"$this\nstill contains $missingHead")
+      // for(v <- missingViews; if v != null)
+      //   assert(!views.contains(v), this.toString+" still contains "+v)
     }
     else for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)
   }
@@ -222,12 +204,57 @@ class MissingInfo(
 
   rehash()
 
+  /** Estimate of the size of this. */
   def size = 
     missingViews.filter(_ != null).length + 
       missingCommon.filter(_ != null).map(_.size).sum
 
-  def mcCount = missingCommon.length
 }
+
+// ==================================================================
+
+object MissingInfo{
+
+  /** Sort missingCommon and missingViews. */
+  private def sort(
+    missingCommon: Array[MissingCommon], missingViews: Array[ComponentView])
+  = {
+    require(missingCommon.length <= 2)
+    // Sort missingCommon
+    if(missingCommon.length == 2){
+      val cmp = missingCommon(0).compare(missingCommon(1))
+      assert(cmp != 0)
+      if(cmp > 0){
+        val t = missingCommon(0); missingCommon(0) = missingCommon(1);
+        missingCommon(1) = t
+      }
+    }
+    // Sort missingViews.  Also replace duplicates by null.  Use insertion
+    // sort, as the array is small.
+    var i = 1 // Inv: sorted missingViews[0..i)
+    while(i < missingViews.length){
+      val mv = missingViews(i); var j = i; i += 1
+      // Inv missingViews[j+1..i) > mv; missingViews(j) is a duplicate or
+      // equals mv, so missingViews[0..j)++missingViews[j+1..i)++[mv] is a
+      // permutation of missingViews[0..i) at the start of this iteration.
+      while(j > 0 && 
+          (missingViews(j-1) == null || mv.compare(missingViews(j-1)) < 0)){
+        missingViews(j) = missingViews(j-1); j -= 1
+      }
+      // Copy mv into position, unless duplicted by missingViews(j-1)
+      if(j == 0 || missingViews(j-1) != mv) missingViews(j) = mv
+      else missingViews(j) = null // ; remainingCount -= 1 
+    }
+    // IMPROVE: remove following
+    if(debugging)
+      for(i <- 0 until missingViews.length-1)
+        if(missingViews(i) != null && missingViews(i+1) != null)
+          assert(missingViews(i).compare(missingViews(i+1)) < 0,
+            "\n"+missingViews.map(_.toString).mkString("\n"))
+  }
+
+}
+
 
 // ==================================================================
 
