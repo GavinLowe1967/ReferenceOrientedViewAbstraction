@@ -21,10 +21,14 @@ class MissingInfo(
    * with a particular identity.  cf. item 2 on page 113 of the notebook.
    * All must be satisfied in order to satisfy this constraint.  
    * 
+   * Note: MissingCommon values might be shared between MissingInfo objects.
+   * 
    * Each is replaced by null when satisfied.  It will be unusual for
    * missingViews to contain more than about four elements, or for
    * missingCommon to contain more than one element.  So we don't compact the
    * arrays.  */
+
+  require(missingCommon.forall(!_.done))
 
   // We keep missingCommon and missingViews sorted. 
   MissingInfo.sort(missingCommon, missingViews)
@@ -33,7 +37,7 @@ class MissingInfo(
 
   assert(missingCommon.length <= 2, 
     "missingCommon.length = "+missingCommon.length)
-  assert(missingViews.length <= 7, "missingViews.length = "+missingViews.length)
+  assert(missingViews.length <= 8, "missingViews.length = "+missingViews.length)
   // FIXME: not true in general
 
   /** Index of the first non-null entry in missingCommon, or
@@ -43,9 +47,7 @@ class MissingInfo(
 
   /** Record missingCommon(i) as being completed. */
   @inline private def mcNull(i: Int) = {
-    require(missingCommon(i).done)
-    missingCommon(i) = null // ; mcIndex += 1 
-// FIXME: if mcIndex < missingCommon.length, update next missingCommon
+    require(missingCommon(i).done); missingCommon(i) = null 
   }
 
   /** Advance to the next MissingCommon value (if any).  
@@ -55,11 +57,17 @@ class MissingInfo(
   def advanceMC(views: ViewSet): ViewBuffer = {
     require(missingCommon(mcIndex) == null)
     mcIndex += 1
-    if(mcIndex < missingCommon.length){
+    if(mcIndex < missingCommon.length){ // consider next 
       assert(mcIndex == 1 && missingCommon.length == 2)
       val mc = missingCommon(mcIndex)
       if(mc == null){ mcIndex += 1; null } // this one is also done
-      else mc.updateMissingViews(views)
+      else{
+        val vb = mc.updateMissingViews(views)
+        if(mc.done){  // and now this is done
+          mcNull(mcIndex); mcIndex += 1; null 
+        }
+        else vb
+      }
     }
     else null
   }
@@ -85,80 +93,52 @@ class MissingInfo(
   /** Is this complete? */
   @inline def done = mcDone && mvIndex == missingViews.length || newViewFound
 
-
-// FIXME: for each of following, if the current missingCommon is now complete,
-// we need to return a value indicating re-registration is needed.
-
   /** Update the MissingCommon entries in this, based on cv being a possible
     * match to the first clause of the obligation.  cv is expected to be a
     * possible match to at least one member of missingCommon.
     * @return a ViewBuffer containing all views that this needs to be registered
     * against in the store, or null if all MissingCommon are done. */
   def updateMissingCommon(cv: ComponentView, views: ViewSet): ViewBuffer = {
-    // IMPROVE (F): just the one in position mcIndex
+    // IMPROVE: just update the one in position mcIndex
     var vb = new ViewBuffer
     // Deal with the current MissingCommon
     val mc = missingCommon(mcIndex)
     assert(mc != null)
     if(mc.matches(cv)){
-      if(mc.updateMissingCommon(cv, views, vb)){
+      mc.updateMissingCommon(cv, views, vb)
+      if(mc.done){
         mcNull(mcIndex); vb = advanceMC(views)
         if(mcIndex < missingCommon.length){
+          // We've advanced to the second (of two) MissingCommonValues; now
+          // need to register this against vb.
           assert(mcIndex == 1); return vb
         }
       }
     }
+    else assert(mcIndex+1 < missingCommon.length && 
+      missingCommon(mcIndex+1).matches(cv))
     if(mcIndex+1 < missingCommon.length){
       // Deal with the other MissingCommon
-      assert(mcIndex == 0)
+      assert(mcIndex == 0 && missingCommon.length == 2)
       val mc1 = missingCommon(1)
       if(mc1 != null && mc1.matches(cv)){
-        if(mc1.updateMissingCommon(cv, views, new ViewBuffer)) mcNull(1)
+        mc1.updateMissingCommon(cv, views, new ViewBuffer)
+        if(mc1.done) mcNull(1) // It's done, but missingCommon(0) isn't yet
       }
     }
-// FIXME: assert that one matches
-
-//     while(i < missingCommon.length){
-//       val mc = missingCommon(i)
-//       if(mc != null && mc.matches(cv))
-// // FIXME: Assert that it matches
-//         if(mc.updateMissingCommon(cv, views, vb)){
-//           mcNull(i)
-//           if(i == mcIndex) vb = advanceMC(views)
-//         }
-// // FIXME: only if i == mcIndex
-// // FIXME: return heads of missingViews for next MissingCommon
-//       i += 1
-//     }
     vb
   }
 
   /** Update the MissingCommon fields of this based upon the addition of cv. cv
     * is expected to match the head of the missing views of a MissingCommon
-    * value. 
-// FIXME: assert this
-    * Return the views against which this should now be registered, or
+    * value. (IMPROVE: assert this.)
+    * @return the views against which this should now be registered, or
     * null if all the missingCommon entries are satisfied.  */ 
   def updateMCMissingViews(cv: ComponentView, views: ViewSet): ViewBuffer = {
     val mc = missingCommon(mcIndex)
     val vb: ViewBuffer = mc.updateMissingViewsBy(cv, views)
     if(mc.done){ mcNull(mcIndex); advanceMC(views) }
     else vb
-
-// FIXME: just the one in position mcIndex
-//     var i = 0; var ab: ViewBuffer = null
-//     assert(missingCommon.length == 1) // FIXME
-//     while(i < missingCommon.length){
-//       val mc = missingCommon(i)
-//       if(mc != null){
-//         ab = mc.updateMissingViewsBy(cv, views)
-//         if(mc.done){ mcNull(i); ab = advanceMC(views) } 
-// // FIXME: return heads of missingViews for next MissingCommon
-//       }
-//       i += 1
-//     }
-//     assert(ab != null || missingCommon.forall(_ == null))
-//     ab
   }
 
   /** Update missingViews and mvIndex based upon views.  This is called either
@@ -180,6 +160,9 @@ class MissingInfo(
     missingViews(mvIndex) = null; mvIndex += 1
     updateMissingViews(views)
   }
+
+  /** Check that we have nulled-out all done MissingCommons. */
+  def sanity1 = missingCommon.forall(mc => mc == null || !mc.done)
 
   /** Check that: (1) if all the MissingCommon objects are done, then
     * missingViews contains no element of views; (2) otherwise no

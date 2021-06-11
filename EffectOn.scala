@@ -106,13 +106,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           } // end of if(missing.isEmpty && nextNewViews.add(nv))
           else if(missing.nonEmpty || missingCommons.nonEmpty){
             // Note: we create nv eagerly, even if missing is non-empty: this
-            // might not be the most efficient approach
-            // val commonMissingTuples = 
-            //   commonMissing.map(pid => 
-            //     new MissingCommon(pre.servers, preCpts, cpts, pid))
-            // effectOnStore.add(missing, commonMissingTuples, nv)
+            // might not be the most efficient approach.  Note also that the
+            // missingCommons may be shared.
             effectOnStore.add(missing, missingCommons, nv)
-// IMPROVE: 
             if(verbose) println(s"Storing $missing, $missingCommons -> $nv")
             //if(verbose) println(s"Storing $missing, $commonMissingTuples -> $nv")
             nv.setCreationInfoIndirect(

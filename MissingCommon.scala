@@ -46,14 +46,7 @@ class MissingCommon(
   private def updateMissingCandidates(mc: MissingCandidates, cv: ComponentView, 
     views: ViewSet, toRegister: ViewBuffer)
       : MissingCandidates = {
-    if(mc.head == cv){
-      removeViews(mc.tail, views, toRegister)
-      // var mc1 = mc.tail
-      // while(mc1.nonEmpty && views.contains(mc1.head)) mc1 = mc1.tail
-      //if(mc1.isEmpty) isDone = true
-      //else toRegister += mc1.head
-      // mc1
-    }
+    if(mc.head == cv) removeViews(mc.tail, views, toRegister)
     else mc
   }
 
@@ -74,15 +67,26 @@ class MissingCommon(
     * each; if any is now empty, then mark this as satisfied.  Return views
     * against which this should now be registered, or null if done. */
   def updateMissingViewsBy(cv: ComponentView, views: ViewSet): ViewBuffer = {
-    val toRegister = new ArrayBuffer[ComponentView]
-    missingCandidates = 
-      missingCandidates.map(mc => 
-        updateMissingCandidates(mc, cv, views, toRegister))
-    if(done) null 
-    else{ 
-      assert(toRegister.nonEmpty,
-        s"updateMissingViews($cv) with\n${missingCandidates.mkString("\n")}")
-      toRegister
+    // Note: MissingCommon are shared between MissingInfo, so it's possible
+    // that cv has already been removed from this.
+    if(done){
+      // println(s"updateMissingViewsBy: $this already done")
+      null
+    }
+    else{
+      val toRegister = new ArrayBuffer[ComponentView]
+      assert(missingCandidates.forall(_.nonEmpty), this.toString)
+      // The following assertion might be false, because of the sharing
+      // assert(missingCandidates.exists(mc => mc.head == cv))
+      missingCandidates =
+        missingCandidates.map(mc =>
+          updateMissingCandidates(mc, cv, views, toRegister))
+      if(done) null
+      else{
+        assert(toRegister.nonEmpty,
+          s"updateMissingViews($cv) with\n${missingCandidates.mkString("\n")}")
+        toRegister
+      }
     }
   }
 
@@ -110,13 +114,11 @@ class MissingCommon(
 
   /** Update this based on using cv to instantiate servers || princ1 || c.
     * Add to vb those Views against which this needs to be registered. */
-  def updateMissingCommon(cv: ComponentView, views: ViewSet, vb: ViewBuffer)
-      : Boolean = {
+  def updateMissingCommon(cv: ComponentView, views: ViewSet, vb: ViewBuffer) = {
     require(matches(cv)); val cpt1 = cv.components(1) 
     if(cpt1.hasPID(pid))
       if(MissingCommon.updateMissingCandidates(this, cpt1, views, vb))
         isDone = true
-    isDone
   }
 
   /** Sanity check that no head element of missingCandidates is in views. */

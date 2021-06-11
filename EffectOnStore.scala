@@ -36,15 +36,17 @@ trait EffectOnStore{
 // =======================================================
 
 class SimpleEffectOnStore extends EffectOnStore{
+  type MissingInfoSet = ArrayBuffer[MissingInfo]
+
   /** A type of stores, giving the MissingInfos that might need updating as the
     * result of finding a new ComponentView. */
-  type Store = HashMap[ComponentView, ArrayBuffer[MissingInfo]]
+  type Store = HashMap[ComponentView, MissingInfoSet]
+// FIXME: replace with HashSet
 
   /** The underlying store concerning missing values.  For each mi: MissingInfo
     * in the abstract set, and for each cv in mi.missingViews, store(cv)
     * contains mi. */
   private val store = new Store
-// IMPROVE: replace range by MissingInfoSet
 
   /** The underlying store concerning MissingCandidates values in missingCommon
     * fields of MissingInfo objects.  For each mi, for each mc in
@@ -62,6 +64,7 @@ class SimpleEffectOnStore extends EffectOnStore{
   private 
   def addToStore(theStore: Store, cv: ComponentView, missingInfo: MissingInfo)
   = {
+    // missingInfo.sanity1
     theStore.get(cv) match{
       case Some(ab) => 
         if(!containsAB(ab, missingInfo)) ab += missingInfo
@@ -77,17 +80,17 @@ class SimpleEffectOnStore extends EffectOnStore{
       : Unit = {
     Profiler.count("EffectOnStore.add")
     val missingInfo = new MissingInfo(nv, missing.toArray, missingCommon.toArray)
+    // missingInfo.sanity1
     if(missingCommon.isEmpty){
       assert(missing.nonEmpty)
       addToStore(store, missingInfo.missingHead, missingInfo)
     }
     else{
       // Add entries to mcMissingCandidates
-      assert(missingCommon.length <= 1) // FIXME
       for(cv <- missingCommon(0).missingHeads)
         addToStore(mcMissingCandidatesStore, cv, missingInfo)
-      // Add entries to commonStore
-      // IMPROVE (F): just the first
+      // Add entries to commonStore.  IMPROVE: register just against
+      // mi.missingHead
       for(mc <- missingCommon){
 // FIXME: also cpts2? 
         val princ1 = mc.cpts1(0)
@@ -128,10 +131,8 @@ class SimpleEffectOnStore extends EffectOnStore{
       require(mi.mcDone)
       mi.updateMissingViews(views)
       if(mi.done) maybeAdd(mi.newView)
-      else{ 
-        // assert(!views.contains(mi.missingHead)) 
-        addToStore(store, mi.missingHead, mi)
-      }
+      else addToStore(store, mi.missingHead, mi)
+      // mi.sanity1
     }
 
     // In each phase below, we also purge all MissingInfos for which the
@@ -147,7 +148,6 @@ class SimpleEffectOnStore extends EffectOnStore{
         for(mi <- mis; if !mi.mcDone){
           if(views.contains(mi.newView)) mi.markNewViewFound
           else{
-            //val vb = new ViewBuffer
             val vb : ViewBuffer =  mi.updateMissingCommon(cv, views)
             if(mi.done) maybeAdd(mi.newView)
             else if(mi.mcDone) mcDone(mi)
@@ -157,6 +157,7 @@ class SimpleEffectOnStore extends EffectOnStore{
               newMis ::= mi
             }
           }
+          // mi.sanity1
         } // end of for loop
         if(newMis.length != mis.length){
           if(newMis.nonEmpty) commonStore += key -> newMis
@@ -175,11 +176,11 @@ class SimpleEffectOnStore extends EffectOnStore{
           else{
             val ab = mi.updateMCMissingViews(cv, views) 
             if(mi.done) maybeAdd(mi.newView) 
-            else if(ab != null)
-              for(cv1 <- ab) addToStore(mcMissingCandidatesStore, cv1, mi)
-            else mcDone(mi)  // all the MissingCommon entries are satisfied.
+            else if(mi.mcDone) mcDone(mi) 
+            else for(cv1 <- ab) addToStore(mcMissingCandidatesStore, cv1, mi)
           }
-        }
+          // mi.sanity1
+        } // end of for loop
       case None => {}
     }
 
@@ -192,12 +193,10 @@ class SimpleEffectOnStore extends EffectOnStore{
           else{
             mi.updateMissingViewsBy(cv, views)
             if(mi.done) maybeAdd(mi.newView)
-            else{
-              // assert(!views.contains(mi.missingHead))
-              addToStore(store, mi.missingHead, mi)
-            }
+            else addToStore(store, mi.missingHead, mi)
           }
-        }
+          // mi.sanity1
+        } // end of for loop
       case None => {}
     }
 
