@@ -350,6 +350,7 @@ class ServerPrincipalBasedViewSet(initSize: Int = 16) extends ViewSet {
 
   /** Does this contain sv? */
   def contains(sv: ComponentView): Boolean = {
+    // assert(sv != null) // IMPROVE
     val set = underlying.get(sv.servers)
     set != null && set.contains(sv)
   }

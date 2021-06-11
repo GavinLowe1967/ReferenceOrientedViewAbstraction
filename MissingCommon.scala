@@ -83,8 +83,9 @@ class MissingCommon(
           updateMissingCandidates(mc, cv, views, toRegister))
       if(done) null
       else{
-        assert(toRegister.nonEmpty,
-          s"updateMissingViews($cv) with\n${missingCandidates.mkString("\n")}")
+        // The following assertion might be false, because of the sharing
+        // assert(toRegister.nonEmpty,
+        // s"\nupdateMissingViews($cv) with\n${missingCandidates.mkString("\n")}")
         toRegister
       }
     }
@@ -177,7 +178,12 @@ class MissingCommon(
   }
 
   /** A measure of the size of this: the number of ComponentViews stored. */
-  def size = missingCandidates.map(_.length).sum
+  def size = {
+    var mcs = missingCandidates; var size = 0
+    while(mcs.nonEmpty){ size += mcs.head.length; mcs = mcs.tail }
+    size
+    // missingCandidates.map(_.length).sum
+  }
 }
 
 

@@ -37,7 +37,7 @@ class MissingInfo(
 
   assert(missingCommon.length <= 2, 
     "missingCommon.length = "+missingCommon.length)
-  assert(missingViews.length <= 8, "missingViews.length = "+missingViews.length)
+  assert(missingViews.length <= 9, "missingViews.length = "+missingViews.length)
   // FIXME: not true in general
 
   /** Index of the first non-null entry in missingCommon, or
@@ -146,7 +146,7 @@ class MissingInfo(
     * to advance over subsequent missing views in views.  */
   def updateMissingViews(views: ViewSet) = {
     while(mvIndex < missingViews.length && 
-        views.contains(missingViews(mvIndex))){
+      (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))){
       missingViews(mvIndex) = null; mvIndex += 1
     }
   }
