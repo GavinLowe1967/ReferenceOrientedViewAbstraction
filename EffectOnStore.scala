@@ -36,12 +36,11 @@ trait EffectOnStore{
 // =======================================================
 
 class SimpleEffectOnStore extends EffectOnStore{
-  type MissingInfoSet = ArrayBuffer[MissingInfo]
+  type MissingInfoSet = HashSet[MissingInfo]
 
   /** A type of stores, giving the MissingInfos that might need updating as the
     * result of finding a new ComponentView. */
   type Store = HashMap[ComponentView, MissingInfoSet]
-// FIXME: replace with HashSet
 
   /** The underlying store concerning missing values.  For each mi: MissingInfo
     * in the abstract set, and for each cv in mi.missingViews, store(cv)
@@ -66,11 +65,10 @@ class SimpleEffectOnStore extends EffectOnStore{
   = {
     // missingInfo.sanity1
     theStore.get(cv) match{
-      case Some(ab) => 
-        if(!containsAB(ab, missingInfo)) ab += missingInfo
+      case Some(mis) => mis += missingInfo 
       case None =>
-        val ab = new ArrayBuffer[MissingInfo]; ab += missingInfo
-        theStore += cv -> ab
+        val mis = new MissingInfoSet; mis += missingInfo
+        theStore += cv -> mis
     }
   }
 

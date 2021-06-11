@@ -282,51 +282,51 @@ object MissingInfo{
 
 // ==================================================================
 
-/** A set of MissingInfo. */
-class MissingInfoSet{
-  /** We store MissingInfos in a hash set. */
-  private val set = new HashSet[MissingInfo]
+// /** A set of MissingInfo. */
+// class MissingInfoSet{
+//   /** We store MissingInfos in a hash set. */
+//   private val set = new HashSet[MissingInfo]
 
-  /* Each time a MissingInfo's state changes, its hash is updated.  Since each
-   * might be in multiple sets, that means it might be in the wrong place in
-   * this HashSet.  However, each call to update sorts things out. */
+//   /* Each time a MissingInfo's state changes, its hash is updated.  Since each
+//    * might be in multiple sets, that means it might be in the wrong place in
+//    * this HashSet.  However, each call to update sorts things out. */
 
-  /** Add missingInfo to this. */
-  def add(missingInfo: MissingInfo): Unit = set.add(missingInfo)
+//   /** Add missingInfo to this. */
+//   def add(missingInfo: MissingInfo): Unit = set.add(missingInfo)
 
-  /** For each MissingInfo mi in this: (1) if mi is done or its newView is in
-    * views, then remove mi; (2) remove cv from its views; if it is now done,
-    * add its newView to result and remove mi from this. */
-// IMPROVE comment
-  def update(cv: ComponentView, views: ViewSet, 
-      result: ArrayBuffer[ComponentView]) 
-  = { ???
-    // Add nv to result if not already there
-    def maybeAdd(nv: ComponentView) = if(!result.contains(nv)) result += nv
-    // The new value for the set.
-    val newSet = new HashSet[MissingInfo]
+//   /** For each MissingInfo mi in this: (1) if mi is done or its newView is in
+//     * views, then remove mi; (2) remove cv from its views; if it is now done,
+//     * add its newView to result and remove mi from this. */
+// // IMPROVE comment
+//   def update(cv: ComponentView, views: ViewSet, 
+//       result: ArrayBuffer[ComponentView]) 
+//   = { ???
+//     // Add nv to result if not already there
+//     def maybeAdd(nv: ComponentView) = if(!result.contains(nv)) result += nv
+//     // The new value for the set.
+//     val newSet = new HashSet[MissingInfo]
 
-    // MissingInfos that need to be removed from this set.
-    // var toRemove = List[MissingInfo]()
-    // // MissingInfos whose states have changed: they need to be removed,
-    // // rehashed and re-added.
-    // var changedMIs = List[MissingInfo]()
+//     // MissingInfos that need to be removed from this set.
+//     // var toRemove = List[MissingInfo]()
+//     // // MissingInfos whose states have changed: they need to be removed,
+//     // // rehashed and re-added.
+//     // var changedMIs = List[MissingInfo]()
 
-    // for(mi <- set.iterator; if !mi.done){
-    //   if(views.contains(mi.newView)) mi.markNewViewFound
-    //   else{
-    //     val changed = mi.updateMissingViews(cv) // if changed, re-store
-    //     if(mi.done) maybeAdd(mi.newView)
-    //     else{ 
-    //       if(changed) mi.rehash // IMPROVE: do this in updateMissingViews?
-    //       newSet.add(mi)
-    //     }
-    //   }
-    //}
+//     // for(mi <- set.iterator; if !mi.done){
+//     //   if(views.contains(mi.newView)) mi.markNewViewFound
+//     //   else{
+//     //     val changed = mi.updateMissingViews(cv) // if changed, re-store
+//     //     if(mi.done) maybeAdd(mi.newView)
+//     //     else{ 
+//     //       if(changed) mi.rehash // IMPROVE: do this in updateMissingViews?
+//     //       newSet.add(mi)
+//     //     }
+//     //   }
+//     //}
 
-    // for(mi <- toRemove) set.remove(mi)
-    // for(mi <- changedMIs){ set.remove(mi); mi.rehash; set.add(mi) }
+//     // for(mi <- toRemove) set.remove(mi)
+//     // for(mi <- changedMIs){ set.remove(mi); mi.rehash; set.add(mi) }
 
-  }
+//   }
 
-}
+// }
