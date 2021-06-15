@@ -82,7 +82,6 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
         new ComponentView(serversB1, bNode(N1,N2), Array(bNode(N2,Null)))))
 
       // Following isn't actually a reachable state; evolves as previous.
-      println("-------")
       effectOn(pre, 1, post,
         mkCV(serversA, pushSt(T1,N0), Array(bNode(N0,Null))))
       assert(nextNewViews.size == 4)
@@ -111,7 +110,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
 
     // Test with initialisation of node
     def test3 = {
-      println("= test3 =\n")
+      // println("= test3 =")
       reset()
       val pre = new Concretization(servers1, 
         Array(initNodeSt(T0,Null), initNode(N0)))
@@ -148,7 +147,24 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
       assert(nextNewViews.size == 2)
     }
 
-    test1; test2; test3
+    def test4 = {
+      // Principal of cv unifies with process that changes state, and so gains
+      // reference to another component c; parameters can be mapped to other
+      // parameters of c.
+      println("= test4 =")
+      reset()
+      val pre = new Concretization(servers0, 
+        Array(getDatumSt(T0, N0, N1), aNode(N0, N2), bNode(N1, N3)) )
+      val post = new Concretization(servers0,
+        Array(popSt(T0, N0, N1), dNode(N0, N1, N2), bNode(N1, N3)) )
+      pre.ply = 0; post.ply = 0
+      val cv = new ComponentView(servers0,  Array(aNode(N0, N1), cNode(N1, N2)))
+      cv.ply = 1
+      effectOn(pre, 1, post, cv)
+      println(nextNewViews.iterator.mkString("\n"))
+    }
+
+    test1; test2; test3 // ; test4
   }
 
 

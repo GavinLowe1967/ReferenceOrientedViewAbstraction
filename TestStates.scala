@@ -3,6 +3,16 @@ package ViewAbstraction
 /** A definition of various States, Views, etc., for use in tests.  These are
   * consistent with the file test-file.csp. */
 object TestStates{
+  /** Print out all the states.  Normally not called, but useful if the
+    * underlying file test-file.csp is changed. */
+  def report = {
+    val states = MyStateMap.toArray
+    println(states.mkString("\n"))
+    // for(i <- 0 until MyStateMap.stateCount){
+    //   println(s"$i: "+MyStateMap.get(i))
+    // }
+  }
+
   // Create some states
   // The lock, not held and held
   val lock0 = MyStateMap(-1, 27, Array()) // [20[-1]()
@@ -26,6 +36,9 @@ object TestStates{
   def bNode(id: Int, nxt: Int) = MyStateMap(0, 8, Array(id,nxt))
   def cNode(id: Int, nxt: Int) = MyStateMap(0, 9, Array(id,nxt))
 
+
+  def dNode(id: Int, nxt: Int, prev: Int) = ??? //  MyStateMap(0, 100, Array(id,nxt,prev))
+
   // Threads
   val T0 = 0; val T1 = 1; val T2 = 2; val T3 = 3
   // Initial state of Thread(t)
@@ -46,6 +59,7 @@ object TestStates{
   def getDatumSt(t: Int, n1: Int, n2: Int) = MyStateMap(1, 15, Array(t,n1,n2))
 
 
+
   // Combined servers
   val servers0 = ServerStates(List(lock0, top(Null), wd0))
   val servers1 = ServerStates(List(lock1(T0), top(Null), wd0))
@@ -54,5 +68,7 @@ object TestStates{
   // Combined components
   val components1 = Array(pushSt(T0,N0), aNode(0,1))
   val nodes = Array(aNode(0,1), aNode(1,2))
+
+
 
 }

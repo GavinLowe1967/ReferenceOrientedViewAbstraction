@@ -98,6 +98,7 @@ object VA{
 
       if(testing){ 
         system = new SystemP.System("CSP/test-file.csp")
+        TestStates.report
         RemapperP.RemapperTest.test; CombinerP.CombinerTest.test
         SystemP.SystemTest.test(system); 
         new ExtendabilityP.ExtendabilityTest(system).test

@@ -244,6 +244,9 @@ object Unification{
       while(us.nonEmpty){
         val i = us.head._2; us = us.tail
         postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.numParams)
+// FIXME, if this is the unification of the principal of cv, and postCpts(i)
+// gains a reference to postCpts(x), then also add the parameters of
+// postCpts(x).
       }
       // Remove values in ran map1
       Remapper.removeFromBitMap(map1, otherArgsBitMap)

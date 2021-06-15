@@ -86,6 +86,17 @@ mcMissingCandidatesStore: size = 621
   # MissingInfos = 9,823
   MissingInfos size = 24,206
 
+For lazySet, after step E, and a bound of 35. 
+
+store: size = 188775
+  # MissingInfos = 56,527,767
+  MissingInfos size = 152,521,419
+commonStore: size = 3278
+  # MissingInfos = 7,598,592
+  MissingInfos size = 216,095,238
+mcMissingCandidatesStore: size = 93192
+  # MissingInfos = 84,263,788
+  MissingInfos size = 10,183,639,695
 
 
 

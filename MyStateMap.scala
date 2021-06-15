@@ -67,6 +67,10 @@ object MyStateMap{
     println(".  Done.")
   }
 
+  /** Create an array containing all the states.  This is used only in
+    * TestStates.report, and is normally not called. */
+  def toArray = stateStore.asInstanceOf[InitialisationStateHashMap].toArray
+
   // import ox.gavin.profiling.MemoryProfiler.traverse  
   // def memoryProfile = {
   //   println(s"MyStateMap: $stateCount states")

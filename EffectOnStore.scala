@@ -57,7 +57,8 @@ class SimpleEffectOnStore extends EffectOnStore{
     * MissingInfo in the abstract set, and for each
     * MissingCommon(servers,cpts,_,_) or (servers,_,cpts,_) in
     * mi.missingCommon, commonStore(servers,cpts(0)) contains mi. */
-  private val commonStore = new HashMap[(ServerStates, State), List[MissingInfo]]
+  private val commonStore = new HashMap[(ServerStates, State), MissingInfoSet]
+  // private val commonStore = new HashMap[(ServerStates, State), List[MissingInfo]]
 
   /** Add missingInfo to theStore(cv), if not already there. */
   private 
@@ -94,11 +95,18 @@ class SimpleEffectOnStore extends EffectOnStore{
         val princ1 = mc.cpts1(0)
         if(false && debugging)
           assert(Remapper.remapToPrincipal(mc.servers, princ1) == princ1)
-        val prev = 
-          commonStore.getOrElse((mc.servers, princ1), List[MissingInfo]())
-        //if(!contains(prev,missingInfo)) // needs equality test
-        commonStore += (mc.servers, princ1) -> (missingInfo::prev)
-        //else println("Already stored "+missingInfo)
+        val key = (mc.servers, princ1)
+        commonStore.get(key) match{
+          case Some(mis) => mis += missingInfo
+          case None => 
+            val mis = new MissingInfoSet; mis += missingInfo
+            commonStore += key -> mis
+        }
+        // val prev = 
+        //   commonStore.getOrElse((mc.servers, princ1), List[MissingInfo]())
+        // //if(!contains(prev,missingInfo)) // needs equality test
+        // commonStore += (mc.servers, princ1) -> (missingInfo::prev)
+        // //else println("Already stored "+missingInfo)
       }
     }
   }
@@ -142,7 +150,8 @@ class SimpleEffectOnStore extends EffectOnStore{
     val key = (cv.servers, cv.principal)
     commonStore.get(key) match{
       case Some(mis) => 
-        var newMis = List[MissingInfo]() // those to retain in commonStore(key)
+        // var newMis = List[MissingInfo]() // those to retain in commonStore(key)
+        val newMis = new MissingInfoSet  // those to retain in commonStore(key)
         for(mi <- mis; if !mi.mcDone){
           if(views.contains(mi.newView)) mi.markNewViewFound
           else{
@@ -152,15 +161,15 @@ class SimpleEffectOnStore extends EffectOnStore{
             else{
               // Register mi against each view in vb, and retain in commonStore
               for(cv1 <- vb) addToStore(mcMissingCandidatesStore, cv1, mi)
-              newMis ::= mi
+              newMis += mi
             }
           }
           // mi.sanity1
         } // end of for loop
-        if(newMis.length != mis.length){
-          if(newMis.nonEmpty) commonStore += key -> newMis
-          else commonStore.remove(key)
-        }
+        //if(newMis.length != mis.length){
+        if(newMis.nonEmpty) commonStore += key -> newMis
+        else commonStore.remove(key)
+        //}
       case None => {}
     }
 
