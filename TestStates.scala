@@ -3,7 +3,8 @@ package ViewAbstraction
 /** A definition of various States, Views, etc., for use in tests.  These are
   * consistent with the file test-file.csp. */
 object TestStates{
-  /** Print out all the states.  Normally not called, but useful if the
+  /** Print out all the states.  Also check that the number of parameters is a
+    * constant for each control state.  Normally not called, but useful if the
     * underlying file test-file.csp is changed. */
   def report = {
     // Map showing expected number of arguments for each control state.
@@ -42,7 +43,7 @@ object TestStates{
   def bNode(id: Int, nxt: Int) = MyStateMap(0, 8, Array(id,nxt))
   def cNode(id: Int, nxt: Int) = MyStateMap(0, 9, Array(id,nxt))
 
-  // Node with two references
+  // Node with two references (or CS 11 or 12)
   def dNode(id: Int, nxt: Int, prev: Int) = MyStateMap(0, 10, Array(id,nxt,prev))
 
   // Threads

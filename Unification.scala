@@ -191,14 +191,16 @@ object Unification{
     * Each parameter of cv is remapped (1) as identity function for parameters
     * in pre.servers; (2) if a unification of components is done, as required
     * by that unification; (3) otherwise either (a) to a parameter in
-    * post.servers or the post-state of a unified component, but not in
-    * pre.servers, or (b) for the identity of the principal, an element of
-    * princRenames, or (c) the next fresh variable.  Also, under (a),
-    * identities cannot be mapped to identities in post.components, other than
-    * with unification.  The choice under 3(a) is precisely those variables
-    * that will exist in the post-state of cv (and are distinct post symmetry
-    * reduction).
-// FIXME: if singleRef then under 3(a), also to parameters in pre.components.
+    * post.servers or the post-state of a unified component or the post state
+    * of a component to which cv.principal gains a reference, or (b) for the
+    * identity of the principal, an element of princRenames (when singleRef),
+    * or (c) the next fresh variable.  In each case, the remapping is
+    * restricted to be injective.  Also, under (a), identities cannot be
+    * mapped to identities in post.components, other than with unification.
+    * The choice under 3(a) is precisely those variables that will exist in
+    * the post-state of cv (and are distinct post symmetry reduction).  //
+    * FIXME: if singleRef then under 3(a), also to parameters in
+    * pre.components.
     * 
     * We suppress values that won't give a new view in effectOn.   
     * 
@@ -237,16 +239,37 @@ object Unification{
       if(debugging) assert(Remapper.isInjective(map1), Remapper.show(map1))
       // Create OtherArgMap containing all values not in ran map1 or
       // pre.servers, but (1) in post.servers; or (2) in post.cpts for a
-      // unified component.  newServerIds satisfies (1).
+      // unified component or a component to which cv.principal gains a
+      // reference.  newServerIds satisfies (1).
       val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
       // Add parameters of post.components corresponding to unifs, not shared
       // with servers.
       while(us.nonEmpty){
-        val i = us.head._2; us = us.tail
+        val (j, i) = us.head; us = us.tail
         postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.numParams)
-// FIXME, if this is the unification of the principal of cv, and postCpts(i)
-// gains a reference to postCpts(x), then also add the parameters of
-// postCpts(x).
+        // If this is the unification of the principal of cv, which changes
+        // state and gains a reference to another component c, include the
+        // parameters of c from postCpts.
+        if(!singleRef && j == 0 && preCpts(i) != postCpts(i)){
+          addIdsFromNewRef(otherArgsBitMap, servers.numParams, preCpts, postCpts, i)
+// IMPROVE: think about the case with singleRef
+          // println(s"unifying principal ${cv.components(0)} with "+
+          //   s"${preCpts(i)} changing state")
+          // val prePids = preCpts(i).processIdentities
+          // val postPids = postCpts(i).processIdentities
+          // // Find which parameters are gained
+          // for(k <- 1 until postPids.length){
+          //   val pid = postPids(k)
+          //   if(!isDistinguished(pid._2) && !prePids.contains(pid)){
+          //     // println(s"gains access to $pid")
+          //     val c = StateArray.find(pid, postCpts)
+          //     // I think assumptions imply pid must be in postCpts
+          //     assert(c != null, s"\npre = $pre,\npost = $post,\ncv = $cv")
+          //     // println(s"gains access to $c")
+          //     c.addIdsToBitMap(otherArgsBitMap, servers.numParams)
+          //   }
+          // }
+        }
       }
       // Remove values in ran map1
       Remapper.removeFromBitMap(map1, otherArgsBitMap)
@@ -276,9 +299,10 @@ object Unification{
       //   println(s"combine: unifs = $unifs, sufficientUnif = $sufficientUnif")
       if(sufficientUnif || singleRef) extendUnif(map1, unifs)
 // IMPROVE: why is singleRef necessary above?
-      // Try renaming cv.principal to each id in princNames
+      // Try renaming cv.principal to each id in princRenames
       if(map1(cvpf)(cvpid) < 0) 
         for(newPId <- princRenames; if !map1(cvpf).contains(newPId)){
+          assert(singleRef)
           // if(false) println(s"Combine: renaming ${(cvpf,cvpid)} to $newPId")
           map1(cvpf)(cvpid) = newPId; extendUnif(map1, unifs)
       }
@@ -322,6 +346,25 @@ object Unification{
       changedStateBitMap(i) = preCpts(i) != postCpts(i); i += 1
     }
     changedStateBitMap
+  }
+
+  @inline private def addIdsFromNewRef(
+    otherArgsBitMap: Array[Array[Boolean]], serverNumParams: Array[Int], preCpts: Array[State], postCpts: Array[State], i: Int) = {
+// IMPROVE: think about the case with singleRef
+    val prePids = preCpts(i).processIdentities
+    val postPids = postCpts(i).processIdentities
+    // Find which parameters are gained
+    for(k <- 1 until postPids.length){
+      val pid = postPids(k)
+      if(!isDistinguished(pid._2) && !prePids.contains(pid)){
+        // println(s"gains access to $pid")
+        val c = StateArray.find(pid, postCpts)
+        // I think assumptions imply pid must be in postCpts
+        assert(c != null) // , s"\npre = $pre,\npost = $post,\ncv = $cv")
+        // println(s"gains access to $c")
+        c.addIdsToBitMap(otherArgsBitMap, serverNumParams)
+      }
+    }
   }
 
   /** Remap c, as identity function on parameters of servers and princ1, but

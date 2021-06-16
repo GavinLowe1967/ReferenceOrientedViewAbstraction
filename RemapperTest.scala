@@ -351,10 +351,11 @@ object RemapperTest{
         mkString("\n")
 
     def test1 = {
-      // println("=test1=")
+      println("=test1=")
       val pre = new Concretization(servers0, 
-        Array(initNodeSt(T0,N0), aNode(N0,N1)))
-      val post = new Concretization(servers2, Array(unlock(T0), bNode(N0,N2)))
+        Array(/*initNodeSt*/getDatumSt(T0,N0,N1), aNode(N0,N2), aNode(N1,Null)) )
+      val post = new Concretization(servers2, 
+        Array(unlock(T0), bNode(N0,N1), aNode(N1,Null)))
       val cv = new ComponentView(servers0, Array(aNode(N0,N1), cNode(N1,Null)))
       // val cv = new ComponentView(servers0, Array(aNode(N2,N3)))
       // servers0 contains no ids, servers2 contains T0, N0
@@ -363,7 +364,7 @@ object RemapperTest{
       // Unifying, N0 -> N0, N1 -> N1
       assert(buffer.exists{case (states, unifs) =>
         unifs == List((0,1)) && 
-        states.sameElements(Array(aNode(N0,N1), cNode(N1,Null)))
+        states.sameElements(Array(aNode(N0,N2), cNode(N2,Null)))
       })
       // No unification
       assert(buffer.exists{case (states, unifs) =>
@@ -372,12 +373,13 @@ object RemapperTest{
       assert(buffer.length == 2)
 
       effectOnChangedServersCache.clear
+      //println("=test1a=")
       val buffer2 = combine(pre, post, cv, List()) // , false
       // Unifying, N0 -> N0, N1 -> N1
-      // println(showBuffer(buffer2))
+      //println(showBuffer(buffer2))
       assert(buffer2.exists{case (states, unifs) =>
         unifs == List((0,1)) && 
-        states.sameElements(Array(aNode(N0,N1), cNode(N1,Null)))
+        states.sameElements(Array(aNode(N0,N2), cNode(N2,Null)))
       })
       // No unification, N0 -> N3, N1 -> N4
       assert(buffer2.exists{case (states, unifs) =>
