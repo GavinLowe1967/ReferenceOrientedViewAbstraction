@@ -47,10 +47,12 @@ object Unification{
   private def show(allUs: AllUnifsResult) = 
     allUs.map{case(map,us) => "("+Remapper.show(map)+", "+us+")"}.mkString("; ")
 
-  /** All ways of extending map0 to a mapping map so that for each component c =
-    * cpts(j) whose identity is in dom map, map(c) agrees with any component
-    * preC = preCpts(i) with the same identity.  Also include the pair (j,i)
-    * in the UnificationList.  */
+  /** All ways of extending map0 to unify elements of cpts with elements of
+    * preCpts, other than the two principal components.  
+    * 
+    * For each combination of unifications, map0 is extended to a mapping map
+    * so that if c = cpts(j) is unified with preC = preCpts(i), them map0(c) =
+    * preC, and (j,i) is included in the UnificationList.  */
   private[RemapperP] def allUnifs(
     map0: RemappingMap, preCpts: Array[State], cpts: Array[State]) 
       : AllUnifsResult = {
@@ -250,26 +252,10 @@ object Unification{
         // If this is the unification of the principal of cv, which changes
         // state and gains a reference to another component c, include the
         // parameters of c from postCpts.
-        if(!singleRef && j == 0 && preCpts(i) != postCpts(i)){
-          addIdsFromNewRef(otherArgsBitMap, servers.numParams, preCpts, postCpts, i)
+        if(!singleRef && j == 0 && preCpts(i) != postCpts(i))
+          addIdsFromNewRef(
+            otherArgsBitMap, servers.numParams, preCpts, postCpts, i)
 // IMPROVE: think about the case with singleRef
-          // println(s"unifying principal ${cv.components(0)} with "+
-          //   s"${preCpts(i)} changing state")
-          // val prePids = preCpts(i).processIdentities
-          // val postPids = postCpts(i).processIdentities
-          // // Find which parameters are gained
-          // for(k <- 1 until postPids.length){
-          //   val pid = postPids(k)
-          //   if(!isDistinguished(pid._2) && !prePids.contains(pid)){
-          //     // println(s"gains access to $pid")
-          //     val c = StateArray.find(pid, postCpts)
-          //     // I think assumptions imply pid must be in postCpts
-          //     assert(c != null, s"\npre = $pre,\npost = $post,\ncv = $cv")
-          //     // println(s"gains access to $c")
-          //     c.addIdsToBitMap(otherArgsBitMap, servers.numParams)
-          //   }
-          // }
-        }
       }
       // Remove values in ran map1
       Remapper.removeFromBitMap(map1, otherArgsBitMap)
@@ -348,8 +334,11 @@ object Unification{
     changedStateBitMap
   }
 
+  /** Add to otherArgsBitMap any parameters of a component c to which preCpts(i)
+    * gains a reference as the result of the transition. */ 
   @inline private def addIdsFromNewRef(
-    otherArgsBitMap: Array[Array[Boolean]], serverNumParams: Array[Int], preCpts: Array[State], postCpts: Array[State], i: Int) = {
+    otherArgsBitMap: Array[Array[Boolean]], serverNumParams: Array[Int],
+    preCpts: Array[State], postCpts: Array[State], i: Int) = {
 // IMPROVE: think about the case with singleRef
     val prePids = preCpts(i).processIdentities
     val postPids = postCpts(i).processIdentities
