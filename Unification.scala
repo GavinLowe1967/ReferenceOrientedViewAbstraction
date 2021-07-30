@@ -200,9 +200,7 @@ object Unification{
     * restricted to be injective.  Also, under (a), identities cannot be
     * mapped to identities in post.components, other than with unification.
     * The choice under 3(a) is precisely those variables that will exist in
-    * the post-state of cv (and are distinct post symmetry reduction).  //
-    * FIXME: if singleRef then under 3(a), also to parameters in
-    * pre.components.
+    * the post-state of cv (and are distinct post symmetry reduction).  
     * 
     * We suppress values that won't give a new view in effectOn.   
     * 
@@ -283,8 +281,7 @@ object Unification{
         changedServers, unifs, post.servers, cv, changedStateBitMap)
       // if(false) 
       //   println(s"combine: unifs = $unifs, sufficientUnif = $sufficientUnif")
-      if(sufficientUnif || singleRef) extendUnif(map1, unifs)
-// IMPROVE: why is singleRef necessary above?
+      if(sufficientUnif) extendUnif(map1, unifs)
       // Try renaming cv.principal to each id in princRenames
       if(map1(cvpf)(cvpid) < 0) 
         for(newPId <- princRenames; if !map1(cvpf).contains(newPId)){
@@ -311,7 +308,9 @@ object Unification{
     changedServers: Boolean, unifs: UnificationList, postServers: ServerStates, 
     cv: ComponentView, changedStateBitMap: Array[Boolean])
       : Boolean = {
-    if(changedServers)
+// IMPROVE: why is the case below necessary?
+    if(singleRef) true // changedServers || unifs.nonEmpty
+    else if(changedServers)
       unifs.nonEmpty || effectOnChangedServersCache.add((cv, postServers))
     else{
       var us = unifs; var sufficientUnif = false

@@ -75,7 +75,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       // cv, then check that that combination is possible in sysAbsViews:
       // those that are missing.
       val missing: List[ComponentView] =
-        if(singleRef) missingCrossRefs(pre.servers, cpts, preCpts) else List()
+        if(singleRef) missingCrossRefs(pre.servers, cpts, preCpts) else List() 
       // What does cpts(0) get mapped to?  IMPROVE: we don't need all of unifs
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
@@ -91,9 +91,21 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         // newViewCount += 1        // Mostly with unifs.nonEmpty
         if(!views.contains(nv)){
           if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){
+// IMPROVE: the assertion below fails with the lock-free queue, but that is
+// because we are allowing too many induced transitions, in particular where
+// the secondary component of the new view corresponds to a missing view in
+// cv.
+            if(false && singleRef) 
+              assert(pre.servers != post.servers || unifs.nonEmpty || 
+                newComponents(1) == newPrinc,
+                s"\n$pre -${system.showEvent(e)}-> $post\n"+
+                  s"  with unifications $unifs\nc2Refs = $c2Refs\n"+
+                  s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+                  s"  --> ${View.show(post.servers, newComponents)} == $nv")
             // addedViewCount += 1
-            if(verbose) println(
-              s"$pre --> $post\n  with unifications $unifs\n"+
+            if(verbose /* || newComponents(0) != newPrinc */) println(
+              s"$pre -${system.showEvent(e)}-> $post\n"+
+                s"  with unifications $unifs\n"+
                 s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
                 s"  --> ${View.show(post.servers, newComponents)} == $nv")
             nv.setCreationInfoIndirect(

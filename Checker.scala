@@ -93,6 +93,7 @@ class Checker(system: SystemP.System){
     val newTrans = ((pre, e, post))
     if(!transitions.contains(newTrans)){
       if(newTransitions.add(newTrans)) effectOnOthers(pre, e, post)
+      // Note: the views of post get added to sysAbsViews within apply.
     }
   }
 
@@ -416,7 +417,7 @@ class Checker(system: SystemP.System){
         s"newTransitions, ${newTransitions.size}; "+
         s"newTransitionTemplates, ${newTransitionTemplates.size}")
       val newViewsAB = new ArrayBuffer[ComponentView]
-      def addView(v: ComponentView): Boolean = 
+      def addView(v: ComponentView): Boolean = {
 // FIXME: probably not if there's a missing ref. 
         if(sysAbsViews.add(v)){ 
           if(false) println(v)
@@ -425,6 +426,7 @@ class Checker(system: SystemP.System){
           newViewsAB += v; true 
         } 
         else false
+      } // end of addView
       for((pre,e,post) <- newTransitions.iterator){
         assert(transitions.add(pre, e, post))
         // val v = Remapper.remapComponentView(post.toComponentView)
@@ -454,7 +456,7 @@ class Checker(system: SystemP.System){
 
     println("\nSTEP "+ply+"\n")
     if(singleRef && bound == Int.MaxValue) effectOn.sanityCheck
-    if(singleRef) effectOn.report
+    // if(singleRef) effectOn.report
     if(showViews) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))

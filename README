@@ -1,3 +1,25 @@
+
+============
+
+When singleRef, if the present secondary component gains a reference to a
+missing secondary component, at present this is captured within effectOn (via
+c2Refs).  E.g.
+  (f; Thread(t, n, n'), Node_x(n, null)) -setNext.t.n.n'->
+    (f'; Thread'(t, n, n'), Node_x(n, n')).
+on 
+  (f; Node_y(n', n''), Node_z(n'', n''') 
+induces transition to 
+  (f'; Node_x(n, n'), Node_y(n', n'')
+This doesn't feel like the best way.  However, some states of the missing
+secondary component will be found only after the transition is expanded.  That
+means it will be necessary to store relvant information, e.g. when we
+subsequently find a view
+  (f; Node_?(n', ?), ?)   or   (f; Thread(t, n, n'), Node_?(n', ?))
+create the derived transition.  (The latter looks better.)
+
+
+===============
+
 Plan for improving EffectOnStore.
 
 0. Split store into two parts:

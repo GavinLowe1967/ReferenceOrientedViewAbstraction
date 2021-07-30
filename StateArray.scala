@@ -119,12 +119,19 @@ object StateArray{
 
     // Should pids(i) be included?
     @inline def include(i: Int) = {
-      val pid = pids(i)
+      val pid = pids(i); val (f,id) = pid
       if(!isDistinguished(pid._2) && pid != princId &&
         (includeInfo == null || includeInfo(i))){
-        // check this is first occurrence of pid
-        var j = 1; while(j < i && pids(j) != pid) j += 1
-        j == i
+        // Check if pid is a missing component in cpts(0)
+        if(false && singleRef && cpts(0).hasParam(f,id) && find(cpts, f, id) == null){
+          //println(s"makePostComponents missing component $pid in ${cpts(0)}")
+          false
+        }
+        else{
+          // check this is first occurrence of pid
+          var j = 1; while(j < i && pids(j) != pid) j += 1
+          j == i
+        }
       }
       else false
     }
@@ -149,9 +156,14 @@ object StateArray{
         }
         i += 1
       }
+      if(false){
+        if(result.nonEmpty || !pids.forall(pid => isDistinguished(pid._2))) 
+          result
+        else List(Array(newPrinc))
+      }
       // if(result.length > 1) 
       //   println(s"makePostComponents: "+result.map(showStates))
-      if(result.nonEmpty || otherRef) result else List(Array(newPrinc))
+      else if(result.nonEmpty || otherRef) result else List(Array(newPrinc))
       // If all the refs from newPrinc are distinguished or omitted, we need
       // to include the singleton view.
     }

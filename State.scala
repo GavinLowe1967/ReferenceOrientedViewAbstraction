@@ -47,6 +47,7 @@ class State(val family: Family, val cs: ControlState,
   /** Bit map giving parameters. */
   private var paramBitMap: Array[Array[Boolean]] = null
 
+  /** Does this state have a parameter (f,id)? */
   def hasParam(f: Family, id: Identity) = {
     if(paramBitMap == null){
       paramBitMap = 
@@ -57,6 +58,8 @@ class State(val family: Family, val cs: ControlState,
     }
     paramBitMap(f)(id)
   }
+
+  // def hasParam(pid: ProcessIdentity) = hasParam(pid._1, pid._2)
 
   /** Check the type sizes from the script are large enough for all the
     * parameters in this State.  This is not done during compilation, because

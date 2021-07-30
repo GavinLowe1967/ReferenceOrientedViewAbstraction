@@ -38,7 +38,7 @@ NodeID =  diff(NodeIDType, {Null})               -- real nodes
 datatype T = A | B | C
 
 -- Thread identities
-datatype ThreadID = T0 | T1 
+datatype ThreadID = T0 | T1
 
 -- initialise node to hold value
 channel initNode : ThreadID . NodeID . T

@@ -29,7 +29,8 @@ object Remapper{
 
   /** Template from which to create RemappingMap. */
   private val remappingMapTemplate =
-// FIXME: the "+3" below is arbitrary, and probably insufficient in some cases.
+// FIXME: the "*2" below is arbitrary, and probably insufficient in some cases.
+// Maybe chose the map's size on a case-by-case basis.
     Array.tabulate(numTypes)(t => Array.fill(2*typeSizes(t))(-1))
 
   /** Produce a (deep) clone of map. */
