@@ -119,19 +119,18 @@ object StateArray{
 
     // Should pids(i) be included?
     @inline def include(i: Int) = {
-      val pid = pids(i); val (f,id) = pid
+      val pid = pids(i) ; val (f,id) = pid
       if(!isDistinguished(pid._2) && pid != princId &&
         (includeInfo == null || includeInfo(i))){
         // Check if pid is a missing component in cpts(0)
-        if(false && singleRef && cpts(0).hasParam(f,id) && find(cpts, f, id) == null){
-          //println(s"makePostComponents missing component $pid in ${cpts(0)}")
-          false
-        }
-        else{
-          // check this is first occurrence of pid
-          var j = 1; while(j < i && pids(j) != pid) j += 1
-          j == i
-        }
+        // if(false && singleRef && cpts(0).hasParam(f,id) && find(cpts, f, id) == null){
+        //   //println(s"makePostComponents missing component $pid in ${cpts(0)}")
+        //   false
+        // }
+        // else{
+        // check this is first occurrence of pid
+        var j = 1; while(j < i && pids(j) != pid) j += 1
+        j == i
       }
       else false
     }
@@ -147,23 +146,25 @@ object StateArray{
       // component not present in this view.
       while(i < len){
         if(include(i)){
-          // States corresponding to pids(i)
-          val st1 = findCpt(pids(i))
-          if(st1 != null) result ::= Array(newPrinc, st1)
-          else otherRef = true
-          // else println(s"No state for ${pids(i)} in ${show(postCpts)} or "+
-          //   show(cpts))
+          val (f,id) = pids(i)
+          if(cpts(0).hasParam(f,id) && find(cpts, f, id) == null)
+            otherRef = true
+          else{
+            // States corresponding to pids(i)
+            val st1 = findCpt(pids(i))
+            if(st1 != null) result ::= Array(newPrinc, st1)
+            else otherRef = true
+          }
         }
         i += 1
       }
-      if(false){
-        if(result.nonEmpty || !pids.forall(pid => isDistinguished(pid._2))) 
-          result
-        else List(Array(newPrinc))
-      }
-      // if(result.length > 1) 
-      //   println(s"makePostComponents: "+result.map(showStates))
-      else if(result.nonEmpty || otherRef) result else List(Array(newPrinc))
+      // if(false){
+      //   if(result.nonEmpty || !pids.forall(pid => isDistinguished(pid._2))) 
+      //     result
+      //   else List(Array(newPrinc))
+      // }
+      // else 
+      if(result.nonEmpty || otherRef) result else List(Array(newPrinc))
       // If all the refs from newPrinc are distinguished or omitted, we need
       // to include the singleton view.
     }
