@@ -107,7 +107,9 @@ object StateArray{
   }
 
   /** Make new Array[State] for components, with newPrinc as principal, and
-    * other components from either postCpts or cpts. */
+    * other components from either postCpts or cpts.  In the case of
+    * singleRef, we require that the secondary component is not a missing
+    * component in cpts. */
   def makePostComponents(
     newPrinc: State, postCpts: Array[State], cpts: Array[State])
       : List[Array[State]] = {
@@ -121,13 +123,7 @@ object StateArray{
     @inline def include(i: Int) = {
       val pid = pids(i) ; val (f,id) = pid
       if(!isDistinguished(pid._2) && pid != princId &&
-        (includeInfo == null || includeInfo(i))){
-        // Check if pid is a missing component in cpts(0)
-        // if(false && singleRef && cpts(0).hasParam(f,id) && find(cpts, f, id) == null){
-        //   //println(s"makePostComponents missing component $pid in ${cpts(0)}")
-        //   false
-        // }
-        // else{
+          (includeInfo == null || includeInfo(i))){
         // check this is first occurrence of pid
         var j = 1; while(j < i && pids(j) != pid) j += 1
         j == i
@@ -142,10 +138,12 @@ object StateArray{
 
     if(singleRef){
       var result = List[Array[State]](); var i = 0; var otherRef = false
-      // otherRef is set to true if there is an included reference to a
-      // component not present in this view.
+      // otherRef is set to true if there is a reference from pids that is a
+      // missing reference from cpts, or is to a component not present in cpts
+      // or postCpts.
       while(i < len){
         if(include(i)){
+          // Check this isn't a missing component
           val (f,id) = pids(i)
           if(cpts(0).hasParam(f,id) && find(cpts, f, id) == null)
             otherRef = true
@@ -158,14 +156,12 @@ object StateArray{
         }
         i += 1
       }
-      // if(false){
-      //   if(result.nonEmpty || !pids.forall(pid => isDistinguished(pid._2))) 
-      //     result
-      //   else List(Array(newPrinc))
-      // }
-      // else 
-      if(result.nonEmpty || otherRef) result else List(Array(newPrinc))
-      // If all the refs from newPrinc are distinguished or omitted, we need
+      if(result.nonEmpty || otherRef) result 
+      else{ 
+        assert(pids.length == 1 || isDistinguished(pids(1)._2))
+        List(Array(newPrinc)) 
+      }
+      // If all the refs from newPrinc are distinguished, we need
       // to include the singleton view.
     }
     else{

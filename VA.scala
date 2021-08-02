@@ -30,11 +30,37 @@ object VA{
     else println(s"${millis}ms")
   }
 
+  // Parameters of profiling.
+  var profiling = false; var profilingFlat = false; var interval = 20
+  var profilingBoth = false;
+
+  /** Get the profiler. */
+  def getProfiler: SamplingProfiler = {
+    def filter(frame: StackTraceElement) : Boolean =
+      SamplingProfiler.defaultFilter(frame) && 
+        !frame.getClassName.contains("jdk.internal") // &&
+        // !frame.getClassName.contains("uk.ac.ox.cs.fdr")
+    val printer =
+      if(profilingBoth){
+        data: ArrayBuffer[SamplingProfiler.StackTrace] => {
+          SamplingProfiler.printTree(
+            filter = filter,
+            expand = ProfilerSummaryTree.expandToThreshold(0.05))(data) +
+          SamplingProfiler.print(filter = filter, length = 60)(data)
+        }
+      }
+      else if(!profilingFlat)
+        SamplingProfiler.printTree(
+          filter = filter,
+          expand = ProfilerSummaryTree.expandToThreshold(0.05)) _
+      else SamplingProfiler.print(filter = filter, length = 60) _
+    new SamplingProfiler(interval = interval, print = printer)
+  }
+
+
   def main(args: Array[String]) = {
     // Parse arguments
-    var i = 0; var fname = ""
-    var profiling = false; var profilingFlat = false; var interval = 20
-    var profilingBoth = false; var memoryProfile = false
+    var i = 0; var fname = ""; var memoryProfile = false
     // var verbose = false; 
     var bound = Int.MaxValue; var timing = false
     var testing = false
@@ -62,28 +88,7 @@ object VA{
 
     // Initialise Profiler. 
     ox.gavin.profiling.Profiler.setWorkers(numThreads)
-
-    // Profiler
-    def filter(frame: StackTraceElement) : Boolean = 
-      SamplingProfiler.defaultFilter(frame) && 
-        !frame.getClassName.contains("jdk.internal") // &&
-        // !frame.getClassName.contains("uk.ac.ox.cs.fdr")
-    val printer =
-      if(profilingBoth){
-        data: ArrayBuffer[SamplingProfiler.StackTrace] => {
-          SamplingProfiler.printTree(
-            filter = filter,
-            expand = ProfilerSummaryTree.expandToThreshold(0.05))(data) +
-          SamplingProfiler.print(filter = filter, length = 60)(data)
-        }
-      }
-      else if(!profilingFlat)
-        SamplingProfiler.printTree(
-          filter = filter,
-          expand = ProfilerSummaryTree.expandToThreshold(0.05)) _
-      else SamplingProfiler.print(filter = filter, length = 60) _
-    val profiler = 
-      new SamplingProfiler(interval = interval, print = printer)
+    val profiler = getProfiler
 
     // Run the check
     val start = java.lang.System.nanoTime

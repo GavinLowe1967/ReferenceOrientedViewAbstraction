@@ -209,6 +209,8 @@ object Unification{
   def combine(pre: Concretization, post: Concretization, cv: ComponentView,
     princRenames: List[Identity])
       : CombineResult = {
+    require(singleRef || princRenames.isEmpty)
+    // Profiler.count("princRenames"+princRenames.length) // norm 0, sometimes 1
     if(false) println(s"combine($pre, $post,\n  $cv, $princRenames)")
     val servers = pre.servers; require(servers == cv.servers)
     val preCpts = pre.components; val postCpts = post.components
@@ -224,7 +226,7 @@ object Unification{
 // IMPROVE: following slows down lockFreeQueue a lot -- increases # return
 // values by factor of 3.  I think this is necessary only when there's a cross
 // reference (?)
-    if(/* false && */ singleRef)     // Add params of pre.cpts that are not in servers
+    if(singleRef)     // Add params of pre.cpts that are not in servers
       for(cpt <- preCpts) cpt.addIdsToBitMap(newServerIds, servers.numParams)
     // Bit map indicating which components have changed state.
     val changedStateBitMap = getChangedStateBitMap(preCpts, postCpts)
@@ -272,16 +274,20 @@ object Unification{
     var ix = 0
     while(ix < allUs.length){
       val (map1, unifs) = allUs(ix); ix += 1
+      // Does this create a cross reference from a secondary component to the
+      // principal of cv (with singleRef).
+      val acquiredCrossRef = princRenames.contains(map1(cvpf)(cvpid))
       // Do we need to consider this combination?  Either (1) the servers
       // changed, and either (a) we have some unification, or (b) this is the
       // first time for no unification with this combination of cv,
       // pre.servers and post.servers; or (2) the servers are unchanged but we
       // unify with a component that does change state.
       val sufficientUnif = isSufficientUnif(
-        changedServers, unifs, post.servers, cv, changedStateBitMap)
+        changedServers, unifs, post.servers, cv, changedStateBitMap, acquiredCrossRef)
       // if(false) 
       //   println(s"combine: unifs = $unifs, sufficientUnif = $sufficientUnif")
-      if(sufficientUnif) extendUnif(map1, unifs)
+      if(sufficientUnif /* || princRenames.contains(map1(cvpf)(cvpid)) */ ) 
+        extendUnif(map1, unifs)
       // Try renaming cv.principal to each id in princRenames
       if(map1(cvpf)(cvpid) < 0) 
         for(newPId <- princRenames; if !map1(cvpf).contains(newPId)){
@@ -303,13 +309,21 @@ object Unification{
     * (1) the servers changed, and either (a) we have some unification, or (b)
     * this is the first time for no unification with this combination of cv,
     * pre.servers and post.servers; or (2) the servers are unchanged but we
-    * unify with a component that does change state. */
+    * unify with a component that does change state. 
+    *  **** Different for singleRef
+    * @param changedServers did the servers change state?
+    * @paral unifs the list of unifications made.
+    * @param postServers the post-state of the servers.
+    * @param cv the view with which we're unifying.
+    * @param changedStateBitMap a bitmap showing which components changed state 
+    * in the transition. */
   @inline private def isSufficientUnif(
     changedServers: Boolean, unifs: UnificationList, postServers: ServerStates, 
-    cv: ComponentView, changedStateBitMap: Array[Boolean])
+    cv: ComponentView, changedStateBitMap: Array[Boolean], 
+    acquiredCrossRef: Boolean)
       : Boolean = {
 // IMPROVE: why is the case below necessary?
-    if(singleRef) true // changedServers || unifs.nonEmpty
+    if(singleRef)  changedServers || unifs.nonEmpty || acquiredCrossRef
     else if(changedServers)
       unifs.nonEmpty || effectOnChangedServersCache.add((cv, postServers))
     else{

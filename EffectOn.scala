@@ -81,6 +81,15 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
       var newComponentsList =
         StateArray.makePostComponents(newPrinc, postCpts, cpts)
+      // for(newComponents <- newComponentsList){// IMPROVE
+      //   val nv = Remapper.mkComponentView(post.servers, newComponents)
+      //   if(singleRef && !views.contains(nv) && !nextNewViews.contains(nv)) 
+      //     assert(pre.servers != post.servers || unifs.nonEmpty,
+      //       s"\n$pre -${system.showEvent(e)}-> $post\n"+
+      //         s"  with unifications $unifs\nc2Refs = $c2Refs\n"+
+      //         s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+      //         s"  --> ${View.show(post.servers, newComponents)} == $nv")
+      // }
       // If singleRef and the secondary component of post has gained a
       // reference to newPrinc, we also build views corresponding to those two
       // components.
@@ -88,21 +97,24 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         newComponentsList ::= Array(postCpts(i), newPrinc)
       for(newComponents <- newComponentsList){
         val nv = Remapper.mkComponentView(post.servers, newComponents)
-        // newViewCount += 1        // Mostly with unifs.nonEmpty
+        Profiler.count("newViewCount")       // Mostly with unifs.nonEmpty
         if(!views.contains(nv)){
+          // if(singleRef && !nextNewViews.contains(nv)) // IMPROVE
+          //   assert(pre.servers != post.servers || unifs.nonEmpty ||
+          //     newComponents(1) == newPrinc,
+          //     s"\n$pre -${system.showEvent(e)}-> $post\n"+
+          //       s"  with unifications $unifs\nc2Refs = $c2Refs\n"+
+          //       s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+          //       s"  --> ${View.show(post.servers, newComponents)} == $nv")
           if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){
-// IMPROVE: the assertion below fails with the lock-free queue, but that is
-// because we are allowing too many induced transitions, in particular where
-// the secondary component of the new view corresponds to a missing view in
-// cv.
-            if(false && singleRef) 
-              assert(pre.servers != post.servers || unifs.nonEmpty || 
-                newComponents(1) == newPrinc,
-                s"\n$pre -${system.showEvent(e)}-> $post\n"+
-                  s"  with unifications $unifs\nc2Refs = $c2Refs\n"+
-                  s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-                  s"  --> ${View.show(post.servers, newComponents)} == $nv")
-            // addedViewCount += 1
+            // if(singleRef) // IMPROVE
+            //   assert(pre.servers != post.servers || unifs.nonEmpty || 
+            //     newComponents(1) == newPrinc,
+            //     s"\n$pre -${system.showEvent(e)}-> $post\n"+
+            //       s"  with unifications $unifs\nc2Refs = $c2Refs\n"+
+            //       s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+            //       s"  --> ${View.show(post.servers, newComponents)} == $nv")
+            Profiler.count("addedViewCount")
             if(verbose /* || newComponents(0) != newPrinc */) println(
               s"$pre -${system.showEvent(e)}-> $post\n"+
                 s"  with unifications $unifs\n"+
@@ -126,7 +138,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
             nv.setCreationInfoIndirect(
               pre, cpts, cv, e, post, newComponents, ply)
           }
-        } // end of if(!sysAbsViews.contains(nv))
+        } // end of if(!views.contains(nv))
       } // end of for loop
     } // end of while loop
   }
