@@ -7,6 +7,9 @@ object MyStateMap{
 
   // private var renewed = false
 
+  /** Reset the stateStore.  Necessary when checking multiple files. */
+  def reset = stateStore = new InitialisationStateHashMap
+
   /* We initially use a MyStateHashMap, but later transfer values into a
    * MyTrieStateMap (in renewStateStore).  This is because the latter
    * makes assumptions about various data structures being

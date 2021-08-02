@@ -81,15 +81,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
       var newComponentsList =
         StateArray.makePostComponents(newPrinc, postCpts, cpts)
-      // for(newComponents <- newComponentsList){// IMPROVE
-      //   val nv = Remapper.mkComponentView(post.servers, newComponents)
-      //   if(singleRef && !views.contains(nv) && !nextNewViews.contains(nv)) 
-      //     assert(pre.servers != post.servers || unifs.nonEmpty,
-      //       s"\n$pre -${system.showEvent(e)}-> $post\n"+
-      //         s"  with unifications $unifs\nc2Refs = $c2Refs\n"+
-      //         s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-      //         s"  --> ${View.show(post.servers, newComponents)} == $nv")
-      // }
       // If singleRef and the secondary component of post has gained a
       // reference to newPrinc, we also build views corresponding to those two
       // components.
@@ -99,9 +90,10 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         val nv = Remapper.mkComponentView(post.servers, newComponents)
         Profiler.count("newViewCount")       // Mostly with unifs.nonEmpty
         if(!views.contains(nv)){
-          // if(singleRef && !nextNewViews.contains(nv)) // IMPROVE
-          //   assert(pre.servers != post.servers || unifs.nonEmpty ||
-          //     newComponents(1) == newPrinc,
+          // if(singleRef && !nextNewViews.contains(nv) && 
+          //   (newComponents.length == 1 || newComponents(1) != newPrinc) && 
+          //   pre.servers != post.servers && unifs.isEmpty)
+          //   assert(Unification.eOCSCContains(cv, post.servers),
           //     s"\n$pre -${system.showEvent(e)}-> $post\n"+
           //       s"  with unifications $unifs\nc2Refs = $c2Refs\n"+
           //       s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+

@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
   * @param aShapes the shapes of abstractions.
   * @param cShapes the shapes of concretizations. */
 class Checker(system: SystemP.System){
+
   /** Exception thrown to indicate that an error transition has been found.
     * This is caught within process. */
   class FoundErrorException extends Exception
@@ -19,6 +20,8 @@ class Checker(system: SystemP.System){
   protected var sysAbsViews: ViewSet = null
   // Note: in various places, we iterate over sysAbsViews.  We should avoid
   // adding new views to the set while that is going on.
+
+  def numViews = sysAbsViews.size
 
   /** The new views to be considered on the next ply. */
   protected var nextNewViews: MyHashSet[ComponentView] = null
