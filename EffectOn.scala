@@ -32,7 +32,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   import Unification.UnificationList //  = List[(Int,Int)]
 
-  private val Backtrack = false // backtrack changes 2021.05.08 
+  private val Backtrack = Unification.Backtrack // false // backtrack changes 2021.05.08 
 
   /** The effect of the transition pre -e-> post on cv.  Create extra views
     * caused by the way the transition changes cv, and add them to
@@ -54,8 +54,15 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     val c2Refs = 
       if(singleRef) getCrossReferences(preCpts, postCpts, cv.principal.family)
       else List[(Int,Identity)]()
-    // All remappings of cv to unify with pre, together with the list of
-    // indices of unified components.
+    val processInducedInfo1 = processInducedInfo(
+      pre, preCpts, e, post, postCpts, cv, c2Refs, ply, nextNewViews) _
+    // inducedInfo: ArrayBuffer[(Array[State], UnificationList) is all
+    // remappings of cv to unify with pre for primary induced transitions,
+    // together with the list of indices of unified
+    // components. secondaryInducedArray: Buffer[(Array[State],
+    // UnificationList, Int) is similar for secondary induced transitions,
+    // where the final component is the index of preCpts/postCpts that gains a
+    // reference to cv.principal.
     val (inducedInfo, secondaryInduced)
         : (ArrayBuffer[(Array[State], UnificationList)],
            ArrayBuffer[(Array[State], UnificationList, Int)]) =
@@ -65,23 +72,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     while(index < inducedInfo.length){
       Profiler.count("EffectOn step")
       val (cpts, unifs) = inducedInfo(index); index += 1
-      if(verbose) println("cpts = "+StateArray.show(cpts))
-      if(debugging){
-        StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
-      }
-      // If singleRef, identities of components referenced by both principals,
-      // but not included in the views, and such that there is no way of
-      // instantiating them consistently within sysAbsViews.
-      // val commonMissing: List[ProcessIdentity] = 
-      val missingCommons: List[MissingCommon] = 
-        if(singleRef && !pre.components.sameElements(cv.components)) 
-          checkCompatibleMissing(pre.servers, preCpts, cpts)
-        else List()
-      // If singleRef and there are references between components from pre and
-      // cv, then check that that combination is possible in sysAbsViews:
-      // those that are missing.
-      val missing: List[ComponentView] =
-        if(singleRef) missingCrossRefs(pre.servers, cpts, preCpts) else List() 
+
       // What does cpts(0) get mapped to?  IMPROVE: we don't need all of unifs
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
       val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
@@ -90,43 +81,97 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       // If singleRef and the secondary component of post has gained a
       // reference to newPrinc, we also build views corresponding to those two
       // components.
-      if(Backtrack) for((i,id) <- c2Refs; if id == newPrinc.ids(0))
+      if(Backtrack) for((i,id) <- c2Refs; if id == newPrinc.ids(0)){
         newComponentsList ::= Array(postCpts(i), newPrinc)
-      for(newComponents <- newComponentsList){
-        val nv = Remapper.mkComponentView(post.servers, newComponents)
-        Profiler.count("newViewCount")       // Mostly with unifs.nonEmpty
-        if(!views.contains(nv)){
-          if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){
-            Profiler.count("addedViewCount")
-            if(verbose) println(
-              s"$pre -${system.showEvent(e)}-> $post\n"+
-                s"  with unifications $unifs\n"+
-                s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-                s"  --> ${View.show(post.servers, newComponents)} == $nv")
-            nv.setCreationInfoIndirect(
-              pre, cpts, cv, e, post, newComponents, ply)
-            if(!nv.representableInScript){
-              println("Not enough identities in script to combine transition\n"+
-                s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
-              sys.exit
-            }
-          } // end of if(missing.isEmpty && nextNewViews.add(nv))
-          else if(missing.nonEmpty || missingCommons.nonEmpty){
-            // Note: we create nv eagerly, even if missing is non-empty: this
-            // might not be the most efficient approach.  Note also that the
-            // missingCommons may be shared.
-            effectOnStore.add(missing, missingCommons, nv)
-            // if(verbose) println(s"Storing $missing, $missingCommons -> $nv")
-            nv.setCreationInfoIndirect(
-              pre, cpts, cv, e, post, newComponents, ply)
-          }
-        } // end of if(!views.contains(nv))
-      } // end of for loop
+        // println(s"$pre -> $post\non $cv induces secondary: "+
+        //   StateArray.show(Array(postCpts(i), newPrinc)))
+      }
+
+      processInducedInfo1(cpts, unifs, newComponentsList)
     } // end of while loop
+
+    if(!Backtrack) for((cpts, unifs, k) <- secondaryInduced){
+      // println(s"secondaryInduced: ${StateArray.show(cpts)}, $unifs, $k")
+      // What does cpts(0) get mapped to?  IMPROVE: repeated code
+      var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
+      val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
+      val newComponentsList = List(Array(postCpts(k), newPrinc))
+      processInducedInfo1(cpts, unifs, newComponentsList)
+      // processSecondaryInducedInfo(cpts, unifs, k)
+    }
   }
 
+  /** Create induced transition corresponding to cv.components renamed to cpts
+    * to be accordant with pre, with unifications unifs.
+    * 
+    * This function would live better inside apply; but that function is too
+    * large.  Other parameters are as there. */
   @inline private 
-  def processInducedInfo(cpts: Array[State], unifs: UnificationList) = ???
+  def processInducedInfo(
+    pre: Concretization, preCpts: Array[State], e: EventInt, 
+    post: Concretization, postCpts: Array[State], 
+    cv: ComponentView, c2Refs: List[(Int,Identity)], 
+    ply: Int, nextNewViews: MyHashSet[ComponentView])
+    (cpts: Array[State], unifs: UnificationList, 
+      newComponentsList: List[Array[State]])
+  : Unit = {
+    if(verbose) println("cpts = "+StateArray.show(cpts))
+    if(debugging){
+      StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
+    }
+    // If singleRef, identities of components referenced by both principals,
+    // but not included in the views, and such that there is no way of
+    // instantiating them consistently within sysAbsViews.
+    val missingCommons: List[MissingCommon] =
+      if(singleRef && !pre.components.sameElements(cv.components))
+        checkCompatibleMissing(pre.servers, preCpts, cpts)
+      else List()
+    // If singleRef and there are references between components from pre and
+    // cv, then check that that combination is possible in sysAbsViews:
+    // those that are missing.
+    val missing: List[ComponentView] =
+      if(singleRef) missingCrossRefs(pre.servers, cpts, preCpts) else List()
+    // What does cpts(0) get mapped to?  IMPROVE: we don't need all of unifs
+    // var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
+    // val newPrinc = if(us.isEmpty) cpts(0) else postCpts(us.head._2)
+    // var newComponentsList =
+    //   StateArray.makePostComponents(newPrinc, postCpts, cpts)
+    // // If singleRef and the secondary component of post has gained a
+    // // reference to newPrinc, we also build views corresponding to those two
+    // // components.
+    // if(Backtrack) for((i,id) <- c2Refs; if id == newPrinc.ids(0))
+    //   newComponentsList ::= Array(postCpts(i), newPrinc)
+    for(newComponents <- newComponentsList){
+      val nv = Remapper.mkComponentView(post.servers, newComponents)
+      Profiler.count("newViewCount")       // Mostly with unifs.nonEmpty
+      if(!views.contains(nv)){
+        if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){
+          Profiler.count("addedViewCount")
+          if(verbose) println(
+            s"$pre -${system.showEvent(e)}-> $post\n"+
+              s"  with unifications $unifs\n"+
+              s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+              s"  --> ${View.show(post.servers, newComponents)} == $nv")
+          nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
+          if(!nv.representableInScript){
+            println("Not enough identities in script to combine transition\n"+
+              s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+            sys.exit
+          }
+        } // end of if(missing.isEmpty && nextNewViews.add(nv))
+        else if(missing.nonEmpty || missingCommons.nonEmpty){
+          // Note: we create nv eagerly, even if missing is non-empty: this
+          // might not be the most efficient approach.  Note also that the
+          // missingCommons may be shared.
+          effectOnStore.add(missing, missingCommons, nv)
+          // if(verbose) println(s"Storing $missing, $missingCommons -> $nv")
+          nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
+        }
+      } // end of if(!views.contains(nv))
+    } // end of for loop
+  }
+
+
 
 // IMPROVE: in the calculation of c2Refs, I think we can omit params of
 // pre.servers other than cv.principal's identity.
