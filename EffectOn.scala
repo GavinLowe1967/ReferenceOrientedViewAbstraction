@@ -30,6 +30,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     * subsequently tries to complete the transitions.  */
   private val effectOnStore: EffectOnStore = new SimpleEffectOnStore
 
+  import Unification.UnificationList //  = List[(Int,Int)]
+
   /** The effect of the transition pre -e-> post on cv.  Create extra views
     * caused by the way the transition changes cv, and add them to
     * nextNewViews. */
@@ -52,8 +54,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       else List[(Int,Identity)]()
     // All remappings of cv to unify with pre, together with the list of
     // indices of unified components.
-    val newCpts: ArrayBuffer[(Array[State], List[(Int,Int)])] =
-      Unification.combine(pre, post, cv, c2Refs.map(_._2)) // IMPROVE 
+    val (newCpts, _): (ArrayBuffer[(Array[State], UnificationList)],
+                       ArrayBuffer[(Array[State], UnificationList, Int)]) =
+      Unification.combine(pre, post, cv, c2Refs /*.map(_._2)*/) // IMPROVE 
     var cptIx = 0
 
     while(cptIx < newCpts.length){

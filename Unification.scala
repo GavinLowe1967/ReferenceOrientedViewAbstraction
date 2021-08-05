@@ -40,7 +40,7 @@ object Unification{
 
   /** The result of a unification, giving the indices of components that have
     * been unified. */ 
-  private type UnificationList = List[(Int,Int)]
+  type UnificationList = List[(Int,Int)]
 
   type AllUnifsResult =  ArrayBuffer[(RemappingMap, UnificationList)]
 
@@ -201,6 +201,13 @@ object Unification{
   // def eOCSCContains(cv: ComponentView, postServers: ServerStates) = 
   //   effectOnChangedServersCache.contains((cv, postServers))
 
+  // Backtracking flag for current updates (2021.08.05). 
+  val Backtrack = true // false
+
+  /** The part of the result corresponding to secondary induced transitions.
+    * The Int field is the index of the component in pre/post that gains
+    * access to cv.principal. */
+  type CombineResult2 = ArrayBuffer[(Array[State], UnificationList, Int)]
 
   /** All ways of unifying pre and cv.  
     * 
@@ -225,10 +232,11 @@ object Unification{
 // pre.components.
 
   def combine(pre: Concretization, post: Concretization, cv: ComponentView,
-    princRenames: List[Identity])
-      : CombineResult = {
+    c2Refs : List[(Int,Identity)] /* princRenames: List[Identity] */)
+      : (CombineResult, CombineResult2) = {
     // IMPROVE: some of the initial calculations depends only on pre and post, so
     // could be stored with the transition.
+    val princRenames = c2Refs.map(_._2)
     require(singleRef || princRenames.isEmpty)
     // Profiler.count("princRenames"+princRenames.length) // norm 0, sometimes 1
     if(false) println(s"combine($pre, $post,\n  $cv, $princRenames)")
@@ -246,12 +254,11 @@ object Unification{
 // IMPROVE: following slows down lockFreeQueue a lot -- increases # return
 // values by factor of 3.  I think this is necessary only when there's a cross
 // reference (?).
-// FIXME: I think it should be postCpts.
-    if(singleRef)     // Add params of pre.cpts that are not in servers
-      for(cpt <- preCpts) cpt.addIdsToBitMap(newServerIds, servers.numParams)
+    if(Backtrack && singleRef) // Add params of post.cpts that are not in servers
+      for(cpt <- postCpts) cpt.addIdsToBitMap(newServerIds, servers.numParams)
     // Bit map indicating which components have changed state.
     val changedStateBitMap = getChangedStateBitMap(preCpts, postCpts)
-    val result = new CombineResult
+    val result = new CombineResult; val result2 = new CombineResult2
 
     // Get all ways of unifying pre and cv. 
     val allUs = allUnifs(map0, pre.components, cv.components)
@@ -286,6 +293,46 @@ object Unification{
       StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
       combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
         cv.components, result)
+
+      /* Build remappings for secondary induced transitions corresponding to
+       * component k acquiring a reference to cv.principal in parameter id. */
+      def mkSecondaryRemaps(k: Int, id: Int) = {
+        require(map1(cvpf)(cvpid) == id)
+        // For each other parameter of postCpts(k), if not in ran map1, add to
+        // otherArgs, and to otherArgsBitMap if not an identity in postCpts.
+        for((t,id1) <- postCpts(k).processIdentities)
+          if(id1 != id && !contains(map1(t),id1) && !contains(otherArgs(t),id1)){
+            otherArgs(t) ::= id1
+            if(StateArray.findIndex(postCpts, t, id1) < 0)
+              otherArgsBitMap(t)(id1) = true
+          }
+        val tempRes = new CombineResult
+        combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
+          cv.components, tempRes)
+        for((newSts, us) <- tempRes){ // IMPROVE
+          assert(us eq unifs)
+          // if(!cv.components.sameElements(newSts)){
+          //   println(s"In $pre -> $post,\ncomponent $k gains reference to $cv")
+          //   println("Produces "+StateArray.show(newSts))
+          // }
+          result2 += ((newSts, us, k))
+        }
+      } // end of mkSecondaryRemaps
+
+      // Now find remappings for secondary induced transitions.  Find whether
+      // the secondary component that changes state can gain a reference to
+      // cv.principal.
+      if(singleRef){
+        for((k,id) <- c2Refs){
+          assert(changedStateBitMap(k))
+          if(map1(cvpf)(cvpid) == id) mkSecondaryRemaps(k, id)
+          else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), id)){
+            // Consider mapping cvpid to id
+            map1(cvpf)(cvpid) = id; mkSecondaryRemaps(k, id)
+            map1(cvpf)(cvpid) = -1 // backtrack
+          }
+        }
+      }
     } // end of extendUnif
 
     var ix = 0
@@ -309,14 +356,14 @@ object Unification{
         //   println(s"$pre -> $post;\n$cv; $unifs; $inCache")
       }
       // Try renaming cv.principal to each id in princRenames
-      if(map1(cvpf)(cvpid) < 0) 
+      if(Backtrack && map1(cvpf)(cvpid) < 0) 
         for(newPId <- princRenames; if !map1(cvpf).contains(newPId)){
           assert(singleRef)
           map1(cvpf)(cvpid) = newPId; extendUnif(map1, unifs)
       }
     } // end of while loop
 
-    result
+    (result, result2)
   }
 // IMPROVE: do we need all of unifs?
 // IMPROVE, try to identify second case for sufficientUnifs within allUnifs,

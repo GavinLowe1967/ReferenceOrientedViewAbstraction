@@ -1,6 +1,6 @@
 In Unification.combine, return two results.
 
-1. A Combineresult, as present, but ignoring princRenames.
+1. A Combine.result, as present, but ignoring princRenames.
 
 2. For each choice of unifs, for each way of mapping cv.principal.id to match
 a newly acquired parameter of a secondary component c that changes state, add
@@ -9,7 +9,7 @@ c in post.  Return (remapped state, unifs, post-state of c).
 
 In EffectOn, treat above results as follows:
 
-1. At present, but without the contribution from c2Refs, so without adding
+1(a). At present, but without the contribution from c2Refs, so without adding
 *all* parameters of pre.cpts to newServerIds.
 
 2. Only as with c2Refs, for the relevant secondary component (which is the
