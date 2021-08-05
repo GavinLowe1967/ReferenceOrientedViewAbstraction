@@ -99,22 +99,28 @@ object VA{
     }
   }
 
+  // Test suite: list of filenames and expected number of states; first for
+  // full views then for singleRef.
+  val testSuite =  List(
+    ("CSP/lockFreeQueue.csp", 2272), ("CSP/TreiberStack.csp", 1653),
+    ("CSP/lockBasedStack.csp", 302), ("CSP/lockBasedQueue.csp", 556)
+  )
   val srTestSuite = List(
     ("CSP/lockFreeQueue.csp", 2210), ("CSP/TreiberStack.csp", 1072),
     ("CSP/lockBasedStack.csp", 294), ("CSP/lockBasedQueue.csp", 553)
   )
 
+  /** Run a test suite. */
   def runTestSuite() = {
-    assert(singleRef)
-    for((fname, states) <- srTestSuite){
+    val theTestSuite = if(singleRef) srTestSuite else testSuite
+    for((fname, states) <- theTestSuite){
       MyStateMap.reset; RemapperP.Unification.reset
       println("********* "+fname)
       val states1 = run(fname)
-      assert(states == states1, 
+      assert(states == states1,
         s"$fname: expected $states states but found $states1.")
     }
   }
-
 
   /** Main function. */
   def main(args: Array[String]) = {

@@ -112,6 +112,9 @@ object Unification{
   /** Bit map, indexed by process identities. */
   private type BitMap = Array[Array[Boolean]]
 
+  /** Result returned from combine(pre,...,cv).  Each entry represents a way of
+    * remapping cv, paired with a UnificationList that contains (j,i) whenever
+    * cv.components(j) unifies with pre.components(i). */
   type CombineResult = ArrayBuffer[(Array[State], UnificationList)]
 
   /** All ways of remapping cpts, consistent with map.  Parameters not in dom
@@ -186,7 +189,10 @@ object Unification{
     * result with no unifications.  Note that we don't need to record
     * pre.servers explicitly, because it equals cv.servers. */ 
   private[RemapperP] val effectOnChangedServersCache = 
-    new BasicHashSet[(ComponentView, ServerStates)]
+    new BasicHashSet[(ComponentView, ServerStates)] 
+// FIXME: remove
+  // private[RemapperP] val effectOnChangedServersCacheXXX = 
+  //   new BasicHashSet[(ComponentView, ServerStates)]
 
   /** Reset effectOnChangedServersCache.  Necessary when performing multiple
     * checks. */
@@ -212,11 +218,17 @@ object Unification{
     * 
     * We suppress values that won't give a new view in effectOn.   
     * 
-    * @return remapped state, paired with a ReunificationList that contains
+    * @return remapped state, paired with a UnificationList that contains
     * (j,i) whenever cv.components(j) unifies with pre.components(i).  */
+
+// IMPROVE comment: at present, if singleRef also remaps to all params in
+// pre.components.
+
   def combine(pre: Concretization, post: Concretization, cv: ComponentView,
     princRenames: List[Identity])
       : CombineResult = {
+    // IMPROVE: some of the initial calculations depends only on pre and post, so
+    // could be stored with the transition.
     require(singleRef || princRenames.isEmpty)
     // Profiler.count("princRenames"+princRenames.length) // norm 0, sometimes 1
     if(false) println(s"combine($pre, $post,\n  $cv, $princRenames)")
@@ -233,7 +245,8 @@ object Unification{
       ServerStates.newParamsBitMap(servers, post.servers)
 // IMPROVE: following slows down lockFreeQueue a lot -- increases # return
 // values by factor of 3.  I think this is necessary only when there's a cross
-// reference (?)
+// reference (?).
+// FIXME: I think it should be postCpts.
     if(singleRef)     // Add params of pre.cpts that are not in servers
       for(cpt <- preCpts) cpt.addIdsToBitMap(newServerIds, servers.numParams)
     // Bit map indicating which components have changed state.
@@ -288,7 +301,13 @@ object Unification{
       // unify with a component that does change state.
       val sufficientUnif = isSufficientUnif(changedServers, unifs, post.servers,
         cv, changedStateBitMap, acquiredCrossRef) // || changedServers && princRenames.nonEmpty
-      if(sufficientUnif) extendUnif(map1, unifs)
+      if(sufficientUnif){
+        extendUnif(map1, unifs)
+        // val inCache = effectOnChangedServersCacheXXX.contains((cv, post.servers))
+        // if(! isSufficientUnifXXX(changedServers, unifs, post.servers,
+        //   cv, changedStateBitMap, acquiredCrossRef))
+        //   println(s"$pre -> $post;\n$cv; $unifs; $inCache")
+      }
       // Try renaming cv.principal to each id in princRenames
       if(map1(cvpf)(cvpid) < 0) 
         for(newPId <- princRenames; if !map1(cvpf).contains(newPId)){
@@ -323,29 +342,55 @@ object Unification{
     cv: ComponentView, changedStateBitMap: Array[Boolean], 
     acquiredCrossRef: Boolean)
       : Boolean = {
-    if(singleRef){
-      if(acquiredCrossRef) true
-// IMPROVE:  case below?
-      else if(changedServers) true
-        // unifs.nonEmpty || effectOnChangedServersCache.add((cv, postServers))
-      else{
-        var us = unifs; var sufficientUnif = false
-        while(!sufficientUnif && us.nonEmpty){
-          sufficientUnif = changedStateBitMap(us.head._2); us = us.tail
-        }
-        sufficientUnif
-      }
-    }
-    else if(changedServers)
-      unifs.nonEmpty || effectOnChangedServersCache.add((cv, postServers))
-    else{
+    // Is there a unification with a component that changes state?
+    @inline def changingUnif = {
       var us = unifs; var sufficientUnif = false
       while(!sufficientUnif && us.nonEmpty){
         sufficientUnif = changedStateBitMap(us.head._2); us = us.tail
       }
       sufficientUnif
     }
+
+    if(singleRef){
+      if(acquiredCrossRef) true
+// IMPROVE:  case below?
+      else if(changedServers) true
+        // Following misses some views with lockFreeQueue
+        // unifs.nonEmpty || effectOnChangedServersCache.add((cv, postServers))
+      else // Is there a unification with a component that changes state?
+        changingUnif
+    } // end of if(singleRef)
+    else if(changedServers)
+      unifs.nonEmpty || effectOnChangedServersCache.add((cv, postServers))
+      // Note, this can't be strengthened to
+      // changingUnif || effectOnChangedServersCache.add((cv, postServers))
+      // If there are two different ways of performing unification with a 
+      // component that doesn't change state, this will find just one of them.
+    else // Is there a unification with a component that changes state?
+      changingUnif
   }
+
+  // // Alternative, incorrect version -- don't see why.  FIXME: remove
+  // @inline private def isSufficientUnifXXX(
+  //   changedServers: Boolean, unifs: UnificationList, postServers: ServerStates, 
+  //   cv: ComponentView, changedStateBitMap: Array[Boolean], 
+  //   acquiredCrossRef: Boolean)
+  //     : Boolean = {
+  //   // Is there a unification with a component that changes state?
+  //   def changingUnif = {
+  //     var us = unifs; var sufficientUnif = false
+  //     while(!sufficientUnif && us.nonEmpty){
+  //       sufficientUnif = changedStateBitMap(us.head._2); us = us.tail
+  //     }
+  //     sufficientUnif
+  //   }
+  //   assert(!singleRef)
+  //   if(changedServers)
+  //     changingUnif || effectOnChangedServersCacheXXX.add((cv, postServers))
+  //   else // Is there a unification with a component that changes state?
+  //     changingUnif
+  // }
+
 
   /** Bitmap showing which components changed state between preCpts and
     * postCpts. */

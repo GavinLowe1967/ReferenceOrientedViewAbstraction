@@ -86,6 +86,9 @@ package object ViewAbstraction{
     i < xs.length
   }
 
+  def contains[A](xs: List[A], x: A): Boolean = 
+    xs.nonEmpty && (xs.head == x || contains(xs.tail, x))
+
 
   /** Flatten (concat) a list of lists: more efficient than API version. */
   def flatten(xss: List[List[Int]]): List[Int] =

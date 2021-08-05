@@ -150,16 +150,30 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   def getCrossReferences(
     preCpts: Array[State], postCpts: Array[State], f: Family)
       : List[(Int,Identity)] = {
-    // Identities in pre: improve
-    val ids = preCpts.filter(c => c.family == f).map(_.ids(0))
-    var result = List[(Int,Identity)]() 
-    for(i <- 1 until preCpts.length; if preCpts(i) != postCpts(i)){
-      val c1 = postCpts(i); val c1Params = c1.ids
-      for(j <- 1 until c1Params.length; if c1.typeMap(j) == f){
-        val p = c1Params(j)
-        if(!isDistinguished(p) && !ids.contains(p)) result ::= (i, p)
+    require(singleRef)
+    // Identities of family f in pre: improve
+    // val ids = preCpts.filter(c => c.family == f).map(_.ids(0))
+    var ids = List[Identity](); var i = 0
+    while(i < preCpts.length){
+      val c = preCpts(i); i += 1; if(c.family == f) ids ::= c.ids(0)
+    }
+    var result = List[(Int,Identity)](); i = 1
+    while(i < preCpts.length){
+      if(preCpts(i) != postCpts(i)){
+        val c1 = postCpts(i); val c1Params = c1.ids; var j = 1
+        while(j < c1Params.length){
+          if(c1.typeMap(j) == f){
+            val p = c1Params(j)
+            // Check: non-distiguished, not an id in preCpts, new param in c1
+            if(!isDistinguished(p) && !contains(ids,p) && 
+                !preCpts(i).hasParam(f,p))
+              result ::= (i, p)
+          }
+          j += 1
+        } // end of inner while
       }
-      }
+      i += 1
+    } // end of outer while
     if(false) println(s"getCrossReferences: $result")
     result
   }
