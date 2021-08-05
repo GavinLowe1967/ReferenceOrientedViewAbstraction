@@ -32,6 +32,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   import Unification.UnificationList //  = List[(Int,Int)]
 
+  private val Backtrack = false // backtrack changes 2021.05.08 
+
   /** The effect of the transition pre -e-> post on cv.  Create extra views
     * caused by the way the transition changes cv, and add them to
     * nextNewViews. */
@@ -54,14 +56,15 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       else List[(Int,Identity)]()
     // All remappings of cv to unify with pre, together with the list of
     // indices of unified components.
-    val (newCpts, _): (ArrayBuffer[(Array[State], UnificationList)],
-                       ArrayBuffer[(Array[State], UnificationList, Int)]) =
-      Unification.combine(pre, post, cv, c2Refs /*.map(_._2)*/) // IMPROVE 
-    var cptIx = 0
+    val (inducedInfo, secondaryInduced)
+        : (ArrayBuffer[(Array[State], UnificationList)],
+           ArrayBuffer[(Array[State], UnificationList, Int)]) =
+      Unification.combine(pre, post, cv, c2Refs)
 
-    while(cptIx < newCpts.length){
+    var index = 0
+    while(index < inducedInfo.length){
       Profiler.count("EffectOn step")
-      val (cpts, unifs) = newCpts(cptIx); cptIx += 1
+      val (cpts, unifs) = inducedInfo(index); index += 1
       if(verbose) println("cpts = "+StateArray.show(cpts))
       if(debugging){
         StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
@@ -87,30 +90,15 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       // If singleRef and the secondary component of post has gained a
       // reference to newPrinc, we also build views corresponding to those two
       // components.
-      for((i,id) <- c2Refs; if id == newPrinc.ids(0))
+      if(Backtrack) for((i,id) <- c2Refs; if id == newPrinc.ids(0))
         newComponentsList ::= Array(postCpts(i), newPrinc)
       for(newComponents <- newComponentsList){
         val nv = Remapper.mkComponentView(post.servers, newComponents)
         Profiler.count("newViewCount")       // Mostly with unifs.nonEmpty
         if(!views.contains(nv)){
-          // if(singleRef && !nextNewViews.contains(nv) && 
-          //   (newComponents.length == 1 || newComponents(1) != newPrinc) && 
-          //   pre.servers != post.servers && unifs.isEmpty)
-          //   assert(Unification.eOCSCContains(cv, post.servers),
-          //     s"\n$pre -${system.showEvent(e)}-> $post\n"+
-          //       s"  with unifications $unifs\nc2Refs = $c2Refs\n"+
-          //       s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-          //       s"  --> ${View.show(post.servers, newComponents)} == $nv")
           if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){
-            // if(singleRef) // IMPROVE
-            //   assert(pre.servers != post.servers || unifs.nonEmpty || 
-            //     newComponents(1) == newPrinc,
-            //     s"\n$pre -${system.showEvent(e)}-> $post\n"+
-            //       s"  with unifications $unifs\nc2Refs = $c2Refs\n"+
-            //       s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-            //       s"  --> ${View.show(post.servers, newComponents)} == $nv")
             Profiler.count("addedViewCount")
-            if(verbose /* || newComponents(0) != newPrinc */) println(
+            if(verbose) println(
               s"$pre -${system.showEvent(e)}-> $post\n"+
                 s"  with unifications $unifs\n"+
                 s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
@@ -128,8 +116,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
             // might not be the most efficient approach.  Note also that the
             // missingCommons may be shared.
             effectOnStore.add(missing, missingCommons, nv)
-            if(verbose) println(s"Storing $missing, $missingCommons -> $nv")
-            //if(verbose) println(s"Storing $missing, $commonMissingTuples -> $nv")
+            // if(verbose) println(s"Storing $missing, $missingCommons -> $nv")
             nv.setCreationInfoIndirect(
               pre, cpts, cv, e, post, newComponents, ply)
           }
@@ -137,6 +124,10 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       } // end of for loop
     } // end of while loop
   }
+
+  @inline private 
+  def processInducedInfo(cpts: Array[State], unifs: UnificationList) = ???
+
 // IMPROVE: in the calculation of c2Refs, I think we can omit params of
 // pre.servers other than cv.principal's identity.
 // IMPROVE: could we have more simply achieved the effect of c2Refs by using
