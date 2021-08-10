@@ -197,9 +197,6 @@ object Unification{
     * checks. */
   def reset = effectOnChangedServersCache.clear
 
-  // Backtracking flag for current updates (2021.08.05). 
-  val Backtrack = false
-
   /** The part of the result corresponding to secondary induced transitions.
     * The Int field is the index of the component in pre/post that gains
     * access to cv.principal. */
@@ -211,22 +208,31 @@ object Unification{
     * in pre.servers; (2) if a unification of components is done, as required
     * by that unification; (3) otherwise either (a) to a parameter in
     * post.servers or the post-state of a unified component or the post state
-    * of a component to which cv.principal gains a reference, or (b) for the
-    * identity of the principal, an element of princRenames (when singleRef),
-    * or (c) the next fresh variable.  In each case, the remapping is
-    * restricted to be injective.  Also, under (a), identities cannot be
-    * mapped to identities in post.components, other than with unification.
-    * The choice under 3(a) is precisely those variables that will exist in
-    * the post-state of cv (and are distinct post symmetry reduction).  
+    * of a component to which cv.principal gains a reference, or (b) the next
+    * fresh value.  In each case, the remapping is restricted to be injective.
+    * Also, under (a), identities cannot be mapped to identities in
+    * post.components, other than with unification.  The choice under 3(a) is
+    * precisely those variables that will exist in the post-state of cv (and
+    * are distinct post symmetry reduction).  The first component of the
+    * returned result contains each such remapped state, paired with a
+    * UnificationList that contains (j,i) whenever cv.components(j) unifies
+    * with pre.components(i).
+    * 
+    * The second component of the result contains information concerning
+    * secondary induced transitions under singleRef.  In this case, c2Refs
+    * contains pairs (i,id) such that if post.components(i) gains a reference
+    * in parameter id to a value of the same type as cv.principal.  For each
+    * such (i,id), each parameter of cv is renamed as under (1) or (2) above;
+    * or (3) cv.principal.id is renamed to id; (4) every other parameter of
+    * cv.principal can be renamed to a parameter in post.servers or a
+    * parameter of post.components(i) or the next fresh value.  Each element
+    * of the second component of the result contains: the remapped state, the
+    * unification list (as above), and the parameter i.
     * 
     * We suppress values that won't give a new view in effectOn.   
     * 
     * @return remapped state, paired with a UnificationList that contains
     * (j,i) whenever cv.components(j) unifies with pre.components(i).  */
-
-// IMPROVE comment: at present, if singleRef also remaps to all params in
-// pre.components.
-
   def combine(pre: Concretization, post: Concretization, cv: ComponentView,
     c2Refs : List[(Int,Identity)])
       : (CombineResult, CombineResult2) = {
@@ -246,17 +252,12 @@ object Unification{
     // All params in post.servers but not in pre.servers, as a bitmap.
     val newServerIds: Array[Array[Boolean]] = 
       ServerStates.newParamsBitMap(servers, post.servers)
-// IMPROVE: following slows down lockFreeQueue a lot -- increases # return
-// values by factor of 3.  I think this is necessary only when there's a cross
-// reference (?).
-    if(Backtrack && singleRef) // Add params of post.cpts that are not in servers
-      for(cpt <- postCpts) cpt.addIdsToBitMap(newServerIds, servers.numParams)
     // Bit map indicating which components have changed state.
     val changedStateBitMap = getChangedStateBitMap(preCpts, postCpts)
     val result = new CombineResult; val result2 = new CombineResult2
     // Extending a particular way of unifying pre and cv.
     val extendUnif1 = extendUnif(
-      servers, preCpts, postCpts, cv, cvpf, cvpid, c2Refs, newServerIds,
+      servers, preCpts, postCpts, cv,  c2Refs, newServerIds,
       nextArg, changedStateBitMap, result, result2) _ 
 
     // Get all ways of unifying pre and cv. 
@@ -276,12 +277,6 @@ object Unification{
         cv, changedStateBitMap, acquiredCrossRef)
       if(c2Refs.nonEmpty || sufficientUnif) 
         extendUnif1(map1, unifs, sufficientUnif)
-      // Try renaming cv.principal to each id in princRenames
-      if(Backtrack && map1(cvpf)(cvpid) < 0) 
-        for(newPId <- princRenames; if !map1(cvpf).contains(newPId)){
-          assert(singleRef)
-          map1(cvpf)(cvpid) = newPId; extendUnif1(map1, unifs, true)
-      }
     } // end of while loop
 
     (result, result2)
@@ -339,39 +334,67 @@ object Unification{
       changingUnif
   }
 
-  /** Extend map1 with unifications unifs, to create all remappings of cv to be
-    * accordant with pre.  If sufficientUnif, add all results to result.  Also
-    * create renamings corresponding to secondary induced transitions, and add
-    * results to result2.
+  /** Extend map1 with unifications unifs, corresponding to transitions induced
+    * by the transition pre -> post (with pre = (servers, preCpts)) on cv.
+    * 
+    * If sufficientUnif, create representatives of all remappings of cv to be
+    * accordant with pre, and add to result.  Also create renamings
+    * corresponding to secondary induced transitions, and add results to
+    * result2.
+    * 
+    * Parameters must be remapped consistent with map1.  Parameters undefined
+    * in map1 can be mapped: (1) to a parameter in newServerIds; (2) a
+    * parameter of postCpts corresponding to a unification; (3) if the
+    * principal of cv is unified with a component that changes state and gains
+    * a reference to a component c, then the parameters of c; (4) a fresh
+    * value, given by nextArg.  Proviso: identities cannot be mapped to
+    * identities in preCpts.  Each remapped state and corresponding
+    * unifications is added to result.
+    * 
+    * In addition, with singleRef, result2 contains information about
+    * secondary induced transitions.  For each (k,p) in c2Refs:
+    * cv.principal.id gets mapped to p; and every other parameter gets mapped
+    * as in (1) or (4), or (5) to a parameter of post.components(k). Each
+    * remapped state, corresponding unifications and parameter k is added to
+    * result.
     * 
     * This function would live more happily inside combine; but that function
-    * is just too large.  All other parameters are as there.  */
+    * is just too large.  All other parameters are as there. 
+    * 
+    * @param unifs a representation of unifications between cv and pre.  
+    * @param map1 the mapping corresponding to unifs. 
+    * @param c2Refs if singleRef, pairs (k,p) such that the kth secondary
+    * component might obtain a reference to cv.princ in its parameter p.
+    * @param newServerIds bit map giving parameters in pre.servers but not 
+    * post.servers.
+    * @param nextArg a NextArgMap giving the next fresh value to use.
+    * @param changedStateBitMap a bit map showing which components changed state
+    * in the transition. */
   @inline private def extendUnif(
     servers: ServerStates, preCpts: Array[State], postCpts: Array[State], 
-    cv: ComponentView, cvpf: Family, cvpid: Identity, 
-    c2Refs: List[(Int,Identity)],
+    cv: ComponentView, c2Refs: List[(Int,Identity)],
     newServerIds: Array[Array[Boolean]], nextArg: NextArgMap, 
     changedStateBitMap: Array[Boolean],
     result: CombineResult, result2: CombineResult2)
     (map1: RemappingMap, unifs: UnificationList, sufficientUnif: Boolean)
-  = {
+      : Unit = {
     if(debugging) assert(Remapper.isInjective(map1), Remapper.show(map1))
+    val (cvpf, cvpid) = cv.principal.componentProcessIdentity
     // Create OtherArgMap containing all values not in ran map1 or
-    // pre.servers, but (1) in post.servers; or (2) in post.cpts for a
-    // unified component or a component to which cv.principal gains a
-    // reference.  newServerIds satisfies (1).
+    // pre.servers, but (1) in post.servers; or (2) in post.cpts for a unified
+    // component or a component to which cv.principal gains a reference.
+    // newServerIds satisfies (1).
     val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
-    // Add parameters of post.components corresponding to unifs, not shared
+    // (2) Add parameters of post.components corresponding to unifs, not shared
     // with servers.
     while(us.nonEmpty){
       val (j, i) = us.head; us = us.tail
       postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.numParams)
-      // If this is the unification of the principal of cv, which changes
+      // (3) If this is the unification of the principal of cv, which changes
       // state and gains a reference to another component c, include the
       // parameters of c from postCpts.
-      if(!singleRef && j == 0 && changedStateBitMap(i)) addIdsFromNewRef(
+      if(j == 0 && changedStateBitMap(i)) addIdsFromNewRef(
         otherArgsBitMap, servers.numParams, preCpts, postCpts, i)
-// IMPROVE: think about the case with singleRef
     }
     // Remove values in ran map1
     Remapper.removeFromBitMap(map1, otherArgsBitMap)
@@ -387,10 +410,10 @@ object Unification{
 
     /* Build remappings for secondary induced transitions corresponding to
      * component k acquiring a reference to cv.principal in parameter id. */
-    def mkSecondaryRemaps(k: Int, id: Int) = {
+    @inline def mkSecondaryRemaps(k: Int, id: Int) = {
       require(map1(cvpf)(cvpid) == id)
-      // For each other parameter of postCpts(k), if not in ran map1, add to
-      // otherArgs, and to otherArgsBitMap if not an identity in postCpts.
+      // (5) For each other parameter of postCpts(k), if not in ran map1, add
+      // to otherArgs, and to otherArgsBitMap if not an identity in postCpts.
       for((t,id1) <- postCpts(k).processIdentities)
         if(id1 != id && !contains(map1(t),id1) && !contains(otherArgs(t),id1)){
           otherArgs(t) ::= id1
@@ -406,14 +429,14 @@ object Unification{
     } // end of mkSecondaryRemaps
 
     // Remappings for secondary induced transitions.  Find whether the
-    // secondary component that changes state can gain a reference to
-    // cv.principal.
-    if(singleRef && !Backtrack) for((k,id) <- c2Refs){
+    // secondary component (index k) that changes state can gain a reference
+    // to cv.principal (in p).  (5) Map cv.principal.id to p.
+    if(singleRef) for((k,p) <- c2Refs){
       assert(changedStateBitMap(k))
-      if(map1(cvpf)(cvpid) == id) mkSecondaryRemaps(k, id)
-      else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), id)){
-        // Consider mapping cvpid to id (and backtrack)
-        map1(cvpf)(cvpid) = id; mkSecondaryRemaps(k, id); map1(cvpf)(cvpid) = -1
+      if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
+      else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p)){
+        // Consider mapping cvpid to p (and backtrack)
+        map1(cvpf)(cvpid) = p; mkSecondaryRemaps(k, p); map1(cvpf)(cvpid) = -1
       }
     }
   } // end of extendUnif
@@ -436,19 +459,16 @@ object Unification{
   @inline private def addIdsFromNewRef(
     otherArgsBitMap: Array[Array[Boolean]], serverNumParams: Array[Int],
     preCpts: Array[State], postCpts: Array[State], i: Int) = {
-// IMPROVE: think about the case with singleRef
     val prePids = preCpts(i).processIdentities
     val postPids = postCpts(i).processIdentities
     // Find which parameters are gained
     for(k <- 1 until postPids.length){
       val pid = postPids(k)
       if(!isDistinguished(pid._2) && !prePids.contains(pid)){
-        // println(s"gains access to $pid")
         val c = StateArray.find(pid, postCpts)
-        // I think assumptions imply pid must be in postCpts
-        assert(c != null) // , s"\npre = $pre,\npost = $post,\ncv = $cv")
-        // println(s"gains access to $c")
-        c.addIdsToBitMap(otherArgsBitMap, serverNumParams)
+        // Assumptions imply pid must be in postCpts, except under singleRef.
+        if(c != null) c.addIdsToBitMap(otherArgsBitMap, serverNumParams)
+        else assert(singleRef)
       }
     }
   }

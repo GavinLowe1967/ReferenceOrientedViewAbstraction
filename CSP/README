@@ -87,7 +87,7 @@ lazySetZ.csp: similar to above, but with process to force error trace.
 
 --------
 
-lazySet.csp: Each node has reference to locking thread.  Finds false error on
+lazySet3.csp: Each node has reference to locking thread.  Finds false error on
 step 29, 31,364 abstractions.  There seem to be two nodes containing B.  Added
 BTracker.
 

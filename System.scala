@@ -716,7 +716,7 @@ class System(fname: String) {
         // Profiler.count("getMaps: new") ~1.5%
         val (f,id) = pid; val map0 = servers.remappingMap
         val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
-        otherArgs(f) = otherArgs(f).filter(_ != id)
+        otherArgs(f) = removeFromList(otherArgs(f), id) // otherArgs(f).filter(_ != id)
         nextArg(f) = nextArg(f) max (id+1)
         val maps = Combiner.remapToId(map0, otherArgs, nextArg, st, id)
         // Create corresponding renamed States, and pair with maps
@@ -727,23 +727,30 @@ class System(fname: String) {
           if(!renamedState.representableInScript)
             throw UnrepresentableException(renamedState)
           // should have renamedState.ids in ran map.  IMPROVE: assertion only
-          if(false){
-            val ids1 = renamedState.ids; val typeMap = renamedState.typeMap
-            var j = 0
-            while(j < ids1.length){
-              assert( ids1(j) < 0 || map(typeMap(j)).contains(ids1(j)) ,
-                "\nmap = "+Remapper.show(map)+"undefined on = "+renamedState)
-              j += 1
-            }
-          }
-          if(!renamedState.representableInScript)
-            throw new UnrepresentableException(renamedState)
+          // if(false){
+          //   val ids1 = renamedState.ids; val typeMap = renamedState.typeMap
+          //   var j = 0
+          //   while(j < ids1.length){
+          //     assert( ids1(j) < 0 || map(typeMap(j)).contains(ids1(j)) ,
+          //       "\nmap = "+Remapper.show(map)+"undefined on = "+renamedState)
+          //     j += 1
+          //   }
+          // }
           mapStates(i) = (map, renamedState); i += 1
         }
         mapCache += (st, pid, servers, preCptsL) -> (mapStates, otherArgs)
         (mapStates, otherArgs)
     }
   }
+
+  /** xs with x removed. */
+  @inline def removeFromList(xs: List[Int], x: Int): List[Int] = 
+    if(xs.isEmpty) xs
+    else{
+      val y = xs.head
+      if(x == y){ /* assert(!contains(xs.tail, x));*/ xs.tail } 
+      else y::removeFromList(xs.tail, x)
+    }
 
   /** Check that renamedState agrees with preCpts on common components, and test
     * whether the remainder of cpts (excluding component i) can be unified

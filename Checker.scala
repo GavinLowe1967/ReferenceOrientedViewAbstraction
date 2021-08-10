@@ -442,7 +442,8 @@ class Checker(system: SystemP.System){
           }
         }
       }
-      if(false) // print newTransitions
+      if(true) // print newTransitions
+// IMPROVE
         println(
           (for((pre,e,post) <- newTransitions.iterator.toArray)
           yield s"$pre -${system.showEvent(e)}->\n  $post"
@@ -451,7 +452,8 @@ class Checker(system: SystemP.System){
         transitionTemplates.add(pre, post, id, e, inc)
       for(v <- nextNewViews.iterator) addView(v)
       ply += 1; newViews = newViewsAB.toArray; 
-      if(verbose) 
+      if(true || verbose) 
+// IMPROVE
         println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
       if(newViews.isEmpty) done.set(true)
       if(false && ply > 15) println(sysAbsViews.summarise1)

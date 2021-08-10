@@ -1,3 +1,33 @@
+*** EffectOn seems to be being called twice with the same arguments (at least
+with singleRef).
+
+I think that with singleRef we need to consider more remappings, maybe
+remapping to any parameter in pre.components (subject to normal constraints).
+Consider transition
+
+(fixed(N1,T1); 40(T1,N1), 13(N2,Null,N1)) -> (fixed'(N1); 38(T1), 13(N2,Null,N1))
+
+on
+
+(fixed(N1,T1); 110(T2,N2,N1), 36(N1,N2,Null))
+
+This should induce transition to
+
+(fixed'(N1); 110(T2,N2,N1), 36(N1,N2,Null))
+
+corresponding to mapping {T1->T1, T2->T2, N1->N1, N2->N2}, assuming existence
+of view
+
+(fixed(N1,T1); 13(N2,Null,N1), 36(N1,N2,Null))
+
+(to satisfy condition (b) of Def 13).  But at present it considers just the
+mapping {T1->T1, T2->T2, N1->N1, N2->N3} and fails to produce the induced
+transition because we are missing view
+
+(fixed(N1,T1); 13(N2,Null,N1), 36(N1,N3,Null))
+
+=========
+
 In Unification.combine, return two results.
 
 1. A Combine.result, as present, but ignoring princRenames.
