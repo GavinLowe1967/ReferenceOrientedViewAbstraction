@@ -400,7 +400,72 @@ object Unification{
     }
     // If singleRef, add parameters of preCpts.
     if(singleRef) 
-      for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
+      extendUnifSingleRef(
+        servers, preCpts, postCpts, cv, c2Refs, changedStateBitMap, 
+        result, result2, map1, otherArgsBitMap, nextArg, unifs, sufficientUnif)
+    //  for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
+    else{
+      // Remove values in ran map1
+      Remapper.removeFromBitMap(map1, otherArgsBitMap)
+      // Convert to OtherArgMap
+      val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
+      // Values that identities can be mapped to: values in otherArgs, but not
+      // identities of components in post; update otherArgsBitMap to record.
+      StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
+      // Create primary induced transitions.
+      assert(sufficientUnif)
+      combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
+        cv.components, result)
+
+      // /* Build remappings for secondary induced transitions corresponding to
+      //  * component k acquiring a reference to cv.principal in parameter id. */
+      // @inline def mkSecondaryRemaps(k: Int, id: Int) = {
+      //   require(map1(cvpf)(cvpid) == id)
+      //   // (5) For each other parameter of postCpts(k), if not in ran map1, add
+      //   // to otherArgs, and to otherArgsBitMap if not an identity in postCpts.
+      //   for((t,id1) <- postCpts(k).processIdentities)
+      //     if(id1 != id && !contains(map1(t),id1) && !contains(otherArgs(t),id1)){
+      //       otherArgs(t) ::= id1
+      //       if(StateArray.findIndex(postCpts, t, id1) < 0)
+      //         otherArgsBitMap(t)(id1) = true
+      //     }
+      //   val tempRes = new CombineResult
+      //   combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
+      //     cv.components, tempRes)
+      //   for((newSts, us) <- tempRes){ // IMPROVE
+      //     assert(us eq unifs); result2 += ((newSts, us, k))
+      //   }
+      // } // end of mkSecondaryRemaps
+
+      // // Remappings for secondary induced transitions.  Find whether the
+      // // secondary component (index k) that changes state can gain a reference
+      // // to cv.principal (in p).  (5) Map cv.principal.id to p.
+      // if(singleRef) for((k,p) <- c2Refs){
+      //   assert(changedStateBitMap(k))
+      //   if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
+      //   else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p)){
+      //     // Consider mapping cvpid to p (and backtrack)
+      //     map1(cvpf)(cvpid) = p; mkSecondaryRemaps(k, p); map1(cvpf)(cvpid) = -1
+      //   }
+      // }
+    }
+  } // end of extendUnif
+
+  /** Second part of extendUnif in the case of singleRef. 
+    */
+  @inline private def extendUnifSingleRef(
+    servers: ServerStates, preCpts: Array[State], postCpts: Array[State], 
+    cv: ComponentView, c2Refs: List[(Int,Identity)], 
+    changedStateBitMap: Array[Boolean], 
+    result: CombineResult, result2: CombineResult2,
+    map1: RemappingMap, otherArgsBitMap: Array[Array[Boolean]], 
+    nextArg: NextArgMap, unifs: UnificationList, sufficientUnif: Boolean)
+  = {
+    require(singleRef)
+    val (cvpf, cvpid) = cv.principal.componentProcessIdentity
+    // IMPROVE: improve following
+    for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
+
     // Remove values in ran map1
     Remapper.removeFromBitMap(map1, otherArgsBitMap)
     // Convert to OtherArgMap
@@ -433,10 +498,7 @@ object Unification{
       }
     } // end of mkSecondaryRemaps
 
-    // Remappings for secondary induced transitions.  Find whether the
-    // secondary component (index k) that changes state can gain a reference
-    // to cv.principal (in p).  (5) Map cv.principal.id to p.
-    if(singleRef) for((k,p) <- c2Refs){
+    for((k,p) <- c2Refs){
       assert(changedStateBitMap(k))
       if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
       else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p)){
@@ -444,7 +506,7 @@ object Unification{
         map1(cvpf)(cvpid) = p; mkSecondaryRemaps(k, p); map1(cvpf)(cvpid) = -1
       }
     }
-  } // end of extendUnif
+  }
 
 
   /** Bitmap showing which components changed state between preCpts and
