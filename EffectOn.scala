@@ -130,8 +130,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       if(!views.contains(nv)){
         if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){
           Profiler.count("addedViewCount")
-// IMPROVE
-          if(true || verbose) println(
+          if(verbose) println(
             s"$pre -${system.showEvent(e)}-> $post\n"+
               s"  with unifications $unifs\n"+
               s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+

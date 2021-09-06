@@ -83,7 +83,7 @@ object StateArray{
     * such.  IMPROVE: combine with Unification.find */
   @inline def find(pid: ProcessIdentity, cpts: Array[State]): State = {
     var i = 0
-    while(i < cpts.length && cpts(i).componentProcessIdentity != pid)
+    while(i < cpts.length && !cpts(i).hasPID(pid))
       i += 1
     if(i < cpts.length) cpts(i) else null
   }

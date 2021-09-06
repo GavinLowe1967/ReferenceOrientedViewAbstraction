@@ -442,8 +442,7 @@ class Checker(system: SystemP.System){
           }
         }
       }
-      if(true) // print newTransitions
-// IMPROVE
+      if(verbose) // print newTransitions
         println(
           (for((pre,e,post) <- newTransitions.iterator.toArray)
           yield s"$pre -${system.showEvent(e)}->\n  $post"
@@ -452,8 +451,7 @@ class Checker(system: SystemP.System){
         transitionTemplates.add(pre, post, id, e, inc)
       for(v <- nextNewViews.iterator) addView(v)
       ply += 1; newViews = newViewsAB.toArray; 
-      if(true || verbose) 
-// IMPROVE
+      if(verbose) 
         println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
       if(newViews.isEmpty) done.set(true)
       if(false && ply > 15) println(sysAbsViews.summarise1)
@@ -461,7 +459,8 @@ class Checker(system: SystemP.System){
 
     println("\nSTEP "+ply+"\n")
     if(singleRef && bound == Int.MaxValue) effectOn.sanityCheck
-    // if(singleRef) effectOn.report
+    // Following is expensive: IMPROVE: enable via switch
+    if(singleRef) effectOn.report
     if(showViews) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))

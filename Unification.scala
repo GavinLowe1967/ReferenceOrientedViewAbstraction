@@ -347,7 +347,9 @@ object Unification{
     * parameter of postCpts corresponding to a unification; (3) if the
     * principal of cv is unified with a component that changes state and gains
     * a reference to a component c, then the parameters of c; (4) a fresh
-    * value, given by nextArg.  Proviso: identities cannot be mapped to
+    * value, given by nextArg.  
+// Also all params of pre.cpts if singleRef ************ 
+    * Proviso: identities cannot be mapped to
     * identities in preCpts.  Each remapped state and corresponding
     * unifications is added to result.
     * 
@@ -396,6 +398,9 @@ object Unification{
       if(j == 0 && changedStateBitMap(i)) addIdsFromNewRef(
         otherArgsBitMap, servers.numParams, preCpts, postCpts, i)
     }
+    // If singleRef, add parameters of preCpts.
+    if(singleRef) 
+      for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
     // Remove values in ran map1
     Remapper.removeFromBitMap(map1, otherArgsBitMap)
     // Convert to OtherArgMap

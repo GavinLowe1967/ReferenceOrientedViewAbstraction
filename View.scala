@@ -297,9 +297,8 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     if(thatCpts.length != length) false
     else{
       var i = 0
-      while(i < length && 
-        thatCpts(i).componentProcessIdentity == 
-        components(i).componentProcessIdentity)
+      while(i < length && thatCpts(i).family == components(i).family && 
+        thatCpts(i).ids(0) == components(i).ids(0))
           i += 1
       i == length
     }
