@@ -1,6 +1,6 @@
 package ViewAbstraction
 
-import ViewAbstraction.RemapperP.{Remapper,Unification}
+import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
 import scala.collection.mutable.ArrayBuffer
 

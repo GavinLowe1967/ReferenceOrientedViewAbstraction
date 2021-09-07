@@ -114,7 +114,7 @@ object VA{
   def runTestSuite() = {
     val theTestSuite = if(singleRef) srTestSuite else testSuite
     for((fname, states) <- theTestSuite){
-      State.reset; MyStateMap.reset; RemapperP.Unification.reset
+      State.reset; MyStateMap.reset; Unification.reset
       println("********* "+fname)
       val states1 = run(fname)
       assert(states == states1,
@@ -157,6 +157,7 @@ object VA{
       if(testing){ 
         system = new SystemP.System("CSP/test-file.csp")
         TestStates.report
+        UnificationTest.test
         RemapperP.RemapperTest.test; CombinerP.CombinerTest.test
         SystemP.SystemTest.test(system); 
         new ExtendabilityP.ExtendabilityTest(system).test

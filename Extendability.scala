@@ -1,7 +1,7 @@
 package ViewAbstraction.ExtendabilityP
 
 import ViewAbstraction._
-import ViewAbstraction.RemapperP.{Remapper,Unification}
+import ViewAbstraction.RemapperP.Remapper
 import ViewAbstraction.CombinerP.Combiner
 import scala.collection.mutable.{HashMap}
 

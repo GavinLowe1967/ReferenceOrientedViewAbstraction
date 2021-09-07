@@ -53,11 +53,11 @@ $(DIR)/TestStates.class: $(DIR)/MyStateMap.class
 
 $(DIR)/RemapperP/Remapper.class: $(DIR)/View.class 
 
-$(DIR)/RemapperP/RemapperTest.class: $(DIR)/TestStates.class $(DIR)/RemapperP/Remapper.class $(DIR)/RemapperP/Unification.class
+$(DIR)/RemapperP/RemapperTest.class: $(DIR)/TestStates.class $(DIR)/RemapperP/Remapper.class $(DIR)/Unification.class
 
 $(COMBINERP)/Combiner.class: $(DIR)/RemapperP/Remapper.class
 
-$(REMAPPERP)/Unification.class: $(REMAPPERP)/Remapper.class
+$(DIR)/Unification.class: $(REMAPPERP)/Remapper.class
 
 $(COMBINERP)/CombinerTest.class:  $(DIR)/TestStates.class $(COMBINERP)/Combiner.class 
 
@@ -88,27 +88,27 @@ $(DIR)/CompatibleWithCache.class: $(DIR)/BasicHashMap.class
 
 $(DIR)/Debugger.class: $(DIR)/SystemP/System.class
 
-$(EXTENDERP)/Extendability.class: $(DIR)/RemapperP/Unification.class $(DIR)/CompatibleWithCache.class
+$(EXTENDERP)/Extendability.class: $(DIR)/Unification.class $(DIR)/CompatibleWithCache.class
 
 $(EXTENDERP)/ExtendabilityTest.class: $(EXTENDERP)/Extendability.class 
 
-$(DIR)/MissingCommon.class: $(REMAPPERP)/Unification.class
+$(DIR)/MissingCommon.class: $(DIR)/Unification.class
 
 $(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
 
 $(DIR)/EffectOnStore.class: $(DIR)/MissingInfo.class
 
-$(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(REMAPPERP)/Unification.class
+$(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(DIR)/Unification.class
 
 # # Checker and main program
 
-$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/RemapperP/Unification.class  $(DIR)/Debugger.class  $(DIR)/EffectOn.class $(EXTENDERP)/Extendability.class
+$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/Unification.class  $(DIR)/Debugger.class  $(DIR)/EffectOn.class $(EXTENDERP)/Extendability.class
 
 $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 
 # $(DIR)/NewViewExtender.class $(DIR)/Debugger.class $(DIR)/Concurrency.class
 
-$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class $(COMBINERP)/CombinerTest.class $(DIR)/SystemP/SystemTest.class $(DIR)/CheckerTest.class $(EXTENDERP)/ExtendabilityTest.class
+$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class $(COMBINERP)/CombinerTest.class $(DIR)/SystemP/SystemTest.class $(DIR)/CheckerTest.class $(EXTENDERP)/ExtendabilityTest.class $(DIR)/UnificationTest.class
 
 # # Standard recipe
 
