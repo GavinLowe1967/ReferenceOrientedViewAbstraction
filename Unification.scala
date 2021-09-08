@@ -427,54 +427,67 @@ object Unification{
     cv: ComponentView, c2Refs: List[(Int,Identity)], 
     changedStateBitMap: Array[Boolean], 
     result: CombineResult, result2: CombineResult2,
-    map1: RemappingMap, otherArgsBitMap: Array[Array[Boolean]], 
+    map0: RemappingMap, otherArgsBitMap0: Array[Array[Boolean]], 
     nextArg: NextArgMap, unifs: UnificationList, sufficientUnif: Boolean)
   = {
     require(singleRef)
     val (cvpf, cvpid) = cv.principal.componentProcessIdentity
-    // IMPROVE: improve following
-    for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
 
-    // Remove values in ran map1
-    Remapper.removeFromBitMap(map1, otherArgsBitMap)
-    // Convert to OtherArgMap
-    val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
-    // Values that identities can be mapped to: values in otherArgs, but not
-    // identities of components in post; update otherArgsBitMap to record.
-    StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
-    // Create primary induced transitions.
-    if(sufficientUnif)
-      combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
-        cv.components, result)
+    // Consider which identities of cpts are remapped to match a non-identity
+    // of preCpts, or non-identities of cpts that are remapped to match an
+    // identity of preCpts.
+    val crossRefs = remapToCreateCrossRefs(preCpts, cv.components, map0)
+    for((map1, tuples) <- crossRefs){
+      // Clone, to avoid interference between different iterations. 
+      val otherArgsBitMap = otherArgsBitMap0.map(_.clone)
+      // Indices of components of preCpts that are mapped onto.
+      val rangeIndices = tuples.map{ case ((i1,_),_) => i1 }.distinct
+      for(i1 <- rangeIndices)
+        preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.numParams)
+      // IMPROVE: we need only map parameters of cpts(i2) like this, where
+      // i2 is the relevant index in the current tuple.
+      // for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
+      // Remove values in ran map1
+      Remapper.removeFromBitMap(map1, otherArgsBitMap)
+      // Convert to OtherArgMap
+      val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
+      // Values that identities can be mapped to: values in otherArgs, but not
+      // identities of components in post; update otherArgsBitMap to record.
+      StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
+      // Create primary induced transitions.
+      if(sufficientUnif)
+        combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
+          cv.components, result)
 
-    /* Build remappings for secondary induced transitions corresponding to
-     * component k acquiring a reference to cv.principal in parameter id. */
-    @inline def mkSecondaryRemaps(k: Int, id: Int) = {
-      require(map1(cvpf)(cvpid) == id)
-      // (5) For each other parameter of postCpts(k), if not in ran map1, add
-      // to otherArgs, and to otherArgsBitMap if not an identity in postCpts.
-      for((t,id1) <- postCpts(k).processIdentities)
-        if(id1 != id && !contains(map1(t),id1) && !contains(otherArgs(t),id1)){
-          otherArgs(t) ::= id1
-          if(StateArray.findIndex(postCpts, t, id1) < 0)
-            otherArgsBitMap(t)(id1) = true
+      /* Build remappings for secondary induced transitions corresponding to
+       * component k acquiring a reference to cv.principal in parameter id. */
+      @inline def mkSecondaryRemaps(k: Int, id: Int) = {
+        require(map1(cvpf)(cvpid) == id)
+        // (5) For each other parameter of postCpts(k), if not in ran map1, add
+        // to otherArgs, and to otherArgsBitMap if not an identity in postCpts.
+        for((t,id1) <- postCpts(k).processIdentities)
+          if(id1 != id && !contains(map1(t),id1) && !contains(otherArgs(t),id1)){
+            otherArgs(t) ::= id1
+            if(StateArray.findIndex(postCpts, t, id1) < 0)
+              otherArgsBitMap(t)(id1) = true
+          }
+        val tempRes = new CombineResult
+        combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
+          cv.components, tempRes)
+        for((newSts, us) <- tempRes){ // IMPROVE
+          assert(us eq unifs); result2 += ((newSts, us, k))
         }
-      val tempRes = new CombineResult
-      combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
-        cv.components, tempRes)
-      for((newSts, us) <- tempRes){ // IMPROVE
-        assert(us eq unifs); result2 += ((newSts, us, k))
-      }
-    } // end of mkSecondaryRemaps
+      } // end of mkSecondaryRemaps
 
-    for((k,p) <- c2Refs){
-      assert(changedStateBitMap(k))
-      if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
-      else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p)){
-        // Consider mapping cvpid to p (and backtrack)
-        map1(cvpf)(cvpid) = p; mkSecondaryRemaps(k, p); map1(cvpf)(cvpid) = -1
+      for((k,p) <- c2Refs){
+        assert(changedStateBitMap(k))
+        if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
+        else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p)){
+          // Consider mapping cvpid to p (and backtrack)
+          map1(cvpf)(cvpid) = p; mkSecondaryRemaps(k, p); map1(cvpf)(cvpid) = -1
+        }
       }
-    }
+    } // end of outer for loop.
   } // end of extendUnifSingleRef
 
 
@@ -632,11 +645,14 @@ object Unification{
           // Try to map id2 to match id1
           val id1 = preCpts(i1).ids(j1); val id2 = cpts(i2).ids(j2)
           val t = preCpts(i1).typeMap(j1)
-          assert(!isDistinguished(id1) && !isDistinguished(id2) &&
-            (!preIds.contains((t,id1)) || !ids.contains((t,id2))), // IMPROVE
-            s"($i1,$j1), ($t,$id1), ($t, $id2)")
+          assert(!isDistinguished(id1) && !isDistinguished(id2), 
+            StateArray.show(preCpts)+"\n"+StateArray.show(cpts)+"\n"+
+              s"($i1,$j1), ($i2,$j2), ($t,$id1), ($t, $id2)")
           if(t == cpts(i2).typeMap(j2) && map(t)(id2) < 0 &&
               !map(t).contains(id1) ){ // IMPROVE
+            assert((!preIds.contains((t,id1)) || !ids.contains((t,id2))),
+              StateArray.show(preCpts)+"\n"+StateArray.show(cpts)+"\n"+
+                s"($i1,$j1), ($i2,$j2), ($t,$id1), ($t, $id2)")
             map(t)(id2) = id1 // temporary update (*)
             val newTuples = ((i1,j1),(i2,j2))::tuples
             // Advance
