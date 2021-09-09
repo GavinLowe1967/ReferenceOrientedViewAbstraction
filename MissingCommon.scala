@@ -8,11 +8,25 @@ import scala.collection.mutable.ArrayBuffer
   * identity pid such that (1) servers || cpts1(0) || c is in the ViewSet; (2)
   * servers || cpts2(0) || c is in the ViewSet; (3) if c has a reference to a
   * secondary component c2 of cpts1 or cpts2, then servers || c || c2 is in
-  * ViewSet (modulo renaming).  This corresponds to case 2 on p. 113 of the
-  * notebook. */
+  * ViewSet (modulo renaming).  This corresponds to condition (c) in the
+  * definition of induced transitions with restricted views. */
+// FIXME: case (3) above doesn't agree with the paper. 
 class MissingCommon(
     val servers: ServerStates, val cpts1: Array[State], val cpts2: Array[State],
     val pid: ProcessIdentity){
+  /* Overview of main functions.
+   * 
+   * updateMissingViewsBy     (called from MissingInfo)
+   * |--updateMissingCandidates
+   *    |-removeViews
+   * 
+   * updateMissingViews       (called from MissingInfo)
+   * |--removeViews
+   * 
+   * updateMissingCommon      (called from MissingInfo)
+   * |--MissingCommon.updateMissingCandidates
+   */
+
   val princ1 = cpts1(0)
 
   require(princ1.processIdentities.contains(pid) && 
@@ -20,7 +34,9 @@ class MissingCommon(
 
   /** Each value cands of type MissingCandidates represents that if all the
     * elements of cands are added to the ViewSet, then this obligation will be
-    * discharged. */
+    * discharged.  Each corresponds to a particular component state c for
+    * which condition (1) is satisfied; cands contains those views
+    * corresponding to conditions (2) and (3).  */
   type MissingCandidates = List[ComponentView]
 
   /** When any element of missingCandidates is satisfied, then this obligation
@@ -58,7 +74,10 @@ class MissingCommon(
       : MissingCandidates = {
     var mc1 = mc
     while(mc1.nonEmpty && views.contains(mc1.head)) mc1 = mc1.tail
-    if(mc1.isEmpty) isDone = true
+    if(mc1.isEmpty){ 
+      // This is now satisfied; also reclaim memory.
+      isDone = true; missingCandidates = List() 
+    }
     else toRegister += mc1.head
     mc1
   }
@@ -91,8 +110,8 @@ class MissingCommon(
     }
   }
 
-  /** Update missingCandidates based views.  Remove elements of views from the
-    * front of each.  If any is now empty, then mark this as satisfied.
+  /** Update missingCandidates based on views.  Remove elements of views from
+    * the front of each.  If any is now empty, then mark this as satisfied.
     * Return views against which this should now be registered, or null if
     * done. */
   def updateMissingViews(views: ViewSet): ArrayBuffer[ComponentView] = {
@@ -190,6 +209,14 @@ class MissingCommon(
 // =======================================================
 
 object MissingCommon{
+  /* Overview of main functions.
+   * 
+   * makeMissingCommon          (called from EffectOn)
+   * |--updateMissingCandidates  (also called from companion updateMissingCommon)
+   *   |--Unification.remapToJoin
+   *   |--getMissingCandidates
+   */
+
   /** A buffer for storing Views, against which a MissingInfo should be
     * registered in the EffectOnStore. */
   type ViewBuffer = ArrayBuffer[ComponentView]
@@ -230,6 +257,10 @@ object MissingCommon{
   /** Update mc.missingCandidates to include lists of missing views
     * corresponding to instantiating c with a renaming of cpt1.  Add to vb the
     * views that mc needs to be registered against in the EffectOnStore.
+    * 
+    * Pre: views contains a view mc.servers || mc.cpts1(0) || cpt1 to
+    * instantiate clause (1) of mc.
+    * 
     * @return true if mc is now complete. */
   @inline private 
   def updateMissingCandidates(
@@ -253,9 +284,9 @@ object MissingCommon{
 
   /** Find the missing Views that are necessary to complete mc for a particular
     * candidate state c.  Return a list containing each of the following that
-    * is not currently in views: (1) servers || cpts2(0) || c; and (2) if c
-    * has a reference to a secondary component c2 of cpts1 or cpts2, then
-    * servers || c || c2 (renamed). */
+    * is not currently in views: (1) mc.servers || mc.cpts2(0) || c; and (2)
+    * if c has a reference to a secondary component c2 of mc.cpts1 or
+    * mc.cpts2, then mc.servers || c || c2 (renamed). */
   @inline private 
   def getMissingCandidates(mc: MissingCommon, c: State, views: ViewSet)
       : List[ComponentView] = {
@@ -269,7 +300,8 @@ object MissingCommon{
 
     maybeAdd(Array(cpts2(0), c))
     // If c has a reference to a secondary component c2 of cpts2 or cpts1,
-    // then the View servers || c || c2 is necessary.
+    // then the View servers || c || c2 is necessary.  This avoids a false
+    // error with lockFreeQueue.csp.
     var j = 1
     while(j < c.length){
       val pid2 = c.processIdentities(j); j += 1

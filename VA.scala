@@ -107,7 +107,8 @@ object VA{
   )
   val srTestSuite = List(
     ("CSP/lockBasedStack.csp", 294), ("CSP/lockBasedQueue.csp", 553),
-    ("CSP/TreiberStack.csp", 1072), ("CSP/lockFreeQueue.csp", 2210)
+    ("CSP/TreiberStack.csp", 1072), // 1075 if clause (3) in MissingCommon omitted 
+    ("CSP/lockFreeQueue.csp", 2210)
   )
 
   /** Run a test suite. */

@@ -59,6 +59,8 @@ $(COMBINERP)/Combiner.class: $(DIR)/RemapperP/Remapper.class
 
 $(DIR)/Unification.class: $(REMAPPERP)/Remapper.class
 
+$(DIR)/UnificationTest.class: $(DIR)/Unification.class
+
 $(COMBINERP)/CombinerTest.class:  $(DIR)/TestStates.class $(COMBINERP)/Combiner.class 
 
 
@@ -90,7 +92,7 @@ $(DIR)/Debugger.class: $(DIR)/SystemP/System.class
 
 $(EXTENDERP)/Extendability.class: $(DIR)/Unification.class $(DIR)/CompatibleWithCache.class
 
-$(EXTENDERP)/ExtendabilityTest.class: $(EXTENDERP)/Extendability.class 
+$(EXTENDERP)/ExtendabilityTest.class: $(DIR)/TestStates.class $(EXTENDERP)/Extendability.class 
 
 $(DIR)/MissingCommon.class: $(DIR)/Unification.class
 
@@ -108,7 +110,11 @@ $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 
 # $(DIR)/NewViewExtender.class $(DIR)/Debugger.class $(DIR)/Concurrency.class
 
-$(DIR)/VA.class:  $(DIR)/Checker.class $(DIR)/RemapperP/RemapperTest.class $(COMBINERP)/CombinerTest.class $(DIR)/SystemP/SystemTest.class $(DIR)/CheckerTest.class $(EXTENDERP)/ExtendabilityTest.class $(DIR)/UnificationTest.class
+TESTS = $(DIR)/RemapperP/RemapperTest.class $(COMBINERP)/CombinerTest.class $(DIR)/SystemP/SystemTest.class $(DIR)/CheckerTest.class $(EXTENDERP)/ExtendabilityTest.class $(DIR)/UnificationTest.class
+
+$(DIR)/VA.class:  $(DIR)/Checker.class $(TESTS)
+
+$(TESTS): $(DIR)/TestStates.class
 
 # # Standard recipe
 

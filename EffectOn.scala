@@ -9,6 +9,15 @@ import scala.collection.mutable.{ArrayBuffer}
   * functions.  These describe the effect that one transition has on another
   * View. */
 class EffectOn(views: ViewSet, system: SystemP.System){
+  /* Overview of main functions.
+   * 
+   * apply
+   * |--getCrossReferences
+   * |--processInducedInfo
+   * |  |--checkCompatibleMissing
+   * |  |--missingCrossRefs
+   * |--Unification.combine
+   */
 
   /** A mapping showing which component views might be added later.
     * Abstractly it stores tuples (missing, missingCommon, nv) such that:

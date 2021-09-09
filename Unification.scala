@@ -7,6 +7,18 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
 
 /** Operations concerned with unifying states or views. */
 object Unification{
+  /* Relationship of main functions:
+   * 
+   * combine
+   * |--allUnifs
+   * |  |--unify
+   * |--extendUnif
+   * |  |--extendUnifSingleRef
+   * |  |  |--remapToCreateSingleRefs
+   * |  |  |--combine1
+   * |  |--combine1
+   * |--isSufficientUnif
+   */
 
   /** Try to extend map to map' such that map'(st2) = st1.
     * Note: map is unchanged.
@@ -421,6 +433,7 @@ object Unification{
     * @param otherArgsBitMap a bit map giving values that parameters of cv could 
     * be mapped to, and satisfying cases (1)-(3) in the description of
     * extendUnif.
+// IMPROVE: not all of these are needed for secondary induced transitions
     */
   @inline private def extendUnifSingleRef(
     servers: ServerStates, preCpts: Array[State], postCpts: Array[State], 

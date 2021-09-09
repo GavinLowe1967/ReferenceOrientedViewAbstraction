@@ -281,17 +281,20 @@ object Remapper{
   //     : ServerStates = 
   //   ServerStates(remapStates(map, nextArg, ss.servers))
 
+  /** Cache used in remapServerStates. */
   private val remapSSCache = 
     new HashMap[ServerStates, (ServerStates, RemappingMap, NextArgMap)]
 
+  /** Remap ss to normal form.  Also return resulting RemappingMap and
+    * NextArgMap. */
   @inline private def remapServerStates(ss: ServerStates)
       : (ServerStates, RemappingMap, NextArgMap) = {
-    remapSSCache.get(ss) match{
+    remapSSCache.get(ss) match{ // Try to retrieve from cache. 
       case Some((ss1, map, nextArgs)) => 
-        Profiler.count("remapServerStates found")
+        // Profiler.count("remapServerStates found")
         (ss1, cloneMap(map), nextArgs.clone)
       case None =>
-        Profiler.count("remapServerStates new")
+        // Profiler.count("remapServerStates new")
         val map = newRemappingMap; var nextArg = newNextArgMap
         val servers = ServerStates(remapStates(map, nextArg, ss.servers))
         remapSSCache += ss -> ((servers, cloneMap(map), nextArg.clone))
