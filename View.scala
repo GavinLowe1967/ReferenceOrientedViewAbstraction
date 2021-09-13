@@ -214,6 +214,11 @@ object View{
     servers.toString+" || "+StateArray.show(states)
 }
 
+object ComponentView{
+  /** Is v1 < v2. */
+  def compare(v1: ComponentView, v2: ComponentView): Boolean = v1.compare(v2) < 0
+}
+
 // =======================================================
 
 /** A concretization. */

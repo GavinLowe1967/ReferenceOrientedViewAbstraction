@@ -5,21 +5,23 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
 
 
 /** Information capturing when newView might be added to the ViewSet: once all
-  * of missingViews0 have been added, and all the obligations represented by
-  * missingCommon0 have been satisfied. */
+  * of missingViews have been added, and all the obligations represented by
+  * missingCommon have been satisfied. */
 class MissingInfo(
   val newView: ComponentView, 
   private var missingViews: Array[ComponentView], 
   private var missingCommon: Array[MissingCommon]
 ){
   /* missingViews contains component views that are necessary to satisfy this
-   * constraint: all must be added to the ViewSet.  cf. item 1 on page 113 of
-   * notebook.
+   * constraint: all must be added to the ViewSet.  This corresponds to
+   * condition (b) in the definition of induced transitions with restricted
+   * views.
    * 
    * missingCommon stores information about views necessary to satisfy this
    * constraint.  Each represents an obligation to instantiate a component
-   * with a particular identity.  cf. item 2 on page 113 of the notebook.
-   * All must be satisfied in order to satisfy this constraint.  
+   * with a particular identity.  This corresponds to condition (c) in the
+   * definition of induced transitions with restricted views.  All must be
+   * satisfied in order to satisfy this constraint.
    * 
    * Note: MissingCommon values might be shared between MissingInfo objects.
    * 
@@ -27,6 +29,22 @@ class MissingInfo(
    * missingViews to contain more than about four elements, or for
    * missingCommon to contain more than one element.  So we don't compact the
    * arrays.  */
+
+  /* Overview of main functions.
+   * updateMissingCommon     (called from EffectOnStore)
+   * |--(MissingCommon.)updateMissingCommon
+   * |--advanceMC
+   *    |--(MissingCommon.)updateMissingViews
+   * 
+   * updateMCMissingViews    (called from EffectOnStore)
+   * |--(MissingCommon.)updateMissingViewsBy
+   * |--advanceMC
+   * 
+   * updateMissingViews     (called from EffectOnStore)
+   * 
+   * updateMissingViewsBy    (called from EffectOnStore)
+   * |--updateMissingViews
+   */
 
   require(missingCommon.forall(!_.done))
 
@@ -136,6 +154,7 @@ class MissingInfo(
     * null if all the missingCommon entries are satisfied.  */ 
   def updateMCMissingViews(cv: ComponentView, views: ViewSet): ViewBuffer = {
     val mc = missingCommon(mcIndex)
+    // assert(mc.matches(cv))  IMPROVE: why does this not hold? 
     val vb: ViewBuffer = mc.updateMissingViewsBy(cv, views)
     if(mc.done){ mcNull(mcIndex); advanceMC(views) }
     else vb

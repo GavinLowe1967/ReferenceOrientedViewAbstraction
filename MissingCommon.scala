@@ -2,7 +2,7 @@ package ViewAbstraction
 
 import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer,HashSet}
 
 /** The representation of the obligation to find a component state c with
   * identity pid such that (1) servers || cpts1(0) || c is in the ViewSet; (2)
@@ -10,7 +10,7 @@ import scala.collection.mutable.ArrayBuffer
   * secondary component c2 of cpts1 or cpts2, then servers || c || c2 is in
   * ViewSet (modulo renaming).  This corresponds to condition (c) in the
   * definition of induced transitions with restricted views. */
-// FIXME: case (3) above doesn't agree with the paper. 
+// FIXME: case (3) above doesn't agree with the paper, but seems necessary.
 class MissingCommon(
     val servers: ServerStates, val cpts1: Array[State], val cpts2: Array[State],
     val pid: ProcessIdentity){
@@ -36,17 +36,23 @@ class MissingCommon(
     * elements of cands are added to the ViewSet, then this obligation will be
     * discharged.  Each corresponds to a particular component state c for
     * which condition (1) is satisfied; cands contains those views
-    * corresponding to conditions (2) and (3).  */
+    * corresponding to conditions (2) and (3).  The list is sorted (wrt
+    * ComponentView.compare).  */
   type MissingCandidates = List[ComponentView]
 
   /** When any element of missingCandidates is satisfied, then this obligation
-    * will be discharged. */
+    * will be discharged.  Each MissingCandidates within the list is sorted
+    * (wrt ComponentView.compare). */
   private var missingCandidates = List[MissingCandidates]()
 
   private var isDone = false
 
   /** Is this constraint satisfied? */
   @inline def done = isDone
+
+  /** Record that this is now done.  Also clear missingCandidates to reclaim
+    * memory. */
+  private def setDone = { isDone = true; missingCandidates = List() }
 
   /** The heads of the missing candidates.  The corresponding MissingInfo should
     * be registered against these in
@@ -74,10 +80,7 @@ class MissingCommon(
       : MissingCandidates = {
     var mc1 = mc
     while(mc1.nonEmpty && views.contains(mc1.head)) mc1 = mc1.tail
-    if(mc1.isEmpty){ 
-      // This is now satisfied; also reclaim memory.
-      isDone = true; missingCandidates = List() 
-    }
+    if(mc1.isEmpty) setDone    // This is now satisfied
     else toRegister += mc1.head
     mc1
   }
@@ -138,7 +141,83 @@ class MissingCommon(
     require(matches(cv)); val cpt1 = cv.components(1) 
     if(cpt1.hasPID(pid))
       if(MissingCommon.updateMissingCandidates(this, cpt1, views, vb))
-        isDone = true
+        setDone
+  }
+
+  /** States for which MissingCommon.updateMissingCandidates has been executed
+    * on this. */
+  private val doneMissingCandidates = new HashSet[State]
+
+  /** Called by MissingCommon.updateMissingCandidates when updating this with
+    * st.  Return true if this is the first such instance for st. */
+  private def isNewUMCState(st: State): Boolean = doneMissingCandidates.add(st)
+
+  /** States for which the loop of MissingCommon.updateMissingCandidates has
+    * been executed, i.e. states instantiating c there. */
+  private val doneMissingCandidatesRenamed = new HashSet[State]
+
+  /** Called by MissingCommon.updateMissingCandidates when updating this with
+    * st.  Return true if this is the first such instance for st instantiating
+    * c. */
+  private def isNewUMCRenamedState(st: State): Boolean = 
+    doneMissingCandidatesRenamed.add(st)
+
+  /** Add mCand to missingCandidates if it's not there already.  Return true if
+    * successful.  Pre: mCand is sorted.  */
+  private def add(mCand: MissingCandidates): Boolean = {
+    require(isSorted(mCand), mCand) // IMPROVE: quite expensive
+    // Traverse missingCandidates.  Add to newMC any that is not a proper
+    // superset of mCand.
+    var newMC = List[MissingCandidates]()
+    var found = false // true if missingCandidates includes a subset of mCand
+    for(mCand1 <- missingCandidates){
+      val cmp = compare(mCand1, mCand)
+      // if(cmp == Sup){  // mCand1 can be removed
+      //   assert(mCand.forall(mCand1.contains(_)), mCand1.toString+"\n"+mCand) 
+      // }
+      // else if(cmp == Eq){
+      //   assert(mCand == mCand1); newMC::= mCand1; found = true
+      // }
+      // else if(cmp == Sub){
+      //   assert(mCand1.forall(mCand.contains(_))); newMC::= mCand1; found = true
+      // }
+      // else{ // cmp == Inc
+      //   assert(mCand1.exists(!mCand.contains(_)) || 
+      //     mCand.exists(!mCand1.contains(_)))
+      //   newMC::= mCand1
+      // }
+      if(cmp != Sup) newMC::= mCand1 // mCand1 can't be replaced by mCand
+      found ||= cmp == Sub || cmp == Eq // mCand can't be replaced by mCand1
+    }
+    if(!found) newMC ::= mCand
+    missingCandidates = newMC
+    !found
+  }
+
+  /** Is mCand sorted, without repetitions. */
+  private def isSorted(mCand: MissingCandidates): Boolean = 
+    mCand.length < 2 || 
+      mCand.head.compare(mCand.tail.head) < 0 && isSorted(mCand.tail)
+
+  // Possible returns from compare
+  private val Eq = 0; private val Sub = 1; 
+  private val Sup = 2; private val Inc = 4
+
+  /** Compare mc1 and mc2.  Return Eq is equal, Sub if mc1 is proper subset, Sup
+    * if mc1 is a proper superset, and Inc if they are incomparable.  */
+  private def compare(mc1: MissingCandidates, mc2: MissingCandidates) = {
+    var c1 = mc1; var c2 = mc2; var sub = true; var sup = true
+    // Inv sub is true if elements of mc1 seen so far are all in mc2; sup is
+    // true if elements of mc2 seen so far are all in mc1.  Still need to
+    // compare c1 and c2.
+    while(c1.nonEmpty && c2.nonEmpty && (sub || sup)){
+      val comp = c1.head.compare(c2.head)
+      if(comp < 0){ sub = false; c1 = c1.tail } // c1.head not in mc2
+      else if(comp == 0){ c1 = c1.tail; c2 = c2.tail }
+      else{ sup = false; c2 = c2.tail } // c2.head is not in mc1
+    }
+    sub &&= c1.isEmpty; sup &&= c2.isEmpty
+    if(sub){ if(sup) Eq else Sub } else if(sup) Sup else Inc
   }
 
   /** Sanity check that no head element of missingCandidates is in views. */
@@ -196,11 +275,17 @@ class MissingCommon(
     }
   }
 
+  /** Has this been counted for profiling purposes? */
+  private var counted = false
+
   /** A measure of the size of this: the number of ComponentViews stored. */
   def size = {
-    var mcs = missingCandidates; var size = 0
-    while(mcs.nonEmpty){ size += mcs.head.length; mcs = mcs.tail }
-    size
+    if(counted) 0
+    else{
+      counted = false; var mcs = missingCandidates; var size = 0
+      while(mcs.nonEmpty){ size += mcs.head.length; mcs = mcs.tail }
+      size
+    }
     // missingCandidates.map(_.length).sum
   }
 }
@@ -267,26 +352,36 @@ object MissingCommon{
     mc: MissingCommon, cpt1: State, views: ViewSet, vb: ViewBuffer)
       : Boolean = {
     require(cpt1.hasPID(mc.pid))
-    // All relevant renamings of cpt1: identity on params of servers and
-    // princ1, but otherwise either to other params of cpts2 or to fresh
-    // values.
+    if(mc.isNewUMCState(cpt1)){
+      // All relevant renamings of cpt1: identity on params of servers and
+      // princ1, but otherwise either to other params of cpts2 or to fresh
+      // values.
 // FIXME: also rename to other params of cpts1?
-    val renames = Unification.remapToJoin(mc.servers, mc.princ1, mc.cpts2, cpt1)
-    var i = 0; var found = false
-    while(i < renames.length && !found){
-      val c = renames(i); i += 1
-      val missing = getMissingCandidates(mc, c, views) 
-      if(missing.isEmpty) found = true
-      else{ mc.missingCandidates ::= missing; vb += missing.head }
-    } // end of while loop
-    found
+      val renames = 
+        Unification.remapToJoin(mc.servers, mc.princ1, mc.cpts2, cpt1)
+      var i = 0; var found = false
+      while(i < renames.length && !found){
+        val c = renames(i); i += 1
+        if(mc.isNewUMCRenamedState(c)){
+          val missing = getMissingCandidates(mc, c, views)
+          if(missing.isEmpty) found = true
+          else//  if(!mc.missingCandidates.contains(missing)){ 
+          //   mc.missingCandidates ::= missing; vb += missing.head
+          // }
+            if(mc.add(missing)) vb += missing.head
+        }
+      } // end of while loop
+      found
+    }
+    else false
   }
 
   /** Find the missing Views that are necessary to complete mc for a particular
     * candidate state c.  Return a list containing each of the following that
     * is not currently in views: (1) mc.servers || mc.cpts2(0) || c; and (2)
     * if c has a reference to a secondary component c2 of mc.cpts1 or
-    * mc.cpts2, then mc.servers || c || c2 (renamed). */
+    * mc.cpts2, then mc.servers || c || c2 (renamed).  The list is sorted (wrt
+    * ComponentView.compare).  */
   @inline private 
   def getMissingCandidates(mc: MissingCommon, c: State, views: ViewSet)
       : List[ComponentView] = {
@@ -295,7 +390,8 @@ object MissingCommon{
     // Add servers || cptsx, if not in views
     @inline def maybeAdd(cptsx: Array[State]) = { 
       val cvx = Remapper.mkComponentView(servers, cptsx)
-      if(!views.contains(cvx)){ missing ::= cvx /*; vb += cvx */ }
+      if(!views.contains(cvx) && !missing.contains(cvx)) missing ::= cvx
+      // IMPROVE: insert so as to maintain sorted order. 
     }
 
     maybeAdd(Array(cpts2(0), c))
@@ -310,7 +406,7 @@ object MissingCommon{
       val c1 = StateArray.find(pid2, cpts1)
       if(c1 != null) maybeAdd(Array(c, c1))
     }
-    missing
+    missing.sortWith(ComponentView.compare _)
   }
 
 

@@ -35,7 +35,16 @@ trait EffectOnStore{
 
 // =======================================================
 
+/** A simple implementation of EffectOnStore. */
 class SimpleEffectOnStore extends EffectOnStore{
+  /* Overview of main functions.
+   * 
+   * add
+   * |--addToStore
+   */
+
+  /** A set of MissingInfos.
+    * IMPROVE: remove redundancies? */
   type MissingInfoSet = HashSet[MissingInfo]
 
   /** A type of stores, giving the MissingInfos that might need updating as the
@@ -51,6 +60,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     * fields of MissingInfo objects.  For each mi, for each mc in
     * mi.missingCommon, for each cv in mc.missingCandidates.flatten,
     * mcMissingCandidateStore(cv) contains mi. */
+// IMPROVE comment: just the heads? 
   private val mcMissingCandidatesStore = new Store
 
   /** The underlying store concerning MissingCommon values.  For each mi:
@@ -58,13 +68,11 @@ class SimpleEffectOnStore extends EffectOnStore{
     * MissingCommon(servers,cpts,_,_) or (servers,_,cpts,_) in
     * mi.missingCommon, commonStore(servers,cpts(0)) contains mi. */
   private val commonStore = new HashMap[(ServerStates, State), MissingInfoSet]
-  // private val commonStore = new HashMap[(ServerStates, State), List[MissingInfo]]
 
   /** Add missingInfo to theStore(cv), if not already there. */
   private 
   def addToStore(theStore: Store, cv: ComponentView, missingInfo: MissingInfo)
   = {
-    // missingInfo.sanity1
     theStore.get(cv) match{
       case Some(mis) => mis += missingInfo 
       case None =>
@@ -111,11 +119,11 @@ class SimpleEffectOnStore extends EffectOnStore{
     }
   }
 
-  @inline def containsAB[A](xs: ArrayBuffer[A], x: A): Boolean = {
-    var i = 0
-    while(i < xs.length && xs(i) != x) i += 1
-    i < xs.length
-  }
+  // @inline def containsAB[A](xs: ArrayBuffer[A], x: A): Boolean = {
+  //   var i = 0
+  //   while(i < xs.length && xs(i) != x) i += 1
+  //   i < xs.length
+  // }
 
   private def contains(cvs: List[MissingInfo], cv: MissingInfo): Boolean = 
     cvs.nonEmpty && (cvs.head == cv || cvs.tail.contains(cv))
@@ -150,7 +158,6 @@ class SimpleEffectOnStore extends EffectOnStore{
     val key = (cv.servers, cv.principal)
     commonStore.get(key) match{
       case Some(mis) => 
-        // var newMis = List[MissingInfo]() // those to retain in commonStore(key)
         val newMis = new MissingInfoSet  // those to retain in commonStore(key)
         for(mi <- mis; if !mi.mcDone){
           if(views.contains(mi.newView)) mi.markNewViewFound
