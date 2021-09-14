@@ -47,9 +47,13 @@ class MissingInfo(
    */
 
   require(missingCommon.forall(!_.done))
+  require(missingViews.forall(_ != null))
 
   // We keep missingCommon and missingViews sorted. 
   MissingInfo.sort(missingCommon, missingViews)
+
+  /* missingViews may contain null values: duplicates are replaced by null in
+   * the above sort. */
 
   import MissingCommon.ViewBuffer // ArrayBuffer[ComponentView]
 
@@ -83,16 +87,16 @@ class MissingInfo(
     if(mcIndex < missingCommon.length){ // consider next 
       assert(mcIndex == 1 && missingCommon.length == 2)
       val mc = missingCommon(mcIndex)
-      if(mc == null){ mcIndex += 1; null } // this one is also done
+      if(mc == null){ mcIndex += 1; rehashMC(); null } // this one is also done
       else{
         val vb = mc.updateMissingViews(views)
         if(mc.done){  // and now this is done
-          mcNull(mcIndex); mcIndex += 1; null 
+          mcNull(mcIndex); mcIndex += 1; rehashMC(); null 
         }
-        else vb
+        else{ rehashMC(); vb }
       }
     }
-    else null
+    else{ rehashMC(); null }
   }
 
   /** Are all the missingCommon entries done? */
@@ -118,46 +122,24 @@ class MissingInfo(
 
   /** Update the MissingCommon entries in this, based on cv being a possible
     * match to the first clause of the obligation.  cv is expected to be a
-    * possible match to at least one member of missingCommon.
+    * possible match to the next element of missingCommon.
     * @return a ViewBuffer containing all views that this needs to be registered
     * against in the store if not all MissingCommon are done. */
   def updateMissingCommon(cv: ComponentView, views: ViewSet): ViewBuffer = {
-    // IMPROVE: just update the one in position mcIndex
-    // var vb = new ViewBuffer
-    // Deal with the current MissingCommon
-    val mc = missingCommon(mcIndex); assert(mc != null)
-    // assert(mc.matches(cv))  // IMPROVE structure
-// FIXME: I think above assertion could be false if mcIndex = 1, and cv matches missingCommon(0).
-    if(mc.matches(cv)){
-      val vb = new ViewBuffer
-      mc.updateWithNewMatch(cv, views, vb)
-      if(mc.done){
-        // Advance to the next MissingCommon (if any)
-        mcNull(mcIndex); val vb1 = advanceMC(views); vb1
-        // if(mcIndex < missingCommon.length){
-        //   // We have advanced.  Need to register this against vb.
-        //   assert(mcIndex == 1); return vb // IMPROVE: remove assertion
-        // }
-      }
-      else vb
+    val mc = missingCommon(mcIndex); assert(mc != null && mc.matches(cv))
+    // if(mc.matches(cv)){
+    val vb = new ViewBuffer
+    mc.updateWithNewMatch(cv, views, vb)
+    if(mc.done){
+      // Advance to the next MissingCommon (if any), and return views to
+      // register against
+      mcNull(mcIndex); advanceMC(views)
     }
+    else vb
+    // }
     // I think following can't happen: we unregistered against
     // missingCommon(0) in EffectOnStore.
-    else{ assert(false && mcIndex == 1 && missingCommon(0).matches(cv)); null }
-    /* I think following is unnecessary.  We register just against
-     * missingCommon(mcIndex) */
-    // else assert(false && mcIndex+1 < missingCommon.length && 
-    //   missingCommon(mcIndex+1).matches(cv))
-    // if(mcIndex+1 < missingCommon.length){
-    //   // Deal with the other MissingCommon
-    //   assert(mcIndex == 0 && missingCommon.length == 2)
-    //   val mc1 = missingCommon(1)
-    //   if(mc1 != null && mc1.matches(cv)){
-    //     mc1.updateMissingCommon(cv, views, new ViewBuffer)
-    //     if(mc1.done) mcNull(1) // It's done, but missingCommon(0) isn't yet
-    //   }
-    // }
-    // vb
+    // else{ assert(false && mcIndex == 1 && missingCommon(0).matches(cv)); null }
   }
 
   /** Update the MissingCommon fields of this based upon the addition of cv.
@@ -183,6 +165,7 @@ class MissingInfo(
       (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))){
       missingViews(mvIndex) = null; mvIndex += 1
     }
+    rehashMV()
   }
 
   /** Update missingViews and mvIndex based on the addition of cv.  cv is
@@ -226,34 +209,62 @@ class MissingInfo(
       MissingInfo.equalExceptNull(mi.missingCommon, missingCommon)
   }
 
-  private var theHashCode = -1
+  // private var theHashCode = -1
 
   /** The hash code for this. */
-  override def hashCode = theHashCode
+  override def hashCode = mcHash ^ mvHash
 
-  /** Recalculate the hash code.  This should be performed every time the state
-    * of this changes. */
-  def rehash() = {
-    var h = newView.hashCode; var i = 0
+  /** Hash of newView and missingCommon. */
+  private var mcHash = -1
+
+  /** Update mcHash.  Should be called at each update of mcIndex. */
+  private def rehashMC() = {
+    var h = newView.hashCode; var i = mcIndex
+    while(i < missingCommon.length){
+      assert(missingCommon(i) != null) 
+      h = h*73 + missingCommon(i).hashCode
+      i += 1
+    }
+    mcHash = h
+  }
+
+  /** Hash of missingViews. */
+  private var mvHash = -1
+
+  /** Update mvHash.  Should be called at each update of mvIndex. */
+  private def rehashMV() = {
+    var h = 0; var i = mvIndex
     while(i < missingViews.length){
       if(missingViews(i) != null) h = h*73 + missingViews(i).hashCode
       i += 1
     }
-    i = 0
-    while(i < missingCommon.length){
-      if(missingCommon(i) != null) h = h*73 + missingCommon(i).hashCode
-      i += 1
-    }
-    theHashCode = h
   }
 
-  rehash()
+  rehashMC(); rehashMV()
+
+  /** Recalculate the hash code.  This should be performed every time the state
+    * of this changes. */
+  // def rehash() = {
+  //   var h = newView.hashCode; var i = 0
+  //   while(i < missingViews.length){
+  //     if(missingViews(i) != null) h = h*73 + missingViews(i).hashCode
+  //     i += 1
+  //   }
+  //   i = 0
+  //   while(i < missingCommon.length){
+  //     if(missingCommon(i) != null) h = h*73 + missingCommon(i).hashCode
+  //     i += 1
+  //   }
+  //   theHashCode = h
+  // }
+
+  // rehash()
 
   /** Estimate of the size of this. 
     * @return a pair: the number of views in missingViews; and the number of 
     * views in missingCommon. */
   def size: (Int, Int) = 
-    (missingViews.filter(_ != null).length,
+    (missingViews.count(_ != null),
       missingCommon.filter(_ != null).map(_.size).sum)
 
 }
@@ -292,12 +303,6 @@ object MissingInfo{
       if(j == 0 || missingViews(j-1) != mv) missingViews(j) = mv
       else missingViews(j) = null // ; remainingCount -= 1 
     }
-    // IMPROVE: remove following
-    // if(debugging)
-    //   for(i <- 0 until missingViews.length-1)
-    //     if(missingViews(i) != null && missingViews(i+1) != null)
-    //       assert(missingViews(i).compare(missingViews(i+1)) < 0,
-    //         "\n"+missingViews.map(_.toString).mkString("\n"))
   }
 
   /** Do xs and ys hold the same non-null values? */
@@ -316,54 +321,3 @@ object MissingInfo{
   }
 }
 
-
-// ==================================================================
-
-// /** A set of MissingInfo. */
-// class MissingInfoSet{
-//   /** We store MissingInfos in a hash set. */
-//   private val set = new HashSet[MissingInfo]
-
-//   /* Each time a MissingInfo's state changes, its hash is updated.  Since each
-//    * might be in multiple sets, that means it might be in the wrong place in
-//    * this HashSet.  However, each call to update sorts things out. */
-
-//   /** Add missingInfo to this. */
-//   def add(missingInfo: MissingInfo): Unit = set.add(missingInfo)
-
-//   /** For each MissingInfo mi in this: (1) if mi is done or its newView is in
-//     * views, then remove mi; (2) remove cv from its views; if it is now done,
-//     * add its newView to result and remove mi from this. */
-// // IMPROVE comment
-//   def update(cv: ComponentView, views: ViewSet, 
-//       result: ArrayBuffer[ComponentView]) 
-//   = { ???
-//     // Add nv to result if not already there
-//     def maybeAdd(nv: ComponentView) = if(!result.contains(nv)) result += nv
-//     // The new value for the set.
-//     val newSet = new HashSet[MissingInfo]
-
-//     // MissingInfos that need to be removed from this set.
-//     // var toRemove = List[MissingInfo]()
-//     // // MissingInfos whose states have changed: they need to be removed,
-//     // // rehashed and re-added.
-//     // var changedMIs = List[MissingInfo]()
-
-//     // for(mi <- set.iterator; if !mi.done){
-//     //   if(views.contains(mi.newView)) mi.markNewViewFound
-//     //   else{
-//     //     val changed = mi.updateMissingViews(cv) // if changed, re-store
-//     //     if(mi.done) maybeAdd(mi.newView)
-//     //     else{ 
-//     //       if(changed) mi.rehash // IMPROVE: do this in updateMissingViews?
-//     //       newSet.add(mi)
-//     //     }
-//     //   }
-//     //}
-
-//     // for(mi <- toRemove) set.remove(mi)
-//     // for(mi <- changedMIs){ set.remove(mi); mi.rehash; set.add(mi) }
-
-//   }
-
-// }
