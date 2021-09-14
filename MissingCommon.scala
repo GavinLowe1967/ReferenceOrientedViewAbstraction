@@ -2,7 +2,7 @@ package ViewAbstraction
 
 import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
-import scala.collection.mutable.{ArrayBuffer,HashSet}
+import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap}
 
 /** The representation of the obligation to find a component state c with
   * identity pid such that (1) servers || cpts1(0) || c is in the ViewSet; (2)
@@ -38,7 +38,7 @@ class MissingCommon(
     * which condition (1) is satisfied; cands contains those views
     * corresponding to conditions (2) and (3).  The list is sorted (wrt
     * ComponentView.compare).  */
-  type MissingCandidates = List[ComponentView]
+  type MissingCandidates = MissingCommon.MissingCandidates // List[ComponentView]
 
   /** When any element of missingCandidates is satisfied, then this obligation
     * will be discharged.  Each MissingCandidates within the list is sorted
@@ -59,7 +59,7 @@ class MissingCommon(
     * EffectOnStore.mcMissingCandidatesStore. */
   def missingHeads = missingCandidates.map(_.head)
 
-  import MissingCommon.ViewBuffer // ArrayBuffer[ComponentView]
+  import MissingCommon.ViewBuffer
 
   /** Update mc based on the addition of cv.  If cv matches mc.head, remove it,
     * and the maximal prefix from views.  If then done, record this.
@@ -119,12 +119,13 @@ class MissingCommon(
     * done. */
   def updateMissingViews(views: ViewSet): ArrayBuffer[ComponentView] = {
     val toRegister = new ArrayBuffer[ComponentView]
+    assert(done || missingCandidates.nonEmpty) // ??? 
     missingCandidates = 
       missingCandidates.map(mc => removeViews(mc, views, toRegister))
     if(done) null 
     else{ 
       assert(toRegister.nonEmpty,
-        s"updateMissingViews with\n${missingCandidates.mkString("\n")}")
+        s"updateMissingViews with\n${missingCandidates}")
       toRegister
     }
   }
@@ -135,8 +136,9 @@ class MissingCommon(
     cv.servers == servers && cv.components(0) == princ1
   // IMPROVE: can we also ensure that cv.components(1).processIdentity == pid?
 
-  /** Update this based on using cv to instantiate servers || princ1 || c.
-    * Add to vb those Views against which this needs to be registered. */
+  /** Update this based on using cv to instantiate servers || princ1 || c.  Add
+    * to vb those Views against which this needs to be registered, namely
+    * missingHeads. */
   def updateMissingCommon(cv: ComponentView, views: ViewSet, vb: ViewBuffer) = {
     require(matches(cv)); val cpt1 = cv.components(1) 
     if(cpt1.hasPID(pid))
@@ -162,6 +164,8 @@ class MissingCommon(
   private def isNewUMCRenamedState(st: State): Boolean = 
     doneMissingCandidatesRenamed.add(st)
 
+  import MissingCommon.{Eq,Sub,Sup,Inc}
+
   /** Add mCand to missingCandidates if it's not there already.  Return true if
     * successful.  Pre: mCand is sorted.  */
   private def add(mCand: MissingCandidates): Boolean = {
@@ -171,7 +175,7 @@ class MissingCommon(
     var newMC = List[MissingCandidates]()
     var found = false // true if missingCandidates includes a subset of mCand
     for(mCand1 <- missingCandidates){
-      val cmp = compare(mCand1, mCand)
+      val cmp = MissingCommon.compare(mCand1, mCand)
       // if(cmp == Sup){  // mCand1 can be removed
       //   assert(mCand.forall(mCand1.contains(_)), mCand1.toString+"\n"+mCand) 
       // }
@@ -190,6 +194,7 @@ class MissingCommon(
       found ||= cmp == Sub || cmp == Eq // mCand can't be replaced by mCand1
     }
     if(!found) newMC ::= mCand
+    assert(newMC.nonEmpty)
     missingCandidates = newMC
     !found
   }
@@ -199,26 +204,7 @@ class MissingCommon(
     mCand.length < 2 || 
       mCand.head.compare(mCand.tail.head) < 0 && isSorted(mCand.tail)
 
-  // Possible returns from compare
-  private val Eq = 0; private val Sub = 1; 
-  private val Sup = 2; private val Inc = 4
 
-  /** Compare mc1 and mc2.  Return Eq is equal, Sub if mc1 is proper subset, Sup
-    * if mc1 is a proper superset, and Inc if they are incomparable.  */
-  private def compare(mc1: MissingCandidates, mc2: MissingCandidates) = {
-    var c1 = mc1; var c2 = mc2; var sub = true; var sup = true
-    // Inv sub is true if elements of mc1 seen so far are all in mc2; sup is
-    // true if elements of mc2 seen so far are all in mc1.  Still need to
-    // compare c1 and c2.
-    while(c1.nonEmpty && c2.nonEmpty && (sub || sup)){
-      val comp = c1.head.compare(c2.head)
-      if(comp < 0){ sub = false; c1 = c1.tail } // c1.head not in mc2
-      else if(comp == 0){ c1 = c1.tail; c2 = c2.tail }
-      else{ sup = false; c2 = c2.tail } // c2.head is not in mc1
-    }
-    sub &&= c1.isEmpty; sup &&= c2.isEmpty
-    if(sub){ if(sup) Eq else Sub } else if(sup) Sup else Inc
-  }
 
   /** Sanity check that no head element of missingCandidates is in views. */
   def sanityCheck(views: ViewSet) = {
@@ -237,7 +223,7 @@ class MissingCommon(
     * its initial parameters, so we use equality of parameters as the notion
     * of equality. */
   override def equals(that: Any) = that match{
-    case mc: MissingCommon =>
+    case mc: MissingCommon => 
       mc.hashCode == hashCode && // optimisation
       mc.servers == servers && mc.cpts1.sameElements(cpts1) &&
       mc.cpts2.sameElements(cpts2) && mc.pid == pid
@@ -278,11 +264,12 @@ class MissingCommon(
   /** Has this been counted for profiling purposes? */
   private var counted = false
 
-  /** A measure of the size of this: the number of ComponentViews stored. */
+  /** A measure of the size of this: the number of ComponentViews stored.  If
+    * size has already been called, then return 0 to avoid double-counting. */
   def size = {
     if(counted) 0
     else{
-      counted = false; var mcs = missingCandidates; var size = 0
+      counted = true; var mcs = missingCandidates; var size = 0
       while(mcs.nonEmpty){ size += mcs.head.length; mcs = mcs.tail }
       size
     }
@@ -306,6 +293,31 @@ object MissingCommon{
     * registered in the EffectOnStore. */
   type ViewBuffer = ArrayBuffer[ComponentView]
 
+  /** All the MissingCommon we have created.  */
+  private var allMCs = 
+    new HashMap[(ServerStates, List[State], ProcessIdentity), MissingCommon]
+
+  /** Get a MissingCommon corresponding to servers, cpts1, cpts2, pid: either
+    * retrieving a previous such object, or creating a new one.  The
+    * MissingCommon is paired with a Boolean that indicates if it is new. */
+  @inline private def getOrInit(
+    servers: ServerStates, cpts1: Array[State], cpts2: Array[State],
+    pid: ProcessIdentity)
+      : (MissingCommon, Boolean) = {
+    val key = (servers, cpts1.toList++cpts2.toList, pid)
+    allMCs.get(key) match{
+      case Some(mc) => Profiler.count("old MissingCommon"); (mc, false)
+      case None => 
+        val mc = new MissingCommon(servers, cpts1, cpts2, pid)
+        Profiler.count("new MissingCommon"); allMCs += key -> mc; (mc, true)
+    }
+  }
+
+  /** Reset ready for a new check. */
+  def reset = 
+    allMCs = 
+      new HashMap[(ServerStates, List[State], ProcessIdentity), MissingCommon]
+
   /** A MissingCommon object, corresponding to servers, cpts1, cpts2 and pid, or
     * null if the obligation is already satisfied.
     * 
@@ -323,25 +335,30 @@ object MissingCommon{
     Profiler.count("makeMissingCommon")
     assert(singleRef)
     assert(cpts2.length == 2, StateArray.show(cpts2))
-    val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
-    val mc = new MissingCommon(servers, cpts1, cpts2, pid)
-    val ab = new ViewBuffer
-    // Search for elements of views of the form servers || princ1 || c where c
-    // has identity pid
-    val iter = views.iterator(servers, princ1)
-    while(iter.hasNext && !found){
-      val cv = iter.next; val cpts = cv.components; assert(cpts.length == 2, cv)
-      val cpt1 = cpts(1)
-      if(cpt1.hasPID(pid)) found = updateMissingCandidates(mc, cpt1, views, ab)
+    val (mc, isNew) = getOrInit(servers, cpts1, cpts2, pid)
+    if(isNew){ 
+      // Initialise mc, based on views
+      val ab = new ViewBuffer
+      val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
+      // Search for elements of views of the form servers || princ1 || c where c
+      // has identity pid
+      val iter = views.iterator(servers, princ1)
+      while(iter.hasNext && !found){
+        val cv = iter.next; val cpts = cv.components; 
+        assert(cpts.length == 2, cv); val cpt1 = cpts(1)
+        if(cpt1.hasPID(pid)) found = updateMissingCandidates(mc, cpt1, views, ab)
+      }
+      if(found){ mc.setDone; null } else mc 
+      // Note: we don't need to do anything with ab here, as mc.allcandidates
+      // will store the same Views.  IMPROVE?
     }
-    if(found) null else mc 
-    // Note: we don't need to do anything with ab here, as mc.allcandidates
-    // will store the same Views.  IMPROVE?
+    else if(mc.done) null else mc 
   }
 
   /** Update mc.missingCandidates to include lists of missing views
     * corresponding to instantiating c with a renaming of cpt1.  Add to vb the
-    * views that mc needs to be registered against in the EffectOnStore.
+    * views that mc needs to be registered against in the EffectOnStore,
+    * namely mc.missingHeads.
     * 
     * Pre: views contains a view mc.servers || mc.cpts1(0) || cpt1 to
     * instantiate clause (1) of mc.
@@ -408,6 +425,37 @@ object MissingCommon{
     }
     missing.sortWith(ComponentView.compare _)
   }
+
+  // Possible returns from compare
+  private val Eq = 0; private val Sub = 1; 
+  private val Sup = 2; private val Inc = 4
+
+  /** Each value cands of type MissingCandidates represents that if all the
+    * elements of cands are added to the ViewSet, then this obligation will be
+    * discharged.  Each corresponds to a particular component state c for
+    * which condition (1) is satisfied; cands contains those views
+    * corresponding to conditions (2) and (3).  The list is sorted (wrt
+    * ComponentView.compare).  */
+  type MissingCandidates = List[ComponentView]
+
+  /** Compare mc1 and mc2.  Return Eq is equal, Sub if mc1 is proper subset, Sup
+    * if mc1 is a proper superset, and Inc if they are incomparable.  */
+  @inline private 
+  def compare(mc1: MissingCandidates, mc2: MissingCandidates): Int = {
+    var c1 = mc1; var c2 = mc2; var sub = true; var sup = true
+    // Inv sub is true if elements of mc1 seen so far are all in mc2; sup is
+    // true if elements of mc2 seen so far are all in mc1.  Still need to
+    // compare c1 and c2.
+    while(c1.nonEmpty && c2.nonEmpty && (sub || sup)){
+      val comp = c1.head.compare(c2.head)
+      if(comp < 0){ sub = false; c1 = c1.tail } // c1.head not in mc2
+      else if(comp == 0){ c1 = c1.tail; c2 = c2.tail }
+      else{ sup = false; c2 = c2.tail } // c2.head is not in mc1
+    }
+    sub &&= c1.isEmpty; sup &&= c2.isEmpty
+    if(sub){ if(sup) Eq else Sub } else if(sup) Sup else Inc
+  }
+
 
 
 }

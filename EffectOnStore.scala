@@ -41,6 +41,10 @@ class SimpleEffectOnStore extends EffectOnStore{
    * 
    * add
    * |--addToStore
+   * 
+   * complete
+   * |--mcDone
+   *    |--(MissingInfo).{mcDone,updateMissingViews,done}
    */
 
   /** A set of MissingInfos.
@@ -51,22 +55,28 @@ class SimpleEffectOnStore extends EffectOnStore{
     * result of finding a new ComponentView. */
   type Store = HashMap[ComponentView, MissingInfoSet]
 
-  /** The underlying store concerning missing values.  For each mi: MissingInfo
-    * in the abstract set, and for each cv in mi.missingViews, store(cv)
-    * contains mi. */
-  private val store = new Store
-
-  /** The underlying store concerning MissingCandidates values in missingCommon
-    * fields of MissingInfo objects.  For each mi, for each mc in
-    * mi.missingCommon, for each cv in mc.missingCandidates.flatten,
-    * mcMissingCandidateStore(cv) contains mi. */
-// IMPROVE comment: just the heads? 
+  /** Information about those mi: MissingInfo in the abstract set such that
+    * !mi.mcDone (i.e. not all MissingCommon in mi.missingCommon are done).
+    * If mc is the first element of mi.missingCommon that is not done, then
+    * for each v in mc.missingHeads, mcMissingCandidatesStore contains v -> mi
+    * (i.e. keyed against the next missing view in each option within mc). */
   private val mcMissingCandidatesStore = new Store
+
+  /** Information about those mi: MissingInfo in the abstract set such that
+    * mi.mcDone (i.e. all MissingCommon in mi.missingCommon are done).  For
+    * each such mi, store contains mi.missingHead -> mi (i.e. keyed against
+    * the next missing view). */
+  private val store = new Store
 
   /** The underlying store concerning MissingCommon values.  For each mi:
     * MissingInfo in the abstract set, and for each
     * MissingCommon(servers,cpts,_,_) or (servers,_,cpts,_) in
-    * mi.missingCommon, commonStore(servers,cpts(0)) contains mi. */
+    * mi.missingCommon, commonStore(servers,cpts(0)) contains mi.  This is
+    * used to identify whether a new view can be used to instantiate c in the
+    * obligation of the missingCommon.  */
+// FIXME: seems to be just the former.  Maybe that's enough.
+// IMPROVE: include the pid in the domain of the mapping.
+// IMPROVE: store only against the first MissingCommon.
   private val commonStore = new HashMap[(ServerStates, State), MissingInfoSet]
 
   /** Add missingInfo to theStore(cv), if not already there. */
@@ -87,7 +97,6 @@ class SimpleEffectOnStore extends EffectOnStore{
       : Unit = {
     Profiler.count("EffectOnStore.add")
     val missingInfo = new MissingInfo(nv, missing.toArray, missingCommon.toArray)
-    // missingInfo.sanity1
     if(missingCommon.isEmpty){
       assert(missing.nonEmpty)
       addToStore(store, missingInfo.missingHead, missingInfo)
@@ -119,17 +128,10 @@ class SimpleEffectOnStore extends EffectOnStore{
     }
   }
 
-  // @inline def containsAB[A](xs: ArrayBuffer[A], x: A): Boolean = {
-  //   var i = 0
-  //   while(i < xs.length && xs(i) != x) i += 1
-  //   i < xs.length
-  // }
-
   private def contains(cvs: List[MissingInfo], cv: MissingInfo): Boolean = 
     cvs.nonEmpty && (cvs.head == cv || cvs.tail.contains(cv))
 
   import MissingCommon.ViewBuffer
-
 
   /** Try to complete values in the store, based on the addition of cv, and with
     * views as the ViewSet.  Return the Views that can now be added.  */
@@ -234,30 +236,38 @@ class SimpleEffectOnStore extends EffectOnStore{
 
   /** Report on size. */
   def report = {
-    // The number of MissingInfos in iter, and the sum of their sizes
-    def count(iter: Iterator[Iterable[MissingInfo]]): (Long, Long) = {
+    // The number of MissingInfos in iter; the number of views in their
+    // missingViews; and the number of views in their missingCommons
+    def count(iter: Iterator[Iterable[MissingInfo]]): (Long, Long, Long) = {
       // # items in iter, and sum of their sizes
-      var numEls = 0L; var elsSize = 0L
-      for(mis <- iter; mi <- mis){ numEls += 1; elsSize += mi.size }
+      var numEls = 0L; var mvSize = 0L; var mcSize  = 0L
+      for(mis <- iter; mi <- mis){ 
+        numEls += 1; val (mvSize1,mcSize1) = mi.size
+        mvSize += mvSize1; mcSize += mcSize1
+      }
           // Profiler.count("MissingCommon length "+mi.mcCount)
-      (numEls, elsSize)
+      (numEls, mvSize, mcSize)
     }
     println
     println("store: size = "+store.size)
-    val (storeEls, storeElsSize) = count(store.valuesIterator)
+    val (storeEls, storeMVSize, storeMCSize) = count(store.valuesIterator)
     println("  # MissingInfos = "+printLong(storeEls))
-    println("  MissingInfos size = "+printLong(storeElsSize))
+    println("  MissingInfos missingViews size = "+printLong(storeMVSize))
+    println("  MissingInfos missingCommon size = "+printLong(storeMCSize))
 
     println("commonStore: size = "+commonStore.size)
-    val (cStoreEls, cStoreElsSize) = count(commonStore.valuesIterator)
+    val (cStoreEls, cStoreMVSize, cStoreMCSize) = 
+      count(commonStore.valuesIterator)
     println("  # MissingInfos = "+printLong(cStoreEls))
-    println("  MissingInfos size = "+printLong(cStoreElsSize))
+    println("  MissingInfos missingViews size = "+printLong(cStoreMVSize))
+    println("  MissingInfos missingCommon size = "+printLong(cStoreMCSize))
 
     println("mcMissingCandidatesStore: size = "+mcMissingCandidatesStore.size)
-    val (mcmStoreEls, mcmStoreElsSize) = 
+    val (mcmStoreEls, mcmStoreMVSize, mcmStoreMCSize) = 
       count(mcMissingCandidatesStore.valuesIterator)
     println("  # MissingInfos = "+printLong(mcmStoreEls))
-    println("  MissingInfos size = "+printLong(mcmStoreElsSize))
+    println("  MissingInfos missingViews size = "+printLong(mcmStoreMVSize))
+    println("  MissingInfos missingCommons size = "+printLong(mcmStoreMCSize))
     println
 
     // Find key with largest image

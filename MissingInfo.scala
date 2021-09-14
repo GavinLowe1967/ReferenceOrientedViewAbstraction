@@ -233,10 +233,12 @@ class MissingInfo(
 
   rehash()
 
-  /** Estimate of the size of this. */
-  def size = 
-    missingViews.filter(_ != null).length + 
-      missingCommon.filter(_ != null).map(_.size).sum
+  /** Estimate of the size of this. 
+    * @return a pair: the number of views in missingViews; and the number of 
+    * views in missingCommon. */
+  def size: (Int, Int) = 
+    (missingViews.filter(_ != null).length,
+      missingCommon.filter(_ != null).map(_.size).sum)
 
 }
 
