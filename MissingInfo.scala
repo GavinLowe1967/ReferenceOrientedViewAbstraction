@@ -36,7 +36,7 @@ class MissingInfo(
    * |--advanceMC
    *    |--(MissingCommon.)updateMissingViews
    * 
-   * updateMCMissingViews    (called from EffectOnStore)
+   * updateMissingViewsOfMissingCommon    (called from EffectOnStore)
    * |--(MissingCommon.)updateMissingViewsBy
    * |--advanceMC
    * 
@@ -56,7 +56,12 @@ class MissingInfo(
   assert(missingCommon.length <= 2, 
     "missingCommon.length = "+missingCommon.length)
   assert(missingViews.length <= 9, "missingViews.length = "+missingViews.length)
-  // FIXME: not true in general
+  // FIXME: latter not true in general
+
+  /* Initially we try to discharge the obligations represented by missingCommon.
+   * mcIndex represents the next MissingCommon to consider; mcDone gives true
+   * when all are satisfied.  Subsequently, the obligations represented by
+   * missingViews are considered.   */
 
   /** Index of the first non-null entry in missingCommon, or
     * missingCommon.length if all are null.  Invariant:
@@ -115,46 +120,55 @@ class MissingInfo(
     * match to the first clause of the obligation.  cv is expected to be a
     * possible match to at least one member of missingCommon.
     * @return a ViewBuffer containing all views that this needs to be registered
-    * against in the store, or null if all MissingCommon are done. */
+    * against in the store if not all MissingCommon are done. */
   def updateMissingCommon(cv: ComponentView, views: ViewSet): ViewBuffer = {
     // IMPROVE: just update the one in position mcIndex
-    var vb = new ViewBuffer
+    // var vb = new ViewBuffer
     // Deal with the current MissingCommon
-    val mc = missingCommon(mcIndex)
-    assert(mc != null)
+    val mc = missingCommon(mcIndex); assert(mc != null)
+    // assert(mc.matches(cv))  // IMPROVE structure
+// FIXME: I think above assertion could be false if mcIndex = 1, and cv matches missingCommon(0).
     if(mc.matches(cv)){
-      mc.updateMissingCommon(cv, views, vb)
+      val vb = new ViewBuffer
+      mc.updateWithNewMatch(cv, views, vb)
       if(mc.done){
-        mcNull(mcIndex); vb = advanceMC(views)
-        if(mcIndex < missingCommon.length){
-          // We've advanced to the second (of two) MissingCommonValues; now
-          // need to register this against vb.
-          assert(mcIndex == 1); return vb
-        }
+        // Advance to the next MissingCommon (if any)
+        mcNull(mcIndex); val vb1 = advanceMC(views); vb1
+        // if(mcIndex < missingCommon.length){
+        //   // We have advanced.  Need to register this against vb.
+        //   assert(mcIndex == 1); return vb // IMPROVE: remove assertion
+        // }
       }
+      else vb
     }
-    else assert(mcIndex+1 < missingCommon.length && 
-      missingCommon(mcIndex+1).matches(cv))
-    if(mcIndex+1 < missingCommon.length){
-      // Deal with the other MissingCommon
-      assert(mcIndex == 0 && missingCommon.length == 2)
-      val mc1 = missingCommon(1)
-      if(mc1 != null && mc1.matches(cv)){
-        mc1.updateMissingCommon(cv, views, new ViewBuffer)
-        if(mc1.done) mcNull(1) // It's done, but missingCommon(0) isn't yet
-      }
-    }
-    vb
+    // I think following can't happen: we unregistered against
+    // missingCommon(0) in EffectOnStore.
+    else{ assert(false && mcIndex == 1 && missingCommon(0).matches(cv)); null }
+    /* I think following is unnecessary.  We register just against
+     * missingCommon(mcIndex) */
+    // else assert(false && mcIndex+1 < missingCommon.length && 
+    //   missingCommon(mcIndex+1).matches(cv))
+    // if(mcIndex+1 < missingCommon.length){
+    //   // Deal with the other MissingCommon
+    //   assert(mcIndex == 0 && missingCommon.length == 2)
+    //   val mc1 = missingCommon(1)
+    //   if(mc1 != null && mc1.matches(cv)){
+    //     mc1.updateMissingCommon(cv, views, new ViewBuffer)
+    //     if(mc1.done) mcNull(1) // It's done, but missingCommon(0) isn't yet
+    //   }
+    // }
+    // vb
   }
 
-  /** Update the MissingCommon fields of this based upon the addition of cv. cv
-    * is expected to match the head of the missing views of a MissingCommon
-    * value. (IMPROVE: assert this.)
+  /** Update the MissingCommon fields of this based upon the addition of cv.
+    * Normally, cv will match a missingHead of the next MissingCommon, but not
+    * if we've subsequently advanced within the MissingCommons. (IMPROVE:
+    * assert this.)
     * @return the views against which this should now be registered, or
     * null if all the missingCommon entries are satisfied.  */ 
-  def updateMCMissingViews(cv: ComponentView, views: ViewSet): ViewBuffer = {
+  def updateMissingViewsOfMissingCommon(cv: ComponentView, views: ViewSet)
+      : ViewBuffer = {
     val mc = missingCommon(mcIndex)
-    // assert(mc.matches(cv))  IMPROVE: why does this not hold? 
     val vb: ViewBuffer = mc.updateMissingViewsBy(cv, views)
     if(mc.done){ mcNull(mcIndex); advanceMC(views) }
     else vb
@@ -164,6 +178,7 @@ class MissingInfo(
     * when all MissingCommon are first complete, or from missingCommonViewsBy,
     * to advance over subsequent missing views in views.  */
   def updateMissingViews(views: ViewSet) = {
+    require(mcDone)
     while(mvIndex < missingViews.length && 
       (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))){
       missingViews(mvIndex) = null; mvIndex += 1
@@ -173,7 +188,8 @@ class MissingInfo(
   /** Update missingViews and mvIndex based on the addition of cv.  cv is
     * expected to match the next missing view. */
   def updateMissingViewsBy(cv: ComponentView, views: ViewSet): Unit = {
-    assert(mvIndex < missingViews.length && missingViews(mvIndex) == cv,
+    require(mcDone && mvIndex < missingViews.length && 
+      missingViews(mvIndex) == cv,
       s"mvIndex = $mvIndex, cv = $cv, missingViews = \n"+
         missingViews.mkString("\n"))
     missingViews(mvIndex) = null; mvIndex += 1

@@ -23,7 +23,7 @@ class MissingCommon(
    * updateMissingViews       (called from MissingInfo)
    * |--removeViews
    * 
-   * updateMissingCommon      (called from MissingInfo)
+   * updateWithNewMatch      (called from MissingInfo)
    * |--MissingCommon.updateMissingCandidates
    */
 
@@ -38,13 +38,17 @@ class MissingCommon(
     * which condition (1) is satisfied; cands contains those views
     * corresponding to conditions (2) and (3).  The list is sorted (wrt
     * ComponentView.compare).  */
-  type MissingCandidates = MissingCommon.MissingCandidates // List[ComponentView]
+  import MissingCommon.MissingCandidates // List[ComponentView]
 
   /** When any element of missingCandidates is satisfied, then this obligation
     * will be discharged.  Each MissingCandidates within the list is sorted
     * (wrt ComponentView.compare). */
   private var missingCandidates = List[MissingCandidates]()
+  /* We maintain the invariant that the first element of each list is missing
+   * from the current view set.  (IMPROVE: at what point, per ply?)  This will
+   * be registered against those first elements in the EffectOnStore. */
 
+  /** Is this constraint satisfied? */
   private var isDone = false
 
   /** Is this constraint satisfied? */
@@ -59,13 +63,14 @@ class MissingCommon(
     * EffectOnStore.mcMissingCandidatesStore. */
   def missingHeads = missingCandidates.map(_.head)
 
-  import MissingCommon.ViewBuffer
+  import MissingCommon.ViewBuffer // ArrayBuffer[ComponentView]
 
   /** Update mc based on the addition of cv.  If cv matches mc.head, remove it,
     * and the maximal prefix from views.  If then done, record this.
     * Otherwise add to toRegister the next view, against which this should be
     * registered. */
-  private def updateMissingCandidates(mc: MissingCandidates, cv: ComponentView, 
+  @inline private 
+  def updateMissingCandidates(mc: MissingCandidates, cv: ComponentView,
     views: ViewSet, toRegister: ViewBuffer)
       : MissingCandidates = {
     if(mc.head == cv) removeViews(mc.tail, views, toRegister)
@@ -91,10 +96,7 @@ class MissingCommon(
   def updateMissingViewsBy(cv: ComponentView, views: ViewSet): ViewBuffer = {
     // Note: MissingCommon are shared between MissingInfo, so it's possible
     // that cv has already been removed from this.
-    if(done){
-      // println(s"updateMissingViewsBy: $this already done")
-      null
-    }
+    if(done) null
     else{
       val toRegister = new ArrayBuffer[ComponentView]
       assert(missingCandidates.forall(_.nonEmpty), this.toString)
@@ -106,8 +108,7 @@ class MissingCommon(
       if(done) null
       else{
         // The following assertion might be false, because of the sharing
-        // assert(toRegister.nonEmpty,
-        // s"\nupdateMissingViews($cv) with\n${missingCandidates.mkString("\n")}")
+        // assert(toRegister.nonEmpty)
         toRegister
       }
     }
@@ -132,14 +133,14 @@ class MissingCommon(
 
   /** Is cv a possible match to clause (1), i.e. does it match servers ||
     * cpts1(0) || c? */
-  def matches(cv: ComponentView) = 
+  @inline def matches(cv: ComponentView) = 
     cv.servers == servers && cv.components(0) == princ1
   // IMPROVE: can we also ensure that cv.components(1).processIdentity == pid?
 
   /** Update this based on using cv to instantiate servers || princ1 || c.  Add
     * to vb those Views against which this needs to be registered, namely
     * missingHeads. */
-  def updateMissingCommon(cv: ComponentView, views: ViewSet, vb: ViewBuffer) = {
+  def updateWithNewMatch(cv: ComponentView, views: ViewSet, vb: ViewBuffer) = {
     require(matches(cv)); val cpt1 = cv.components(1) 
     if(cpt1.hasPID(pid))
       if(MissingCommon.updateMissingCandidates(this, cpt1, views, vb))
@@ -166,8 +167,9 @@ class MissingCommon(
 
   import MissingCommon.{Eq,Sub,Sup,Inc}
 
-  /** Add mCand to missingCandidates if it's not there already.  Return true if
-    * successful.  Pre: mCand is sorted.  */
+  /** Add mCand to missingCandidates if no subset is there already; remove any
+    * superset of mCand.  Return true if successful.  Pre: mCand is
+    * sorted.  */
   private def add(mCand: MissingCandidates): Boolean = {
     require(isSorted(mCand), mCand) // IMPROVE: quite expensive
     // Traverse missingCandidates.  Add to newMC any that is not a proper
@@ -176,20 +178,6 @@ class MissingCommon(
     var found = false // true if missingCandidates includes a subset of mCand
     for(mCand1 <- missingCandidates){
       val cmp = MissingCommon.compare(mCand1, mCand)
-      // if(cmp == Sup){  // mCand1 can be removed
-      //   assert(mCand.forall(mCand1.contains(_)), mCand1.toString+"\n"+mCand) 
-      // }
-      // else if(cmp == Eq){
-      //   assert(mCand == mCand1); newMC::= mCand1; found = true
-      // }
-      // else if(cmp == Sub){
-      //   assert(mCand1.forall(mCand.contains(_))); newMC::= mCand1; found = true
-      // }
-      // else{ // cmp == Inc
-      //   assert(mCand1.exists(!mCand.contains(_)) || 
-      //     mCand.exists(!mCand1.contains(_)))
-      //   newMC::= mCand1
-      // }
       if(cmp != Sup) newMC::= mCand1 // mCand1 can't be replaced by mCand
       found ||= cmp == Sub || cmp == Eq // mCand can't be replaced by mCand1
     }
@@ -203,8 +191,6 @@ class MissingCommon(
   private def isSorted(mCand: MissingCandidates): Boolean = 
     mCand.length < 2 || 
       mCand.head.compare(mCand.tail.head) < 0 && isSorted(mCand.tail)
-
-
 
   /** Sanity check that no head element of missingCandidates is in views. */
   def sanityCheck(views: ViewSet) = {
@@ -284,9 +270,12 @@ object MissingCommon{
   /* Overview of main functions.
    * 
    * makeMissingCommon          (called from EffectOn)
-   * |--updateMissingCandidates  (also called from companion updateMissingCommon)
+   * |--updateMissingCandidates  (also called from companion updateWithNewMatch)
    *   |--Unification.remapToJoin
    *   |--getMissingCandidates
+   * 
+   * Profiling, 2021/09/13, ~20% of total Checker time is spent within
+   * makeMissingCommon.
    */
 
   /** A buffer for storing Views, against which a MissingInfo should be
@@ -382,10 +371,7 @@ object MissingCommon{
         if(mc.isNewUMCRenamedState(c)){
           val missing = getMissingCandidates(mc, c, views)
           if(missing.isEmpty) found = true
-          else//  if(!mc.missingCandidates.contains(missing)){ 
-          //   mc.missingCandidates ::= missing; vb += missing.head
-          // }
-            if(mc.add(missing)) vb += missing.head
+          else if(mc.add(missing)) vb += missing.head
         }
       } // end of while loop
       found
@@ -439,7 +425,8 @@ object MissingCommon{
   type MissingCandidates = List[ComponentView]
 
   /** Compare mc1 and mc2.  Return Eq is equal, Sub if mc1 is proper subset, Sup
-    * if mc1 is a proper superset, and Inc if they are incomparable.  */
+    * if mc1 is a proper superset, and Inc if they are incomparable.  Pre:
+    * both are sorted.  */
   @inline private 
   def compare(mc1: MissingCandidates, mc2: MissingCandidates): Int = {
     var c1 = mc1; var c2 = mc2; var sub = true; var sup = true
@@ -455,7 +442,4 @@ object MissingCommon{
     sub &&= c1.isEmpty; sup &&= c2.isEmpty
     if(sub){ if(sup) Eq else Sub } else if(sup) Sup else Inc
   }
-
-
-
 }

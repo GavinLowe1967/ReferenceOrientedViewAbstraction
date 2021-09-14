@@ -49,6 +49,7 @@ class SimpleEffectOnStore extends EffectOnStore{
 
   /** A set of MissingInfos.
     * IMPROVE: remove redundancies? */
+// FIXME: hashes not correct
   type MissingInfoSet = HashSet[MissingInfo]
 
   /** A type of stores, giving the MissingInfos that might need updating as the
@@ -190,7 +191,7 @@ class SimpleEffectOnStore extends EffectOnStore{
         for(mi <- mis; if !mi.mcDone){
           if(views.contains(mi.newView)) mi.markNewViewFound
           else{
-            val ab = mi.updateMCMissingViews(cv, views) 
+            val ab = mi.updateMissingViewsOfMissingCommon(cv, views) 
             if(mi.done) maybeAdd(mi.newView) 
             else if(mi.mcDone) mcDone(mi) 
             else for(cv1 <- ab) addToStore(mcMissingCandidatesStore, cv1, mi)
