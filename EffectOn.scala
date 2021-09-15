@@ -159,6 +159,14 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
         }
       } // end of if(!views.contains(nv))
+      else if(false){
+        println(
+          s"$pre -${system.showEvent(e)}-> $post\n"+
+            s"  with unifications $unifs induces $cv --> $nv")
+        val v1 = views.get(nv)
+        println(s"Previously "+v1.showCreationInfo)
+          // println(v1)
+      }
     } // end of for loop
   }
 

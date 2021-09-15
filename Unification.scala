@@ -326,7 +326,10 @@ object Unification{
     }
 
     if(singleRef){
-      if(acquiredCrossRef) true
+      if(unifs.length == cv.components.length && unifs.contains((0,0))){
+        /*println(s"Avoiding unification with $unifs");*/ false
+      }
+      else if(acquiredCrossRef) true
 // IMPROVE:  case below?
       else if(changedServers) true
         // Following misses some views with lockFreeQueue

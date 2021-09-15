@@ -10,6 +10,9 @@ trait ViewSet{
   /** Does this contain sv? */
   def contains(sv: ComponentView): Boolean
 
+  /** Get the view in this corresponding to v.  Pre: there is one. */
+  def get(v: ComponentView): ComponentView 
+
   /** The number of elements in the set. */
   def size: Long 
 
@@ -207,6 +210,8 @@ class ServerBasedViewSet(initSize: Int = 16) extends ViewSet{
     set != null && set.contains(sv)
   }
 
+  def get(v: ViewAbstraction.ComponentView): ComponentView = ???
+
   /** The number of elements in the set. */
   def size: Long = theSize
 
@@ -267,6 +272,14 @@ class PrincipalBasedViewSet(initSize: Int = 4){
   def contains(sv: ComponentView): Boolean = {
     val set = underlying.get(sv.principal)
     set != null && set.contains(sv)
+  }
+
+  /** Get the view in this corresponding to v.  Pre: there is one. */
+  def get(v: ComponentView): ComponentView = {
+    underlying.get(v.principal).find(_ == v) match{
+      case Some(v1) => v1
+      case None => println(s"No element corresponding to $v"); assert(false); v
+    }
   }
 
   /** Iterator over the set.  */
@@ -350,10 +363,13 @@ class ServerPrincipalBasedViewSet(initSize: Int = 16) extends ViewSet {
 
   /** Does this contain sv? */
   def contains(sv: ComponentView): Boolean = {
-    // assert(sv != null) // IMPROVE
     val set = underlying.get(sv.servers)
     set != null && set.contains(sv)
   }
+
+  /** Get the view in this corresponding to v.  Pre: there is one. */
+  def get(v: ComponentView): ComponentView = 
+    underlying.get(v.servers).get(v)
 
   /** The number of elements in the set. */
   def size: Long = theSize

@@ -75,6 +75,11 @@ abstract class View{
   private def mkExtendedPost(post1: Concretization, newCpts: Array[State]) = 
     new Concretization(post1.servers, 
       StateArray.union(post1.components, newCpts))
+
+  def showCreationInfo: String = creationIngredients match{
+    case (pre1, cpts, cv, post1, newCpts) => s"induced by $pre1 -> $post1 on $cv"
+    case null => s"produced by $pre -> $post"
+  }
 }
 
 // =======================================================

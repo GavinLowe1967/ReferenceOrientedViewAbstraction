@@ -86,14 +86,11 @@ class SimpleEffectOnStore extends EffectOnStore{
   def addToStore(theStore: Store, cv: ComponentView, missingInfo: MissingInfo)
   = {
     val mis = theStore.getOrElseUpdate(cv, new MissingInfoSet)
-    mis += missingInfo
-    // theStore.get(cv) match{
-    //   case Some(mis) => mis += missingInfo 
-    //   case None =>
-    //     val mis = new MissingInfoSet; mis += missingInfo
-    //     theStore += cv -> mis
-    // }
+    if(false && mis.contains(missingInfo)) 
+      Profiler.count("EffectOnStore add failed")
+    else{ mis += missingInfo; /*Profiler.count("EffectOnStore add succeeded")*/ }
   }
+// IMPROVE
 
   /** Add MissingInfo(nv, missing, missingCommon) to the stores. */
   def add(missing: List[ComponentView], missingCommon: List[MissingCommon], 
@@ -114,19 +111,16 @@ class SimpleEffectOnStore extends EffectOnStore{
       for(mc <- missingCommon){
         val princ1 = mc.cpts1(0); val key = (mc.servers, princ1)
         val mis = candidateForMCStore.getOrElseUpdate(key, new MissingInfoSet)
-        mis += missingInfo
-        // candidateForMCStore.get(key) match{
-        //   case Some(mis) => mis += missingInfo
-        //   case None => 
-        //     val mis = new MissingInfoSet; mis += missingInfo
-        //     candidateForMCStore += key -> mis
-        // }
+       if(false && mis.contains(missingInfo))  
+         Profiler.count("EffectOnStore add failed")
+       else mis += missingInfo //Profiler.count("EffectOnStore add succeeded") }
+// IMPROVE
       }
     }
   }
-
-  // private def containsX(cvs: List[MissingInfo], cv: MissingInfo): Boolean = 
-  //   cvs.nonEmpty && (cvs.head == cv || cvs.tail.contains(cv))
+  /* Profiling, 2021/09/15 on lazySet.csp with bound 36: of 247M calls to add,
+   * there were 70M successful adds to one of the maps, and 228M unsuccessful
+   * adds. */
 
   import MissingCommon.ViewBuffer
 
@@ -239,11 +233,6 @@ class SimpleEffectOnStore extends EffectOnStore{
       (numEls, mvSize, mcSize)
     }
     println
-    println("mcDoneStore: size = "+mcDoneStore.size)
-    val (storeEls, storeMVSize, storeMCSize) = count(mcDoneStore.valuesIterator)
-    println("  # MissingInfos = "+printLong(storeEls))
-    println("  MissingInfos missingViews size = "+printLong(storeMVSize))
-    println("  MissingInfos missingCommon size = "+printLong(storeMCSize))
 
     println("candidateForMCStore: size = "+candidateForMCStore.size)
     val (cStoreEls, cStoreMVSize, cStoreMCSize) = 
@@ -259,12 +248,13 @@ class SimpleEffectOnStore extends EffectOnStore{
     println("  # MissingInfos = "+printLong(mcmStoreEls))
     println("  MissingInfos missingViews size = "+printLong(mcmStoreMVSize))
     println("  MissingInfos missingCommons size = "+printLong(mcmStoreMCSize))
-    println
 
-    // Find key with largest image
-    // val maxKey = store.keys.maxBy(k => store(k).length)
-    // println(s"maxKey = $maxKey -> ")
-    // for(mi <- store(maxKey)) println(mi)
+    println("mcDoneStore: size = "+mcDoneStore.size)
+    val (storeEls, storeMVSize, storeMCSize) = count(mcDoneStore.valuesIterator)
+    println("  # MissingInfos = "+printLong(storeEls))
+    println("  MissingInfos missingViews size = "+printLong(storeMVSize))
+    println("  MissingInfos missingCommon size = "+printLong(storeMCSize))
+
   }
 
 }

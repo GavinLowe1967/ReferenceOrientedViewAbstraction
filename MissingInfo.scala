@@ -127,7 +127,6 @@ class MissingInfo(
     * against in the store if not all MissingCommon are done. */
   def updateMissingCommon(cv: ComponentView, views: ViewSet): ViewBuffer = {
     val mc = missingCommon(mcIndex); assert(mc != null && mc.matches(cv))
-    // if(mc.matches(cv)){
     val vb = new ViewBuffer
     mc.updateWithNewMatch(cv, views, vb)
     if(mc.done){
@@ -136,10 +135,6 @@ class MissingInfo(
       mcNull(mcIndex); advanceMC(views)
     }
     else vb
-    // }
-    // I think following can't happen: we unregistered against
-    // missingCommon(0) in EffectOnStore.
-    // else{ assert(false && mcIndex == 1 && missingCommon(0).matches(cv)); null }
   }
 
   /** Update the MissingCommon fields of this based upon the addition of cv.
@@ -209,8 +204,6 @@ class MissingInfo(
       MissingInfo.equalExceptNull(mi.missingCommon, missingCommon)
   }
 
-  // private var theHashCode = -1
-
   /** The hash code for this. */
   override def hashCode = mcHash ^ mvHash
 
@@ -242,31 +235,12 @@ class MissingInfo(
 
   rehashMC(); rehashMV()
 
-  /** Recalculate the hash code.  This should be performed every time the state
-    * of this changes. */
-  // def rehash() = {
-  //   var h = newView.hashCode; var i = 0
-  //   while(i < missingViews.length){
-  //     if(missingViews(i) != null) h = h*73 + missingViews(i).hashCode
-  //     i += 1
-  //   }
-  //   i = 0
-  //   while(i < missingCommon.length){
-  //     if(missingCommon(i) != null) h = h*73 + missingCommon(i).hashCode
-  //     i += 1
-  //   }
-  //   theHashCode = h
-  // }
-
-  // rehash()
-
   /** Estimate of the size of this. 
     * @return a pair: the number of views in missingViews; and the number of 
     * views in missingCommon. */
   def size: (Int, Int) = 
     (missingViews.count(_ != null),
       missingCommon.filter(_ != null).map(_.size).sum)
-
 }
 
 // ==================================================================
