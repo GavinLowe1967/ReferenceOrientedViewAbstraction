@@ -148,8 +148,9 @@ object UnificationTest extends Unification.Tester{
       })
       assert(buffer.length == 2)
 
-      effectOnChangedServersCache.clear
+      // effectOnChangedServersCache.clear
       //println("=test1a=")
+      cv.clearInduced
       val (buffer2,_) = combine(pre, post, cv, List()) // , false
       // Unifying, N0 -> N0, N1 -> N1
       //println(showBuffer(buffer2))
@@ -166,7 +167,7 @@ object UnificationTest extends Unification.Tester{
 
     def test2 = {
       //println("\n=test2=")
-      effectOnChangedServersCache.clear
+      // effectOnChangedServersCache.clear
       val pre = new Concretization(servers0, 
         Array(getDatumSt(T0,N0,N1), aNode(N0,N2), bNode(N1,N3)) )
       val post = 

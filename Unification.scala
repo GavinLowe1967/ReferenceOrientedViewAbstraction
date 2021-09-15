@@ -200,12 +200,12 @@ object Unification{
     * post.servers, for which there has been a call to combine giving a
     * result with no unifications.  Note that we don't need to record
     * pre.servers explicitly, because it equals cv.servers. */ 
-  private val effectOnChangedServersCache = 
-    new BasicHashSet[(ComponentView, ServerStates)] 
+  // private val effectOnChangedServersCache = 
+  //   new BasicHashSet[(ComponentView, ServerStates)] 
 
   /** Reset effectOnChangedServersCache.  Necessary when performing multiple
     * checks. */
-  def reset = effectOnChangedServersCache.clear
+  def reset = { } // effectOnChangedServersCache.clear
 
   /** The part of the result corresponding to secondary induced transitions.
     * The Int field is the index of the component in pre/post that gains
@@ -338,7 +338,7 @@ object Unification{
         changingUnif
     } // end of if(singleRef)
     else if(changedServers)
-      unifs.nonEmpty || effectOnChangedServersCache.add((cv, postServers))
+      unifs.nonEmpty || cv.addDoneInduced(postServers) // effectOnChangedServersCache.add((cv, postServers))
       // Note, this can't be strengthened to
       // changingUnif || effectOnChangedServersCache.add((cv, postServers))
       // If there are two different ways of performing unification with a 
@@ -693,8 +693,8 @@ object Unification{
     type AllUnifsResult = Unification.AllUnifsResult
     protected val allUnifs = Unification.allUnifs _
     protected val remapToCreateCrossRefs = Unification.remapToCreateCrossRefs _
-    protected val effectOnChangedServersCache = 
-      Unification.effectOnChangedServersCache
+    // protected val effectOnChangedServersCache = 
+    //   Unification.effectOnChangedServersCache
   }
 
 

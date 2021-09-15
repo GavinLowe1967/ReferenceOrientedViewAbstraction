@@ -161,6 +161,24 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     }
   }
 
+  /** Information about transitions pre -> post for which we have considered
+    * induced transitions from this view, with pre.servers = this.servers !=
+    * post.servers and with no unification.  The set of post.servers for all
+    * such transitions. */
+  private val doneInducedPostServers = new BasicHashSet[ServerStates]
+
+  /** Record that we are considering an induced transition with this, with no
+    * unification, and whose post-state has postServers.  Return true if this
+    * is the first such. */
+  def addDoneInduced(postServers: ServerStates): Boolean = 
+    doneInducedPostServers.add(postServers)
+
+  def doneInducedContains(postServers: ServerStates): Boolean = 
+    doneInducedPostServers.contains(postServers)
+
+  /** Clear information about induced transitions.  Used in unit testing. */
+  def clearInduced = doneInducedPostServers.clear
+
   override def toString = 
     s"$servers || "+components.mkString("[", " || ", "]") // +s" <$ply>"
 
@@ -171,13 +189,9 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   override def equals(that: Any) = {
     if(that != null){
       val cv = that.asInstanceOf[ComponentView]
-      servers == cv.servers && sameCpts(cv.components) // components.sameElements(cv.components)
+      servers == cv.servers && sameCpts(cv.components)
     }
     else false
-    //   that match{
-    // case cv: ComponentView => 
-    //   servers == cv.servers && components.sameElements(cv.components)
-    // case null => false
   }
 
   @inline private def sameCpts(cpts: Array[State]) = {
