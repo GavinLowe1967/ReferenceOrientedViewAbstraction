@@ -5,10 +5,26 @@ import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
 import scala.collection.mutable.{ArrayBuffer,HashSet}
 
+object EffectOnUnification{
+  def combine(pre: Concretization, post: Concretization, cv: ComponentView,
+    c2Refs : List[(Int,Identity)]) = 
+    new EffectOnUnification().combine(pre, post, cv, c2Refs)
+
+  /** Hooks for testing. */
+  trait Tester{
+    protected val remapToCreateCrossRefs = 
+      new EffectOnUnification().remapToCreateCrossRefs _
+  }
+}
+
+
+// =======================================================
+
 /** Object responsible for the unification of a View cv with a Concretization
   * pre, suitable for calculating transitions induced by pre -> post upon
   * cv.  */
-object EffectOnUnification{
+class EffectOnUnification(){
+
   import Unification.{UnificationList,CombineResult,BitMap,allUnifs,combine1}
 
   /* Relationship of main functions:
@@ -24,7 +40,6 @@ object EffectOnUnification{
    * |  |--getOtherArgsBitMapForSingleRef
    * |  |--Unification.combine1 
    */ 
-
 
   /** The part of the result corresponding to secondary induced transitions.
     * The Int field is the index of the component in pre/post that gains
@@ -487,9 +502,9 @@ object EffectOnUnification{
     result
   }
 
-
-  /** Hooks for testing. */
-  trait Tester{
-    protected val remapToCreateCrossRefs = EffectOnUnification.remapToCreateCrossRefs _
-  }
+  // /** Hooks for testing. */
+  // trait Tester{
+  //   protected val remapToCreateCrossRefs = 
+  //     EffectOnUnification.remapToCreateCrossRefs _
+  // }
 }
