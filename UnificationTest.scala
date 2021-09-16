@@ -3,11 +3,13 @@ package ViewAbstraction
 import scala.collection.mutable.ArrayBuffer
 
 /** Tester for Unification. */
-object UnificationTest extends Unification.Tester{
+object UnificationTest 
+    extends Unification.Tester with EffectOnUnification.Tester{
   import TestStates._
   import RemapperP.Remapper.{show,newRemappingMap}
   import RemapperP.RemapperTest.{emptyMap,checkMap}
-  import Unification.{unify,CombineResult,combine,remapToJoin,MatchingTuple}
+  import Unification.{unify,CombineResult,remapToJoin}
+  import EffectOnUnification.{combine,MatchingTuple}
 
   /** Test of unify. */
   private def unifyTest = {

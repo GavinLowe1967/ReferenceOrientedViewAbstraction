@@ -79,7 +79,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     val (inducedInfo, secondaryInduced)
         : (ArrayBuffer[(Array[State], UnificationList)],
            ArrayBuffer[(Array[State], UnificationList, Int)]) =
-      Unification.combine(pre, post, cv, c2Refs)
+      EffectOnUnification.combine(pre, post, cv, c2Refs)
 
     // Process inducedInfo
     var index = 0
