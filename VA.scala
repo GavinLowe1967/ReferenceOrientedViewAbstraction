@@ -156,6 +156,7 @@ object VA{
     val start = java.lang.System.nanoTime
     try{
       if(testing){ 
+        assert(fname.isEmpty)
         system = new SystemP.System("CSP/test-file.csp")
         TestStates.report
         UnificationTest.test
@@ -164,7 +165,7 @@ object VA{
         new ExtendabilityP.ExtendabilityTest(system).test
         new CheckerTest(system).test
       }
-      else if(testSuite) runTestSuite()
+      else if(testSuite){ assert(fname.isEmpty); runTestSuite() }
       else if(profiling || profilingFlat || profilingBoth) profiler(run(fname)) 
       else run(fname)
       val elapsed0 = (java.lang.System.nanoTime - start) // in ns

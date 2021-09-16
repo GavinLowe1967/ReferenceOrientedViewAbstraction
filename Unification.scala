@@ -12,12 +12,14 @@ object Unification{
    * combine
    * |--allUnifs
    * |  |--unify
-   * |--extendUnif
-   * |  |--extendUnifSingleRef
-   * |  |  |--remapToCreateSingleRefs
-   * |  |  |--combine1
-   * |  |--combine1
    * |--isSufficientUnif
+   * |--mkOtherArgsBitMap
+   * |--extendUnif
+   * |  |--combine1
+   * |--extendUnifSingleRef
+   * |  |--remapToCreateCrossRefs
+   * |  |--getOtherArgsBitMapForSingleRef
+   * |  |--combine1
    */
 
   /** Try to extend map to map' such that map'(st2) = st1.
@@ -361,53 +363,16 @@ object Unification{
       changingUnif
   }
 
-  /** Extend map1 with unifications unifs, corresponding to transitions induced
-    * by the transition pre -> post (with pre = (servers, preCpts)) on cv.
-    * 
-    * Parameters must be remapped consistent with map1.  Parameters undefined
-    * in map1 can be mapped: (1) to a parameter in otherArgsBitMap (other than
-    * in the range of map1); or (2) a fresh value, given by nextArg.  However,
-    * identities cannot be mapped to identities of components in post (since
-    * that would imply unification).  Each remapped state and corresponding
-    * unifications is added to result.
-    * 
-    * This function would live more happily inside combine; but that function
-    * is just too large.  All other parameters are as there. 
-    * 
-    * @param unifs a representation of unifications between cv and pre.  
-    * @param map1 the mapping corresponding to unifs. 
-    * @param otherArgsBitMap a bit map giving values from the transition that
-    * parameters can be mapped to.
-    * @param nextArg a NextArgMap giving the next fresh value to use. */
-  @inline private def extendUnif(
-    postCpts: Array[State], cv: ComponentView, unifs: UnificationList,
-    map1: RemappingMap, otherArgsBitMap: Array[Array[Boolean]], 
-    nextArg: NextArgMap, result: CombineResult)
-      : Unit = {
-    if(debugging) assert(Remapper.isInjective(map1), Remapper.show(map1))
-    assert(!singleRef)
-    // Remove values in ran map1
-    Remapper.removeFromBitMap(map1, otherArgsBitMap)
-    // Convert to OtherArgMap
-    val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
-    // Values that identities can be mapped to: values in otherArgs, but not
-    // identities of components in post; update otherArgsBitMap to record.
-    StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
-    // Create primary induced transitions.
-    combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
-      cv.components, result)
-  } // end of extendUnif
-
-  /** Create OtherArgMap containing all values: (1) in newServerIds (parameters
-    * in post.servers but not pre.servers), or (2) in post.cpts for a unified
-    * parameter if not in (pre.)servers; (3) in post.cpts for a component to
-    * which cv.principal gains a reference; But excluding parameters of
-    * servers in all cases.  */
+  /** Create a bit map corresponding to an OtherArgMap and containing all
+    * values: (1) in newServerIds (parameters in post.servers but not
+    * pre.servers), or (2) in post.cpts for a unified parameter if not in
+    * (pre.)servers; (3) in post.cpts for a component to which cv.principal
+    * gains a reference; But excluding parameters of servers in all cases.  */
   @inline private def mkOtherArgsBitMap(
     servers: ServerStates, preCpts: Array[State], postCpts: Array[State],
-    newServerIds: Array[Array[Boolean]],
-    changedStateBitMap: Array[Boolean], unifs: UnificationList )
-      : Array[Array[Boolean]] = {
+    newServerIds: BitMap, changedStateBitMap: Array[Boolean], 
+    unifs: UnificationList )
+      : BitMap = {
     // (1) parameters in newServerIds
     val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
     while(us.nonEmpty){
@@ -424,8 +389,36 @@ object Unification{
     otherArgsBitMap
   }
 
+  /** Extend map1 with unifications unifs, corresponding to transitions induced
+    * by the transition pre -> post on cv.
+    * 
+    * Parameters must be remapped consistent with map1.  Parameters undefined
+    * in map1 can be mapped: (1) to a parameter in otherArgsBitMap (other than
+    * in the range of map1); or (2) a fresh value, given by nextArg.  However,
+    * identities cannot be mapped to identities of postCpts (=
+    * post.components) (since that would imply unification).  Each remapped
+    * state and corresponding unifications is added to result. */
+  @inline private def extendUnif(
+    postCpts: Array[State], cv: ComponentView, unifs: UnificationList,
+    map1: RemappingMap, otherArgsBitMap: BitMap, nextArg: NextArgMap, 
+    result: CombineResult)
+      : Unit = {
+    if(debugging) assert(Remapper.isInjective(map1), Remapper.show(map1))
+    assert(!singleRef)
+    // Remove values in ran map1
+    Remapper.removeFromBitMap(map1, otherArgsBitMap)
+    // Convert to OtherArgMap
+    val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
+    // Values that identities can be mapped to: values in otherArgs, but not
+    // identities of components in post; update otherArgsBitMap to record.
+    StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
+    // Create primary induced transitions.
+    combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
+      cv.components, result)
+  } // end of extendUnif
 
-  /** Second part of extendUnif in the case of singleRef. 
+
+  /** Extend a unification in the case of singleRef. 
     * Most parameters are as for extendUnif.
     * @param otherArgsBitMap a bit map giving values that parameters of cv could 
     * be mapped to, and satisfying cases (1)-(3) in the description of
@@ -437,28 +430,19 @@ object Unification{
     cv: ComponentView, c2Refs: List[(Int,Identity)], 
     changedStateBitMap: Array[Boolean], 
     result: CombineResult, result2: CombineResult2,
-    map0: RemappingMap, otherArgsBitMap0: Array[Array[Boolean]], 
-    nextArg: NextArgMap, unifs: UnificationList, sufficientUnif: Boolean)
+    map0: RemappingMap, otherArgsBitMap0: BitMap, nextArg: NextArgMap, 
+    unifs: UnificationList, sufficientUnif: Boolean)
   = {
     require(singleRef)
     val (cvpf, cvpid) = cv.principal.componentProcessIdentity
-
     // Consider which identities of cpts are remapped to match a non-identity
     // of preCpts, or non-identities of cpts that are remapped to match an
     // identity of preCpts.
     val crossRefs = remapToCreateCrossRefs(preCpts, cv.components, map0)
     for((map1, tuples) <- crossRefs){
-      // Clone, to avoid interference between different iterations. 
-      val otherArgsBitMap = otherArgsBitMap0.map(_.clone)
-      // Indices of components of preCpts that are mapped onto.
-      val rangeIndices = tuples.map{ case ((i1,_),_) => i1 }.distinct
-      for(i1 <- rangeIndices)
-        preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.numParams)
-      // IMPROVE: we need only map parameters of cpts(i2) like this, where
-      // i2 is the relevant index in the current tuple.
-      // for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
-      // Remove values in ran map1
-      Remapper.removeFromBitMap(map1, otherArgsBitMap)
+      // Get other arg BitMap for this case. 
+      val otherArgsBitMap = getOtherArgsBitMapForSingleRef(
+        servers, preCpts, map1, otherArgsBitMap0, tuples)
       // Convert to OtherArgMap
       val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
       // Values that identities can be mapped to: values in otherArgs, but not
@@ -500,6 +484,27 @@ object Unification{
     } // end of outer for loop.
   } // end of extendUnifSingleRef
 
+  /** Extend otherArgsBitMap0.  Add parameters of components c of preCpts such
+    * that a component of map1(cv) has a reference to c, or vice versa; such
+    * components c are identified by the first index in an element of tuples.
+    * Also remove values in ran map1. */
+  @inline private def getOtherArgsBitMapForSingleRef(
+    servers: ServerStates, preCpts: Array[State], map1: RemappingMap, 
+    otherArgsBitMap0: BitMap, tuples: List[((Int,Int),(Int,Int))])
+      : BitMap = {
+    // Clone, to avoid interference between different iterations.
+    val otherArgsBitMap = otherArgsBitMap0.map(_.clone)
+    // Indices of components of preCpts that are mapped onto.
+    val rangeIndices = tuples.map{ case ((i1,_),_) => i1 }.distinct
+    for(i <- rangeIndices)
+      preCpts(i).addIdsToBitMap(otherArgsBitMap, servers.numParams)
+    // IMPROVE: we need only map parameters of cpts(i2) like this, where
+    // i2 is the relevant index in the current tuple.
+    // for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
+    // Remove values in ran map1
+    Remapper.removeFromBitMap(map1, otherArgsBitMap)
+    otherArgsBitMap
+  }
 
   /** Bitmap showing which components changed state between preCpts and
     * postCpts. */
