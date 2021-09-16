@@ -288,8 +288,12 @@ object Unification{
       // if(singleRef && !acquiredCrossRef && changedServers && unifs.isEmpty && 
       //   cv.doneInducedContains(post.servers))
       //   println(s"Considering $pre -> $post  on $cv")
-      if(c2Refs.nonEmpty || sufficientUnif) 
-        extendUnif1(map1, unifs, sufficientUnif)
+      if(c2Refs.nonEmpty || sufficientUnif){
+        val otherArgsBitMap = mkOtherArgsBitMap(
+          servers, preCpts, postCpts, newServerIds, changedStateBitMap, unifs)
+        extendUnif1(map1, unifs, otherArgsBitMap, sufficientUnif)
+
+      }
     } // end of while loop
 
     (result, result2)
@@ -401,25 +405,26 @@ object Unification{
     newServerIds: Array[Array[Boolean]], nextArg: NextArgMap, 
     changedStateBitMap: Array[Boolean],
     result: CombineResult, result2: CombineResult2)
-    (map1: RemappingMap, unifs: UnificationList, sufficientUnif: Boolean)
+    (map1: RemappingMap, unifs: UnificationList, otherArgsBitMap: Array[Array[Boolean]], sufficientUnif: Boolean)
       : Unit = {
     if(debugging) assert(Remapper.isInjective(map1), Remapper.show(map1))
     // Create OtherArgMap containing all values not in ran map1 or
     // pre.servers, but (1) in post.servers; or (2) in post.cpts for a unified
     // component or a component to which cv.principal gains a reference.
     // newServerIds satisfies (1).
-    val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
-    // (2) Add parameters of post.components corresponding to unifs, not shared
-    // with servers.
-    while(us.nonEmpty){
-      val (j, i) = us.head; us = us.tail
-      postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.numParams)
-      // (3) If this is the unification of the principal of cv, which changes
-      // state and gains a reference to another component c, include the
-      // parameters of c from postCpts.
-      if(j == 0 && changedStateBitMap(i)) addIdsFromNewRef(
-        otherArgsBitMap, servers.numParams, preCpts, postCpts, i)
-    }
+    // val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
+    // // (2) Add parameters of post.components corresponding to unifs, not shared
+    // // with servers.
+    // while(us.nonEmpty){
+    //   val (j, i) = us.head; us = us.tail
+    //   postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.numParams)
+    //   // (3) If this is the unification of the principal of cv, which changes
+    //   // state and gains a reference to another component c, include the
+    //   // parameters of c from postCpts.
+    //   if(j == 0 && changedStateBitMap(i)) addIdsFromNewRef(
+    //     otherArgsBitMap, servers.numParams, preCpts, postCpts, i)
+    // }
+    // val otherArgsBitMap = mkOtherArgsBitMap(servers, preCpts, postCpts, newServerIds, changedStateBitMap, unifs)
     // If singleRef, add parameters of preCpts.
     if(singleRef) 
       extendUnifSingleRef(
@@ -439,6 +444,30 @@ object Unification{
         cv.components, result)
     }
   } // end of extendUnif
+
+  /** Create OtherArgMap containing all values: (*) in newServerIds (parameters
+    * in post.servers but not pre.servers), or (*) in post.cpts for a unified
+    * parameter if not in (pre.)servers; (*) in post.cpts for a component to
+    * which cv.principal gains a reference.  */
+  @inline private def mkOtherArgsBitMap(
+    servers: ServerStates, preCpts: Array[State], postCpts: Array[State],
+    newServerIds: Array[Array[Boolean]],
+    changedStateBitMap: Array[Boolean], unifs: UnificationList )
+      : Array[Array[Boolean]] = {
+    val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
+    // (2) Add parameters of post.components corresponding to unifs, not shared
+    // with servers.
+    while(us.nonEmpty){
+      val (j, i) = us.head; us = us.tail
+      postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.numParams)
+      // (3) If this is the unification of the principal of cv, which changes
+      // state and gains a reference to another component c, include the
+      // parameters of c from postCpts.
+      if(j == 0 && changedStateBitMap(i)) addIdsFromNewRef(
+        otherArgsBitMap, servers.numParams, preCpts, postCpts, i)
+    }
+    otherArgsBitMap
+  }
 
 
   /** Second part of extendUnif in the case of singleRef. 
