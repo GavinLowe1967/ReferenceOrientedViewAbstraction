@@ -100,7 +100,9 @@ $(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
 
 $(DIR)/EffectOnStore.class: $(DIR)/MissingInfo.class
 
-$(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(DIR)/Unification.class
+$(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
+
+$(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(DIR)/EffectOnUnification.class
 
 # # Checker and main program
 

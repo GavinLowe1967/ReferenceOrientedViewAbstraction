@@ -115,7 +115,7 @@ object VA{
   def runTestSuite() = {
     val theTestSuite = if(singleRef) srTestSuite else testSuite
     for((fname, states) <- theTestSuite){
-      State.reset; MyStateMap.reset; Unification.reset; MissingCommon.reset
+      State.reset; MyStateMap.reset;MissingCommon.reset // Unification.reset; 
       println("********* "+fname)
       val states1 = run(fname)
       assert(states == states1,

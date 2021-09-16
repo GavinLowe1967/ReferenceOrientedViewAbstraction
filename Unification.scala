@@ -198,17 +198,6 @@ object Unification{
     rec(0, 0)
   }
 
-  /** Record of the cv, pre.servers and post.servers, with pre.servers !=
-    * post.servers, for which there has been a call to combine giving a
-    * result with no unifications.  Note that we don't need to record
-    * pre.servers explicitly, because it equals cv.servers. */ 
-  // private val effectOnChangedServersCache = 
-  //   new BasicHashSet[(ComponentView, ServerStates)] 
-
-  /** Reset effectOnChangedServersCache.  Necessary when performing multiple
-    * checks. */
-  def reset = { } // effectOnChangedServersCache.clear
-
   /** The part of the result corresponding to secondary induced transitions.
     * The Int field is the index of the component in pre/post that gains
     * access to cv.principal. */
@@ -290,7 +279,7 @@ object Unification{
         val otherArgsBitMap = mkOtherArgsBitMap(
           servers, preCpts, postCpts, newServerIds, changedStateBitMap, unifs)
         if(singleRef) extendUnifSingleRef(
-          servers, preCpts, postCpts, cv, c2Refs, changedStateBitMap,
+          servers, preCpts, postCpts, cv, c2Refs, // changedStateBitMap,
           result, result2, map1, otherArgsBitMap, nextArg, unifs, sufficientUnif)
         else 
           extendUnif(postCpts, cv, unifs, map1, otherArgsBitMap, nextArg, result)
@@ -428,13 +417,11 @@ object Unification{
   @inline private def extendUnifSingleRef(
     servers: ServerStates, preCpts: Array[State], postCpts: Array[State], 
     cv: ComponentView, c2Refs: List[(Int,Identity)], 
-    changedStateBitMap: Array[Boolean], 
     result: CombineResult, result2: CombineResult2,
     map0: RemappingMap, otherArgsBitMap0: BitMap, nextArg: NextArgMap, 
     unifs: UnificationList, sufficientUnif: Boolean)
   = {
     require(singleRef)
-    val (cvpf, cvpid) = cv.principal.componentProcessIdentity
     // Consider which identities of cpts are remapped to match a non-identity
     // of preCpts, or non-identities of cpts that are remapped to match an
     // identity of preCpts.
@@ -452,37 +439,11 @@ object Unification{
       if(sufficientUnif)
         combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
           cv.components, result)
-
-      /* Build remappings for secondary induced transitions corresponding to
-       * component k acquiring a reference to cv.principal in parameter id. */
-      @inline def mkSecondaryRemaps(k: Int, id: Int) = {
-        require(map1(cvpf)(cvpid) == id)
-        // (5) For each other parameter of postCpts(k), if not in ran map1, add
-        // to otherArgs, and to otherArgsBitMap if not an identity in postCpts.
-        for((t,id1) <- postCpts(k).processIdentities)
-          if(id1 != id && !contains(map1(t),id1) && !contains(otherArgs(t),id1)){
-            otherArgs(t) ::= id1
-            if(StateArray.findIndex(postCpts, t, id1) < 0)
-              otherArgsBitMap(t)(id1) = true
-          }
-        val tempRes = new CombineResult
-        combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
-          cv.components, tempRes)
-        for((newSts, us) <- tempRes){ // IMPROVE
-          assert(us eq unifs); result2 += ((newSts, us, k))
-        }
-      } // end of mkSecondaryRemaps
-
-      for((k,p) <- c2Refs){
-        assert(changedStateBitMap(k))
-        if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
-        else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p)){
-          // Consider mapping cvpid to p (and backtrack)
-          map1(cvpf)(cvpid) = p; mkSecondaryRemaps(k, p); map1(cvpf)(cvpid) = -1
-        }
-      }
+      makeSecondaryInducedTransitions(postCpts, cv, c2Refs, 
+        map1, otherArgs, otherArgsBitMap, nextArg, unifs, result2)
     } // end of outer for loop.
   } // end of extendUnifSingleRef
+
 
   /** Extend otherArgsBitMap0.  Add parameters of components c of preCpts such
     * that a component of map1(cv) has a reference to c, or vice versa; such
@@ -505,6 +466,51 @@ object Unification{
     Remapper.removeFromBitMap(map1, otherArgsBitMap)
     otherArgsBitMap
   }
+
+  /** Create information about secondary induced transitions, and add them to
+    * result2.  For each (k,p) in c2Refs, try to map cv.principal's identity
+    * to p, so c = postCpts(k) has a reference to cv.principal in p.  Remap
+    * according to map1, otherArgs, otherArgsBitMap, nextArg, but also mapping
+    * parameters to parameters of c. */
+  @inline private def makeSecondaryInducedTransitions( 
+    postCpts: Array[State], cv: ComponentView, c2Refs: List[(Int,Identity)],
+    map1: RemappingMap, otherArgs: OtherArgMap, otherArgsBitMap: BitMap,  
+    nextArg: NextArgMap, unifs: UnificationList, result2: CombineResult2)
+  = {
+    val (cvpf, cvpid) = cv.principal.componentProcessIdentity
+    /* Build remappings for secondary induced transitions corresponding to
+     * component k acquiring a reference to cv.principal in parameter id. */
+    @inline def mkSecondaryRemaps(k: Int, id: Int) = {
+      require(map1(cvpf)(cvpid) == id && 
+        postCpts(k).processIdentities.contains((cvpf,id)))
+      // For each other parameter of postCpts(k), if not in ran map1, add to
+      // otherArgs, and to otherArgsBitMap if not an identity in postCpts.
+      for((t,id1) <- postCpts(k).processIdentities)
+        if(id1 != id && !contains(map1(t),id1) && !contains(otherArgs(t),id1)){
+          otherArgs(t) ::= id1
+          if(StateArray.findIndex(postCpts, t, id1) < 0)
+            otherArgsBitMap(t)(id1) = true
+        }
+      val tempRes = new CombineResult
+      combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs,
+        cv.components, tempRes)
+      for((newSts, us) <- tempRes){ // IMPROVE
+        assert(us eq unifs); result2 += ((newSts, us, k))
+      }
+    } // end of mkSecondaryRemaps
+
+    for((k,p) <- c2Refs){
+      // assert(changedStateBitMap(k))
+      if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
+      else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p)){
+        // Consider mapping cvpid to p (and backtrack)
+        map1(cvpf)(cvpid) = p; mkSecondaryRemaps(k, p); map1(cvpf)(cvpid) = -1
+      }
+    }
+
+  }
+
+
 
   /** Bitmap showing which components changed state between preCpts and
     * postCpts. */
