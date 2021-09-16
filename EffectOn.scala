@@ -13,10 +13,10 @@ class EffectOn(views: ViewSet, system: SystemP.System){
    * 
    * apply
    * |--getCrossReferences
+   * |--Unification.combine
    * |--processInducedInfo
    * |  |--checkCompatibleMissing
    * |  |--missingCrossRefs
-   * |--Unification.combine
    */
 
   /** A mapping showing which component views might be added later.
@@ -145,6 +145,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
               s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
               s"  --> ${View.show(post.servers, newComponents)} == $nv")
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
+          if(unifs.isEmpty) nv.addDoneInduced(post.servers)
           if(!nv.representableInScript){
             println("Not enough identities in script to combine transition\n"+
               s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)

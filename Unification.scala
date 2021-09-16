@@ -230,8 +230,8 @@ object Unification{
     * 
     * The second component of the result contains information concerning
     * secondary induced transitions under singleRef.  In this case, c2Refs
-    * contains pairs (i,id) such that if post.components(i) gains a reference
-    * in parameter id to a value of the same type as cv.principal.  For each
+    * contains pairs (i,id) such that post.components(i) gains a reference in
+    * parameter id to a value of the same type as cv.principal.id.  For each
     * such (i,id), each parameter of cv is renamed as under (1) or (2) above;
     * or (3) cv.principal.id is renamed to id; (4) every other parameter of
     * cv.principal can be renamed to a parameter in post.servers or a
@@ -285,6 +285,9 @@ object Unification{
       // unify with a component that does change state.
       val sufficientUnif = isSufficientUnif(changedServers, unifs, post.servers,
         cv, changedStateBitMap, acquiredCrossRef)
+      // if(singleRef && !acquiredCrossRef && changedServers && unifs.isEmpty && 
+      //   cv.doneInducedContains(post.servers))
+      //   println(s"Considering $pre -> $post  on $cv")
       if(c2Refs.nonEmpty || sufficientUnif) 
         extendUnif1(map1, unifs, sufficientUnif)
     } // end of while loop
@@ -331,7 +334,14 @@ object Unification{
       }
       else if(acquiredCrossRef) true
 // IMPROVE:  case below?
-      else if(changedServers) true
+      else if(changedServers){
+        // if(unifs.isEmpty && cv.doneInducedContains(postServers))
+        //   println(s"Considering induced on $cv with $postServers")
+        true   
+        // I don't know why the following doesn't work.  Maybe the add in
+        // EffectOn.processInducedInfo should check !acquiredCrossRef
+        // unifs.nonEmpty || !cv.doneInducedContains(postServers)
+      }
         // Following misses some views with lockFreeQueue
         // unifs.nonEmpty || effectOnChangedServersCache.add((cv, postServers))
       else // Is there a unification with a component that changes state?
