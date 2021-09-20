@@ -12,8 +12,11 @@ object Unification{
     * allUnifs      (called from EffectOnUnification)
     * |--unify      (called from Extendability.findReferencingView)
     * 
+    * combine1      (called from EffectOnUnification)
+    * |--combineX
+    * 
     * remapToJoin      (called from MissingCommon)
-    * |--combine1      (called from EffectOnUnification)
+    * |--combineX
     */
 
   /** Try to extend map to map' such that map'(st2) = st1.
@@ -140,12 +143,31 @@ object Unification{
     nextArg: NextArgMap, unifs: UnificationList, 
     cpts: Array[State], result: CombineResult)
       : Unit = {
+    val res0 = new ArrayBuffer[RemappingMap]
+    combineX(map, otherArgs, bitMap, nextArg, cpts, res0)
+    for(map1 <- res0) result += ((Remapper.applyRemapping(map1, cpts), unifs))
+  }
+
+
+  /** All ways of remapping cpts, consistent with map.  Parameters not in dom
+    * map can be mapped: (1) to values of otherArgs, but, in the case of
+    * identities, only those included in bitMap; or (2) to fresh values
+    * starting from nextArg.  
+    * 
+    * IMPROVE: do not remap components with indexes in map fst unifs.
+    * 
+    * map, otherArgs and nextArg are treated mutable, but all updates are
+    * backtracked. */
+  private def combineX(
+    map: RemappingMap, otherArgs: OtherArgMap, bitMap: BitMap, 
+    nextArg: NextArgMap, cpts: Array[State], result: ArrayBuffer[RemappingMap])
+      : Unit = {
     // Recursively remap cpts(i).args[j..), then cpts[i+1..).
     def rec(i: Int, j: Int): Unit = {
       if(i == cpts.length){
         // println((View.showStates(Remapper.applyRemapping(map, cpts)), unifs))
         // IMPROVE: remap each state in turn (and clone at this point)
-        result += ((Remapper.applyRemapping(map, cpts), unifs))
+        result += Remapper.cloneMap(map) // ((Remapper.applyRemapping(map, cpts), unifs))
       }
       else{
         val c = cpts(i); val ids = c.ids
@@ -205,7 +227,7 @@ object Unification{
       : ArrayBuffer[State] = {
     require(singleRef)
     require(princ1.processIdentities.contains(c.componentProcessIdentity))
-    // We look to use combine1, although some of the parameters there aren't
+    // We look to use combineX, although some of the parameters there aren't
     // used.  IMPROVE?
     // Identity map on parameters of servers and princ1; and next args to use
     val map0 = servers.remappingMap; val nextArgMap = servers.nextArgMap
@@ -220,11 +242,11 @@ object Unification{
         otherArgs(f) ::= id; nextArgMap(f) = nextArgMap(f) max (id+1)
       }
     // println(s"otherArgs = "+otherArgs.mkString(", "))
-    val result = new CombineResult
+    val result = new ArrayBuffer[RemappingMap] // CombineResult
     // the bitmap is empty: c's id should not be remapped, by precondition.
-    combine1(map0, otherArgs, newBitMap, nextArgMap, 
-      List[(Int,Int)](), Array(c), result)
-    result.map{ case(cs, _) => cs(0) }
+    combineX(map0, otherArgs, newBitMap, nextArgMap, Array(c), result)
+    // result.map{ case(cs, _) => cs(0) }
+    result.map{ case map => Remapper.applyRemappingToState(map, c) }
   }
 
   /** Hooks for testing. */
