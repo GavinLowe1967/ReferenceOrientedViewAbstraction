@@ -13,7 +13,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
    * 
    * apply
    * |--getCrossReferences
-   * |--Unification.combine
+   * |--EffectOnUnification.apply
    * |--processInducedInfo
    * |  |--checkCompatibleMissing
    * |  |--missingCrossRefs
@@ -52,23 +52,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     if(verbose) println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers && pre.sameComponentPids(post))
     val postCpts = post.components; val preCpts = pre.components
-    // In the case of singleRef, secondary components that might gain a
-    // reference to c2 = cv.principal (without unification): all pairs (i,id)
-    // (i >= 1) such that the i'th  component c1 changes state, and id is a
-    // parameter of c1 in the post state that might reference c2, distinct
-    // from any component identity in pre, post.  We will subsequently form
-    // views with c1 as the principal component, referencing c2 (renamed).
-    val c2Refs = 
-      if(singleRef) getCrossReferences(preCpts, postCpts, cv.principal.family)
-      else List[(Int,Identity)]()
-    /* Function to process induced transition. */
-    val processInducedInfo1 = 
-      processInducedInfo(pre, e, post, cv, ply, nextNewViews) _
-    /* What does cpt get mapped to given unifications unifs? */
-    @inline def getNewPrinc(cpt: State, unifs: UnificationList): State = {
-      var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
-      if(us.isEmpty) cpt else postCpts(us.head._2)
-    }
+
     // inducedInfo: ArrayBuffer[(Array[State], UnificationList) is all
     // remappings of cv to unify with pre for primary induced transitions,
     // together with the list of indices of unified
@@ -79,17 +63,26 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     val (inducedInfo, secondaryInduced)
         : (ArrayBuffer[(Array[State], UnificationList)],
            ArrayBuffer[(Array[State], UnificationList, Int)]) =
-      EffectOnUnification.combine(pre, post, cv, c2Refs)
+      EffectOnUnification.combine(pre, post, cv)
+
+    /* Function to process induced transition. */
+    val processInducedInfo1 = 
+      processInducedInfo(pre, e, post, cv, ply, nextNewViews) _
+    /* What does cpt get mapped to given unifications unifs? */
+    @inline def getNewPrinc(cpt: State, unifs: UnificationList): State = {
+      var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
+      if(us.isEmpty) cpt else postCpts(us.head._2)
+    }
 
     // Process inducedInfo
     var index = 0
     while(index < inducedInfo.length){
-      Profiler.count("EffectOn step")
       val (cpts, unifs) = inducedInfo(index); index += 1
+      Profiler.count("EffectOn step "+unifs.isEmpty)
       val newPrinc = getNewPrinc(cpts(0), unifs) 
       var newComponentsList =
         StateArray.makePostComponents(newPrinc, postCpts, cpts)
-      processInducedInfo1(cpts, unifs, newComponentsList)
+      processInducedInfo1(cpts, unifs, true, newComponentsList)
     } // end of while loop
     // Process secondaryInduced
     index = 0
@@ -98,9 +91,13 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       Profiler.count("SecondaryInduced")
       val newPrinc = getNewPrinc(cpts(0), unifs) 
       val newComponentsList = List(Array(postCpts(k), newPrinc))
-      processInducedInfo1(cpts, unifs, newComponentsList)
+      processInducedInfo1(cpts, unifs, false, newComponentsList)
     }
   }
+
+  // Used in profiling to test if side conditions are trivially satisfied.
+  // IMPROVE
+  //var trivialSideConditions = false
 
   /** Create induced transition producing views with post.servers and each
     * element of newComponentsList.  The transition is induced by pre -e->
@@ -113,13 +110,14 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   def processInducedInfo(
     pre: Concretization,  e: EventInt, post: Concretization,
     cv: ComponentView, ply: Int, nextNewViews: MyHashSet[ComponentView])
-    (cpts: Array[State], unifs: UnificationList, 
+    (cpts: Array[State], unifs: UnificationList, isPrimary: Boolean,
       newComponentsList: List[Array[State]])
   : Unit = {
     if(verbose) println("cpts = "+StateArray.show(cpts))
     if(debugging){
       StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     }
+    //trivialSideConditions = true
     // If singleRef, identities of components referenced by both principals,
     // but not included in the views, and such that there is no way of
     // instantiating them consistently within sysAbsViews.
@@ -133,6 +131,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     val missing: List[ComponentView] =
       if(singleRef) missingCrossRefs(pre.servers, cpts, pre.components) 
       else List()
+    // Profiler.count("TrivialSideConditions "+
+    //   (trivialSideConditions && unifs.isEmpty))
     for(newComponents <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newComponents)
       Profiler.count("newViewCount")       // Mostly with unifs.nonEmpty
@@ -145,7 +145,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
               s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
               s"  --> ${View.show(post.servers, newComponents)} == $nv")
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
-          if(unifs.isEmpty) nv.addDoneInduced(post.servers)
+          // if(singleRef && isPrimary && unifs.isEmpty) 
+          //   nv.addDoneInduced(post.servers)
           if(!nv.representableInScript){
             println("Not enough identities in script to combine transition\n"+
               s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
@@ -172,50 +173,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   }
 
 
-// IMPROVE: in the calculation of c2Refs, I think we can omit params of
-// pre.servers other than cv.principal's identity.
-// IMPROVE: could we have more simply achieved the effect of c2Refs by using
-// cv with pre.principal as principal, and c2 as secondary component?  This
-// assumes pre.principal has a reference to c2, which seems reasonable.
-
-
-  /** Identify secondary components that can gain a reference to a component of
-    * type f.  All pairs (i,id) (with i >= 1) such that the i'th component c1
-    * changes state between preCpts and postCpts, and id is a
-    * non-distinguished parameter of c1 of family f in the post state, other
-    * than an identity in preCpts/postCpts. */
-  @inline private 
-  def getCrossReferences(
-    preCpts: Array[State], postCpts: Array[State], f: Family)
-      : List[(Int,Identity)] = {
-    require(singleRef)
-    // Identities of family f in pre: improve
-    // val ids = preCpts.filter(c => c.family == f).map(_.ids(0))
-    var ids = List[Identity](); var i = 0
-    while(i < preCpts.length){
-      val c = preCpts(i); i += 1; if(c.family == f) ids ::= c.ids(0)
-    }
-    var result = List[(Int,Identity)](); i = 1
-    while(i < preCpts.length){
-      if(preCpts(i) != postCpts(i)){
-        val c1 = postCpts(i); val c1Params = c1.ids; var j = 1
-        while(j < c1Params.length){
-          if(c1.typeMap(j) == f){
-            val p = c1Params(j)
-            // Check: non-distiguished, not an id in preCpts, new param in c1
-            if(!isDistinguished(p) && !contains(ids,p) && 
-                !preCpts(i).hasParam(f,p))
-              result ::= (i, p)
-          }
-          j += 1
-        } // end of inner while
-      }
-      i += 1
-    } // end of outer while
-    if(false) println(s"getCrossReferences: $result")
-    result
-  }
-
   /** Test whether, if the principal components of cpts1 and cpts2 both have a
     * reference to the same missing component then there is a way of
     * instantiating that component, consistent with the current set of views.
@@ -232,10 +189,12 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     var missingCommonRefs = List[ProcessIdentity]()
     var missingCommons = List[MissingCommon]()
     for(pid <- missingRefs1; if missingRefs2.contains(pid)){
+      //trivialSideConditions = false
       val mc = MissingCommon.makeMissingCommon(servers, cpts1, cpts2, pid, views)
       if(mc != null){
 // FIXME: if the component c has a reference to one of the present secondary
 // components, or vice versa, check that that combination is also possible.
+// (Later:) isn't this just missingCrossRefs?
         if(verbose){
           println(s"checkCompatibleMissing($servers, ${StateArray.show(cpts1)},"+
           s" ${StateArray.show(cpts2)})")
@@ -257,6 +216,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     assert(singleRef)
     var missing = List[ComponentView]() // missing necessary Views
     for(cptsx <- StateArray.crossRefs(cpts1, cpts2)){
+      //trivialSideConditions = false
       val cvx = Remapper.mkComponentView(servers, cptsx)
       if(!views.contains(cvx)) missing ::= cvx
     }

@@ -59,7 +59,7 @@ $(COMBINERP)/Combiner.class: $(DIR)/RemapperP/Remapper.class
 
 $(DIR)/Unification.class: $(REMAPPERP)/Remapper.class
 
-$(DIR)/UnificationTest.class: $(DIR)/Unification.class
+$(DIR)/UnificationTest.class: $(DIR)/Unification.class $(DIR)/EffectOnUnification.class
 
 $(COMBINERP)/CombinerTest.class:  $(DIR)/TestStates.class $(COMBINERP)/Combiner.class 
 

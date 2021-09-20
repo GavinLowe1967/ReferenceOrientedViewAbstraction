@@ -92,6 +92,28 @@ object Remapper{
     result
   }
 
+  type RemappingList =  List[List[(Identity,Identity)]]
+
+  /** The range restriction of map to the parameters of servers, i.e. 
+    * 
+    * { x -> y | (x -> y) in map, y is a parameter of servers }.
+    * 
+    * The precise form of the result isn't important, other than equality
+    * corresponding to equality of the above expression; but the types are in
+    * reverse order; and the pairs for each type are in reverse order of x
+    * components. */
+  def rangeRestrictTo(map: RemappingMap, servers: ServerStates)
+      : RemappingList = {
+    var result = List[List[(Identity,Identity)]]()
+    for(t <- 0 until numTypes){
+      val sIds = servers.serverIds(t); var tResult = List[(Identity,Identity)]()
+      for(id <- 0 until map(t).length){
+        val y = map(t)(id); if(sIds.contains(y)) tResult ::= (id, y)
+      }
+      result ::= tResult
+    }
+    result
+  }
 
   // ------ NextArgMaps
 

@@ -137,7 +137,7 @@ object UnificationTest
       val cv = new ComponentView(servers0, Array(aNode(N0,N1), cNode(N1,Null)))
       // val cv = new ComponentView(servers0, Array(aNode(N2,N3)))
       // servers0 contains no ids, servers2 contains T0, N0
-      val (buffer,_) = combine(pre, post, cv, List()) // , true
+      val (buffer,_) = combine(pre, post, cv /*, List()*/) // , true
       // println(showBuffer(buffer))
       // Unifying, N0 -> N0, N1 -> N1
       assert(buffer.exists{case (states, unifs) =>
@@ -153,7 +153,7 @@ object UnificationTest
       // effectOnChangedServersCache.clear
       //println("=test1a=")
       cv.clearInduced
-      val (buffer2,_) = combine(pre, post, cv, List()) // , false
+      val (buffer2,_) = combine(pre, post, cv /*, List()*/) // , false
       // Unifying, N0 -> N0, N1 -> N1
       //println(showBuffer(buffer2))
       assert(buffer2.exists{case (states, unifs) =>
@@ -176,7 +176,7 @@ object UnificationTest
         new Concretization(servers2, 
           Array(setTopB(T0,N0), bNode(N0,N1), bNode(N1,N3)) )
       val cv = new ComponentView(servers0, Array(aNode(N0,N1), cNode(N1,Null)))
-      val (buffer,_) = combine(pre, post, cv, List()) // , false
+      val (buffer,_) = combine(pre, post, cv /*, List()*/) // , false
       // Note, N2 in pre is ignored as it doesn't unify 
       // println(showBuffer(buffer))
       assert(buffer.length == 2)
@@ -200,7 +200,7 @@ object UnificationTest
           Array(setTopB(T0,N0), bNode(N0,N1), bNode(N1,N3)) )
       val cv = new ComponentView(servers1, 
         Array(getDatumSt(T0,N0,Null), aNode(N0,N1)))
-      val (buffer,_) = combine(pre, post, cv, List()) // , false
+      val (buffer,_) = combine(pre, post, cv /*, List()*/) // , false
       // servers1 contains T0, and the T0 components in pre and cv can't be 
       // unified.
       assert(buffer.isEmpty)
@@ -221,7 +221,7 @@ object UnificationTest
       // servers2 contains N0 and T0
       val cv = new ComponentView(servers1, 
         Array(getDatumSt(T1,N0,N2), aNode(N0,N1), cNode(N2,N3)))
-      val (buffer,_) = combine(pre, post, cv, List()) // , false
+      val (buffer,_) = combine(pre, post, cv /*, List()*/) // , false
       // println("\n"+showBuffer(buffer))
       assert(buffer.forall{case (states, unifs) =>
         unifs == List((1,1)) && ( 
@@ -263,7 +263,7 @@ object UnificationTest
       val post = new Concretization(servers1, 
         Array(setTopB(T0,N0), bNode(N0,Null)))
       val cv = new ComponentView(servers1, Array(initNodeSt(T0,Null)))
-      val (buffer,_) = combine(pre, post, cv, List()) // , false
+      val (buffer,_) = combine(pre, post, cv /*, List()*/) // , false
 // FIXME: test here
       //println(showBuffer(buffer))
     }
@@ -314,46 +314,49 @@ object UnificationTest
   private def remapToCreateCrossRefsTest = {
     println("==remapToCreateCrossRefsTest==")
 
+    def rTCCR(cpts1: Array[State], cpts2: Array[State], map: RemappingMap) =
+      remapToCreateCrossRefs(cpts1, cpts2, map)
+
     def showResult(result: ArrayBuffer[(RemappingMap, List[MatchingTuple])]) = 
       for((map, tuples) <- result) println(show(map)+": "+tuples)
 
-    val cpts1 = Array(aNode(N0,N1),bNode(N1,N2))
+    val cpts1 = Array(aNode(N0,N1),bNode(N1,N2)) 
     val cpts1X = Array(aNode(N0,N1),bNode(N1,Null))
     val cpts2 = Array(bNode(N0,N1),cNode(N1,N2))
     val cpts2X = Array(bNode(N0,N1),cNode(N1,Null))
 
     def test1 = {
       val map0 = newRemappingMap
-      val result = remapToCreateCrossRefs(cpts1, cpts2, map0)
+      val result = rTCCR(cpts1, cpts2, map0)
       // (N0 -> N2 xor N1 -> N2) or neither; (N2 -> N0 xor N2 -> N1) or neither
       // showResult(result)
       assert(result.length == 9, showResult(result))
-      val result2 = remapToCreateCrossRefs(cpts1X, cpts2, map0)
+      val result2 = rTCCR(cpts1X, cpts2, map0)
       // (N2 -> N0 xor N2 -> N1) or neither
       assert(result2.length == 3, showResult(result2))
-      val result3 = remapToCreateCrossRefs(cpts1, cpts2X, map0)
+      val result3 = rTCCR(cpts1, cpts2X, map0)
       // (N0 -> N2 xor N1 -> N2) or neither
       assert(result3.length == 3, showResult(result3))
-      val result4 = remapToCreateCrossRefs(cpts1X, cpts2X, map0)
+      val result4 = rTCCR(cpts1X, cpts2X, map0)
       // No links; identity map
       assert(result4.length == 1, showResult(result4))
     }
 
     def test2 = {
       val map0 = newRemappingMap; map0(0)(0) = 0
-      val result = remapToCreateCrossRefs(cpts1, cpts2, map0)
+      val result = rTCCR(cpts1, cpts2, map0)
       // N2 -> N1 or not; N1 -> N2 or not
       assert(result.length == 4, showResult(result))
 
-      val result2 = remapToCreateCrossRefs(cpts1X, cpts2, map0)
+      val result2 = rTCCR(cpts1X, cpts2, map0)
       // N2 -> N1 or not
       assert(result2.length == 2, showResult(result2))
 
-      val result3 = remapToCreateCrossRefs(cpts1, cpts2X, map0)
+      val result3 = rTCCR(cpts1, cpts2X, map0)
       // N1 -> N2 or not
       assert(result3.length == 2, showResult(result3))
 
-      val result4 = remapToCreateCrossRefs(cpts1X, cpts2X, map0)
+      val result4 = rTCCR(cpts1X, cpts2X, map0)
       // No links; identity map
       assert(result4.length == 1, showResult(result4))
     }
@@ -362,12 +365,12 @@ object UnificationTest
       val cpts1 = Array(getDatumSt(T0,N0,N1), aNode(N0,N2))
       val cpts2 = Array(bNode(N0,N1),cNode(N1,Null))
       val map0 = newRemappingMap
-      val result = remapToCreateCrossRefs(cpts1, cpts2, map0)
+      val result = rTCCR(cpts1, cpts2, map0)
       // N0 -> N1, N2 or neither; N1 -> N1, N2 or neither; but injective
       assert(result.length == 7, showResult(result))
 
       val cpts1X = Array(getDatumSt(T0,N0,N1), aNode(N1,N2))
-      val result2 = remapToCreateCrossRefs(cpts1X, cpts2, map0)
+      val result2 = rTCCR(cpts1X, cpts2, map0)
       assert(result2.length == 7, showResult(result2))
       // N0 -> N0, N2 or neither; N1 -> N0, N2 or neither; but injective
     }

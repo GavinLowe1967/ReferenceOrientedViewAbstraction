@@ -28,6 +28,18 @@ object RemapperTest{
 
   // ======== Now the tests
 
+  private def rangeRestrictTest = {
+    println("== rangeRestrictTest ==")
+    val map = newRemappingMap
+    map(0)(0) = 1; map(0)(1) = 2; map(0)(2) = 0 // N2 -> N0
+    map(1)(0) = 0; map(1)(1) = 2 // T0 -> T0
+    val result = Remapper.rangeRestrictTo(map, servers2) // T0 N0
+    // Types are reversed in result, so first list represents T0 -> T0, 
+    // second represents N2 -> N0
+    assert(result == List( List((0,0)), List((2,0)) ) )
+    // println(result)
+  }
+
   /** Test on createCombiningMaps. */
   private def createCombiningMapsTest = {
     val (map, otherArgs, nextArgs) = createCombiningMaps(servers1, components1)
@@ -237,6 +249,7 @@ object RemapperTest{
 
   def test = {
     println("=== RemapperTest ===")
+    rangeRestrictTest
     createCombiningMapsTest
     createMaps1Test
     // combine1Test

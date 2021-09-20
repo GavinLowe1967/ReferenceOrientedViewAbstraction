@@ -7,6 +7,14 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
 
 /** Operations concerned with unifying states or views. */
 object Unification{
+  /** Main functions:
+    * 
+    * allUnifs      (called from EffectOnUnification)
+    * |--unify      (called from Extendability.findReferencingView)
+    * 
+    * remapToJoin      (called from MissingCommon)
+    * |--combine1      (called from EffectOnUnification)
+    */
 
   /** Try to extend map to map' such that map'(st2) = st1.
     * Note: map is unchanged.
