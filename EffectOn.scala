@@ -145,6 +145,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
               s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
               s"  --> ${View.show(post.servers, newComponents)} == $nv")
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
+          // if(singleRef && isPrimary && unifs.isEmpty){
+          //   val resMap = Remapper.rangeRestrictTo(map1, postServers)
+          //   val ok = cv.addDoneInducedPostServersRemaps(post.servers, 
           // if(singleRef && isPrimary && unifs.isEmpty) 
           //   nv.addDoneInduced(post.servers)
           if(!nv.representableInScript){

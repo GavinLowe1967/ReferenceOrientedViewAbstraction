@@ -25,7 +25,7 @@ class EffectOnUnification(
    * |--extendUnifSingleRef
    *    |--EffectOnUnification.remapToCreateCrossRefs
    *    |--getOtherArgsBitMapForSingleRef
-   *    |--Unification.combine1 
+   *    |--Unification.getCombiningMaps 
    *    |-makeSecondaryInducedTransitions
    */ 
 
@@ -295,8 +295,18 @@ class EffectOnUnification(
       // identities of components in post; update otherArgsBitMap to record.
       StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
       // Create primary induced transitions.
-      if(sufficientUnif)
-        combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, result)
+      if(sufficientUnif){
+        val res0 = new ArrayBuffer[RemappingMap]
+        Unification.getCombiningMaps(
+          map1, otherArgs, otherArgsBitMap, nextArg, cpts, res0)
+        for(map1 <- res0){ 
+          // if(unifs.nonEmpty || 
+          //   !cv.containsDoneInducedPostServersRemaps(
+          //     postServers, Remapper.rangeRestrictTo(map1, postServers)))
+            result += ((Remapper.applyRemapping(map1, cpts), unifs))
+        }
+        // combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, result)
+      }
       makeSecondaryInducedTransitions(map1, otherArgs, otherArgsBitMap, unifs)
     } // end of outer for loop.
   } // end of extendUnifSingleRef

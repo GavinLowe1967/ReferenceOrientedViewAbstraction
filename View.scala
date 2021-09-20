@@ -167,6 +167,12 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     * such transitions. */
   private val doneInducedPostServers = new BasicHashSet[ServerStates]
 
+  /** Record that we are considering an induced transition with this, with no
+    * unification, and whose post-state has postServers.  Return true if this
+    * is the first such. */
+  def addDoneInduced(postServers: ServerStates): Boolean = 
+    doneInducedPostServers.add(postServers)
+
   type RemappingList =  List[List[(Identity,Identity)]]
 
   /** If singleRef, pairs (post.servers, Remapper.rangeRestrictTo(map,
@@ -176,11 +182,14 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     if(singleRef) new BasicHashSet[(ServerStates, RemappingList)]
     else null
 
-  /** Record that we are considering an induced transition with this, with no
-    * unification, and whose post-state has postServers.  Return true if this
-    * is the first such. */
-  def addDoneInduced(postServers: ServerStates): Boolean = 
-    doneInducedPostServers.add(postServers)
+  def addDoneInducedPostServersRemaps(servers: ServerStates, map: RemappingList) 
+      : Boolean = 
+    doneInducedPostServersRemaps.add((servers, map))
+
+  def containsDoneInducedPostServersRemaps(
+    servers: ServerStates, map: RemappingList)
+      : Boolean =
+    doneInducedPostServersRemaps.contains((servers, map))
 
   // def doneInducedContains(postServers: ServerStates): Boolean = 
   //   doneInducedPostServers.contains(postServers)

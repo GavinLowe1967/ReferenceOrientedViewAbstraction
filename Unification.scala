@@ -144,31 +144,25 @@ object Unification{
     cpts: Array[State], result: CombineResult)
       : Unit = {
     val res0 = new ArrayBuffer[RemappingMap]
-    combineX(map, otherArgs, bitMap, nextArg, cpts, res0)
+    getCombiningMaps(map, otherArgs, bitMap, nextArg, cpts, res0)
     for(map1 <- res0) result += ((Remapper.applyRemapping(map1, cpts), unifs))
   }
 
 
-  /** All ways of remapping cpts, consistent with map.  Parameters not in dom
-    * map can be mapped: (1) to values of otherArgs, but, in the case of
+  /** Find all ways of remapping cpts, consistent with map.  Parameters not in
+    * dom map can be mapped: (1) to values of otherArgs, but, in the case of
     * identities, only those included in bitMap; or (2) to fresh values
-    * starting from nextArg.  
-    * 
-    * IMPROVE: do not remap components with indexes in map fst unifs.
+    * starting from nextArg.  Each such map is added to result.
     * 
     * map, otherArgs and nextArg are treated mutable, but all updates are
     * backtracked. */
-  private def combineX(
+  @inline def getCombiningMaps(
     map: RemappingMap, otherArgs: OtherArgMap, bitMap: BitMap, 
     nextArg: NextArgMap, cpts: Array[State], result: ArrayBuffer[RemappingMap])
       : Unit = {
     // Recursively remap cpts(i).args[j..), then cpts[i+1..).
     def rec(i: Int, j: Int): Unit = {
-      if(i == cpts.length){
-        // println((View.showStates(Remapper.applyRemapping(map, cpts)), unifs))
-        // IMPROVE: remap each state in turn (and clone at this point)
-        result += Remapper.cloneMap(map) // ((Remapper.applyRemapping(map, cpts), unifs))
-      }
+      if(i == cpts.length) result += Remapper.cloneMap(map) 
       else{
         val c = cpts(i); val ids = c.ids
         if(j == ids.length) // End of this component; move to next component
@@ -244,8 +238,7 @@ object Unification{
     // println(s"otherArgs = "+otherArgs.mkString(", "))
     val result = new ArrayBuffer[RemappingMap] // CombineResult
     // the bitmap is empty: c's id should not be remapped, by precondition.
-    combineX(map0, otherArgs, newBitMap, nextArgMap, Array(c), result)
-    // result.map{ case(cs, _) => cs(0) }
+    getCombiningMaps(map0, otherArgs, newBitMap, nextArgMap, Array(c), result)
     result.map{ case map => Remapper.applyRemappingToState(map, c) }
   }
 
