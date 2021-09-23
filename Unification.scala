@@ -143,7 +143,7 @@ object Unification{
     nextArg: NextArgMap, unifs: UnificationList, 
     cpts: Array[State], result: CombineResult)
       : Unit = {
-    if(debugging){
+    if(false && debugging){
       assert(Remapper.isInjective(map), Remapper.show(map))
       // Check otherArgs disjoint from ran map
       // for(f <- 0 until numTypes; id <- otherArgs(f);
@@ -179,12 +179,9 @@ object Unification{
 
     // Recursively remap cpts(i).args[j..), then cpts[i+1..).
     def rec(i: Int, j: Int): Unit = {
-// IMPROVE
-      if(debugging) assert(Remapper.isInjective(map), Remapper.show(map))
-      if(i == cpts.length){ 
-        if(debugging) assert(Remapper.isInjective(map), Remapper.show(map))
-        result += Remapper.cloneMap(map)
-      }
+      if(false && debugging) // Following is very expensive
+        assert(Remapper.isInjective(map), Remapper.show(map))
+      if(i == cpts.length) result += Remapper.cloneMap(map)
       else{
         val c = cpts(i); val ids = c.ids
         if(j == ids.length) // End of this component; move to next component

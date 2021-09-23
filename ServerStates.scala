@@ -20,21 +20,12 @@ class ServerStates(val servers: List[State]){
 
   def isNormalised = normalised
 
-  /** For each type t, the list of identities of type t used within servers. */
-  // private val serverIds: Array[List[Identity]] = 
-  //  Array.fill(numTypes)(List[Identity]())
-  // IMPROVE: not used after initialisation.
-
   /** The parameters used in this, as a bit map. */
   val idsBitMap = newBitMap
 
-  /** Number of parameters of each type. */
-  private val numParams = new Array[Int](numTypes) // serverIds.map(_.length)
-
   /** Upper bound on the parameter of each type: all parameters (t,p) have p <
-    * paramsBound(t). */
+    * paramsBound(t), and the bound is tight. */
   val paramsBound = new Array[Int](numTypes) 
-  // serverIds.map(ids => if(ids.isEmpty) 0 else ids.max+1)
 
   /** Initialise serverIdsBitMap, normalised, numParams, paramsBound. */
   private def mkParamsInfo() = {
@@ -45,22 +36,14 @@ class ServerStates(val servers: List[State]){
       while(index < st.ids.length){
         val id = st.ids(index)
         val t = State.stateTypeMap(st.cs)(index); index += 1
-        if(!isDistinguished(id) && !idsBitMap(t)(id) /*!serverIds(t).contains(id)*/){
-          // if(serverIds(t).isEmpty) normalised &&= id == 0
-          // else normalised &&= id == serverIds(t).head+1
+        if(!isDistinguished(id) && !idsBitMap(t)(id)){
           normalised &&= id == paramsBound(t)
-          // serverIds(t) ::= id; 
-          idsBitMap(t)(id) = true
-          numParams(t) += 1; 
-          paramsBound(t) = paramsBound(t) max (id+1)
+          idsBitMap(t)(id) = true; paramsBound(t) = paramsBound(t) max (id+1)
         }
       }
     }
-    if(normalised){
-      //assert(numParams.sameElements(paramsBound))
-      for(t <- 0 until numTypes) 
-        assert(paramsBound(t) == idsBitMap(t).count(_ == true))
-    }
+    if(normalised) for(t <- 0 until numTypes) 
+      assert(paramsBound(t) == idsBitMap(t).count(_ == true))
   }
 
   mkParamsInfo()
@@ -71,9 +54,9 @@ class ServerStates(val servers: List[State]){
       Array.tabulate(numTypes)(t =>
         // For a remapping involving this, assuming the script has enough
         // parameters, each set of components can have at most
-        // typeSizes(t)-numParams(t) fresh parameters, giving the value below.
-        Array.tabulate(2*typeSizes(t)-paramsBound/*numParams*/(t))(i =>
-          if(i < paramsBound(t)/*numParams(t)*/) i else -1))
+        // typeSizes(t)-paramsBound(t) fresh parameters, giving the value below.
+        Array.tabulate(2*typeSizes(t)-paramsBound(t))(i =>
+          if(i < paramsBound(t)) i else -1))
     else null
 
   /** A (fresh) RemappingMap, representing the identity on the parameters of 
@@ -85,10 +68,9 @@ class ServerStates(val servers: List[State]){
       while(t < numTypes){ result(t) = remappingMapTemplate(t).clone; t += 1 }
       result
     }
-    // Array.tabulate(numTypes)(t => remappingMapTemplate(t))
   }
 
-  def nextArgMap = { assert(normalised); paramsBound/*numParams*/.clone }
+  def nextArgMap = { assert(normalised); paramsBound.clone }
 
   /** Is this representable using the values defined in the script? */
   val representableInScript = servers.forall(_.representableInScript)
@@ -120,15 +102,12 @@ object ServerStates{
   /** Map containing all ServerStates objects created so far. */
   private val ssMap = new MyLockFreeReadHashMap[List[State], ServerStates]
   // private val ssMap: ServerStatesMap = new ServerStatesLockFreeReadHashMap
-    // new ServerStatesHashMap
 
   /** The number of ServerStates objects created so far. */
   def count = ssMap.size
 
   /** Factory method. */
   def apply(servers: List[State]): ServerStates = {
-    // count += 1; new ServerStates(servers)
-    // ssMap.getOrAdd(servers)
     ssMap.getOrElseUpdate(servers, new ServerStates(servers))
   }
 
@@ -141,7 +120,7 @@ object ServerStates{
       val pids = sts.head.processIdentities; sts = sts.tail; var i = 0
       while(i < pids.length){
         val (f,id) = pids(i); i += 1
-        if(id >= pre.paramsBound/*numParams*/(f)) newIds(f)(id) = true
+        if(id >= pre.paramsBound(f)) newIds(f)(id) = true
       }
     }
     newIds

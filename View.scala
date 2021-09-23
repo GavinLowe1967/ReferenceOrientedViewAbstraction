@@ -185,7 +185,7 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   def addDoneInduced(postServers: ServerStates): Boolean = 
     doneInducedPostServers.add(postServers)
 
-  type RemappingList =  List[List[(Identity,Identity)]]
+  type RemappingList = ComponentView.RemappingList // List[List[(Identity,Identity)]]
 
   /** If singleRef, pairs (post.servers, Remapper.rangeRestrictTo(map,
     * post.servers)) for which we have produced a primary induced transition
@@ -266,6 +266,12 @@ object View{
 object ComponentView{
   /** Is v1 < v2. */
   def compare(v1: ComponentView, v2: ComponentView): Boolean = v1.compare(v2) < 0
+
+  type RemappingList =  List[List[(Identity,Identity)]]
+
+  /** A class of objects used to key the doneInducedPostServersRemaps mapping in
+    * each ComponentView. */
+  class ServersReducedMap(servers: ServerStates, map: RemappingList)
 }
 
 // =======================================================

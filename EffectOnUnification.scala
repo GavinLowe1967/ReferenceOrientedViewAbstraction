@@ -254,7 +254,7 @@ class EffectOnUnification(
   @inline private def extendUnif(unifs: UnificationList,
     map1: RemappingMap, otherArgsBitMap: BitMap)
       : Unit = {
-    if(debugging) assert(Remapper.isInjective(map1), Remapper.show(map1))
+    // if(debugging) assert(Remapper.isInjective(map1), Remapper.show(map1))
     assert(!singleRef)
     // Remove values in ran map1
     Remapper.removeFromBitMap(map1, otherArgsBitMap)
@@ -550,9 +550,10 @@ object EffectOnUnification{
               s"($i1,$j1), ($i2,$j2), ($t,$id1), ($t, $id2)")
           if(t == cpts(i2).typeMap(j2) && map(t)(id2) < 0 &&
               !map(t).contains(id1) ){ // IMPROVE
-            assert((!preIds.contains((t,id1)) || !ids.contains((t,id2))),
-              StateArray.show(preCpts)+"\n"+StateArray.show(cpts)+"\n"+
-                s"($i1,$j1), ($i2,$j2), ($t,$id1), ($t, $id2)")
+            if(false) 
+              assert((!preIds.contains((t,id1)) || !ids.contains((t,id2))),
+                StateArray.show(preCpts)+"\n"+StateArray.show(cpts)+"\n"+
+                  s"($i1,$j1), ($i2,$j2), ($t,$id1), ($t, $id2)")
             map(t)(id2) = id1 // temporary update (*)
             val newTuples = ((i1,j1),(i2,j2))::tuples
             // Advance
