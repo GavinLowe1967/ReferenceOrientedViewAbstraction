@@ -18,61 +18,69 @@ class ServerStates(val servers: List[State]){
   /** Is this normalised? */
   private var normalised = true
 
+  def isNormalised = normalised
+
   /** For each type t, the list of identities of type t used within servers. */
   // private val serverIds: Array[List[Identity]] = 
   //  Array.fill(numTypes)(List[Identity]())
   // IMPROVE: not used after initialisation.
 
   /** The parameters used in this, as a bit map. */
-  val serverIdsBitMap = newBitMap
+  val idsBitMap = newBitMap
 
   /** Number of parameters of each type. */
-  val numParams = new Array[Int](numTypes) // serverIds.map(_.length)
+  private val numParams = new Array[Int](numTypes) // serverIds.map(_.length)
 
   /** Upper bound on the parameter of each type: all parameters (t,p) have p <
     * paramsBound(t). */
-  val paramsBound = new Array[Int](numTypes) // serverIds.map(ids => if(ids.isEmpty) 0 else ids.max+1)
+  val paramsBound = new Array[Int](numTypes) 
+  // serverIds.map(ids => if(ids.isEmpty) 0 else ids.max+1)
 
-  /** Initialise serverIds, serverIdsBitMap, normalised */
-  private def mkServerIds() = {
-    // List of identities of each type in servers
-    // val serverIds: Array[List[Identity]] =
-    //   Array.fill(numTypes)(List[Identity]())
+  /** Initialise serverIdsBitMap, normalised, numParams, paramsBound. */
+  private def mkParamsInfo() = {
+    // Traverse parameters, updating information
     for(st <- servers){
       var index = 0
       // for(id <- st.ids){
       while(index < st.ids.length){
         val id = st.ids(index)
         val t = State.stateTypeMap(st.cs)(index); index += 1
-        if(!isDistinguished(id) && !serverIdsBitMap(t)(id) /*!serverIds(t).contains(id)*/){
+        if(!isDistinguished(id) && !idsBitMap(t)(id) /*!serverIds(t).contains(id)*/){
           // if(serverIds(t).isEmpty) normalised &&= id == 0
           // else normalised &&= id == serverIds(t).head+1
           normalised &&= id == paramsBound(t)
           // serverIds(t) ::= id; 
-          serverIdsBitMap(t)(id) = true
-          numParams(t) += 1; paramsBound(t) = paramsBound(t) max (id+1)
+          idsBitMap(t)(id) = true
+          numParams(t) += 1; 
+          paramsBound(t) = paramsBound(t) max (id+1)
         }
       }
     }
+    if(normalised){
+      //assert(numParams.sameElements(paramsBound))
+      for(t <- 0 until numTypes) 
+        assert(paramsBound(t) == idsBitMap(t).count(_ == true))
+    }
   }
 
-  mkServerIds()
-
+  mkParamsInfo()
 
   /** A template Remapper.RemappingMap */
-  private val remappingMapTemplate = Array.tabulate(numTypes)(t => 
-    // For a remapping involving this, assuming the script has enough
-    // parameters, each set of components can have at most
-    // typeSizes(t)-numParams(t) fresh parameters, giving the value below.
-    Array.tabulate(2*typeSizes(t)-numParams(t))(i => 
-      if(i < numParams(t)) i else -1))
+  private val remappingMapTemplate = 
+    if(normalised)
+      Array.tabulate(numTypes)(t =>
+        // For a remapping involving this, assuming the script has enough
+        // parameters, each set of components can have at most
+        // typeSizes(t)-numParams(t) fresh parameters, giving the value below.
+        Array.tabulate(2*typeSizes(t)-paramsBound/*numParams*/(t))(i =>
+          if(i < paramsBound(t)/*numParams(t)*/) i else -1))
+    else null
 
   /** A (fresh) RemappingMap, representing the identity on the parameters of 
     * this; or null if this is not normalised. */
   def remappingMap: RemappingMap = {
     if(!normalised) null
     else{
-      assert(normalised)
       val result = new Array[Array[Identity]](numTypes); var t = 0
       while(t < numTypes){ result(t) = remappingMapTemplate(t).clone; t += 1 }
       result
@@ -80,7 +88,7 @@ class ServerStates(val servers: List[State]){
     // Array.tabulate(numTypes)(t => remappingMapTemplate(t))
   }
 
-  def nextArgMap = { assert(normalised); numParams.clone }
+  def nextArgMap = { assert(normalised); paramsBound/*numParams*/.clone }
 
   /** Is this representable using the values defined in the script? */
   val representableInScript = servers.forall(_.representableInScript)
@@ -127,12 +135,13 @@ object ServerStates{
   /** All the new parameters in post, but not in pre, as a bit map. */
   def newParamsBitMap(pre: ServerStates, post: ServerStates)
       : Array[Array[Boolean]] = {
+    require(pre.isNormalised)
     val newIds = newBitMap; var sts: List[State] = post.servers
     while(sts.nonEmpty){
       val pids = sts.head.processIdentities; sts = sts.tail; var i = 0
       while(i < pids.length){
         val (f,id) = pids(i); i += 1
-        if(id >= pre.numParams(f)) newIds(f)(id) = true
+        if(id >= pre.paramsBound/*numParams*/(f)) newIds(f)(id) = true
       }
     }
     newIds

@@ -637,7 +637,7 @@ class System(fname: String) {
     val buffer = new ArrayBuffer[(State, List[State])]()
     val (f,id) = pid; val servers = pre.servers; require(cv.servers == servers)
     val preCpts = pre.components; val cpts = cv.components
-    val serverRefs = id < servers.numParams(f) // do servers reference pid?
+    val serverRefs = servers.idsBitMap(f)(id) // id < servers.numParams(f) // do servers reference pid?
     val (fp, idp) = preCpts(0).componentProcessIdentity// id of principal of pre
     //println(s"consistentStates(${State.showProcessId(pid)}, $pre, $cv)")
     // Find all components of cv that can be renamed to a state of pid
@@ -650,7 +650,7 @@ class System(fname: String) {
       // identities in the server identities (so the renaming doesn't change
       // servers).
       if(st1.family == f && 
-        (st1.id == id || !serverRefs && st1.id >= servers.numParams(f))){
+        (st1.id == id || !serverRefs && !servers.idsBitMap(f)(st1.id) /*st1.id >= servers.numParams(f) */ )){
         // Calculate (in maps) all ways of remapping st1 (consistent with the
         // servers) so that: (1) its identity maps to id; (2) other parameters
         // are injectively mapped either to a parameter in pre.components,

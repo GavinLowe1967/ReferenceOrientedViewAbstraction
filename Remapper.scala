@@ -104,7 +104,7 @@ object Remapper{
     * components. */
   def rangeRestrictTo(map: RemappingMap, servers: ServerStates)
       : RemappingList = {
-    val sIds = servers.serverIdsBitMap
+    val sIds = servers.idsBitMap
     var result = List[List[(Identity,Identity)]](); var t = 0
     while(t < numTypes){
       val thisSIds = sIds(t); val len = thisSIds.length
@@ -235,7 +235,7 @@ object Remapper{
   def createMaps1(servers: ServerStates, components: Array[State]) 
       : (OtherArgMap, NextArgMap) = {
     val otherArgs = Array.fill(numTypes)(List[Identity]())
-    val serverNumParams = servers.numParams
+    val serverNumParams = servers.paramsBound // numParams
     val nextArg = serverNumParams.clone // Note: need to clone
     for(st <- components; i <- 0 until st.ids.length){
       val f = st.typeMap(i); val id = st.ids(i)

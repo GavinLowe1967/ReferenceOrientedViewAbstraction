@@ -31,7 +31,8 @@ class EffectOnUnification(
 
   /* A few object variables, extracted directly from pre, post and cv, used in
    * several functions. */
-  private val servers = pre.servers; require(servers == cv.servers)
+  private val servers = pre.servers; 
+  require(servers == cv.servers && servers.isNormalised)
   private val postServers = post.servers
   private val preCpts = pre.components; private val postCpts = post.components
   require(preCpts.length == postCpts.length)
@@ -211,12 +212,12 @@ class EffectOnUnification(
       val (j, i) = us.head; us = us.tail
       // (2) Add parameters of postCpts(i), which is unified with a component
       // of cv.
-      postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.numParams)
+      postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap) // numParams)
       // (3) If this is the unification of the principal of cv, which changes
       // state and gains a reference to another component c, include the
       // parameters of c from postCpts.
       if(j == 0 && changedStateBitMap(i)) 
-        addIdsFromNewRef(otherArgsBitMap, servers.numParams, i)
+        addIdsFromNewRef(otherArgsBitMap, /*servers.numParams,*/ i)
     }
     otherArgsBitMap
   }
@@ -224,17 +225,18 @@ class EffectOnUnification(
   /** Add to otherArgsBitMap any parameters of a component c to which preCpts(i)
     * gains a reference as the result of the transition. */ 
   @inline private def addIdsFromNewRef(
-    otherArgsBitMap: Array[Array[Boolean]], serverNumParams: Array[Int], i: Int)
+    otherArgsBitMap: Array[Array[Boolean]], /*serverNumParams: Array[Int],*/ i: Int)
   = {
     val prePids = preCpts(i).processIdentities
     val postPids = postCpts(i).processIdentities
+    val serverIds = servers.idsBitMap
     // Find which parameters are gained
     for(k <- 1 until postPids.length){
       val pid = postPids(k)
       if(!isDistinguished(pid._2) && !prePids.contains(pid)){
         val c = StateArray.find(pid, postCpts)
         // Assumptions imply pid must be in postCpts, except under singleRef.
-        if(c != null) c.addIdsToBitMap(otherArgsBitMap, serverNumParams)
+        if(c != null) c.addIdsToBitMap(otherArgsBitMap, serverIds)
         else assert(singleRef)
       }
     }
@@ -327,7 +329,7 @@ class EffectOnUnification(
     // Indices of components of preCpts that are mapped onto.
     val rangeIndices = tuples.map{ case ((i1,_),_) => i1 }.distinct
     for(i <- rangeIndices)
-      preCpts(i).addIdsToBitMap(otherArgsBitMap, servers.numParams)
+      preCpts(i).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap)
     // IMPROVE: we need only map parameters of cpts(i2) like this, where
     // i2 is the relevant index in the current tuple.
     // for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
