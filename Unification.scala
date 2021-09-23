@@ -123,10 +123,10 @@ object Unification{
   /** Bit map, indexed by process identities. */
   type BitMap = Array[Array[Boolean]]
 
-  /** Result returned from combine(pre,...,cv).  Each entry represents a way of
-    * remapping cv, paired with a UnificationList that contains (j,i) whenever
-    * cv.components(j) unifies with pre.components(i). */
-  type CombineResult = ArrayBuffer[(Array[State], UnificationList)]
+  /** Result returned from combine1.  Each entry represents a remapping map, its
+    * application to cv.components, and a UnificationList that contains (j,i)
+    * whenever cv.components(j) unifies with pre.components(i). */
+  type CombineResult = ArrayBuffer[(RemappingMap, Array[State], UnificationList)]
 
   /** All ways of remapping cpts, consistent with map.  Parameters not in dom
     * map can be mapped: (1) to values of otherArgs, but, in the case of
@@ -143,9 +143,17 @@ object Unification{
     nextArg: NextArgMap, unifs: UnificationList, 
     cpts: Array[State], result: CombineResult)
       : Unit = {
+    if(debugging){
+      assert(Remapper.isInjective(map), Remapper.show(map))
+      // Check otherArgs disjoint from ran map
+      // for(f <- 0 until numTypes; id <- otherArgs(f);
+      //     id1 <- 0 until map(f).length)
+      //   assert(map(f)(id1) != id)
+    }
     val res0 = new ArrayBuffer[RemappingMap]
     getCombiningMaps(map, otherArgs, bitMap, nextArg, cpts, res0)
-    for(map1 <- res0) result += ((Remapper.applyRemapping(map1, cpts), unifs))
+    for(map1 <- res0) 
+      result += ((map1, Remapper.applyRemapping(map1, cpts), unifs))
   }
 
 
@@ -160,9 +168,23 @@ object Unification{
     map: RemappingMap, otherArgs: OtherArgMap, bitMap: BitMap, 
     nextArg: NextArgMap, cpts: Array[State], result: ArrayBuffer[RemappingMap])
       : Unit = {
+    if(debugging){ // IMPROVE
+      assert(Remapper.isInjective(map), Remapper.show(map))
+      for(f <- 0 until numTypes) assert(otherArgs(f) == otherArgs(f).distinct)
+      // Check otherArgs disjoint from ran map
+      for(f <- 0 until numTypes; id <- otherArgs(f); 
+          id1 <- 0 until map(f).length)
+        assert(map(f)(id1) != id)
+    }
+
     // Recursively remap cpts(i).args[j..), then cpts[i+1..).
     def rec(i: Int, j: Int): Unit = {
-      if(i == cpts.length) result += Remapper.cloneMap(map) 
+// IMPROVE
+      if(debugging) assert(Remapper.isInjective(map), Remapper.show(map))
+      if(i == cpts.length){ 
+        if(debugging) assert(Remapper.isInjective(map), Remapper.show(map))
+        result += Remapper.cloneMap(map)
+      }
       else{
         val c = cpts(i); val ids = c.ids
         if(j == ids.length) // End of this component; move to next component
@@ -232,7 +254,8 @@ object Unification{
     // otherArgMap
     val otherArgs = Remapper.newOtherArgMap
     for(cpt2 <- cpts2; (f,id) <- cpt2.processIdentities)
-      if(!isDistinguished(id) && map0(f)(id) < 0){
+      if(!isDistinguished(id) && map0(f)(id) < 0 && !otherArgs(f).contains(id)){
+        assert(!map0(f).contains(id)) // IMPROVE
         otherArgs(f) ::= id; nextArgMap(f) = nextArgMap(f) max (id+1)
       }
     // println(s"otherArgs = "+otherArgs.mkString(", "))

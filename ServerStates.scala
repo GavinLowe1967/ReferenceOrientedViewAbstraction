@@ -15,31 +15,49 @@ class ServerStates(val servers: List[State]){
   /** Override hash function. */
   override val hashCode = mkHash
   
-  /** For each type t, the list of identities of type t used within servers. */
-  val serverIds: Array[List[Identity]] = mkServerIds
-
   /** Is this normalised? */
   private var normalised = true
 
-  /** Initialise serverIds */
-  private def mkServerIds = {
-    val result = Array.fill(numTypes)(List[Identity]())
+  /** For each type t, the list of identities of type t used within servers. */
+  // private val serverIds: Array[List[Identity]] = 
+  //  Array.fill(numTypes)(List[Identity]())
+  // IMPROVE: not used after initialisation.
+
+  /** The parameters used in this, as a bit map. */
+  val serverIdsBitMap = newBitMap
+
+  /** Number of parameters of each type. */
+  val numParams = new Array[Int](numTypes) // serverIds.map(_.length)
+
+  /** Upper bound on the parameter of each type: all parameters (t,p) have p <
+    * paramsBound(t). */
+  val paramsBound = new Array[Int](numTypes) // serverIds.map(ids => if(ids.isEmpty) 0 else ids.max+1)
+
+  /** Initialise serverIds, serverIdsBitMap, normalised */
+  private def mkServerIds() = {
+    // List of identities of each type in servers
+    // val serverIds: Array[List[Identity]] =
+    //   Array.fill(numTypes)(List[Identity]())
     for(st <- servers){
       var index = 0
-      for(id <- st.ids){
+      // for(id <- st.ids){
+      while(index < st.ids.length){
+        val id = st.ids(index)
         val t = State.stateTypeMap(st.cs)(index); index += 1
-        if(!isDistinguished(id) && !result(t).contains(id)){
-          if(result(t).isEmpty) normalised &&= id == 0
-          else normalised &&= id == result(t).head+1
-          result(t) ::= id
+        if(!isDistinguished(id) && !serverIdsBitMap(t)(id) /*!serverIds(t).contains(id)*/){
+          // if(serverIds(t).isEmpty) normalised &&= id == 0
+          // else normalised &&= id == serverIds(t).head+1
+          normalised &&= id == paramsBound(t)
+          // serverIds(t) ::= id; 
+          serverIdsBitMap(t)(id) = true
+          numParams(t) += 1; paramsBound(t) = paramsBound(t) max (id+1)
         }
       }
     }
-    result
   }
 
-  /** Number of parameters of each type. */
-  val numParams = serverIds.map(_.length)
+  mkServerIds()
+
 
   /** A template Remapper.RemappingMap */
   private val remappingMapTemplate = Array.tabulate(numTypes)(t => 
@@ -50,12 +68,15 @@ class ServerStates(val servers: List[State]){
       if(i < numParams(t)) i else -1))
 
   /** A (fresh) RemappingMap, representing the identity on the parameters of 
-    * this. */
+    * this; or null if this is not normalised. */
   def remappingMap: RemappingMap = {
-    assert(normalised)
-    val result = new Array[Array[Identity]](numTypes); var t = 0
-    while(t < numTypes){ result(t) = remappingMapTemplate(t).clone; t += 1 }
-    result
+    if(!normalised) null
+    else{
+      assert(normalised)
+      val result = new Array[Array[Identity]](numTypes); var t = 0
+      while(t < numTypes){ result(t) = remappingMapTemplate(t).clone; t += 1 }
+      result
+    }
     // Array.tabulate(numTypes)(t => remappingMapTemplate(t))
   }
 

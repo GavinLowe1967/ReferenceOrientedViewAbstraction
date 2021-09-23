@@ -9,7 +9,7 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
 class EffectOnUnification(
   pre: Concretization, post: Concretization, cv: ComponentView){
 
-  import Unification.{CombineResult,BitMap,combine1}
+  import Unification.{CombineResult,BitMap}
   import EffectOnUnification.MatchingTuple
 
   /* Relationship of main functions:
@@ -36,6 +36,7 @@ class EffectOnUnification(
   private val preCpts = pre.components; private val postCpts = post.components
   require(preCpts.length == postCpts.length)
   private val cpts = cv.components
+  if(debugging) StateArray.checkDistinct(cpts)
   private val (cvpf, cvpid) = cv.principal.componentProcessIdentity
  
   /** In the case of singleRef, secondary components of the transition that
@@ -261,7 +262,8 @@ class EffectOnUnification(
     // identities of components in post; update otherArgsBitMap to record.
     StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
     // Create primary induced transitions.
-    combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, result)
+    Unification.combine1(
+      map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, result)
   } // end of extendUnif
 
 
@@ -300,10 +302,11 @@ class EffectOnUnification(
         Unification.getCombiningMaps(
           map1, otherArgs, otherArgsBitMap, nextArg, cpts, res0)
         for(map1 <- res0){ 
-          // if(unifs.nonEmpty || 
-          //   !cv.containsDoneInducedPostServersRemaps(
-          //     postServers, Remapper.rangeRestrictTo(map1, postServers)))
-            result += ((Remapper.applyRemapping(map1, cpts), unifs))
+          if(unifs.nonEmpty || 
+            !cv.containsDoneInducedPostServersRemaps(
+              // postServers, Remapper.restrictTo(map1, cv, postServers)) )
+              postServers, Remapper.rangeRestrictTo(map1, postServers)) )
+            result += ((map1, Remapper.applyRemapping(map1, cpts), unifs))
         }
         // combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, result)
       }
@@ -339,12 +342,27 @@ class EffectOnUnification(
     * according to map1, otherArgs, otherArgsBitMap, nextArg, but also mapping
     * parameters to parameters of c. */
   @inline private def makeSecondaryInducedTransitions( 
-    map1: RemappingMap, otherArgs: OtherArgMap, otherArgsBitMap: BitMap,  
+    map1: RemappingMap, otherArgs0: OtherArgMap, otherArgsBitMap0: BitMap,  
     unifs: UnificationList)
   = {
+    // IMPROVE
+    for(f <- 0 until numTypes; id <- otherArgs0(f); 
+        id1 <- 0 until map1(f).length)
+      assert(map1(f)(id1) != id)
     /* Build remappings for secondary induced transitions corresponding to
      * component k acquiring a reference to cv.principal in parameter id. */
     @inline def mkSecondaryRemaps(k: Int, id: Int) = {
+      // clone otherArgs0, otherArgsBitMap, removing (cvpf,id)
+      val otherArgs = new Array[List[Identity]](numTypes); var f = 0
+      while(f < numTypes){
+        if(f == cvpf) otherArgs(f) = otherArgs0(f).filter(_ != id)
+        else otherArgs(f) = otherArgs0(f)
+        f += 1
+      }
+      // val otherArgs = otherArgs0.clone;
+      // otherArgs(cvpf) = otherArgs(cvpf).filter(_ != id)
+      val otherArgsBitMap = otherArgsBitMap0.map(_.clone)
+      otherArgsBitMap(cvpf)(id) = false
       require(map1(cvpf)(cvpid) == id && 
         postCpts(k).processIdentities.contains((cvpf,id)))
       // For each other parameter of postCpts(k), if not in ran map1, add to
@@ -356,9 +374,15 @@ class EffectOnUnification(
             otherArgsBitMap(t)(id1) = true
         }
       val tempRes = new CombineResult
-      combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, tempRes)
-      for((newSts, us) <- tempRes){ // IMPROVE
-        assert(us eq unifs); result2 += ((newSts, us, k))
+      for(f <- 0 until numTypes; id <- otherArgs(f);
+          id1 <- 0 until map1(f).length)
+        assert(map1(f)(id1) != id, 
+          Remapper.show(map1)+"\n"+otherArgs.mkString(";"))
+      Unification.combine1(
+        map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, tempRes)
+      for((_, newSts, us) <- tempRes){ // IMPROVE
+        assert(us eq unifs); StateArray.checkDistinct(newSts)
+        result2 += ((newSts, us, k))
       }
     } // end of mkSecondaryRemaps
 
@@ -367,7 +391,8 @@ class EffectOnUnification(
       if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
       else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p)){
         // Consider mapping cvpid to p (and backtrack)
-        map1(cvpf)(cvpid) = p; mkSecondaryRemaps(k, p); map1(cvpf)(cvpid) = -1
+        map1(cvpf)(cvpid) = p; // assert(!otherArgs0(cvpf).contains(p))
+        mkSecondaryRemaps(k, p); map1(cvpf)(cvpid) = -1
       }
     }
   }

@@ -104,16 +104,49 @@ object Remapper{
     * components. */
   def rangeRestrictTo(map: RemappingMap, servers: ServerStates)
       : RemappingList = {
-    var result = List[List[(Identity,Identity)]]()
-    for(t <- 0 until numTypes){
-      val sIds = servers.serverIds(t); var tResult = List[(Identity,Identity)]()
-      for(id <- 0 until map(t).length){
-        val y = map(t)(id); if(sIds.contains(y)) tResult ::= (id, y)
+    val sIds = servers.serverIdsBitMap
+    var result = List[List[(Identity,Identity)]](); var t = 0
+    while(t < numTypes){
+      val thisSIds = sIds(t); val len = thisSIds.length
+      var tResult = List[(Identity,Identity)]()
+      var id = 0; val thisLen = map(t).length max servers.paramsBound(t)
+      while(id < thisLen){
+        val y = map(t)(id); //if(y >= 0 && sIds.contains(y)) tResult ::= (id, y)
+        if(y >= 0 && y < len && thisSIds(y)) tResult ::= (id, y)
+        id += 1
       }
-      result ::= tResult
+      result ::= tResult; t += 1
     }
     result
-  }
+  }  
+
+  /** map domain restricted to the parameters of v.components, and range
+    * restricted to the parameters of servers, i.e.
+    * 
+    * { x -> y | (x -> y) in map, x is a parameter of v.components and 
+    *            y is a parameter of servers }.
+    * 
+    * The precise form of the result isn't important, other than equality
+    * corresponding to equality of the above expression; but the types are in
+    * reverse order; and the pairs for each type are in reverse order of x
+    * components.
+    * 
+    * In fact, this gives no advantage over rangeRestrictTo. */
+//   def restrictTo(map: RemappingMap, v: ComponentView, servers: ServerStates)
+//       : RemappingList = {
+// // IMPROVE: use bit map for servers' parameters
+//     val vParams = v.cptParamBitMap
+//     var result = List[List[(Identity,Identity)]]()
+//     for(t <- 0 until numTypes){
+//       val sIds = servers.serverIds(t); var tResult = List[(Identity,Identity)]()
+//       for(id <- 0 until map(t).length){
+//         val y = map(t)(id); 
+//         if(y >= 0 && vParams(t)(id) && sIds.contains(y)) tResult ::= (id, y)
+//       }
+//       result ::= tResult
+//     }
+//     result
+//   }
 
   // ------ NextArgMaps
 

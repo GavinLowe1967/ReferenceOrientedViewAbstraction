@@ -125,8 +125,9 @@ object UnificationTest
   private def combineTest = {
     println("== combineTest ==")
     def showBuffer(buff: CombineResult) =
-      buff.map{ case (states, us) => StateArray.show(states)+"; "+us }.
-        mkString("\n")
+      buff.map{ case (map, states, us) => 
+        RemapperP.Remapper.show(map)+"; "+StateArray.show(states)+"; "+us 
+      }.mkString("\n")
 
     def test1 = {
       println("=test1=")
@@ -140,12 +141,12 @@ object UnificationTest
       val (buffer,_) = combine(pre, post, cv /*, List()*/) // , true
       // println(showBuffer(buffer))
       // Unifying, N0 -> N0, N1 -> N1
-      assert(buffer.exists{case (states, unifs) =>
+      assert(buffer.exists{case (map, states, unifs) =>
         unifs == List((0,1)) && 
         states.sameElements(Array(aNode(N0,N2), cNode(N2,Null)))
       })
       // No unification
-      assert(buffer.exists{case (states, unifs) =>
+      assert(buffer.exists{case (map, states, unifs) =>
         unifs.isEmpty && states.sameElements(Array(aNode(N3,N4), cNode(N4,Null)))
       })
       assert(buffer.length == 2)
@@ -156,12 +157,12 @@ object UnificationTest
       val (buffer2,_) = combine(pre, post, cv /*, List()*/) // , false
       // Unifying, N0 -> N0, N1 -> N1
       //println(showBuffer(buffer2))
-      assert(buffer2.exists{case (states, unifs) =>
+      assert(buffer2.exists{case (map, states, unifs) =>
         unifs == List((0,1)) && 
         states.sameElements(Array(aNode(N0,N2), cNode(N2,Null)))
       })
       // No unification, N0 -> N3, N1 -> N4
-      assert(buffer2.exists{case (states, unifs) =>
+      assert(buffer2.exists{case (map, states, unifs) =>
         unifs.isEmpty && states.sameElements(Array(aNode(N3,N4), cNode(N4,Null)))
       })
       assert(buffer2.length == 2)
@@ -181,12 +182,12 @@ object UnificationTest
       // println(showBuffer(buffer))
       assert(buffer.length == 2)
       // Unifying N2 -> N0, N3 -> N2
-      assert(buffer.exists{case (states, unifs) =>
+      assert(buffer.exists{case (map, states, unifs) =>
         unifs == List((0,1)) && 
         states.sameElements(Array(aNode(N0,N2), cNode(N2,Null)))
       })
       // No unification; N0 -> N4, N1 -> N5
-      assert(buffer.exists{case (states, unifs) =>
+      assert(buffer.exists{case (map, states, unifs) =>
         unifs.isEmpty && states.sameElements(Array(aNode(N4,N5), cNode(N5,Null)))
       })
     }
@@ -223,7 +224,7 @@ object UnificationTest
         Array(getDatumSt(T1,N0,N2), aNode(N0,N1), cNode(N2,N3)))
       val (buffer,_) = combine(pre, post, cv /*, List()*/) // , false
       // println("\n"+showBuffer(buffer))
-      assert(buffer.forall{case (states, unifs) =>
+      assert(buffer.forall{case (map, states, unifs) =>
         unifs == List((1,1)) && ( 
           // N0 -> N0, N1 -> N2, T1 -> T1, N2 -> fresh (can't map to N1),
           // N3 -> N1 or fresh

@@ -111,6 +111,7 @@ class Checker(system: SystemP.System){
     assert(v.ply < Int.MaxValue)
     v match{
       case cv: ComponentView =>
+        if(debugging) StateArray.checkDistinct(cv.components)
         for((pre, e, post, outsidePid) <- system.transitions(cv)){
           assert(pre.ply < Int.MaxValue)
           assert(post.ply == Int.MaxValue); post.ply = ply

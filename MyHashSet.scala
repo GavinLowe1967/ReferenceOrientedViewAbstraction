@@ -122,6 +122,101 @@ class BasicHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
   }
 }
 
+//==================================================================
+
+/** An implementation of MyHashSet using open addressing that also stores the
+  * hashes. */
+class OpenHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
+    extends MyHashSet[A]{
+
+  checkPow2(initSize)
+
+  /** The number of keys. */
+  private var count = 0L
+
+ /** The number of slots in the hash table. */
+  private var n = initSize
+
+  /** A bitmask to produce a value in [0..n). */
+  private var mask = n-1
+
+  /** The threshold ratio at which resizing happens. */
+  private val ThresholdRatio = 0.5
+
+  /** The threshold at which the next resizing will happen. */
+  private var threshold = initSize * ThresholdRatio
+
+  /** The array holding the keys. */
+  private var keys = new Array[A](initSize)
+
+  /** The array holding the hashes. 
+    * Invariant, if keys(i) != null then hashes(i) = keys(i).hashCode. */
+  private var hashes = new Array[Int](initSize)
+
+  /** Find the index in the arrays corresponding to k with hashCode h. */
+  private def find(k: A, h: Int): Int = {
+    var i = h & mask
+    while((hashes(i) != h || keys(i) != k) && 
+        (hashes(i) != 0 || keys(i) != null))
+      i = (i+1)&mask
+    i
+  }  
+
+  /** Add x to this set. */
+  def add(x: A): Boolean = {
+    val h = x.hashCode; val i = find(x, h)
+    if(keys(i) == null){
+      if(count >= threshold){ resize(); return add(x) }
+      keys(i) = x; hashes(i) = h; count += 1; true
+    }
+    else false
+  }
+
+  /** Resize the hash table. */
+  private def resize(): Unit = {
+    val oldKeys = keys; val oldHashes = hashes; val oldN = n
+    n += n; threshold = n * ThresholdRatio; mask = n-1
+    keys = new Array[A](n); hashes = new Array[Int](n); var i = 0
+    while(i < oldN){
+      val k = oldKeys(i)
+      if(k != null){ // copy across
+        val h = oldHashes(i); val j = find(k,h); keys(j) = k; hashes(j) = h
+      }
+      i += 1
+    }
+  }
+
+  /** An iterator over the values in the set. */
+  def iterator = new Iterator[A]{
+    /** The index of the next value to return. */
+    private var ix = 0
+
+    /** Advance to the next value. */
+    private def advance = while(ix < n && keys(ix) == null) ix += 1
+
+    advance
+
+    def hasNext = ix < n
+
+    def next = { val k = keys(ix); ix += 1; advance; k }
+  } // end of iterator
+
+  /** Does this set contain x? */
+  def contains(x: A): Boolean = { val i = find(x, x.hashCode); keys(i) != null }
+
+  /** Get the element of this that is equal (==) to x. 
+    * Pre: such an element exists; and this operation is not concurrent with
+    * any add operation. */
+  def get(x: A): A = { val i = find(x, x.hashCode); keys(i) }
+
+  def size: Long = count
+
+  def clear = {
+    keys = new Array[A](initSize); hashes = new Array[Int](initSize); count = 0; 
+    n = initSize; mask = n-1; threshold = initSize * ThresholdRatio
+  }
+}
+
 // =======================================================
 
 /*An implementation of MyHashSet using a sharded hash table with

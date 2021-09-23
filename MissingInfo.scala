@@ -214,8 +214,9 @@ class MissingInfo(
   private def rehashMC() = {
     var h = newView.hashCode; var i = mcIndex
     while(i < missingCommon.length){
-      assert(missingCommon(i) != null) 
-      h = h*73 + missingCommon(i).hashCode
+      if(missingCommon(i) != null){ // not if we blanked one out when sorting
+        h = h*73 + missingCommon(i).hashCode
+      }
       i += 1
     }
     mcHash = h
@@ -255,11 +256,12 @@ object MissingInfo{
     // Sort missingCommon
     if(missingCommon.length == 2){
       val cmp = missingCommon(0).compare(missingCommon(1))
-      assert(cmp != 0)
       if(cmp > 0){
         val t = missingCommon(0); missingCommon(0) = missingCommon(1);
         missingCommon(1) = t
       }
+      else if(cmp == 0) // happens on step 46 of lazySet.csp, after ~100K views
+        missingCommon(1) = null
     }
     // Sort missingViews.  Also replace duplicates by null.  Use insertion
     // sort, as the array is small.

@@ -80,6 +80,11 @@ abstract class View{
     case (pre1, cpts, cv, post1, newCpts) => s"induced by $pre1 -> $post1 on $cv"
     case null => s"produced by $pre -> $post"
   }
+
+  /** Was this induced by a transition from cv1?  Used in trying to understand
+    * why so many induced transitions are redundant. */
+  def inducedFrom(cv1: ComponentView) = 
+    creationIngredients != null && creationIngredients._3 == cv1
 }
 
 // =======================================================
@@ -161,6 +166,13 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     }
   }
 
+  /** Bit map showing which parameters are in the components, if singleRef. */
+  val cptParamBitMap = newBitMap
+  if(singleRef) 
+    for(c <- components; (t,p) <- c.processIdentities; if !isDistinguished(p))
+      cptParamBitMap(t)(p) = true
+
+
   /** Information about transitions pre -> post for which we have considered
     * induced transitions from this view, with pre.servers = this.servers !=
     * post.servers and with no unification.  The set of post.servers for all
@@ -179,7 +191,7 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     * post.servers)) for which we have produced a primary induced transition
     * from this with no unifications.  */
   private val doneInducedPostServersRemaps = 
-    if(singleRef) new BasicHashSet[(ServerStates, RemappingList)]
+    if(singleRef) new OpenHashSet[(ServerStates, RemappingList)]
     else null
 
   def addDoneInducedPostServersRemaps(servers: ServerStates, map: RemappingList) 
@@ -388,6 +400,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   /** Maps used in combining with this.  */
   private var map: RemappingMap = servers.remappingMap
+  // Note: map is null if servers is not normalised. 
   private var nextArg: NextArgMap = null 
   private var otherArgs: OtherArgMap = null
 

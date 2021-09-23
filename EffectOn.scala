@@ -61,7 +61,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     // where the final component is the index of preCpts/postCpts that gains a
     // reference to cv.principal.
     val (inducedInfo, secondaryInduced)
-        : (ArrayBuffer[(Array[State], UnificationList)],
+        : (ArrayBuffer[(RemappingMap, Array[State], UnificationList)],
            ArrayBuffer[(Array[State], UnificationList, Int)]) =
       EffectOnUnification.combine(pre, post, cv)
 
@@ -77,12 +77,12 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     // Process inducedInfo
     var index = 0
     while(index < inducedInfo.length){
-      val (cpts, unifs) = inducedInfo(index); index += 1
+      val (map, cpts, unifs) = inducedInfo(index); index += 1
       Profiler.count("EffectOn step "+unifs.isEmpty)
       val newPrinc = getNewPrinc(cpts(0), unifs) 
       var newComponentsList =
         StateArray.makePostComponents(newPrinc, postCpts, cpts)
-      processInducedInfo1(cpts, unifs, true, newComponentsList)
+      processInducedInfo1(map, cpts, unifs, true, newComponentsList)
     } // end of while loop
     // Process secondaryInduced
     index = 0
@@ -91,7 +91,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       Profiler.count("SecondaryInduced")
       val newPrinc = getNewPrinc(cpts(0), unifs) 
       val newComponentsList = List(Array(postCpts(k), newPrinc))
-      processInducedInfo1(cpts, unifs, false, newComponentsList)
+      processInducedInfo1(null, cpts, unifs, false, newComponentsList)
     }
   }
 
@@ -101,7 +101,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   /** Create induced transition producing views with post.servers and each
     * element of newComponentsList.  The transition is induced by pre -e->
-    * post acting on cv, with unifications unifs.  Add result to nextNewViews. 
+    * post acting on cv, with unifications unifs; cv.cpts is remapped by map
+    * to produce cpts.  Add result to nextNewViews.
     * 
     * This function would live better inside apply; but that function is too
     * large.  Other parameters are as there (most are used only for setting
@@ -110,12 +111,20 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   def processInducedInfo(
     pre: Concretization,  e: EventInt, post: Concretization,
     cv: ComponentView, ply: Int, nextNewViews: MyHashSet[ComponentView])
-    (cpts: Array[State], unifs: UnificationList, isPrimary: Boolean,
-      newComponentsList: List[Array[State]])
+    (map: RemappingMap, cpts: Array[State], unifs: UnificationList, 
+      isPrimary: Boolean, newComponentsList: List[Array[State]])
   : Unit = {
     if(verbose) println("cpts = "+StateArray.show(cpts))
     if(debugging){
       StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
+    }
+    // Record this induced transition if singleRef, if primary and no unifs
+    @inline def recordInduced(): Boolean = {
+      if(singleRef && isPrimary && unifs.isEmpty){
+        val resMap = Remapper.rangeRestrictTo(map, post.servers)
+        cv.addDoneInducedPostServersRemaps(post.servers, resMap)
+      }
+      else true
     }
     //trivialSideConditions = true
     // If singleRef, identities of components referenced by both principals,
@@ -145,9 +154,13 @@ class EffectOn(views: ViewSet, system: SystemP.System){
               s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
               s"  --> ${View.show(post.servers, newComponents)} == $nv")
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
+          val ok = recordInduced(); assert(ok)
           // if(singleRef && isPrimary && unifs.isEmpty){
-          //   val resMap = Remapper.rangeRestrictTo(map1, postServers)
-          //   val ok = cv.addDoneInducedPostServersRemaps(post.servers, 
+          //   // val resMap = Remapper.restrictTo(map, cv, post.servers)
+          //   val resMap = Remapper.rangeRestrictTo(map, post.servers)
+          //   val ok = cv.addDoneInducedPostServersRemaps(post.servers, resMap)
+          //   assert(ok)
+          // }
           // if(singleRef && isPrimary && unifs.isEmpty) 
           //   nv.addDoneInduced(post.servers)
           if(!nv.representableInScript){
@@ -163,14 +176,23 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           effectOnStore.add(missing, missingCommons, nv)
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
         }
+        else{ // nv was in nextNewViews 
+          recordInduced() // might give false
+        }
       } // end of if(!views.contains(nv))
-      else if(false){
-        println(
-          s"$pre -${system.showEvent(e)}-> $post\n"+
-            s"  with unifications $unifs induces $cv --> $nv")
-        val v1 = views.get(nv)
-        println(s"Previously "+v1.showCreationInfo)
-          // println(v1)
+      // Try to work out why so many cases are redundant
+      else{ // views already contains nv
+        recordInduced()
+        if(false){
+//  addDoneInducedPostServersRemaps here? 
+          val v1 = views.get(nv)
+          if(v1.inducedFrom(cv)){
+            println(
+              s"$pre -${system.showEvent(e)}-> $post\n"+
+                s"  with unifications $unifs induces $cv --> $nv")
+            println(s"Previously "+v1.showCreationInfo)
+          }
+        }
       }
     } // end of for loop
   }
