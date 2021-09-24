@@ -187,21 +187,38 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
 
   type RemappingList = ComponentView.RemappingList // List[List[(Identity,Identity)]]
 
+  import ComponentView.ServersReducedMap
+
   /** If singleRef, pairs (post.servers, Remapper.rangeRestrictTo(map,
     * post.servers)) for which we have produced a primary induced transition
     * from this with no unifications.  */
   private val doneInducedPostServersRemaps = 
-    if(singleRef) new OpenHashSet[(ServerStates, RemappingList)]
+    if(singleRef) new OpenHashSet[ServersReducedMap] // [(ServerStates, RemappingList)]
     else null
 
-  def addDoneInducedPostServersRemaps(servers: ServerStates, map: RemappingList) 
-      : Boolean = 
-    doneInducedPostServersRemaps.add((servers, map))
+  /** Record that this has been used to create an induced transition, with
+    * post.servers = servers, and such that pair._1 is the range restriction
+    * of the remapping map to the parameters of servers.  pair._2 is a
+    * hashCode for pair._1.  */
+  @inline def addDoneInducedPostServersRemaps(
+    servers: ServerStates, pair: (RemappingList, Int))
+      : Boolean = {
+    val (map, h) = pair
+    val key = new ServersReducedMap(servers, map, h)
+    doneInducedPostServersRemaps.add(key) // ((servers, map))
+  }
 
+  /** Has this been used to create an induced transition, with post.servers =
+    * servers, and such that pair._1 is the range restriction of the remapping
+    * map to the parameters of servers.  pair._2 is a hashCode for
+    * pair._1.  */
   def containsDoneInducedPostServersRemaps(
-    servers: ServerStates, map: RemappingList)
-      : Boolean =
-    doneInducedPostServersRemaps.contains((servers, map))
+    servers: ServerStates, pair: (RemappingList, Int))
+      : Boolean = {
+    val (map, h) = pair
+    val key = new ServersReducedMap(servers, map, h)
+    doneInducedPostServersRemaps.contains(key) // ((servers, map))
+  }
 
   // def doneInducedContains(postServers: ServerStates): Boolean = 
   //   doneInducedPostServers.contains(postServers)
@@ -267,11 +284,20 @@ object ComponentView{
   /** Is v1 < v2. */
   def compare(v1: ComponentView, v2: ComponentView): Boolean = v1.compare(v2) < 0
 
-  type RemappingList =  List[List[(Identity,Identity)]]
+  type RemappingList = Array[List[Int]] //  Array[List[(Identity,Identity)]]
 
   /** A class of objects used to key the doneInducedPostServersRemaps mapping in
     * each ComponentView. */
-  class ServersReducedMap(servers: ServerStates, map: RemappingList)
+  class ServersReducedMap(
+      val servers: ServerStates, val map: RemappingList, h: Int){
+    override def equals(that: Any) = that match{
+      case srm: ServersReducedMap => 
+        srm.servers == servers && srm.map.sameElements(map)
+    }
+
+    override def hashCode = servers.hashCode ^ h
+
+  }
 }
 
 // =======================================================

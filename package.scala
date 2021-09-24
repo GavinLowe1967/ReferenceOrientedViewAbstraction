@@ -63,9 +63,11 @@ package object ViewAbstraction{
 
   // ------- bitmaps over parameters
 
+  type BitMap = Array[Array[Boolean]]
+
 // FIXME: the size of each row is a hack, and may be insufficient 
-  @inline def newBitMap: Array[Array[Boolean]] = {
-    val newIds = new Array[Array[Boolean]](numTypes); var f = 0
+  @inline def newBitMap: BitMap = {
+    val newIds = new BitMap(numTypes); var f = 0
     while(f < numTypes){ newIds(f) = new Array[Boolean](typeSizes(f)+1); f += 1 }
     newIds
   }

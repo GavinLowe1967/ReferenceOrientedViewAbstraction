@@ -92,33 +92,44 @@ object Remapper{
     result
   }
 
-  type RemappingList =  List[List[(Identity,Identity)]]
+  type RemappingList =  ComponentView.RemappingList 
 
   /** The range restriction of map to the parameters of servers, i.e. 
     * 
     * { x -> y | (x -> y) in map, y is a parameter of servers }.
     * 
     * The precise form of the result isn't important, other than equality
-    * corresponding to equality of the above expression; but the types are in
-    * reverse order; and the pairs for each type are in reverse order of x
-    * components. */
+    * corresponding to equality of the above expression; but the array is
+    * indexed by types; and the pairs for each type are in reverse order of x
+    * components; and each pair x -> y of type t is represented by
+    * summarise(t,x,y).  Also returns a hashCode for that result.  */
   def rangeRestrictTo(map: RemappingMap, servers: ServerStates)
-      : RemappingList = {
-    val sIds = servers.idsBitMap
-    var result = List[List[(Identity,Identity)]](); var t = 0
+      : (RemappingList, Int) = {
+    val sIds = servers.idsBitMap; var h = 0 // h is the hashCode
+    var result = new Array[List[Int]](numTypes); var t = 0
     while(t < numTypes){
-      val thisSIds = sIds(t); val len = thisSIds.length
-      var tResult = List[(Identity,Identity)]()
-      var id = 0; val thisLen = map(t).length max servers.paramsBound(t)
-      while(id < thisLen){
-        val y = map(t)(id); //if(y >= 0 && sIds.contains(y)) tResult ::= (id, y)
-        if(y >= 0 && y < len && thisSIds(y)) tResult ::= (id, y)
-        id += 1
+      val thisSIds = sIds(t); val len = thisSIds.length; assert(len < (1 << 7))
+      var tResult = List[Int]()
+      var x = 0; val thisLen = map(t).length max servers.paramsBound(t)
+      while(x < thisLen){
+        val y = map(t)(x); //if(y >= 0 && sIds.contains(y)) tResult ::= (id, y)
+        if(y >= 0 && y < len && thisSIds(y)){
+          val summary = summarise(t,x,y); tResult ::= summary; 
+          h = (h*37+summary)
+          // tResult ::= (x, y); h = (h*37+11*t+x+1)*17+y+1
+        }
+        x += 1
       }
-      result ::= tResult; t += 1
+      result(t) = tResult; t += 1
     }
-    result
+    (result, h)
   }  
+
+  assert(numTypes > 0 && numTypes < 4)
+
+  /** Summarise x and y into a single Int.  This assumes 0 <= t < 4 and  0 <= y < (1<<7).  This
+    * mapping forms an injection over such pairs. */
+  @inline private def summarise(t: Int, x: Int, y: Int) = (x << 9)+(t << 7) + y
 
   /** map domain restricted to the parameters of v.components, and range
     * restricted to the parameters of servers, i.e.
