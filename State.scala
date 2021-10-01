@@ -44,19 +44,48 @@ class State(val family: Family, val cs: ControlState,
     pIds
   }
 
-  /** Bit map giving parameters. */
-  private var paramBitMap: Array[Array[Boolean]] = null
+  /** Should the ith parameter of this be used for creating views? */
+  @inline def includeParam(i: Int) = {
+    // IMPROVE: cache includeInfo in this object.  This can't be done during
+    // compilation, however.
+    val includeInfo = State.getIncludeInfo(cs)
+    includeInfo == null || includeInfo(i)
+  }
 
-  /** Does this state have a parameter (f,id)? */
-  def hasParam(f: Family, id: Identity) = {
-    if(paramBitMap == null){
-      paramBitMap = 
+// INCLUDE: I'm not sure that we need both of the following
+
+  /** Bit map giving parameters. */
+  // private var paramBitMap: Array[Array[Boolean]] = null
+
+  // /** Does this state have a parameter (f,id)? */
+  // def hasParam(f: Family, id: Identity) = {
+  //   if(paramBitMap == null) {
+  //     paramBitMap =
+  //       // FIXME: the +2 is a hack
+  //       Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)))
+  //     for(i <- 0 until length)
+  //       if(!isDistinguished(ids(i))) paramBitMap(typeMap(i))(ids(i)) = true
+  //   }
+  //   paramBitMap(f)(id)
+  // }
+
+  /** Bit map giving parameters for which corresponding states are included in
+    * views. */
+  private var includedParamBitMap: Array[Array[Boolean]] = null
+
+  /** Does this state have a parameter (f,id) that is not an omitted
+    * reference?  */
+  def hasIncludedParam(f: Family, id: Identity) = {
+    if(includedParamBitMap == null){ 
+      // val includeInfo = State.getIncludeInfo(cs)
+      includedParamBitMap =
         // FIXME: the +2 is a hack
         Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)))
-      for(i <- 0 until length) 
-        if(!isDistinguished(ids(i))) paramBitMap(typeMap(i))(ids(i)) = true
+      for(i <- 0 until length)
+        if(!isDistinguished(ids(i)) && includeParam(i)) // (includeInfo == null || includeInfo(i)))
+          includedParamBitMap(typeMap(i))(ids(i)) = true
     }
-    paramBitMap(f)(id)
+    includedParamBitMap(f)(id)
   }
 
   // def hasParam(pid: ProcessIdentity) = hasParam(pid._1, pid._2)

@@ -26,7 +26,7 @@ class EffectOnUnification(
    *    |--EffectOnUnification.remapToCreateCrossRefs
    *    |--getOtherArgsBitMapForSingleRef
    *    |--Unification.getCombiningMaps 
-   *    |-makeSecondaryInducedTransitions
+   *    |--makeSecondaryInducedTransitions
    */ 
 
   /* A few object variables, extracted directly from pre, post and cv, used in
@@ -49,6 +49,7 @@ class EffectOnUnification(
     * component, referencing c2 (renamed). */
   private val c2Refs: List[(Int,Identity)] =
     if(singleRef) getCrossReferences() else List[(Int,Identity)]()
+// IMPROVE: consider omitted references here
 
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
@@ -419,8 +420,9 @@ class EffectOnUnification(
   /** Identify secondary components that can gain a reference to a component of
     * type cvpf (the type of cv.principal.family).  All pairs (i,id) (with i
     * >= 1) such that the i'th component c1 changes state between preCpts and
-    * postCpts, and id is a new non-distinguished parameter of c1 of family
-    * cvpf in the post state, other than an identity in preCpts/postCpts. */
+    * postCpts, and id is a new included non-distinguished parameter of c1 of
+    * family cvpf in the post state, other than an identity in
+    * preCpts/postCpts. */
   @inline private def getCrossReferences(): List[(Int,Identity)] = {
     require(singleRef)
     // ids is the identities of family cvpf in pre.
@@ -433,11 +435,12 @@ class EffectOnUnification(
       if(preCpts(i) != postCpts(i)){
         val c1 = postCpts(i); val c1Params = c1.ids; var j = 1
         while(j < c1Params.length){
-          if(c1.typeMap(j) == cvpf){
+          if(c1.includeParam(j) && c1.typeMap(j) == cvpf){
             val p = c1Params(j)
             // Check: non-distiguished, not an id in preCpts, new param in c1
             if(!isDistinguished(p) && !contains(ids,p) && 
-                !preCpts(i).hasParam(cvpf,p))
+                !preCpts(i).hasIncludedParam(cvpf,p))
+// IMPROVE: think about above; should it be hasParam? 
               result ::= (i, p)
           }
           j += 1

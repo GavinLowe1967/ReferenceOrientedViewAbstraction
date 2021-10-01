@@ -1,3 +1,6 @@
+Get singleRef to work with omitted references.
+
+
 *** Do we do what's described in clause 3 of Def 13 (concerning missing
     components in primary induced transitions with singleRef.)?
 

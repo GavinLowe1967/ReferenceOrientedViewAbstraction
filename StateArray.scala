@@ -146,7 +146,7 @@ object StateArray{
         if(include(i)){
           // Check this isn't a missing component
           val (f,id) = pids(i)
-          if(cpts(0).hasParam(f,id) && find(cpts, f, id) == null)
+          if(cpts(0).hasIncludedParam(f,id) && find(cpts, f, id) == null)
             otherRef = true
           else{
             // States corresponding to pids(i)
@@ -170,7 +170,7 @@ object StateArray{
       }
       // If all the refs from newPrinc are distinguished, we need
       // to include the singleton view.
-    }
+    } // end of singleRef case
     else{
       var newComponents = new Array[State](len); newComponents(0) = newPrinc
       var i = 1; var k = 1
@@ -204,11 +204,6 @@ object StateArray{
       : List[Array[State]] = {
     require(singleRef)
     var result = List[Array[State]](); var i = 0
-    // Add Array(princ,second) to result, unless this is an omitted reference.
-    // @inline def maybeAdd(princ: State, second: State, ix: Int) = {
-    //   val includeInfo = State.getIncludeInfo(princ.cs)
-    //   if(includeInfo == null || includeInfo(ix)) result ::= Array(princ, second)
-    // }
     while(i < cpts1.length){
       val c1 = cpts1(i); i += 1
       if(! contains(cpts2, c1)){
@@ -217,14 +212,9 @@ object StateArray{
           val c2 = cpts2(j); j += 1
           if(! contains(cpts1, c2)){
             // Cross reference from cpts1 to cpts2
-            if(c1.hasParam(c2.family, c2.id)) result ::= Array(c1,c2)
-              // {
-            //   val includeInfo = State.getIncludeInfo(c1.cs)
-            //   if(includeInfo == null || includeInfo(j))
-            //     result ::= Array(c1,c2)
-            // }
+            if(c1.hasIncludedParam(c2.family, c2.id)) result ::= Array(c1,c2)
             // Cross reference from cpts2 to cpts1
-            if(c2.hasParam(c1.family, c1.id)) result ::= Array(c2,c1)
+            if(c2.hasIncludedParam(c1.family, c1.id)) result ::= Array(c2,c1)
           }
         }
       }
@@ -240,15 +230,18 @@ object StateArray{
     }
   }
 
-  /** All components referenced by cpts(0) but not in cpts. */
+  /** All included components referenced by cpts(0) but not in cpts. */
   def missingRefs(cpts: Array[State]): List[ProcessIdentity] = {
     val princ = cpts(0); val refs = princ.processIdentities
     var missing = List[ProcessIdentity](); var i = 1
     while(i < refs.length){
-      val ref = refs(i); i += 1
-      if(!isDistinguished(ref._2) && 
+      if(princ.includeParam(i)){
+        val ref = refs(i)
+        if(!isDistinguished(ref._2) &&
           !cpts.exists(c => c.componentProcessIdentity == ref)) // IMPROVE
-        missing ::= ref
+          missing ::= ref
+      }
+      i += 1
     }
     missing
   }
