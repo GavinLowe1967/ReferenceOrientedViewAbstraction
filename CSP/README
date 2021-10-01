@@ -32,8 +32,8 @@ lockBasedQueue.csp: involves two synchronisations between thread and watchdog
 on each of enqueueing and dequeueing.  Also artificially keeps the tail
 node in an enqueueing thread's state. 556 abstractions 
 
-lockBasedQueueNextOmit.csp: version where Nodes referenced by "next" reference are
-omitted from Views.  Finds error.
+lockBasedQueueNextOmit.csp: version where Nodes referenced by "next" reference
+are omitted from Views.  Finds error.
 
 
 Treiber Stack
@@ -44,7 +44,7 @@ TreiberStack.csp: make node synchronise on the joining CAS.  1,653 states,
 
 TreiberStackOmitCreator.csp: for newly created nodes, store the identity of
 the creating thread, but don't include that thread in views.  1,026 states
-~2.5s.  Now 1,125 states
+~2.5s.  Now 1,125 states.  889 with singleRef
 
 TreiberStackOmitNext.csp: Nodes referenced by "next" reference are omitted
 from Views.  Finds error.

@@ -403,11 +403,14 @@ object MissingCommon{
     // error with lockFreeQueue.csp.
     var j = 1
     while(j < c.length){
-      val pid2 = c.processIdentities(j); j += 1
-      val c2 = StateArray.find(pid2, cpts2)
-      if(c2 != null) maybeAdd(Array(c, c2))
-      val c1 = StateArray.find(pid2, cpts1)
-      if(c1 != null) maybeAdd(Array(c, c1))
+      if(c.includeParam(j)){
+        val pid2 = c.processIdentities(j)
+        val c2 = StateArray.find(pid2, cpts2)
+        if(c2 != null) maybeAdd(Array(c, c2))
+        val c1 = StateArray.find(pid2, cpts1)
+        if(c1 != null) maybeAdd(Array(c, c1))
+      }
+      j += 1
     }
     missing.sortWith(ComponentView.compare _)
   }
