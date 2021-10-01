@@ -41,6 +41,10 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   import Unification.UnificationList //  = List[(Int,Int)]
 
+  // Following used to check no repeat calls.
+  // private val previous = new scala.collection.mutable.HashSet[
+  //   (Concretization, EventInt, Concretization, ComponentView)]
+
   /** The effect of the transition pre -e-> post on cv.  Create extra views
     * caused by the way the transition changes cv, and add them to
     * nextNewViews. */
@@ -49,7 +53,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     ply: Int, nextNewViews: MyHashSet[ComponentView])
   = {
     // Profiler.count("effectOn")
-    if(verbose) println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
+    if(/* !previous.add((pre,e,post,cv)) || */ verbose) 
+      println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers && pre.sameComponentPids(post))
     val postCpts = post.components; val preCpts = pre.components
 
@@ -174,17 +179,21 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           // might not be the most efficient approach.  Note also that the
           // missingCommons may be shared.
           effectOnStore.add(missing, missingCommons, nv)
+          Profiler.count(s"EffectOn add to store-$isPrimary-${unifs.nonEmpty}"+
+            s"-${pre.servers==post.servers}-${missing.nonEmpty}-"+
+            missingCommons.nonEmpty)
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
         }
         else{ // nv was in nextNewViews 
           recordInduced() // might give false
+          Profiler.count("EffectOn redundancy:"+isPrimary+unifs.isEmpty)
         }
       } // end of if(!views.contains(nv))
       // Try to work out why so many cases are redundant
       else{ // views already contains nv
         recordInduced()
-        if(false){
-//  addDoneInducedPostServersRemaps here? 
+        Profiler.count("EffectOn redundancy:"+isPrimary+unifs.isEmpty)
+        if(false){ // give information about redundancies
           val v1 = views.get(nv)
           if(v1.inducedFrom(cv)){
             println(
@@ -234,7 +243,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   /** Missing cross references, if singleRef.  For each reference from a
     * component c1 of cpts2 to a component c2 of cpts2, or vice versa, test if
     * sysAbsViews contains the view servers || c1 || c2.  Return all such
-    * missing views.  */
+    * missing views.  (cpts1 corresponds to cv.components; cpts2 corresponds
+    * to pre.components). */
   @inline private def missingCrossRefs(
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
       : List[ComponentView] = {

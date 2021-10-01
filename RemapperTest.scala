@@ -37,7 +37,10 @@ object RemapperTest{
     // Types are reversed in result, so first list represents T0 -> T0, 
     // second represents N2 -> N0
     println(result._1.mkString("; "))
-    assert(result._1.sameElements(Array( List((2,0)), List((0,0)) ) ))
+    // assert(result._1.sameElements(
+    //   Array( List(Remapper.summarise(0,2,0)), List(Remapper.summarise(1,0,0)))))
+    assert(result._1.sameElements(Array(
+      Remapper.summarise(0,2,0), Remapper.summarise(1,0,0))))
     // println(result)
   } 
 

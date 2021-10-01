@@ -103,7 +103,8 @@ object VA{
   // full views then for singleRef.
   val testSuite =  List(
     ("CSP/lockBasedStack.csp", 302), ("CSP/lockBasedQueue.csp", 556),
-    ("CSP/TreiberStack.csp", 1653), ("CSP/lockFreeQueue.csp", 2272)
+    ("CSP/TreiberStack.csp", 1653), ("CSP/lockFreeQueue.csp", 2272),
+    ("CSP/TreiberStackOmitCreator.csp", 1125)
   )
   val srTestSuite = List(
     ("CSP/lockBasedStack.csp", 294), ("CSP/lockBasedQueue.csp", 553),

@@ -284,15 +284,17 @@ object ComponentView{
   /** Is v1 < v2. */
   def compare(v1: ComponentView, v2: ComponentView): Boolean = v1.compare(v2) < 0
 
-  type RemappingList = Array[List[Int]] //  Array[List[(Identity,Identity)]]
+  /** Type representing the range restriction of a RemappingMap.  The
+    * representation is described in Remmapper.scale. */
+  type RemappingList = Array[Int] 
 
   /** A class of objects used to key the doneInducedPostServersRemaps mapping in
     * each ComponentView. */
   class ServersReducedMap(
       val servers: ServerStates, val map: RemappingList, h: Int){
-    override def equals(that: Any) = that match{
-      case srm: ServersReducedMap => 
-        srm.servers == servers && srm.map.sameElements(map)
+    override def equals(that: Any) = {
+      val srm = that.asInstanceOf[ServersReducedMap]
+      srm.servers == servers && srm.map.sameElements(map)
     }
 
     override def hashCode = servers.hashCode ^ h

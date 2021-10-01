@@ -140,7 +140,8 @@ object StateArray{
       var result = List[Array[State]](); var i = 0; var otherRef = false
       // otherRef is set to true if there is a reference from pids that is a
       // missing reference from cpts, or is to a component not present in cpts
-      // or postCpts.
+      // or postCpts.  Otherwise, we return the singleton Array(newPrinc),
+      // since that is the only relevant view.
       while(i < len){
         if(include(i)){
           // Check this isn't a missing component
@@ -158,8 +159,14 @@ object StateArray{
       }
       if(result.nonEmpty || otherRef) result 
       else{ 
-        assert(pids.length == 1 || isDistinguished(pids(1)._2))
-        List(Array(newPrinc)) 
+        // If we've got here, all the non-identity parameters of newPrinc must
+        // be distinguished or omitted.
+        for(i <- 1 until len)
+          assert(isDistinguished(pids(i)._2) || 
+            includeInfo != null && !includeInfo(i),
+            s"newPrinc = $newPrinc; postCpts = ${show(postCpts)}\n"+
+              s"cpts = ${show(cpts)}")
+        List(Array(newPrinc))
       }
       // If all the refs from newPrinc are distinguished, we need
       // to include the singleton view.
@@ -197,6 +204,11 @@ object StateArray{
       : List[Array[State]] = {
     require(singleRef)
     var result = List[Array[State]](); var i = 0
+    // Add Array(princ,second) to result, unless this is an omitted reference.
+    // @inline def maybeAdd(princ: State, second: State, ix: Int) = {
+    //   val includeInfo = State.getIncludeInfo(princ.cs)
+    //   if(includeInfo == null || includeInfo(ix)) result ::= Array(princ, second)
+    // }
     while(i < cpts1.length){
       val c1 = cpts1(i); i += 1
       if(! contains(cpts2, c1)){
@@ -204,7 +216,14 @@ object StateArray{
         while(j < cpts2.length){
           val c2 = cpts2(j); j += 1
           if(! contains(cpts1, c2)){
+            // Cross reference from cpts1 to cpts2
             if(c1.hasParam(c2.family, c2.id)) result ::= Array(c1,c2)
+              // {
+            //   val includeInfo = State.getIncludeInfo(c1.cs)
+            //   if(includeInfo == null || includeInfo(j))
+            //     result ::= Array(c1,c2)
+            // }
+            // Cross reference from cpts2 to cpts1
             if(c2.hasParam(c1.family, c1.id)) result ::= Array(c2,c1)
           }
         }

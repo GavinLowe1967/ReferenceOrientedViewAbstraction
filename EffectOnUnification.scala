@@ -419,12 +419,11 @@ class EffectOnUnification(
   /** Identify secondary components that can gain a reference to a component of
     * type cvpf (the type of cv.principal.family).  All pairs (i,id) (with i
     * >= 1) such that the i'th component c1 changes state between preCpts and
-    * postCpts, and id is a non-distinguished parameter of c1 of family cvpf
-    * in the post state, other than an identity in preCpts/postCpts. */
+    * postCpts, and id is a new non-distinguished parameter of c1 of family
+    * cvpf in the post state, other than an identity in preCpts/postCpts. */
   @inline private def getCrossReferences(): List[(Int,Identity)] = {
     require(singleRef)
-    // Identities of family cvpf in pre: improve
-    // val ids = preCpts.filter(c => c.family == cvpf).map(_.ids(0))
+    // ids is the identities of family cvpf in pre.
     var ids = List[Identity](); var i = 0
     while(i < preCpts.length){
       val c = preCpts(i); i += 1; if(c.family == cvpf) ids ::= c.ids(0)

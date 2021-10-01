@@ -1,5 +1,17 @@
-*** EffectOn seems to be being called twice with the same arguments (at least
-with singleRef).
+*** Do we do what's described in clause 3 of Def 13 (concerning missing
+    components in primary induced transitions with singleRef.)?
+
+*** Consider "improve" note at end of Section 6.1, i.e. for each view v, avoid
+    looking for induced transitions twice with the same post.fixed and the
+    same unification of components (with none changing state).  I think here
+    the unification of components is represented by the index of the component
+    of v, and the remapping domain-restricted to that component, and range
+    restricted to the parameters of post.fixed.
+
+
+============
+
+This one is done. 
 
 I think that with singleRef we need to consider more remappings, maybe
 remapping to any parameter in pre.components (subject to normal constraints).

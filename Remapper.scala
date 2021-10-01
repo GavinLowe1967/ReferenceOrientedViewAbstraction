@@ -99,37 +99,37 @@ object Remapper{
     * { x -> y | (x -> y) in map, y is a parameter of servers }.
     * 
     * The precise form of the result isn't important, other than equality
-    * corresponding to equality of the above expression; but the array is
-    * indexed by types; and the pairs for each type are in reverse order of x
-    * components; and each pair x -> y of type t is represented by
-    * summarise(t,x,y).  Also returns a hashCode for that result.  */
+    * corresponding to equality of the above expression; but each pair x -> y
+    * of type t is represented by summarise(t,x,y); these are in lexicographic
+    * order of (t,x).  Also returns a hashCode for that result.  */
   def rangeRestrictTo(map: RemappingMap, servers: ServerStates)
       : (RemappingList, Int) = {
     val sIds = servers.idsBitMap; var h = 0 // h is the hashCode
-    var result = new Array[List[Int]](numTypes); var t = 0
+    var result = new ArrayBuffer[Int]; var t = 0
     while(t < numTypes){
       val thisSIds = sIds(t); val len = thisSIds.length; assert(len < (1 << 7))
-      var tResult = List[Int]()
+      // var tResult = List[Int]()
       var x = 0; val thisLen = map(t).length max servers.paramsBound(t)
       while(x < thisLen){
-        val y = map(t)(x); //if(y >= 0 && sIds.contains(y)) tResult ::= (id, y)
+        val y = map(t)(x)
         if(y >= 0 && y < len && thisSIds(y)){
-          val summary = summarise(t,x,y); tResult ::= summary; 
-          h = (h*37+summary)
-          // tResult ::= (x, y); h = (h*37+11*t+x+1)*17+y+1
+          val summary = summarise(t,x,y); result += summary; h = (h*37+summary)
         }
         x += 1
       }
-      result(t) = tResult; t += 1
+      t += 1
     }
-    (result, h)
+    (result.toArray, h)
   }  
 
-  assert(numTypes > 0 && numTypes < 4)
+  // The following assumption is necessary to ensure summarise forms a bijection.
+  assert(numTypes > 0 && numTypes <= 4)
 
-  /** Summarise x and y into a single Int.  This assumes 0 <= t < 4 and  0 <= y < (1<<7).  This
-    * mapping forms an injection over such pairs. */
-  @inline private def summarise(t: Int, x: Int, y: Int) = (x << 9)+(t << 7) + y
+  /** Summarise t, x and y into a single Int.  This assumes 0 <= t < 4, 0 <= x <
+    * 1<<23, and 0 <= y < (1<<7).  This mapping forms an injection over such
+    * values. */
+  @inline private[RemapperP] 
+  def summarise(t: Int, x: Int, y: Int) = (x << 9)+(t << 7) + y
 
   /** map domain restricted to the parameters of v.components, and range
     * restricted to the parameters of servers, i.e.

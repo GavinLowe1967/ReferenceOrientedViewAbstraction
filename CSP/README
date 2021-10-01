@@ -44,7 +44,7 @@ TreiberStack.csp: make node synchronise on the joining CAS.  1,653 states,
 
 TreiberStackOmitCreator.csp: for newly created nodes, store the identity of
 the creating thread, but don't include that thread in views.  1,026 states
-~2.5s.
+~2.5s.  Now 1,125 states
 
 TreiberStackOmitNext.csp: Nodes referenced by "next" reference are omitted
 from Views.  Finds error.
@@ -75,6 +75,9 @@ Lock-Free Queue
 ===============
 
 lockFreeQueue.csp: 2272 states, ~7 s (about half compilation). 
+
+lockFreeQueueOmitNext.csp.  Omits views based on next references.  Finds false
+errors.
 
 Lazy Set
 ========
