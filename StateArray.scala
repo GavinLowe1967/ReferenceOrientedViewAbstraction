@@ -117,13 +117,13 @@ object StateArray{
     assert(cpts.forall(_ != null)) // IMPROVE
     val len = newPrinc.ids.length; val pids = newPrinc.processIdentities 
     val princId = newPrinc.componentProcessIdentity
-    val includeInfo = State.getIncludeInfo(newPrinc.cs)
+    //val includeInfo = State.getIncludeInfo(newPrinc.cs)
 
     // Should pids(i) be included?
     @inline def include(i: Int) = {
       val pid = pids(i) ; val (f,id) = pid
-      if(!isDistinguished(pid._2) && pid != princId &&
-          (includeInfo == null || includeInfo(i))){
+      if(!isDistinguished(pid._2) && pid != princId && newPrinc.includeParam(i)){
+//          (includeInfo == null || includeInfo(i))){
         // check this is first occurrence of pid
         var j = 1; while(j < i && pids(j) != pid) j += 1
         j == i
@@ -162,8 +162,8 @@ object StateArray{
         // If we've got here, all the non-identity parameters of newPrinc must
         // be distinguished or omitted.
         for(i <- 1 until len)
-          assert(isDistinguished(pids(i)._2) || 
-            includeInfo != null && !includeInfo(i),
+          assert(isDistinguished(pids(i)._2) || !newPrinc.includeParam(i),
+//            includeInfo != null && !includeInfo(i),
             s"newPrinc = $newPrinc; postCpts = ${show(postCpts)}\n"+
               s"cpts = ${show(cpts)}")
         List(Array(newPrinc))

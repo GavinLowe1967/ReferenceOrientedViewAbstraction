@@ -108,14 +108,14 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   @noinline private def checkValid = if(debugging){ 
     assert(components.forall(_ != null)) // IMPROVE
     val len = principal.ids.length; val cptsLen = components.length
-    val includeInfo = State.getIncludeInfo(principal.cs)
+    // val includeInfo = State.getIncludeInfo(principal.cs)
     if(singleRef){
       if(cptsLen == 2){
         // Check principal has a reference to the other component
         val cPid = components(1).componentProcessIdentity; var i = 0
         while(i < len && principal.processIdentity(i) != cPid) i += 1
         assert(i < len, s"Not a correct ComponentView: $this")
-        assert(includeInfo == null || includeInfo(i),
+        assert(principal.includeParam(i), //includeInfo == null || includeInfo(i),
           s"Not a correct ComponentView, omitted component included: $this")
       }
       else{ 
@@ -130,7 +130,8 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
       var i = 1; 
       while(i < len){
         val pid = principal.processIdentity(i)
-        if(!isDistinguished(pid._2) && (includeInfo == null || includeInfo(i))){
+        if(!isDistinguished(pid._2) && principal.includeParam(i)){
+          // (includeInfo == null || includeInfo(i))){
           // Test if there is a component with identity pid
           var j = 1
           while(j < cptsLen && components(j).componentProcessIdentity != pid)
@@ -147,7 +148,7 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
         var i = 0
         while(i < len && principal.processIdentity(i) != otherId) i += 1
         assert(i < len, s"Not a correct ComponentView: $this")
-        assert(includeInfo == null || includeInfo(i),
+        assert(principal.includeParam(i), //includeInfo == null || includeInfo(i),
           s"Not a correct ComponentView, omitted component included: $this")
         j += 1
       }

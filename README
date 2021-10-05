@@ -11,6 +11,9 @@ Get singleRef to work with omitted references.
     of v, and the remapping domain-restricted to that component, and range
     restricted to the parameters of post.fixed.
 
+lazySet with bound of 44.  newViewCount 155M; addedViewCount 1.1M;
+EffectOnStore.add with primary, unifs empty, servers changed, missing
+non-empty 88M.  343 min
 
 ============
 

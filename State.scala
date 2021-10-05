@@ -44,11 +44,22 @@ class State(val family: Family, val cs: ControlState,
     pIds
   }
 
+  /** Information about which references are used to create views.  It is set
+    * the first time includeParam is called (it can't be done before
+    * compilation is complete).  Subsequently, a value of null indicates that
+    * all references can be used to create views. */
+  private var includeInfo: Array[Boolean] = null
+
+  /** Has includeInfo been set? */
+  private var includeInfoSet = false
+
   /** Should the ith parameter of this be used for creating views? */
   @inline def includeParam(i: Int) = {
     // IMPROVE: cache includeInfo in this object.  This can't be done during
     // compilation, however.
-    val includeInfo = State.getIncludeInfo(cs)
+    if(!includeInfoSet){ 
+      includeInfo = State.getIncludeInfo(cs); includeInfoSet = true 
+    }
     includeInfo == null || includeInfo(i)
   }
 

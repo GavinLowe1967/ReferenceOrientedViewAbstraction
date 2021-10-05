@@ -192,8 +192,9 @@ class MissingInfo(
   }
 
   override def toString =
-    s"MissingInfo($newView, ${missingViews.mkString("<",",",">")}, "+
-      missingCommon.mkString("<",",",">")
+    s"MissingInfo(newView = $newView,\n"+
+      s"missingViews = ${missingViews.mkString("<",",",">")},\n"+
+      "missingCommon = "+missingCommon.mkString("<",",",">")+")"
 
   /** Equality: same newView, missingViews and missingCommon (up to equality,
     * ignoring nulls. */

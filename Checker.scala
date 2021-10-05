@@ -194,9 +194,10 @@ class Checker(system: SystemP.System){
       while(i < len && !done){
         // Test if preCpts(i) has non-omitted reference to newPid
         val cpt = preCpts(i); val pids = cpt.processIdentities; 
-        val includeInfo = State.getIncludeInfo(cpt.cs); var j = 0
+        // val includeInfo = State.getIncludeInfo(cpt.cs); 
+        var j = 0
         while(j < pids.length && 
-            (pids(j) != newPid || includeInfo != null && !includeInfo(j))) 
+            (pids(j) != newPid || !cpt.includeParam(j))) // includeInfo != null && !includeInfo(j))) 
           j += 1
         if(j < pids.length) done = true
         else i += 1

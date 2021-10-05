@@ -281,9 +281,9 @@ class EffectOnUnification(
   = {
     require(singleRef)
     // Extend map0 to consider all combinations of mapping an identity in cpts
-    // to matche a non-identity parameter in preCpts, or a non-identity
-    // parameter in preCpts to matche an identity in cpts (but not matching
-    // any identities); this includes the case of mapping no such parameters.
+    // to match a non-identity parameter in preCpts, or a non-identity
+    // parameter in preCpts to match an identity in cpts (but not matching any
+    // identities); this includes the case of mapping no such parameters.
     // Each resulting map (map1 below) is paired with a list of tuples
     // ((i1,j1), (i2,j2)) indicating that parameter j2 of cpts(i2) is mapped
     // to match paramter j1 of preCpts(i1) (precisely one of j1 and j2 will be
@@ -292,6 +292,7 @@ class EffectOnUnification(
       EffectOnUnification.remapToCreateCrossRefs(preCpts, cpts, map0)
     for((map1, tuples) <- crossRefs){
       // Get other arg BitMap for this case. 
+      Profiler.count("tuples size "+tuples.length)
       val otherArgsBitMap = getOtherArgsBitMapForSingleRef(
         map1, otherArgsBitMap0, tuples)
       // Convert to OtherArgMap
