@@ -44,7 +44,7 @@ class SimpleEffectOnStore extends EffectOnStore{
    * 
    * complete
    * |--mcDone
-   *    |--(MissingInfo).{mcDone,updateMissingViews,done}
+   *    |--(MissingInfo).{mcDone,updateMissngViews,done}
    */
 
   /** A set of MissingInfos.
@@ -59,9 +59,11 @@ class SimpleEffectOnStore extends EffectOnStore{
   /** Information about those mi: MissingInfo in the abstract set such that
     * !mi.mcDone (i.e. not all MissingCommon in mi.missingCommon are done).
     * If mc is the first element of mi.missingCommon that is not done, then
-    * for each v in mc.missingHeads, mcNotDoneStore contains
-    * v -> mi (i.e. keyed against the next missing view in each option within
-    * mc). */
+    * for each v in mc.missingHeads, mcNotDoneStore contains v -> mi
+    * (i.e. keyed against the next missing view in each option within mc).
+    * mcNotDoneStore might also hold some MissingInfos that are mcDone,
+    * because they were found to be mcDone in the first phase of complete
+    * (from candidateForMCStore). */
   private val mcNotDoneStore = new Store
 
   /** Information about those mi: MissingInfo in the abstract set such that
@@ -81,16 +83,20 @@ class SimpleEffectOnStore extends EffectOnStore{
   private val candidateForMCStore = 
     new HashMap[(ServerStates, State), MissingInfoSet]
 
+/* IMPROVE: periodically purge the stores of MissingInfos that are done or for
+ * which the newView has been found, and purge mcNotDoneStore and
+ * candidateForMSCStore of MissingInfos that are mcDone. */
+
   /** Add missingInfo to theStore(cv), if not already there. */
   @inline private 
   def addToStore(theStore: Store, cv: ComponentView, missingInfo: MissingInfo)
   = {
     val mis = theStore.getOrElseUpdate(cv, new MissingInfoSet)
-    if(false && mis.contains(missingInfo)) 
-      Profiler.count("EffectOnStore add failed")
-    else{ mis += missingInfo; /*Profiler.count("EffectOnStore add succeeded")*/ }
+    if(!mis.add(missingInfo)) missingInfo.setNotAdded // mis += missingInfo
   }
 // IMPROVE
+
+  import MissingInfo.{LogEntry,McDoneStore,McNotDoneStore,CandidateForMC}
 
   /** Add MissingInfo(nv, missing, missingCommon) to the stores. */
   def add(missing: List[ComponentView], missingCommon: List[MissingCommon], 
@@ -100,21 +106,22 @@ class SimpleEffectOnStore extends EffectOnStore{
     val missingInfo = new MissingInfo(nv, missing.toArray, missingCommon.toArray)
     if(missingCommon.isEmpty){
       assert(missing.nonEmpty)
+      missingInfo.log(McDoneStore(missingInfo.missingHead))
       addToStore(mcDoneStore, missingInfo.missingHead, missingInfo)
     }
     else{
       // Add entries to mcMissingCandidates
-      for(cv <- missingCommon(0).missingHeads)
+      for(cv <- missingCommon(0).missingHeads){
+        missingInfo.log(McNotDoneStore(cv))
         addToStore(mcNotDoneStore, cv, missingInfo)
+      }
       // Add entries to candidateForMCStore.  IMPROVE: register just against
       // missingCommon(0)
       for(mc <- missingCommon){
         val princ1 = mc.cpts1(0); val key = (mc.servers, princ1)
         val mis = candidateForMCStore.getOrElseUpdate(key, new MissingInfoSet)
-       if(false && mis.contains(missingInfo))  
-         Profiler.count("EffectOnStore add failed")
-       else mis += missingInfo //Profiler.count("EffectOnStore add succeeded") }
-// IMPROVE
+        missingInfo.log(CandidateForMC(mc.servers,princ1))
+        if(!mis.add(missingInfo)) missingInfo.setNotAdded // mis += missingInfo
       }
     }
   }
@@ -137,7 +144,11 @@ class SimpleEffectOnStore extends EffectOnStore{
     // otherwise add to mcDoneStore.
     @inline def mcDone(mi: MissingInfo) = {
       require(mi.mcDone); mi.updateMissingViews(views)
-      if(mi.done) maybeAdd(mi.newView) else addToStore(mcDoneStore, mi.missingHead, mi)
+      if(mi.done) maybeAdd(mi.newView) 
+      else{
+        mi.log(McDoneStore(mi.missingHead))
+        addToStore(mcDoneStore, mi.missingHead, mi)
+      }
     }
 
     // In each phase below, we also purge all MissingInfos for which the
@@ -158,8 +169,13 @@ class SimpleEffectOnStore extends EffectOnStore{
             else if(mi.mcDone) mcDone(mi)
             else{
               // Register mi against each view in vb, and retain
-              for(cv1 <- vb) addToStore(mcNotDoneStore, cv1, mi)
-              newMis += mi
+              for(cv1 <- vb){
+                assert(!views.contains(cv1)) // IMPROVE
+                mi.log(McNotDoneStore(cv1))
+                addToStore(mcNotDoneStore, cv1, mi)
+              }
+              mi.log(CandidateForMC(cv.servers, cv.principal))
+              if(!newMis.add(mi)) mi.setNotAdded // newMis += mi
             }
           }
         } // end of for loop
@@ -179,7 +195,11 @@ class SimpleEffectOnStore extends EffectOnStore{
             val ab = mi.updateMissingViewsOfMissingCommon(cv, views) 
             if(mi.done) maybeAdd(mi.newView) 
             else if(mi.mcDone) mcDone(mi) 
-            else for(cv1 <- ab) addToStore(mcNotDoneStore, cv1, mi)
+            else for(cv1 <- ab){
+              assert(!views.contains(cv1)) // IMPROVE
+              mi.log(McNotDoneStore(cv1))
+              addToStore(mcNotDoneStore, cv1, mi)
+            }
           }
         } // end of for loop
       case None => {}
@@ -194,7 +214,11 @@ class SimpleEffectOnStore extends EffectOnStore{
           else{
             mi.updateMissingViewsBy(cv, views)
             if(mi.done) maybeAdd(mi.newView)
-            else addToStore(mcDoneStore, mi.missingHead, mi)
+            else{
+              assert(!views.contains(mi.missingHead)) // IMPROVE
+              mi.log(McDoneStore(mi.missingHead))
+              addToStore(mcDoneStore, mi.missingHead, mi)
+            }
           }
         } // end of for loop
       case None => {}
@@ -213,8 +237,25 @@ class SimpleEffectOnStore extends EffectOnStore{
     // to satisfy mcDone.
     def doCheck(iter: Iterator[Iterable[MissingInfo]], flag: Boolean) = 
       for(mis <- iter; mi <- mis; if !mi.done) mi.sanityCheck(views, flag)
-    doCheck(mcDoneStore.valuesIterator, true)
-    doCheck(mcNotDoneStore.valuesIterator, false)
+    // doCheck(mcDoneStore.valuesIterator, true)
+    for((cv,mis) <- mcDoneStore; mi <- mis; if !mi.done) 
+      mi.sanityCheck(views, true)
+    // doCheck(mcNotDoneStore.valuesIterator, false)
+    for((cv,mis) <- mcNotDoneStore; mi <- mis; if !mi.done){
+      // if(!views.contains(mi.newView)) 
+      //   assert(!mi.mcDone, s"$mi in mcNotDoneStore: "+views.contains(cv))
+      try{  mi.sanityCheck(views, false, cv) }
+      catch{ 
+        case e: java.lang.AssertionError => {
+          println("ERROR"); println(s"\ncv = $cv. "+views.contains(cv)) 
+          println(s"mi = $mi")
+          println("mi.log = "+mi.theLog.reverse.mkString("\n"))
+          e.printStackTrace; sys.exit
+        }
+        case e1: Throwable => 
+          e1.printStackTrace; println(s"\ncv = $cv. "+views.contains(cv)); sys.exit
+      }
+    }
     doCheck(candidateForMCStore.valuesIterator, false)
   }
 

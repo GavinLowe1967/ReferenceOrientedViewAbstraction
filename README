@@ -1,15 +1,21 @@
-Get singleRef to work with omitted references.
+Fix bug with EffectOnStore so that sanityCheck passes.
+
+Relevant call path:
+
+EffectOnStore.complete (entry from candidateForMCStore) ->
+mi.updateMissingCommon -> mc.updateWithNewMatch ->
+MissingCommon.updateMissingCandidates.
+
+Could always re-register against mc.missingHeads. 
+
+Get singleRef to work with omitted references. -- ok I think
+
 
 
 *** Do we do what's described in clause 3 of Def 13 (concerning missing
     components in primary induced transitions with singleRef.)?
 
-*** Consider "improve" note at end of Section 6.1, i.e. for each view v, avoid
-    looking for induced transitions twice with the same post.fixed and the
-    same unification of components (with none changing state).  I think here
-    the unification of components is represented by the index of the component
-    of v, and the remapping domain-restricted to that component, and range
-    restricted to the parameters of post.fixed.
+*** Consider the optimisations at the end of Section 6. 
 
 lazySet with bound of 44.  newViewCount 155M; addedViewCount 1.1M;
 EffectOnStore.add with primary, unifs empty, servers changed, missing

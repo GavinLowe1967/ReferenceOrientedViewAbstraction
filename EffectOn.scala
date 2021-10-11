@@ -179,6 +179,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           // might not be the most efficient approach.  Note also that the
           // missingCommons may be shared.
           effectOnStore.add(missing, missingCommons, nv)
+          // IMPROVE: SANITY FAILS
+          assert(missing.isEmpty || !views.contains(missing.head))
           Profiler.count(s"EffectOn add to store-$isPrimary-${unifs.nonEmpty}"+
             s"-${pre.servers==post.servers}-${missing.nonEmpty}-"+
             missingCommons.nonEmpty)

@@ -25,6 +25,8 @@ class MissingCommon(
    * 
    * updateWithNewMatch      (called from MissingInfo)
    * |--MissingCommon.updateMissingCandidates
+   * 
+   * add                    (called from MissingCommon.updateMissingCandidates
    */
 
   val princ1 = cpts1(0)
@@ -44,9 +46,11 @@ class MissingCommon(
     * will be discharged.  Each MissingCandidates within the list is sorted
     * (wrt ComponentView.compare). */
   private var missingCandidates = List[MissingCandidates]()
-  /* We maintain the invariant that the first element of each list is missing
-   * from the current view set.  (IMPROVE: at what point, per ply?)  This will
-   * be registered against those first elements in the EffectOnStore. */
+  /* We maintain the invariant that the first element of each list is either
+   * missing from the current view set, or in the set of new views being
+   * considered on the current ply.  The MissingInfo object containing this
+   * object will be registered against those first elements in the
+   * EffectOnStore. */
 
   /** Is this constraint satisfied? */
   private var isDone = false
@@ -54,9 +58,18 @@ class MissingCommon(
   /** Is this constraint satisfied? */
   @inline def done = isDone
 
+  // Log for debugging
+
+  import MissingCommon.{MCEvent,AddMC,UpdateMC,SetDoneMC}
+  private var theLog = List[MCEvent]() 
+
+  def log(e: MCEvent) = theLog ::= e
+
   /** Record that this is now done.  Also clear missingCandidates to reclaim
     * memory. */
-  private def setDone = { isDone = true; missingCandidates = List() }
+  private def setDone = { 
+    isDone = true; missingCandidates = List(); log(SetDoneMC) 
+  }
 
   /** The heads of the missing candidates.  The corresponding MissingInfo should
     * be registered against these in
@@ -65,6 +78,7 @@ class MissingCommon(
 
   import MissingCommon.ViewBuffer // ArrayBuffer[ComponentView]
 
+/*
   /** Update mc based on the addition of cv.  If cv matches mc.head, remove it,
     * and the maximal prefix from views.  If then done, record this.
     * Otherwise add to toRegister the next view, against which this should be
@@ -76,6 +90,7 @@ class MissingCommon(
     if(mc.head == cv) removeViews(mc.tail, views, toRegister)
     else mc
   }
+ */
 
   /** Remove the maximum prefix of mc consisting of elements of views.  If any
     * is empty, record that this is done; otherwise add the next view to
@@ -87,9 +102,11 @@ class MissingCommon(
     while(mc1.nonEmpty && views.contains(mc1.head)) mc1 = mc1.tail
     if(mc1.isEmpty) setDone    // This is now satisfied
     else toRegister += mc1.head
+    log(UpdateMC(mc, mc1))
     mc1
   }
 
+/*
   /** Update missingCandidates based on the addition of cv.  Remove cv from
     * each; if any is now empty, then mark this as satisfied.  Return views
     * against which this should now be registered, or null if done. */
@@ -102,32 +119,40 @@ class MissingCommon(
       assert(missingCandidates.forall(_.nonEmpty), this.toString)
       // The following assertion might be false, because of the sharing
       // assert(missingCandidates.exists(mc => mc.head == cv))
-      missingCandidates =
+      val newMC = 
         missingCandidates.map(mc =>
           updateMissingCandidates(mc, cv, views, toRegister))
-      if(done) null
+// I think the above is wrong.  If this is shared, and has already been
+// updated with this cv, the corresponding MissingInfo won't get registered
+// properly.
+      if(done){ assert(missingCandidates.isEmpty);  null }
       else{
+        missingCandidates = newMC
         // The following assertion might be false, because of the sharing
         // assert(toRegister.nonEmpty)
         toRegister
       }
     }
   }
+ */
 
   /** Update missingCandidates based on views.  Remove elements of views from
     * the front of each.  If any is now empty, then mark this as satisfied.
     * Return views against which this should now be registered, or null if
     * done. */
   def updateMissingViews(views: ViewSet): ArrayBuffer[ComponentView] = {
-    val toRegister = new ArrayBuffer[ComponentView]
-    assert(done || missingCandidates.nonEmpty) // ??? 
-    missingCandidates = 
-      missingCandidates.map(mc => removeViews(mc, views, toRegister))
-    if(done) null 
-    else{ 
-      assert(toRegister.nonEmpty,
-        s"updateMissingViews with\n${missingCandidates}")
-      toRegister
+    if(done){ assert(missingCandidates.isEmpty);  null } 
+    else{
+      val toRegister = new ArrayBuffer[ComponentView]
+      assert(missingCandidates.nonEmpty)
+      val newMC = missingCandidates.map(mc => removeViews(mc, views, toRegister))
+      if(done){ assert(missingCandidates.isEmpty);  null }
+      else{
+        missingCandidates = newMC
+        assert(toRegister.nonEmpty,
+          s"updateMissingViews with\n${missingCandidates}")
+        toRegister
+      }
     }
   }
 
@@ -141,6 +166,7 @@ class MissingCommon(
     * to vb those Views against which this needs to be registered, namely
     * missingHeads. */
   def updateWithNewMatch(cv: ComponentView, views: ViewSet, vb: ViewBuffer) = {
+    assert(!done)
     require(matches(cv)); val cpt1 = cv.components(1) 
     if(cpt1.hasPID(pid))
       if(MissingCommon.updateMissingCandidates(this, cpt1, views, vb))
@@ -171,6 +197,7 @@ class MissingCommon(
     * superset of mCand.  Return true if successful.  Pre: mCand is
     * sorted.  */
   private def add(mCand: MissingCandidates): Boolean = {
+    assert(!done)
     require(isSorted(mCand), mCand) // IMPROVE: quite expensive
     // Traverse missingCandidates.  Add to newMC any that is not a proper
     // superset of mCand.
@@ -181,7 +208,7 @@ class MissingCommon(
       if(cmp != Sup) newMC::= mCand1 // mCand1 can't be replaced by mCand
       found ||= cmp == Sub || cmp == Eq // mCand can't be replaced by mCand1
     }
-    if(!found) newMC ::= mCand
+    if(!found){ log(AddMC(mCand)); newMC ::= mCand }
     assert(newMC.nonEmpty)
     missingCandidates = newMC
     !found
@@ -194,16 +221,20 @@ class MissingCommon(
 
   /** Sanity check that no head element of missingCandidates is in views. */
   def sanityCheck(views: ViewSet) = {
-    assert(!done)
-    for(mcs <- missingCandidates){ 
+    // assert(!done) -- might not be true as MissingCommons are shared
+    if(done) assert(missingCandidates.isEmpty, 
+      s"missingCandidates = \n"+missingCandidates.mkString("\n"))
+    else for(mcs <- missingCandidates){
       val v = mcs.head
-      assert(!views.contains(v), this.toString+" still contains "+v)
+      assert(!views.contains(v), this.toString+"\n  still contains "+v)
     }
   }
 
   override def toString = 
-    s"MissingCommon($servers, ${StateArray.show(cpts1)},"+
-      s"  ${StateArray.show(cpts2)}, $pid)"
+    s"MissingCommon($servers, ${StateArray.show(cpts1)},\n"+
+      s"  ${StateArray.show(cpts2)}, $pid)\n"+
+      s"  missingCandidates = \n    "+missingCandidates.mkString("\n    ")+
+      "\n"+theLog.reverse.mkString("\n")
 
   /** Equality test.  The constraint this represents is logically captured by
     * its initial parameters, so we use equality of parameters as the notion
@@ -292,7 +323,7 @@ object MissingCommon{
   @inline private def getOrInit(
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State],
     pid: ProcessIdentity)
-      : (MissingCommon, Boolean) = {
+      : (MissingCommon, Boolean) = if(true){
     val key = (servers, cpts1.toList++cpts2.toList, pid)
     allMCs.get(key) match{
       case Some(mc) => Profiler.count("old MissingCommon"); (mc, false)
@@ -300,6 +331,9 @@ object MissingCommon{
         val mc = new MissingCommon(servers, cpts1, cpts2, pid)
         Profiler.count("new MissingCommon"); allMCs += key -> mc; (mc, true)
     }
+  }
+  else{ // IMPROVE: sharing turned off
+    val mc = new MissingCommon(servers, cpts1, cpts2, pid); (mc, true)
   }
 
   /** Reset ready for a new check. */
@@ -357,6 +391,7 @@ object MissingCommon{
   def updateMissingCandidates(
     mc: MissingCommon, cpt1: State, views: ViewSet, vb: ViewBuffer)
       : Boolean = {
+    assert(!mc.done)
     require(cpt1.hasPID(mc.pid))
     if(mc.isNewUMCState(cpt1)){
       // All relevant renamings of cpt1: identity on params of servers and
@@ -368,15 +403,27 @@ object MissingCommon{
       var i = 0; var found = false
       while(i < renames.length && !found){
         val c = renames(i); i += 1
-        if(mc.isNewUMCRenamedState(c)){
+        if(true || mc.isNewUMCRenamedState(c)){ // IMPROVE
           val missing = getMissingCandidates(mc, c, views)
           if(missing.isEmpty) found = true
-          else if(mc.add(missing)) vb += missing.head
+          else{
+            // Note we have to register the corresponding MissingInfo against
+            // missing.head, whether or not the add succeeded, because this
+            // might be shared between MissingInfos.
+            mc.add(missing); vb += missing.head
+          }
         }
       } // end of while loop
       found
     }
-    else false
+    else{ 
+      // This update has previously been done, but we might need to
+      // re-register the MissingInfo object, because of sharing.  The
+      // following might be a bit pessimistic.
+      for(cv <- mc.missingHeads) vb += cv; 
+// FIXME: if any of these is in views, do we need to remove them?
+      false
+    }
   }
 
   /** Find the missing Views that are necessary to complete mc for a particular
@@ -445,4 +492,11 @@ object MissingCommon{
     sub &&= c1.isEmpty; sup &&= c2.isEmpty
     if(sub){ if(sup) Eq else Sub } else if(sup) Sup else Inc
   }
+
+
+  trait MCEvent
+  case class AddMC(mc: MissingCandidates) extends MCEvent 
+  case class UpdateMC(mc: MissingCandidates, mc1: MissingCandidates)
+      extends MCEvent
+  case object SetDoneMC extends MCEvent
 }

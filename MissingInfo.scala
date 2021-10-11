@@ -72,31 +72,51 @@ class MissingInfo(
     * missingCommon[0..mcIndex).forall(_ == null). */
   private var mcIndex = 0
 
+  import MissingInfo.LogEntry
+
+  /** Log used for debugging. */
+  var theLog = List[LogEntry]()
+
+  def log(item: LogEntry) = theLog ::= item
+
   /** Record missingCommon(i) as being completed. */
   @inline private def mcNull(i: Int) = {
     require(missingCommon(i).done); missingCommon(i) = null 
   }
+
+  @inline private def logAdvanceMC = 
+    log(MissingInfo.AdvanceMC(missingCommon.length-mcIndex))
 
   /** Advance to the next MissingCommon value (if any).  
     * @return a ViewBuffer containing views against which this should now be 
     * registered, or null if all MissingCommon are done. */
   @inline private 
   def advanceMC(views: ViewSet): ViewBuffer = {
+    // Deal with case that all MissingCommon are done.  We also update
+    // missingViews in case any of them is done.
+    // IMPROVE: simplify rehashMC in this case. 
+    @inline def allMCDone() = { rehashMC(); updateMissingViews(views); null }
+
+    // IMPROVE: I think the updateMissingViews(views) is unnecessary: I think
+    // it's always done by the client code.  But this needs to be clarified.
+
     require(missingCommon(mcIndex) == null)
-    mcIndex += 1
+    mcIndex += 1; logAdvanceMC
     if(mcIndex < missingCommon.length){ // consider next 
       assert(mcIndex == 1 && missingCommon.length == 2)
       val mc = missingCommon(mcIndex)
-      if(mc == null){ mcIndex += 1; rehashMC(); null } // this one is also done
+      if(mc == null){ // this one is also done
+        mcIndex += 1; logAdvanceMC; allMCDone() 
+      } 
       else{
         val vb = mc.updateMissingViews(views)
         if(mc.done){  // and now this is done
-          mcNull(mcIndex); mcIndex += 1; rehashMC(); null 
+          mcNull(mcIndex); mcIndex += 1; logAdvanceMC; allMCDone()
         }
         else{ rehashMC(); vb }
       }
     }
-    else{ rehashMC(); null }
+    else allMCDone() 
   }
 
   /** Are all the missingCommon entries done? */
@@ -115,7 +135,10 @@ class MissingInfo(
   private var newViewFound = false
 
   /** Record that newView has already been seen, so this is redundant. */
-  def markNewViewFound = newViewFound = true
+  def markNewViewFound = {
+    log(MissingInfo.MarkNewViewFound)
+    newViewFound = true
+  }
 
   /** Is this complete? */
   @inline def done = mcDone && mvIndex == missingViews.length || newViewFound
@@ -127,14 +150,19 @@ class MissingInfo(
     * against in the store if not all MissingCommon are done. */
   def updateMissingCommon(cv: ComponentView, views: ViewSet): ViewBuffer = {
     val mc = missingCommon(mcIndex); assert(mc != null && mc.matches(cv))
-    val vb = new ViewBuffer
-    mc.updateWithNewMatch(cv, views, vb)
     if(mc.done){
-      // Advance to the next MissingCommon (if any), and return views to
-      // register against
       mcNull(mcIndex); advanceMC(views)
     }
-    else vb
+    else{
+      val vb = new ViewBuffer
+      mc.updateWithNewMatch(cv, views, vb)
+      if(mc.done){
+        // Advance to the next MissingCommon (if any), and return views to
+        // register against
+        mcNull(mcIndex); advanceMC(views)
+      }
+      else vb
+    }
   }
 
   /** Update the MissingCommon fields of this based upon the addition of cv.
@@ -146,10 +174,11 @@ class MissingInfo(
   def updateMissingViewsOfMissingCommon(cv: ComponentView, views: ViewSet)
       : ViewBuffer = {
     val mc = missingCommon(mcIndex)
-    val vb: ViewBuffer = mc.updateMissingViewsBy(cv, views)
+    val vb: ViewBuffer = mc.updateMissingViews(views) //  updateMissingViewsBy(cv, views)
     if(mc.done){ mcNull(mcIndex); advanceMC(views) }
     else vb
   }
+// IMPROVE: the above doesn't use cv
 
   /** Update missingViews and mvIndex based upon views.  This is called either
     * when all MissingCommon are first complete, or from missingCommonViewsBy,
@@ -174,6 +203,15 @@ class MissingInfo(
     updateMissingViews(views)
   }
 
+  private var notAdded = false
+
+  /** Record that an attempt to add this to a Store in EffectOnStore failed,
+    * because an equivalent MissingInfo was already there.  This means that
+    * the expected invariant might not hold: missingCommon values in this may
+    * still retain a view that is in the current view set.  This affects the
+    * check in sanityCheck below. */
+  def setNotAdded = notAdded = true
+
   /** Check that we have nulled-out all done MissingCommons. */
   def sanity1 = missingCommon.forall(mc => mc == null || !mc.done)
 
@@ -181,20 +219,33 @@ class MissingInfo(
     * missingViews contains no element of views; (2) otherwise no
     * MissingCommon object has a head missingView in views; (3) if flag, then
     * all MissingCommon objects are done (but not necessarily vice versa). */
-  def sanityCheck(views: ViewSet, flag: Boolean) = {
+  def sanityCheck(views: ViewSet, flag: Boolean, cv: ComponentView = null) = {
     assert(!done)
-    if(flag) assert(mcDone)
-    if(mcDone){
+    if(flag){
+      assert(mcDone)
       assert(missingCommon.forall(_ == null))
-      assert(!views.contains(missingHead), s"$this\nstill contains $missingHead")
+      if(!views.contains(newView)) // IMPROVE: SANITY I'm not sure this is needed
+        assert(!views.contains(missingHead), 
+          s"$this\nstill contains $missingHead.  cv = $cv."+
+            (if(cv!=null) views.contains(cv) else "")+
+            "\n"+theLog.reverse.mkString("\n"))
     }
-    else for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)
+    else{
+      // This came from one of the stores related to part c.  It is possible
+      // that mcDone holds, but this was replaced by a different but equal
+      // MissingInfo in the store for part b, in which case the latter part of
+      // the above check might not hold.
+      if(mcDone) assert(missingCommon.forall(_ == null))
+      else if(!notAdded) 
+        for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)
+    }
   }
 
   override def toString =
     s"MissingInfo(newView = $newView,\n"+
       s"missingViews = ${missingViews.mkString("<",",",">")},\n"+
-      "missingCommon = "+missingCommon.mkString("<",",",">")+")"
+      "missingCommon = "+missingCommon.mkString("<",",",">")+")"+
+      s"notAdded = $notAdded"
 
   /** Equality: same newView, missingViews and missingCommon (up to equality,
     * ignoring nulls. */
@@ -296,5 +347,12 @@ object MissingInfo{
     }
     i == xs.length && j == ys.length 
   }
-}
 
+  // Entries in the log of a MissingInfo.  Used for debugging
+  trait LogEntry
+  case class McDoneStore(cv: ComponentView) extends LogEntry
+  case class McNotDoneStore(cv: ComponentView) extends LogEntry
+  case class CandidateForMC(servers: ServerStates, princ: State) extends LogEntry
+  case object MarkNewViewFound extends LogEntry
+  case class AdvanceMC(remaining: Int) extends LogEntry
+}
