@@ -10,15 +10,10 @@ import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap}
   * secondary component c2 of cpts1 or cpts2, then servers || c || c2 is in
   * ViewSet (modulo renaming).  This corresponds to condition (c) in the
   * definition of induced transitions with restricted views. */
-// FIXME: case (3) above doesn't agree with the paper, but seems necessary.
 class MissingCommon(
     val servers: ServerStates, val cpts1: Array[State], val cpts2: Array[State],
     val pid: ProcessIdentity){
   /* Overview of main functions.
-   * 
-   * updateMissingViewsBy     (called from MissingInfo)
-   * |--updateMissingCandidates
-   *    |-removeViews
    * 
    * updateMissingViews       (called from MissingInfo)
    * |--removeViews
@@ -30,6 +25,8 @@ class MissingCommon(
    */
 
   val princ1 = cpts1(0)
+
+  def key = (servers, princ1)
 
   require(princ1.processIdentities.contains(pid) && 
     cpts2(0).processIdentities.contains(pid))
@@ -78,20 +75,6 @@ class MissingCommon(
 
   import MissingCommon.ViewBuffer // ArrayBuffer[ComponentView]
 
-/*
-  /** Update mc based on the addition of cv.  If cv matches mc.head, remove it,
-    * and the maximal prefix from views.  If then done, record this.
-    * Otherwise add to toRegister the next view, against which this should be
-    * registered. */
-  @inline private 
-  def updateMissingCandidates(mc: MissingCandidates, cv: ComponentView,
-    views: ViewSet, toRegister: ViewBuffer)
-      : MissingCandidates = {
-    if(mc.head == cv) removeViews(mc.tail, views, toRegister)
-    else mc
-  }
- */
-
   /** Remove the maximum prefix of mc consisting of elements of views.  If any
     * is empty, record that this is done; otherwise add the next view to
     * toRegister. */
@@ -106,35 +89,6 @@ class MissingCommon(
     mc1
   }
 
-/*
-  /** Update missingCandidates based on the addition of cv.  Remove cv from
-    * each; if any is now empty, then mark this as satisfied.  Return views
-    * against which this should now be registered, or null if done. */
-  def updateMissingViewsBy(cv: ComponentView, views: ViewSet): ViewBuffer = {
-    // Note: MissingCommon are shared between MissingInfo, so it's possible
-    // that cv has already been removed from this.
-    if(done) null
-    else{
-      val toRegister = new ArrayBuffer[ComponentView]
-      assert(missingCandidates.forall(_.nonEmpty), this.toString)
-      // The following assertion might be false, because of the sharing
-      // assert(missingCandidates.exists(mc => mc.head == cv))
-      val newMC = 
-        missingCandidates.map(mc =>
-          updateMissingCandidates(mc, cv, views, toRegister))
-// I think the above is wrong.  If this is shared, and has already been
-// updated with this cv, the corresponding MissingInfo won't get registered
-// properly.
-      if(done){ assert(missingCandidates.isEmpty);  null }
-      else{
-        missingCandidates = newMC
-        // The following assertion might be false, because of the sharing
-        // assert(toRegister.nonEmpty)
-        toRegister
-      }
-    }
-  }
- */
 
   /** Update missingCandidates based on views.  Remove elements of views from
     * the front of each.  If any is now empty, then mark this as satisfied.
@@ -176,6 +130,7 @@ class MissingCommon(
   /** States for which MissingCommon.updateMissingCandidates has been executed
     * on this. */
   private val doneMissingCandidates = new HashSet[State]
+    // new HashMap[State,List[State]]
 
   /** Called by MissingCommon.updateMissingCandidates when updating this with
     * st.  Return true if this is the first such instance for st. */
@@ -183,7 +138,8 @@ class MissingCommon(
 
   /** States for which the loop of MissingCommon.updateMissingCandidates has
     * been executed, i.e. states instantiating c there. */
-  private val doneMissingCandidatesRenamed = new HashSet[State]
+  private val doneMissingCandidatesRenamed: HashSet[State] = null
+  // new HashSet[State]  IMPROVE: not used at present
 
   /** Called by MissingCommon.updateMissingCandidates when updating this with
     * st.  Return true if this is the first such instance for st instantiating
@@ -323,7 +279,7 @@ object MissingCommon{
   @inline private def getOrInit(
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State],
     pid: ProcessIdentity)
-      : (MissingCommon, Boolean) = if(true){
+      : (MissingCommon, Boolean) = { // if(true){
     val key = (servers, cpts1.toList++cpts2.toList, pid)
     allMCs.get(key) match{
       case Some(mc) => Profiler.count("old MissingCommon"); (mc, false)
@@ -332,9 +288,9 @@ object MissingCommon{
         Profiler.count("new MissingCommon"); allMCs += key -> mc; (mc, true)
     }
   }
-  else{ // IMPROVE: sharing turned off
-    val mc = new MissingCommon(servers, cpts1, cpts2, pid); (mc, true)
-  }
+  // else{ 
+  //   val mc = new MissingCommon(servers, cpts1, cpts2, pid); (mc, true)
+  // }
 
   /** Reset ready for a new check. */
   def reset = 
@@ -419,9 +375,9 @@ object MissingCommon{
     else{ 
       // This update has previously been done, but we might need to
       // re-register the MissingInfo object, because of sharing.  The
-      // following might be a bit pessimistic.
-      for(cv <- mc.missingHeads) vb += cv; 
-// FIXME: if any of these is in views, do we need to remove them?
+      // following might be a bit pessimistic.  IMPROVE: store the relevant
+      // values from one instance to reuse in the next.
+      for(cv <- mc.missingHeads) if(!views.contains(cv)) vb += cv
       false
     }
   }
@@ -493,10 +449,57 @@ object MissingCommon{
     if(sub){ if(sup) Eq else Sub } else if(sup) Sup else Inc
   }
 
-
+  // Events for log 
   trait MCEvent
   case class AddMC(mc: MissingCandidates) extends MCEvent 
   case class UpdateMC(mc: MissingCandidates, mc1: MissingCandidates)
       extends MCEvent
   case object SetDoneMC extends MCEvent
 }
+
+// =================== Dead code =====================
+
+/*
+  /** Update mc based on the addition of cv.  If cv matches mc.head, remove it,
+    * and the maximal prefix from views.  If then done, record this.
+    * Otherwise add to toRegister the next view, against which this should be
+    * registered. */
+  @inline private 
+  def updateMissingCandidates(mc: MissingCandidates, cv: ComponentView,
+    views: ViewSet, toRegister: ViewBuffer)
+      : MissingCandidates = {
+    if(mc.head == cv) removeViews(mc.tail, views, toRegister)
+    else mc
+  }
+ */
+
+
+/*
+  /** Update missingCandidates based on the addition of cv.  Remove cv from
+    * each; if any is now empty, then mark this as satisfied.  Return views
+    * against which this should now be registered, or null if done. */
+  def updateMissingViewsBy(cv: ComponentView, views: ViewSet): ViewBuffer = {
+    // Note: MissingCommon are shared between MissingInfo, so it's possible
+    // that cv has already been removed from this.
+    if(done) null
+    else{
+      val toRegister = new ArrayBuffer[ComponentView]
+      assert(missingCandidates.forall(_.nonEmpty), this.toString)
+      // The following assertion might be false, because of the sharing
+      // assert(missingCandidates.exists(mc => mc.head == cv))
+      val newMC = 
+        missingCandidates.map(mc =>
+          updateMissingCandidates(mc, cv, views, toRegister))
+// I think the above is wrong.  If this is shared, and has already been
+// updated with this cv, the corresponding MissingInfo won't get registered
+// properly.
+      if(done){ assert(missingCandidates.isEmpty);  null }
+      else{
+        missingCandidates = newMC
+        // The following assertion might be false, because of the sharing
+        // assert(toRegister.nonEmpty)
+        toRegister
+      }
+    }
+  }
+ */

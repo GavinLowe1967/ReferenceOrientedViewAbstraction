@@ -35,7 +35,8 @@ trait EffectOnStore{
 
 // =======================================================
 
-/** A simple implementation of EffectOnStore. */
+/** A simple implementation of EffectOnStore.  The name "simple" is a
+  * misnomer.  */
 class SimpleEffectOnStore extends EffectOnStore{
   /* Overview of main functions.
    * 
@@ -47,10 +48,8 @@ class SimpleEffectOnStore extends EffectOnStore{
    *    |--(MissingInfo).{mcDone,updateMissngViews,done}
    */
 
-  /** A set of MissingInfos.
-    * IMPROVE: remove redundancies? */
+  /** A set of MissingInfos. */
   type MissingInfoSet = HashSet[MissingInfo]
-  // IMPROVE: it's not clear that this ever detects equal values. 
 
   /** A type of stores, giving the MissingInfos that might need updating as the
     * result of finding a new ComponentView. */
@@ -103,10 +102,12 @@ class SimpleEffectOnStore extends EffectOnStore{
     nv: ComponentView)
       : Unit = {
     Profiler.count("EffectOnStore.add")
+    for(mc <- missingCommon) assert(!mc.done)
     val missingInfo = new MissingInfo(nv, missing.toArray, missingCommon.toArray)
     if(missingCommon.isEmpty){
       assert(missing.nonEmpty)
       missingInfo.log(McDoneStore(missingInfo.missingHead))
+      missingInfo.transferred = true
       addToStore(mcDoneStore, missingInfo.missingHead, missingInfo)
     }
     else{
@@ -129,6 +130,24 @@ class SimpleEffectOnStore extends EffectOnStore{
    * there were 70M successful adds to one of the maps, and 228M unsuccessful
    * adds. */
 
+  // The following doesn't work, because the hash codes have changed, so the 
+  // removes fail.
+  // private def removeFromMCStores(mi: MissingInfo) = {
+  //   require(mi.mcDone)
+  //   for(key <- mi.keys){
+  //     // val princ1 = mc.cpts1(0); val key = (mc.servers, princ1)
+  //     val mis = candidateForMCStore(key)
+  //     val result = mis.remove(mi) 
+  //     Profiler.count("remove from candidateForMCStore "+result)
+  //     // assert(result) // not true at present if mi was found in mcNotDoneStore
+  //   }
+  //   // for(cv <- mi.missingCommonHeads){
+  //   //   val mis = mcNotDoneStore(cv)
+  //   //   val result = mis.remove(mi)
+  //   //   Profiler.count("remove from mcNotDoneStore "+result)
+  //   // }
+  // }
+
   import MissingCommon.ViewBuffer
 
   /** Try to complete values in the store, based on the addition of cv, and with
@@ -147,7 +166,10 @@ class SimpleEffectOnStore extends EffectOnStore{
       if(mi.done) maybeAdd(mi.newView) 
       else{
         mi.log(McDoneStore(mi.missingHead))
+        mi.transferred = true
+        // removeFromMCStores(mi)
         addToStore(mcDoneStore, mi.missingHead, mi)
+// IMPROVE: remove elsewhere
       }
     }
 
@@ -161,8 +183,9 @@ class SimpleEffectOnStore extends EffectOnStore{
     candidateForMCStore.get(key) match{
       case Some(mis) => 
         val newMis = new MissingInfoSet // those to retain
-        for(mi <- mis; if !mi.mcDone){
-          if(views.contains(mi.newView)) mi.markNewViewFound
+        for(mi <- mis){
+          if(mi.mcDone) assert(mi.done || mi.transferred) 
+          else if(views.contains(mi.newView)) mi.markNewViewFound
           else{
             val vb: ViewBuffer = mi.updateMissingCommon(cv, views)
             if(mi.done) maybeAdd(mi.newView)
@@ -189,8 +212,9 @@ class SimpleEffectOnStore extends EffectOnStore{
     mcNotDoneStore.get(cv) match{
       case Some(mis) =>
         mcNotDoneStore.remove(cv) // remove old entry
-        for(mi <- mis; if !mi.mcDone){
-          if(views.contains(mi.newView)) mi.markNewViewFound
+        for(mi <- mis){
+          if(mi.mcDone) assert(mi.done || mi.transferred)
+          else if(views.contains(mi.newView)) mi.markNewViewFound
           else{
             val ab = mi.updateMissingViewsOfMissingCommon(cv, views) 
             if(mi.done) maybeAdd(mi.newView) 
@@ -244,16 +268,14 @@ class SimpleEffectOnStore extends EffectOnStore{
     for((cv,mis) <- mcNotDoneStore; mi <- mis; if !mi.done){
       // if(!views.contains(mi.newView)) 
       //   assert(!mi.mcDone, s"$mi in mcNotDoneStore: "+views.contains(cv))
-      try{  mi.sanityCheck(views, false, cv) }
+      try{  mi.sanityCheck(views, false) }
       catch{ 
         case e: java.lang.AssertionError => {
-          println("ERROR"); println(s"\ncv = $cv. "+views.contains(cv)) 
-          println(s"mi = $mi")
-          println("mi.log = "+mi.theLog.reverse.mkString("\n"))
+          println(s"\ncv = $cv. "+views.contains(cv)) 
           e.printStackTrace; sys.exit
         }
-        case e1: Throwable => 
-          e1.printStackTrace; println(s"\ncv = $cv. "+views.contains(cv)); sys.exit
+      //   case e1: Throwable => 
+      //     e1.printStackTrace; println(s"\ncv = $cv. "+views.contains(cv)); sys.exit
       }
     }
     doCheck(candidateForMCStore.valuesIterator, false)
@@ -299,3 +321,23 @@ class SimpleEffectOnStore extends EffectOnStore{
   }
 
 }
+
+/* Each MissingInfo is stored in the SimpleEffectOnStore as follows.
+ * 
+ * If the requirements for condition (c) of the relevant definition are not
+ * satisfied, then it is stored:
+ * 
+ * - In candidateForMCStore, keyed against (servers,cpts(0)) for each
+ *   MissingCommon(servers,cpts,_,_) representing a conjunct of condition (c).
+ * 
+ * - In mcNotDoneStore, keyed against each elements of mc.missingHeads, where
+ *   mc is the MissingCommon representing the next conjunct of condition (c).
+ * 
+ * If the requirements for condition (c) are satisfied, it is stored in
+ * mcDoneStore, keyed against its missingHead, i.e. the next required View.
+ * 
+ * In addition, candidateForMCStore and mcNotDoneStore might hold MissingInfo
+ * objects for which condition (c) has been satisfied.  A copy will have been
+ * added to mcDoneStore (if the object is not done), indicated by its
+ * transferred field.  These objects can be purged from those stores.
+ */

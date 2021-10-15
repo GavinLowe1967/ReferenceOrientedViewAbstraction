@@ -72,6 +72,9 @@ class MissingInfo(
     * missingCommon[0..mcIndex).forall(_ == null). */
   private var mcIndex = 0
 
+  /** Keys from the MissingCommon. */
+  val keys = missingCommon.map(_.key)
+
   import MissingInfo.LogEntry
 
   /** Log used for debugging. */
@@ -142,6 +145,12 @@ class MissingInfo(
 
   /** Is this complete? */
   @inline def done = mcDone && mvIndex == missingViews.length || newViewFound
+
+  /** Has this been put into the mcDoneStore? */
+  var transferred = false
+
+  // def missingCommonHeads: List[ComponentView] = 
+  //   missingCommon(mcIndex).missingHeads
 
   /** Update the MissingCommon entries in this, based on cv being a possible
     * match to the first clause of the obligation.  cv is expected to be a
@@ -215,31 +224,54 @@ class MissingInfo(
   /** Check that we have nulled-out all done MissingCommons. */
   def sanity1 = missingCommon.forall(mc => mc == null || !mc.done)
 
-  /** Check that: (1) if all the MissingCommon objects are done, then
-    * missingViews contains no element of views; (2) otherwise no
-    * MissingCommon object has a head missingView in views; (3) if flag, then
-    * all MissingCommon objects are done (but not necessarily vice versa). */
-  def sanityCheck(views: ViewSet, flag: Boolean, cv: ComponentView = null) = {
+  /** Check that: (1) if all the MissingCommon objects are done, then views does
+    * not contain missingHead; (2) otherwise no MissingCommon object has a
+    * head missingView in views; (3) if flag, then all MissingCommon objects
+    * are done (but not necessarily vice versa).  However, if flag is false
+    * and notAdded is true, this was might have been replaced by a different
+    * but equivalence object in the relevant place, so not be up to date with
+    * respect to (2) and (3). */
+  def sanityCheck(views: ViewSet, flag: Boolean) = {
     assert(!done)
-    if(flag){
-      assert(mcDone)
+    if(flag) assert(mcDone) // Check (3)
+    if(mcDone){
+      if(!flag) assert(transferred)
       assert(missingCommon.forall(_ == null))
-      if(!views.contains(newView)) // IMPROVE: SANITY I'm not sure this is needed
-        assert(!views.contains(missingHead), 
-          s"$this\nstill contains $missingHead.  cv = $cv."+
-            (if(cv!=null) views.contains(cv) else "")+
-            "\n"+theLog.reverse.mkString("\n"))
+      if(flag || !notAdded) //  IMPROVE: do we need this guard? 
+        assert(!views.contains(missingHead),  // Check (1)
+          s"$this\nstill contains $missingHead.\n"+
+            theLog.reverse.mkString("\n"))
+    }
+    else if(!notAdded){
+      for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)// check (2)
+      Profiler.count("missingCommon sanity check done")
+    }
+    else Profiler.count("missingCommon sanity check skipped")
+  }
+/*
+    if(flag){
+      assert(mcDone && missingCommon.forall(_ == null)) // Check (3)
+      assert(!views.contains(missingHead),  // Check (1)
+        s"$this\nstill contains $missingHead.\n"+
+          theLog.reverse.mkString("\n"))
     }
     else{
       // This came from one of the stores related to part c.  It is possible
       // that mcDone holds, but this was replaced by a different but equal
       // MissingInfo in the store for part b, in which case the latter part of
       // the above check might not hold.
-      if(mcDone) assert(missingCommon.forall(_ == null))
-      else if(!notAdded) 
-        for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)
+      if(mcDone){
+        assert(missingCommon.forall(_ == null))
+        if(!notAdded) assert(!views.contains(missingHead)) // check (3)
+      }
+      else if(!notAdded){
+        for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)// check (2)
+        Profiler.count("missingCommon sanity check done")
+      }
+      else Profiler.count("missingCommon sanity check skipped")
     }
   }
+ */
 
   override def toString =
     s"MissingInfo(newView = $newView,\n"+
