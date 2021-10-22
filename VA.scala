@@ -143,6 +143,8 @@ object VA{
       case "--testSuite" => testSuite = true; i += 1
       case "--singleRef" => singleRef = true; i += 1
       case "--showViews" => showViews = true; i += 1
+      case "--showEachPly" => showEachPly = true; i += 1
+      case "--showTransitions" => showTransitions = true; i += 1
       case "--memoryProfile" => memoryProfile = true; i += 1
       case "-p" => numThreads = args(i+1).toInt; i += 2
       case fn => fname = fn; i += 1

@@ -156,6 +156,12 @@ package object ViewAbstraction{
   /** Should the final ViewSet be printed? */
   var showViews = false
 
+  /** Should the new views on each ply be shown? */
+  var showEachPly = false
+
+  /** Should each transition be shown? */
+  var showTransitions = false
+
   /** Switch to activate various assertions. */
   val debugging = true // false
 

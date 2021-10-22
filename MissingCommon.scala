@@ -164,7 +164,7 @@ class MissingCommon(
       if(cmp != Sup) newMC::= mCand1 // mCand1 can't be replaced by mCand
       found ||= cmp == Sub || cmp == Eq // mCand can't be replaced by mCand1
     }
-    if(!found){ log(AddMC(mCand)); newMC ::= mCand }
+    if(!found){ newMC ::= mCand; log(AddMC(mCand)) } 
     assert(newMC.nonEmpty)
     missingCandidates = newMC
     !found
@@ -182,7 +182,7 @@ class MissingCommon(
       s"missingCandidates = \n"+missingCandidates.mkString("\n"))
     else for(mcs <- missingCandidates){
       val v = mcs.head
-      assert(!views.contains(v), this.toString+"\n  still contains "+v)
+      assert(!views.contains(v), s"\n$this\n  still contains $v")
     }
   }
 
@@ -190,11 +190,16 @@ class MissingCommon(
     s"MissingCommon($servers, ${StateArray.show(cpts1)},\n"+
       s"  ${StateArray.show(cpts2)}, $pid)\n"+
       s"  missingCandidates = \n    "+missingCandidates.mkString("\n    ")+
-      "\n"+theLog.reverse.mkString("\n")
+      s"\ndone = $done; theLog = \n"+theLog.reverse.mkString("\n")
 
+  /* Note: we avoid creating duplicates of MissingCommon objects, so we can use
+   * object equality. */
+
+/*
   /** Equality test.  The constraint this represents is logically captured by
     * its initial parameters, so we use equality of parameters as the notion
     * of equality. */
+// IMPROVE: we avoid creating duplicates, so we could use reference equality
   override def equals(that: Any) = that match{
     case mc: MissingCommon => 
       mc.hashCode == hashCode && // optimisation
@@ -202,33 +207,38 @@ class MissingCommon(
       mc.cpts2.sameElements(cpts2) && mc.pid == pid
     case null => false
   }
+ */
 
+/*
   /** Hash code, based on the same principle as equality. */
   override val hashCode = {
     @inline def f(x:Int, y: Int) = x*97+y
     f(f(f(f(servers.hashCode, StateArray.mkHash(cpts1)), 
       StateArray.mkHash(cpts2)), pid._1), pid._2)
   }
+ */
 
   /** Ordering on MissingCommon values.  Return a value x s.t.: x < 0 if this <
     * that; x == 0 when this == that; x > 0 when this > that. */
   def compare(that: MissingCommon) = {
+    /* The following makes comparison more efficient, but makes the ordering
+     * nondeterministic (varying from one run to another), and so makes the
+     * final sizes of the stores nondeterministic.
     val hashComp = compareHash(hashCode, that.hashCode)
     if(hashComp != 0) hashComp
+    else{ */
+    val ssComp = servers.compare(that.servers)
+    if(ssComp != 0) ssComp
     else{
-      val ssComp = servers.compare(that.servers)
-      if(ssComp != 0) ssComp
+      val cmp1 = StateArray.compare(cpts1, that.cpts1)
+      if(cmp1 != 0) cmp1
       else{
-        val cmp1 = StateArray.compare(cpts1, that.cpts1)
-        if(cmp1 != 0) cmp1
+        val cmp2 = StateArray.compare(cpts2, that.cpts2)
+        if(cmp2 != 0) cmp2
         else{
-          val cmp2 = StateArray.compare(cpts2, that.cpts2)
-          if(cmp2 != 0) cmp2
-          else{
-            val familyDiff = pid._1 - that.pid._1
-            if(familyDiff != 0) familyDiff
-            else pid._2 - that.pid._2
-          }
+          val familyDiff = pid._1 - that.pid._1
+          if(familyDiff != 0) familyDiff
+          else pid._2 - that.pid._2
         }
       }
     }

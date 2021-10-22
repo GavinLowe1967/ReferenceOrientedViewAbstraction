@@ -57,8 +57,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     ply: Int, nextNewViews: MyHashSet[ComponentView])
   = {
     // Profiler.count("effectOn")
-    if(/* !previous.add((pre,e,post,cv)) || */ verbose) 
-      println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
+    // if(/* !previous.add((pre,e,post,cv)) || */ verbose) 
+    //   println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers && pre.sameComponentPids(post))
     val postCpts = post.components; val preCpts = pre.components
 
@@ -123,7 +123,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     (map: RemappingMap, cpts: Array[State], unifs: UnificationList, 
       isPrimary: Boolean, newComponentsList: List[Array[State]])
   : Unit = {
-    if(verbose) println("cpts = "+StateArray.show(cpts))
+    // if(verbose) println("cpts = "+StateArray.show(cpts))
     if(debugging){
       StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     }
@@ -157,11 +157,18 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       if(!views.contains(nv)){
         if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){
           Profiler.count("addedViewCount")
-          if(verbose) println(
-            s"$pre -${system.showEvent(e)}-> $post\n"+
+          if(showTransitions) println(
+            s"$pre -${system.showEvent(e)}->\n  $post\n"+
               s"  with unifications $unifs\n"+
-              s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-              s"  --> ${View.show(post.servers, newComponents)} == $nv")
+              s"  induces $cv\n"+
+              (if(!cv.components.sameElements(cpts)) 
+                s"  == ${View.show(pre.servers, cpts)}\n"
+              else "")+
+              s"  --> ${View.show(post.servers, newComponents)}\n"+
+              (if(post.servers != nv.servers || 
+                  !newComponents.sameElements(nv.components))
+                " ==\n  $nv"
+              else ""))
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
           val ok = recordInduced(); assert(ok)
           // if(singleRef && isPrimary && unifs.isEmpty){

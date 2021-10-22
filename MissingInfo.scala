@@ -35,12 +35,11 @@ class MissingInfo(
    * |--(MissingCommon.)updateMissingCommon
    * |--advanceMC
    *    |--(MissingCommon.)updateMissingViews
+   *    |--updateMissingViews
    * 
    * updateMissingViewsOfMissingCommon    (called from EffectOnStore)
    * |--(MissingCommon.)updateMissingViewsBy
    * |--advanceMC
-   * 
-   * updateMissingViews     (called from EffectOnStore)
    * 
    * updateMissingViewsBy    (called from EffectOnStore)
    * |--updateMissingViews
@@ -73,7 +72,7 @@ class MissingInfo(
   private var mcIndex = 0
 
   /** Keys from the MissingCommon. */
-  val keys = missingCommon.map(_.key)
+  //val keys = missingCommon.map(_.key)
 
   import MissingInfo.LogEntry
 
@@ -90,18 +89,15 @@ class MissingInfo(
   @inline private def logAdvanceMC = 
     log(MissingInfo.AdvanceMC(missingCommon.length-mcIndex))
 
-  /** Advance to the next MissingCommon value (if any).  
+  /** Advance to the next MissingCommon value (if any).  Otherwise, update the 
+    * missingViews.
     * @return a ViewBuffer containing views against which this should now be 
     * registered, or null if all MissingCommon are done. */
   @inline private 
   def advanceMC(views: ViewSet): ViewBuffer = {
     // Deal with case that all MissingCommon are done.  We also update
-    // missingViews in case any of them is done.
-    // IMPROVE: simplify rehashMC in this case. 
+    // missingViews in case a prefix of them is done.
     @inline def allMCDone() = { rehashMC(); updateMissingViews(views); null }
-
-    // IMPROVE: I think the updateMissingViews(views) is unnecessary: I think
-    // it's always done by the client code.  But this needs to be clarified.
 
     require(missingCommon(mcIndex) == null)
     mcIndex += 1; logAdvanceMC
@@ -109,12 +105,12 @@ class MissingInfo(
       assert(mcIndex == 1 && missingCommon.length == 2)
       val mc = missingCommon(mcIndex)
       if(mc == null){ // this one is also done
-        mcIndex += 1; logAdvanceMC; allMCDone() 
+        mcIndex += 1; logAdvanceMC; allMCDone(); 
       } 
       else{
         val vb = mc.updateMissingViews(views)
         if(mc.done){  // and now this is done
-          mcNull(mcIndex); mcIndex += 1; logAdvanceMC; allMCDone()
+          mcNull(mcIndex); mcIndex += 1; logAdvanceMC; allMCDone(); 
         }
         else{ rehashMC(); vb }
       }
@@ -123,7 +119,7 @@ class MissingInfo(
   }
 
   /** Are all the missingCommon entries done? */
-  def mcDone = mcIndex == missingCommon.length
+  @inline def mcDone = mcIndex == missingCommon.length
 
   /** Index of first non-null missingView.  Once all MissingCommon are complete,
     * this will be registered against missingViews(mvIndex) in
@@ -149,12 +145,10 @@ class MissingInfo(
   /** Has this been put into the mcDoneStore? */
   var transferred = false
 
-  // def missingCommonHeads: List[ComponentView] = 
-  //   missingCommon(mcIndex).missingHeads
-
   /** Update the MissingCommon entries in this, based on cv being a possible
     * match to the first clause of the obligation.  cv is expected to be a
-    * possible match to the next element of missingCommon.
+    * possible match to the next element of missingCommon.  If all
+    * missingCommon are done, also update missingViews.
     * @return a ViewBuffer containing all views that this needs to be registered
     * against in the store if not all MissingCommon are done. */
   def updateMissingCommon(cv: ComponentView, views: ViewSet): ViewBuffer = {
@@ -174,25 +168,22 @@ class MissingInfo(
     }
   }
 
-  /** Update the MissingCommon fields of this based upon the addition of cv.
-    * Normally, cv will match a missingHead of the next MissingCommon, but not
-    * if we've subsequently advanced within the MissingCommons. (IMPROVE:
-    * assert this.)
+  /** Update the missing views in the MissingCommon fields of this.
     * @return the views against which this should now be registered, or
-    * null if all the missingCommon entries are satisfied.  */ 
-  def updateMissingViewsOfMissingCommon(cv: ComponentView, views: ViewSet)
-      : ViewBuffer = {
+    * null if all the missingCommon entries are satisfied.  If all
+    * missingCommon are done, also update missingViews. */ 
+  def updateMissingViewsOfMissingCommon(views: ViewSet): ViewBuffer = {
     val mc = missingCommon(mcIndex)
-    val vb: ViewBuffer = mc.updateMissingViews(views) //  updateMissingViewsBy(cv, views)
+    val vb: ViewBuffer = mc.updateMissingViews(views)
     if(mc.done){ mcNull(mcIndex); advanceMC(views) }
     else vb
   }
-// IMPROVE: the above doesn't use cv
 
   /** Update missingViews and mvIndex based upon views.  This is called either
-    * when all MissingCommon are first complete, or from missingCommonViewsBy,
-    * to advance over subsequent missing views in views.  */
-  def updateMissingViews(views: ViewSet) = {
+    * when all MissingCommon are first complete (from advanceMC), or from
+    * missingCommonViewsBy, to advance over subsequent missing views in
+    * views.  */
+  private def updateMissingViews(views: ViewSet) = {
     require(mcDone)
     while(mvIndex < missingViews.length && 
       (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))){
@@ -200,6 +191,10 @@ class MissingInfo(
     }
     rehashMV()
   }
+
+  /** Check that missingViews is up-to-date with views.  Used in assertions. */
+  def missingViewsUpdated(views: ViewSet): Boolean = 
+    mvIndex == missingViews.length || !views.contains(missingViews(mvIndex))
 
   /** Update missingViews and mvIndex based on the addition of cv.  cv is
     * expected to match the next missing view. */
@@ -242,8 +237,15 @@ class MissingInfo(
           s"$this\nstill contains $missingHead.\n"+
             theLog.reverse.mkString("\n"))
     }
-    else if(!notAdded){
-      for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)// check (2)
+    else if(true || !notAdded){ // IMPROVE: why?  mc should be up to date
+      // Check the first non-done missingCommon is up to date
+      var done = false // have we seen a non-done missingCommon?
+      for(mc <- missingCommon){
+        if(!done && mc != null){ 
+          mc.sanityCheck(views) // check (2)
+          if(!mc.done) done = true // no need to check further
+        }
+      }
       Profiler.count("missingCommon sanity check done")
     }
     else Profiler.count("missingCommon sanity check skipped")
@@ -276,7 +278,7 @@ class MissingInfo(
   override def toString =
     s"MissingInfo(newView = $newView,\n"+
       s"missingViews = ${missingViews.mkString("<",",",">")},\n"+
-      "missingCommon = "+missingCommon.mkString("<",",",">")+")"+
+      "missingCommon = "+missingCommon.mkString("<",",\n  ",">")+")\n"+
       s"notAdded = $notAdded"
 
   /** Equality: same newView, missingViews and missingCommon (up to equality,
@@ -295,7 +297,7 @@ class MissingInfo(
   private var mcHash = -1
 
   /** Update mcHash.  Should be called at each update of mcIndex. */
-  private def rehashMC() = {
+  @inline private def rehashMC() = {
     var h = newView.hashCode; var i = mcIndex
     while(i < missingCommon.length){
       if(missingCommon(i) != null){ // not if we blanked one out when sorting
@@ -387,4 +389,5 @@ object MissingInfo{
   case class CandidateForMC(servers: ServerStates, princ: State) extends LogEntry
   case object MarkNewViewFound extends LogEntry
   case class AdvanceMC(remaining: Int) extends LogEntry
+  case class NotStored(st: String) extends LogEntry
 }

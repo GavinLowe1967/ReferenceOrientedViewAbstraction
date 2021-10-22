@@ -115,7 +115,7 @@ class Checker(system: SystemP.System){
         for((pre, e, post, outsidePid) <- system.transitions(cv)){
           assert(pre.ply < Int.MaxValue)
           assert(post.ply == Int.MaxValue); post.ply = ply
-          if(false)
+          if(showTransitions)
             println(s"$pre -${system.showEvent(e)}-> $post ["+
               (if(outsidePid != null) State.showProcessId(outsidePid) else "")+
               "]")
@@ -454,8 +454,8 @@ class Checker(system: SystemP.System){
         transitionTemplates.add(pre, post, id, e, inc)
       for(v <- nextNewViews.iterator) addView(v)
       ply += 1; newViews = newViewsAB.toArray; 
-      // if(verbose) 
-      //   println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
+      if(showEachPly)
+        println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
       if(newViews.isEmpty) done.set(true)
       // if(false && ply > 15) println(sysAbsViews.summarise1)
     } // end of main loop
