@@ -71,15 +71,13 @@ class MissingInfo(
     * missingCommon[0..mcIndex).forall(_ == null). */
   private var mcIndex = 0
 
-  /** Keys from the MissingCommon. */
-  //val keys = missingCommon.map(_.key)
-
   import MissingInfo.LogEntry
 
   /** Log used for debugging. */
   var theLog = List[LogEntry]()
 
-  def log(item: LogEntry) = theLog ::= item
+  /** Log for debugging purposes.  Currently turned off. */
+  def log(item: LogEntry) = {} // theLog ::= item
 
   /** Record missingCommon(i) as being completed. */
   @inline private def mcNull(i: Int) = {
@@ -220,12 +218,12 @@ class MissingInfo(
   def sanity1 = missingCommon.forall(mc => mc == null || !mc.done)
 
   /** Check that: (1) if all the MissingCommon objects are done, then views does
-    * not contain missingHead; (2) otherwise no MissingCommon object has a
-    * head missingView in views; (3) if flag, then all MissingCommon objects
-    * are done (but not necessarily vice versa).  However, if flag is false
-    * and notAdded is true, this was might have been replaced by a different
-    * but equivalence object in the relevant place, so not be up to date with
-    * respect to (2) and (3). */
+    * not contain missingHead; (2) otherwise the first non-done MissingCommon
+    * object has a head missingView in views; (3) if flag, then all
+    * MissingCommon objects are done (but not necessarily vice versa).
+    * However, if flag is false and notAdded is true, this was might have been
+    * replaced by a different but equivalence object in the relevant place, so
+    * not be up to date with respect to (1). */
   def sanityCheck(views: ViewSet, flag: Boolean) = {
     assert(!done)
     if(flag) assert(mcDone) // Check (3)
@@ -236,8 +234,9 @@ class MissingInfo(
         assert(!views.contains(missingHead),  // Check (1)
           s"$this\nstill contains $missingHead.\n"+
             theLog.reverse.mkString("\n"))
+      else Profiler.count("missingInfo sanity check skipped")
     }
-    else if(true || !notAdded){ // IMPROVE: why?  mc should be up to date
+    else{ 
       // Check the first non-done missingCommon is up to date
       var done = false // have we seen a non-done missingCommon?
       for(mc <- missingCommon){
@@ -246,34 +245,10 @@ class MissingInfo(
           if(!mc.done) done = true // no need to check further
         }
       }
-      Profiler.count("missingCommon sanity check done")
+      // Profiler.count("missingCommon sanity check done")
     }
-    else Profiler.count("missingCommon sanity check skipped")
+    // else Profiler.count("missingCommon sanity check skipped")
   }
-/*
-    if(flag){
-      assert(mcDone && missingCommon.forall(_ == null)) // Check (3)
-      assert(!views.contains(missingHead),  // Check (1)
-        s"$this\nstill contains $missingHead.\n"+
-          theLog.reverse.mkString("\n"))
-    }
-    else{
-      // This came from one of the stores related to part c.  It is possible
-      // that mcDone holds, but this was replaced by a different but equal
-      // MissingInfo in the store for part b, in which case the latter part of
-      // the above check might not hold.
-      if(mcDone){
-        assert(missingCommon.forall(_ == null))
-        if(!notAdded) assert(!views.contains(missingHead)) // check (3)
-      }
-      else if(!notAdded){
-        for(mc <- missingCommon) if(mc != null) mc.sanityCheck(views)// check (2)
-        Profiler.count("missingCommon sanity check done")
-      }
-      else Profiler.count("missingCommon sanity check skipped")
-    }
-  }
- */
 
   override def toString =
     s"MissingInfo(newView = $newView,\n"+

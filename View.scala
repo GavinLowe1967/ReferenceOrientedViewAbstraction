@@ -173,6 +173,21 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     for(c <- components; (t,p) <- c.processIdentities; if !isDistinguished(p))
       cptParamBitMap(t)(p) = true
 
+  /** A bound on the values of each type. */
+  private var paramsBound: Array[Int] = null 
+
+  /** A bound on the values of each type. */
+  def getParamsBound: Array[Int] = {
+    if(paramsBound == null){
+      paramsBound = servers.paramsBound.clone
+      for(cpt <- components){
+        val pb = cpt.getParamsBound
+        for(t <- 0 until numTypes) paramsBound(t) = paramsBound(t) max pb(t)
+      }      
+    }
+    paramsBound
+  }
+
 
   /** Information about transitions pre -> post for which we have considered
     * induced transitions from this view, with pre.servers = this.servers !=
@@ -434,7 +449,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   // =========== Combining maps
 
   /** Maps used in combining with this.  */
-  private var map: RemappingMap = servers.remappingMap
+  private var map: RemappingMap = servers.remappingMap // (getParamsBound)
   // Note: map is null if servers is not normalised. 
   private var nextArg: NextArgMap = null 
   private var otherArgs: OtherArgMap = null
@@ -469,6 +484,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     * 
     * Note: these are cloned on each call. 
     */
+/*
   def getCombiningMaps: (RemappingMap, OtherArgMap, NextArgMap) = {
     if(otherArgs == null) initMaps()
     val map1 = new Array[Array[Int]](numTypes); var t = 0
@@ -482,6 +498,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     if(otherArgs == null) initMaps()
     (map, otherArgs, nextArg)
   }
+ */
 
   /** Get a (fresh) NextArgMap. */
   def getNextArgMap: NextArgMap = {

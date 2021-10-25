@@ -108,7 +108,7 @@ class EffectOnUnification(
     require(singleRef || princRenames.isEmpty)
     // if(false) println(s"combine($pre, $post,\n  $cv, $princRenames)")
     val changedServers = servers != post.servers
-    val map0 = servers.remappingMap
+    val map0 = servers.remappingMap(cv.getParamsBound)
     // All params in post.servers but not in pre.servers, as a bitmap.
     val newServerIds: Array[Array[Boolean]] = 
       ServerStates.newParamsBitMap(servers, post.servers)
@@ -290,9 +290,12 @@ class EffectOnUnification(
     // 0).
     val crossRefs = 
       EffectOnUnification.remapToCreateCrossRefs(preCpts, cpts, map0)
-    for((map1, tuples) <- crossRefs){
+    var i = 0
+    // for((map1, tuples) <- crossRefs){
+    while(i < crossRefs.length){
+      val (map1, tuples) = crossRefs(i); i += 1
+      // Profiler.count("tuples size "+tuples.length) -- mostly 0 or 1
       // Get other arg BitMap for this case. 
-      Profiler.count("tuples size "+tuples.length)
       val otherArgsBitMap = getOtherArgsBitMapForSingleRef(
         map1, otherArgsBitMap0, tuples)
       // Convert to OtherArgMap
@@ -305,10 +308,14 @@ class EffectOnUnification(
         val res0 = new ArrayBuffer[RemappingMap]
         Unification.getCombiningMaps(
           map1, otherArgs, otherArgsBitMap, nextArg, cpts, res0)
-        for(map1 <- res0){ 
+        var j = 0
+        // for(map1 <- res0){
+        while(j < res0.length){
+          val map1 = res0(j); j += 1
           if(unifs.nonEmpty || 
             !cv.containsDoneInducedPostServersRemaps(
-              // postServers, Remapper.restrictTo(map1, cv, postServers)) )
+// IMPROVE: the rangeRestrictTo gets calculated again in
+// EffectOn.processInducedInfo
               postServers, Remapper.rangeRestrictTo(map1, postServers)) )
             result += ((map1, Remapper.applyRemapping(map1, cpts), unifs))
         }
@@ -372,7 +379,8 @@ class EffectOnUnification(
       // For each other parameter of postCpts(k), if not in ran map1, add to
       // otherArgs, and to otherArgsBitMap if not an identity in postCpts.
       for((t,id1) <- postCpts(k).processIdentities)
-        if(id1 != id && !contains(map1(t),id1) && !contains(otherArgs(t),id1)){
+        if(id1 != id && !isDistinguished(id1) && 
+            !contains(map1(t),id1) && !contains(otherArgs(t),id1)){
           otherArgs(t) ::= id1
           if(StateArray.findIndex(postCpts, t, id1) < 0)
             otherArgsBitMap(t)(id1) = true

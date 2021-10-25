@@ -86,12 +86,13 @@ class SimpleEffectOnStore extends EffectOnStore{
  * which the newView has been found, and purge mcNotDoneStore and
  * candidateForMSCStore of MissingInfos that are mcDone. */
 
-  import MissingInfo.{LogEntry,McDoneStore,McNotDoneStore,CandidateForMC,NotStored}
+  import MissingInfo.{LogEntry, McDoneStore, McNotDoneStore,
+    CandidateForMC, NotStored}
 
-  def storeName(theStore: Store): String = 
+  /** Name of theStore.  Used in logging for debugging. */
+  @inline private def storeName(theStore: Store): String = 
     if(theStore == mcNotDoneStore) "mcNotDoneStore"
     else{ assert(theStore == mcDoneStore); "mcDoneStore" }
-
 
   /** Add missingInfo to theStore(cv), if not already there. */
   @inline private 
@@ -121,7 +122,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     else{
       // Add entries to mcMissingCandidates against the first MissingCommon.
       // Note: mcArray may be in a different order from missingCommon.
-      for(cv <- mcArray/*missingCommon*/(0).missingHeads){ // ***
+      for(cv <- mcArray(0).missingHeads){ 
         missingInfo.log(McNotDoneStore(cv))
         addToStore(mcNotDoneStore, cv, missingInfo)
       }
@@ -142,24 +143,6 @@ class SimpleEffectOnStore extends EffectOnStore{
    * there were 70M successful adds to one of the maps, and 228M unsuccessful
    * adds. */
 
-  // The following doesn't work, because the hash codes have changed, so the 
-  // removes fail.
-  // private def removeFromMCStores(mi: MissingInfo) = {
-  //   require(mi.mcDone)
-  //   for(key <- mi.keys){
-  //     // val princ1 = mc.cpts1(0); val key = (mc.servers, princ1)
-  //     val mis = candidateForMCStore(key)
-  //     val result = mis.remove(mi) 
-  //     Profiler.count("remove from candidateForMCStore "+result)
-  //     // assert(result) // not true at present if mi was found in mcNotDoneStore
-  //   }
-  //   // for(cv <- mi.missingCommonHeads){
-  //   //   val mis = mcNotDoneStore(cv)
-  //   //   val result = mis.remove(mi)
-  //   //   Profiler.count("remove from mcNotDoneStore "+result)
-  //   // }
-  // }
-
   import MissingCommon.ViewBuffer
 
   /** Try to complete values in the store, based on the addition of cv, and with
@@ -175,12 +158,10 @@ class SimpleEffectOnStore extends EffectOnStore{
     // now done, then add the newView to result; otherwise add to mcDoneStore.
     @inline def mcDone(mi: MissingInfo) = {
       require(mi.mcDone); require(mi.missingViewsUpdated(views))
-      // mi.updateMissingViews(views)
       if(mi.done) maybeAdd(mi.newView) 
       else{
         mi.log(McDoneStore(mi.missingHead))
         mi.transferred = true
-        // removeFromMCStores(mi)
         addToStore(mcDoneStore, mi.missingHead, mi)
 // IMPROVE: remove elsewhere
       }
@@ -206,7 +187,7 @@ class SimpleEffectOnStore extends EffectOnStore{
             else{
               // Register mi against each view in vb, and retain
               for(cv1 <- vb){
-                assert(!views.contains(cv1)) // IMPROVE
+                // assert(!views.contains(cv1)) // IMPROVE
                 mi.log(McNotDoneStore(cv1))
                 addToStore(mcNotDoneStore, cv1, mi)
               }
@@ -235,7 +216,6 @@ class SimpleEffectOnStore extends EffectOnStore{
             if(mi.done) maybeAdd(mi.newView) 
             else if(mi.mcDone) mcDone(mi) 
             else for(cv1 <- ab){
-              // assert(!views.contains(cv1)) // IMPROVE
               mi.log(McNotDoneStore(cv1))
               addToStore(mcNotDoneStore, cv1, mi)
             }
@@ -254,7 +234,6 @@ class SimpleEffectOnStore extends EffectOnStore{
             mi.updateMissingViewsBy(cv, views)
             if(mi.done) maybeAdd(mi.newView)
             else{
-              // assert(!views.contains(mi.missingHead)) // IMPROVE
               mi.log(McDoneStore(mi.missingHead))
               addToStore(mcDoneStore, mi.missingHead, mi)
             }
@@ -277,9 +256,7 @@ class SimpleEffectOnStore extends EffectOnStore{
       for(mis <- iter; mi <- mis; if !mi.done) mi.sanityCheck(views, flag)
 
     doCheck(mcDoneStore.valuesIterator, true)
-    // for((cv,mis) <- mcDoneStore; mi <- mis; if !mi.done) 
-    //   mi.sanityCheck(views, true)
-    // doCheck(mcNotDoneStore.valuesIterator, false)
+    // Catch in following for debugging
     for((cv,mis) <- mcNotDoneStore; mi <- mis; if !mi.done){
       try{  mi.sanityCheck(views, false) }
       catch{ 
@@ -307,7 +284,6 @@ class SimpleEffectOnStore extends EffectOnStore{
         numEls += 1; val (mvSize1,mcSize1) = mi.size
         mvSize += mvSize1; mcSize += mcSize1
       }
-          // Profiler.count("MissingCommon length "+mi.mcCount)
       (numEls, mvSize, mcSize)
     }
     println

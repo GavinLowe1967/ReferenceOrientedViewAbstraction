@@ -63,23 +63,6 @@ class State(val family: Family, val cs: ControlState,
     includeInfo == null || includeInfo(i)
   }
 
-// INCLUDE: I'm not sure that we need both of the following
-
-  /** Bit map giving parameters. */
-  // private var paramBitMap: Array[Array[Boolean]] = null
-
-  // /** Does this state have a parameter (f,id)? */
-  // def hasParam(f: Family, id: Identity) = {
-  //   if(paramBitMap == null) {
-  //     paramBitMap =
-  //       // FIXME: the +2 is a hack
-  //       Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)))
-  //     for(i <- 0 until length)
-  //       if(!isDistinguished(ids(i))) paramBitMap(typeMap(i))(ids(i)) = true
-  //   }
-  //   paramBitMap(f)(id)
-  // }
-
   /** Bit map giving parameters for which corresponding states are included in
     * views. */
   private var includedParamBitMap: Array[Array[Boolean]] = null
@@ -88,18 +71,30 @@ class State(val family: Family, val cs: ControlState,
     * reference?  */
   def hasIncludedParam(f: Family, id: Identity) = {
     if(includedParamBitMap == null){ 
-      // val includeInfo = State.getIncludeInfo(cs)
       includedParamBitMap =
         // FIXME: the +2 is a hack
         Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)))
       for(i <- 0 until length)
-        if(!isDistinguished(ids(i)) && includeParam(i)) // (includeInfo == null || includeInfo(i)))
+        if(!isDistinguished(ids(i)) && includeParam(i)) 
           includedParamBitMap(typeMap(i))(ids(i)) = true
     }
     includedParamBitMap(f)(id)
   }
 
-  // def hasParam(pid: ProcessIdentity) = hasParam(pid._1, pid._2)
+  /** A bound on the values of each type. */
+  private var paramsBound: Array[Int] = null 
+
+  /** A bound on the values of each type. */
+  def getParamsBound: Array[Int] = {
+    if(paramsBound == null){
+      paramsBound = new Array[Int](numTypes); var i = 0
+      while(i < length){
+        val id = ids(i); val t = typeMap(i); i += 1
+        paramsBound(t) = paramsBound(t) max (id+1)
+      }
+    }
+    paramsBound
+  }
 
   /** Check the type sizes from the script are large enough for all the
     * parameters in this State.  This is not done during compilation, because

@@ -105,21 +105,39 @@ object Remapper{
   def rangeRestrictTo(map: RemappingMap, servers: ServerStates)
       : (RemappingList, Int) = {
     val sIds = servers.idsBitMap; var h = 0 // h is the hashCode
-    var result = new ArrayBuffer[Int]; var t = 0
+
+    // Calculate number of x values overall to consider
+    // var lens = new Array[Int](numTypes); 
+    var t = 0; var len = 0
     while(t < numTypes){
-      val thisSIds = sIds(t); val len = thisSIds.length; assert(len < (1 << 7))
+      // lens(t) = map(t).length // max servers.paramsBound(t); 
+      len += map(t).length; t += 1
+    }
+
+    val result0 = new Array[Int](len) // new ArrayBuffer[Int]; 
+    t = 0; var i = 0 // result in result0[0..i)
+    while(t < numTypes){
+      val thisSIds = sIds(t); val sidsLen = thisSIds.length; 
+      assert(sidsLen < (1 << 7))
       // var tResult = List[Int]()
-      var x = 0; val thisLen = map(t).length max servers.paramsBound(t)
+      var x = 0; val thisLen = map(t).length //map(t).length max servers.paramsBound(t)
       while(x < thisLen){
         val y = map(t)(x)
-        if(y >= 0 && y < len && thisSIds(y)){
-          val summary = summarise(t,x,y); result += summary; h = (h*37+summary)
+        if(y >= 0 && y < sidsLen && thisSIds(y)){
+          val summary = summarise(t,x,y); // result += summary; 
+          result0(i) = summary; i += 1
+          h = (h << 5) + (h << 2) + h + summary //  (h*37+summary)
         }
         x += 1
       }
       t += 1
     }
-    (result.toArray, h)
+
+    // Copy into new array
+    val result = new Array[Int](i); var j = 0
+    while(j < i){ result(j) = result0(j); j += 1 }
+
+    (result, h)
   }  
 
   // The following assumption is necessary to ensure summarise forms a bijection.
@@ -423,6 +441,7 @@ object Remapper{
   /** Remap st so that it can be the principal component in a view with
     * servers. */
   def remapToPrincipal(servers: ServerStates, st: State): State = {
+    // IMPROVE: could use a smaller remappingMap
     remapState(servers.remappingMap, servers.nextArgMap, st)
   }
 

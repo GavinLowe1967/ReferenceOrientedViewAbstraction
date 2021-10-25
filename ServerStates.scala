@@ -70,6 +70,22 @@ class ServerStates(val servers: List[State]){
     }
   }
 
+  /** A (fresh) RemappingMap, of size `size(t)` for each t, representing the
+    * identity on the parameters of this .*/
+  def remappingMap(size: Array[Int]): RemappingMap = {
+    require(normalised)
+    val result = new Array[Array[Identity]](numTypes); var t = 0
+    while(t < numTypes){
+      result(t) = new Array[Identity](size(t))
+      var i = 0
+      while(i < size(t)){
+        result(t)(i) = (if(i < paramsBound(t)) i else -1); i += 1
+      }
+      t += 1
+    }
+    result
+  }
+
   def nextArgMap = { assert(normalised); paramsBound.clone }
 
   /** Is this representable using the values defined in the script? */
