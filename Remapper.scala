@@ -92,7 +92,7 @@ object Remapper{
     result
   }
 
-  type RemappingList =  ComponentView.RemappingList 
+  import ComponentView.ReducedMapInfo // (Array[Long], Int)
 
   /** The range restriction of map to the parameters of servers, i.e. 
     * 
@@ -103,7 +103,7 @@ object Remapper{
     * of type t is represented by summarise(t,x,y); these are in lexicographic
     * order of (t,x).  Also returns a hashCode for that result.  */
   def rangeRestrictTo(map: RemappingMap, servers: ServerStates)
-      : (RemappingList, Int) = {
+      : ReducedMapInfo = {
     val sIds = servers.idsBitMap; var h = 0 // h is the hashCode
 
     // Calculate number of x values overall to consider
@@ -114,18 +114,24 @@ object Remapper{
       len += map(t).length; t += 1
     }
 
-    val result0 = new Array[Int](len) // new ArrayBuffer[Int]; 
+    // We combine together the summary of four maplets into bits, and then put
+    // them into results0.  At each point, we have included k maplets in bits,
+    // and the remainder in results0[0..i)
+    var bits = 0L; var k = 0
+    val result0 = new Array[Long](((len-1) >> 2) + 1) // size ceiling(len/4)
     t = 0; var i = 0 // result in result0[0..i)
     while(t < numTypes){
       val thisSIds = sIds(t); val sidsLen = thisSIds.length; 
-      assert(sidsLen < (1 << 7))
       // var tResult = List[Int]()
       var x = 0; val thisLen = map(t).length //map(t).length max servers.paramsBound(t)
+      // assert(sidsLen < (1 << 7) && thisLen < (1 << 7))
       while(x < thisLen){
         val y = map(t)(x)
         if(y >= 0 && y < sidsLen && thisSIds(y)){
-          val summary = summarise(t,x,y); // result += summary; 
-          result0(i) = summary; i += 1
+          val summary = summarise(t,x,y); 
+          // assert(0 <= summary && summary < 65536)
+          bits = (bits << 16) + summary; k += 1
+          if(k == 4){ result0(i) = summary; i += 1; bits = 0; k = 0 }
           h = (h << 5) + (h << 2) + h + summary //  (h*37+summary)
         }
         x += 1
@@ -133,8 +139,11 @@ object Remapper{
       t += 1
     }
 
+    // Profiler.count("rangeRestrictTo"+(4*i+k)) // IMPROVE
+    // Normally 1 or 2
+    if(k > 0){ result0(i) = bits; i += 1 }
     // Copy into new array
-    val result = new Array[Int](i); var j = 0
+    val result = new Array[Long](i); var j = 0
     while(j < i){ result(j) = result0(j); j += 1 }
 
     (result, h)
@@ -143,8 +152,8 @@ object Remapper{
   // The following assumption is necessary to ensure summarise forms a bijection.
   assert(numTypes > 0 && numTypes <= 4)
 
-  /** Summarise t, x and y into a single Int.  This assumes 0 <= t < 4, 0 <= x <
-    * 1<<23, and 0 <= y < (1<<7).  This mapping forms an injection over such
+  /** Summarise t, x and y into 16 bits.  This assumes 0 <= t < 4, 0 <= x <
+    * (1<<7), and 0 <= y < (1<<7).  This mapping forms an injection over such
     * values. */
   @inline private[RemapperP] 
   def summarise(t: Int, x: Int, y: Int) = (x << 9)+(t << 7) + y
@@ -162,7 +171,7 @@ object Remapper{
     * 
     * In fact, this gives no advantage over rangeRestrictTo. */
 //   def restrictTo(map: RemappingMap, v: ComponentView, servers: ServerStates)
-//       : RemappingList = {
+//       : ReducedMap = {
 // // IMPROVE: use bit map for servers' parameters
 //     val vParams = v.cptParamBitMap
 //     var result = List[List[(Identity,Identity)]]()

@@ -1,3 +1,40 @@
+Optimisation 8
+
+- Function to define crossRefs.  Summarise v.cpts(i) <| pi as Array[Long].
+  Then crossRefs is a List of (State, Int, Array[Long]) tuples.
+
+- Subset relation over crossRefs.  It might help to keep each crossRefs
+  sorted.
+
+- In EffectOn.processInducedInfo, case missing empty, missingCommons
+  non-empty, store against v (post.fixed, pi |> post.fixed, crossRefs): in v,
+  have a mapping from (post.fixed, pi |> post.fixed) to the set of all such
+  crossRefs.
+
+- In EffectOn.apply, calculate crossRefs for each pi (using
+  StateArray.crossRefs(cpts1, cpts2) -- pass through for subsequent use).  If
+  there is a corresponding tuple stored against v, bail out before calling
+  processInducedInfo.
+
+
+
+
+-- Return information about cross references from EffectOnUnification.combine,
+   and use in missingCrossRefs.
+
+*** Do we do what's described in clause 3 of Def 13 (concerning missing
+    components in primary induced transitions with singleRef.)?
+
+*** Consider the optimisations at the end of Section 9.
+
+Make maps smaller.
+
+============
+
+lazySet with bound of 44.  newViewCount 155M; addedViewCount 1.1M;
+EffectOnStore.add with primary, unifs empty, servers changed, missing
+non-empty 88M.  343 min
+
 Fix bug with EffectOnStore so that sanityCheck passes.
 
 Relevant call path:
@@ -9,19 +46,6 @@ MissingCommon.updateMissingCandidates.
 Could always re-register against mc.missingHeads. 
 
 Get singleRef to work with omitted references. -- ok I think
-
-
-
-*** Do we do what's described in clause 3 of Def 13 (concerning missing
-    components in primary induced transitions with singleRef.)?
-
-*** Consider the optimisations at the end of Section 6. 
-
-lazySet with bound of 44.  newViewCount 155M; addedViewCount 1.1M;
-EffectOnStore.add with primary, unifs empty, servers changed, missing
-non-empty 88M.  343 min
-
-============
 
 This one is done. 
 

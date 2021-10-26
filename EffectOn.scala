@@ -62,13 +62,12 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     require(pre.servers == cv.servers && pre.sameComponentPids(post))
     val postCpts = post.components; val preCpts = pre.components
 
-    // inducedInfo: ArrayBuffer[(Array[State], UnificationList) is all
-    // remappings of cv to unify with pre for primary induced transitions,
-    // together with the list of indices of unified
-    // components. secondaryInducedArray: Buffer[(Array[State],
-    // UnificationList, Int) is similar for secondary induced transitions,
-    // where the final component is the index of preCpts/postCpts that gains a
-    // reference to cv.principal.
+    // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList)
+    // is a set of triples (pi, pi(cv.cpts), unifs) where pi is a unification
+    // function corresponding to unifs. secondaryInducedArray:
+    // Buffer[(Array[State], UnificationList, Int) is similar for secondary
+    // induced transitions, where the final component is the index of
+    // preCpts/postCpts that gains a reference to cv.principal.
     val (inducedInfo, secondaryInduced)
         : (ArrayBuffer[(RemappingMap, Array[State], UnificationList)],
            ArrayBuffer[(Array[State], UnificationList, Int)]) =
@@ -135,7 +134,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       }
       else true
     }
-    //trivialSideConditions = true
     // If singleRef, identities of components referenced by both principals,
     // but not included in the views, and such that there is no way of
     // instantiating them consistently within sysAbsViews.
@@ -149,11 +147,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     val missing: List[ComponentView] =
       if(singleRef) missingCrossRefs(pre.servers, cpts, pre.components) 
       else List()
-    // Profiler.count("TrivialSideConditions "+
-    //   (trivialSideConditions && unifs.isEmpty))
     for(newComponents <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newComponents)
-      Profiler.count("newViewCount")       // Mostly with unifs.nonEmpty
+      Profiler.count("newViewCount") 
       if(!views.contains(nv)){
         if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){
           Profiler.count("addedViewCount")
@@ -171,14 +167,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
               else ""))
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
           val ok = recordInduced(); assert(ok)
-          // if(singleRef && isPrimary && unifs.isEmpty){
-          //   // val resMap = Remapper.restrictTo(map, cv, post.servers)
-          //   val resMap = Remapper.rangeRestrictTo(map, post.servers)
-          //   val ok = cv.addDoneInducedPostServersRemaps(post.servers, resMap)
-          //   assert(ok)
-          // }
-          // if(singleRef && isPrimary && unifs.isEmpty) 
-          //   nv.addDoneInduced(post.servers)
           if(!nv.representableInScript){
             println("Not enough identities in script to combine transition\n"+
               s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)

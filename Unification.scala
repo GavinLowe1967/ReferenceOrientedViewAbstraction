@@ -123,6 +123,8 @@ object Unification{
   /** Bit map, indexed by process identities. */
   // type BitMap = Array[Array[Boolean]]
 
+  
+
   /** Result returned from combine1.  Each entry represents a remapping map, its
     * application to cv.components, and a UnificationList that contains (j,i)
     * whenever cv.components(j) unifies with pre.components(i). */

@@ -201,7 +201,8 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   def addDoneInduced(postServers: ServerStates): Boolean = 
     doneInducedPostServers.add(postServers)
 
-  type RemappingList = ComponentView.RemappingList // List[List[(Identity,Identity)]]
+  import ComponentView.{ReducedMap,ReducedMapInfo}  
+    // = Array[Long], (Array[Long],Int)
 
   import ComponentView.ServersReducedMap
 
@@ -209,7 +210,7 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     * post.servers)) for which we have produced a primary induced transition
     * from this with no unifications.  */
   private val doneInducedPostServersRemaps = 
-    if(singleRef) new OpenHashSet[ServersReducedMap] // [(ServerStates, RemappingList)]
+    if(singleRef) new OpenHashSet[ServersReducedMap] // [(ServerStates, ReducedMap)]
     else null
 
   /** Record that this has been used to create an induced transition, with
@@ -217,7 +218,7 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     * of the remapping map to the parameters of servers.  pair._2 is a
     * hashCode for pair._1.  */
   @inline def addDoneInducedPostServersRemaps(
-    servers: ServerStates, pair: (RemappingList, Int))
+    servers: ServerStates, pair: ReducedMapInfo)
       : Boolean = {
     val (map, h) = pair
     val key = new ServersReducedMap(servers, map, h)
@@ -229,7 +230,7 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     * map to the parameters of servers.  pair._2 is a hashCode for
     * pair._1.  */
   def containsDoneInducedPostServersRemaps(
-    servers: ServerStates, pair: (RemappingList, Int))
+    servers: ServerStates, pair: ReducedMapInfo)
       : Boolean = {
     val (map, h) = pair
     val key = new ServersReducedMap(servers, map, h)
@@ -301,13 +302,17 @@ object ComponentView{
   def compare(v1: ComponentView, v2: ComponentView): Boolean = v1.compare(v2) < 0
 
   /** Type representing the range restriction of a RemappingMap.  The
-    * representation is described in Remmapper.scale. */
-  type RemappingList = Array[Int] 
+    * representation is described in Remapper.scala. */
+  type ReducedMap = Array[Long]  
+
+  /** Type representing the range restriction of a RemappingMap, together with a
+    * hash code. */
+  type ReducedMapInfo = (ReducedMap, Int)
 
   /** A class of objects used to key the doneInducedPostServersRemaps mapping in
     * each ComponentView. */
   class ServersReducedMap(
-      val servers: ServerStates, val map: RemappingList, h: Int){
+      val servers: ServerStates, val map: ReducedMap, h: Int){
     override def equals(that: Any) = {
       val srm = that.asInstanceOf[ServersReducedMap]
       srm.servers == servers && srm.map.sameElements(map)

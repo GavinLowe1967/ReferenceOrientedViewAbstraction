@@ -9,7 +9,8 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
 class EffectOnUnification(
   pre: Concretization, post: Concretization, cv: ComponentView){
 
-  import Unification.CombineResult
+  import Unification.CombineResult 
+    // = ArrayBuffer[(RemappingMap, Array[State], UnificationList)]
   import EffectOnUnification.MatchingTuple
 
   /* Relationship of main functions:
@@ -54,13 +55,18 @@ class EffectOnUnification(
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
 
+  import ComponentView.ReducedMapInfo
+
+  type CombineResult1 = 
+    ArrayBuffer[(RemappingMap, Array[State], UnificationList /*, ReducedMapInfo*/)]
+
   /** The part of the result corresponding to secondary induced transitions.
     * The Int field is the index of the component in pre/post that gains
     * access to cv.principal. */
   type CombineResult2 = ArrayBuffer[(Array[State], UnificationList, Int)]
 
   /** Variables in which we build up the result. */
-  private val result = new CombineResult
+  private val result = new CombineResult1
   private val result2 = new CombineResult2
 
   /** A NextArgMap, containing values greater than anything in pre or post. */
@@ -81,10 +87,12 @@ class EffectOnUnification(
     * Also, under (a), identities cannot be mapped to identities in
     * post.components, other than with unification.  The choice under 3(a) is
     * precisely those variables that will exist in the post-state of cv (and
-    * are distinct post symmetry reduction).  The first component of the
-    * returned result contains each such remapped state, paired with a
-    * UnificationList that contains (j,i) whenever cv.components(j) unifies
-    * with pre.components(i).
+    * are distinct post symmetry reduction).  
+    * 
+    * The first component of the returned result contains tuples (map, cpts,
+    * unifs) where map is the remapping function, cpts is the remapped
+    * components, and a UnificationList that contains (j,i) whenever
+    * cv.components(j) unifies with pre.components(i).
     * 
     * The second component of the result contains information concerning
     * secondary induced transitions under singleRef.  In this case, c2Refs
@@ -101,12 +109,11 @@ class EffectOnUnification(
     * 
     * @return remapped state, paired with a UnificationList that contains
     * (j,i) whenever cv.components(j) unifies with pre.components(i).  */
-  def apply(): (CombineResult, CombineResult2) = {
+  def apply(): (CombineResult1, CombineResult2) = {
     // IMPROVE: some of the initial calculations depends only on pre and post, so
     // could be stored with the transition.
     val princRenames = c2Refs.map(_._2) // normally empty; sometimes singleton
     require(singleRef || princRenames.isEmpty)
-    // if(false) println(s"combine($pre, $post,\n  $cv, $princRenames)")
     val changedServers = servers != post.servers
     val map0 = servers.remappingMap(cv.getParamsBound)
     // All params in post.servers but not in pre.servers, as a bitmap.
@@ -126,9 +133,6 @@ class EffectOnUnification(
       // consider primary induced transitions.
       val sufficientUnif = 
         isSufficientUnif(changedServers, unifs, acquiredCrossRef)
-      // if(singleRef && !acquiredCrossRef && changedServers && unifs.isEmpty && 
-      //   cv.doneInducedContains(post.servers))
-      //   println(s"Considering $pre -> $post  on $cv")
       if(c2Refs.nonEmpty || sufficientUnif){
         val otherArgsBitMap = mkOtherArgsBitMap(newServerIds, unifs)
         if(singleRef) 
@@ -170,33 +174,16 @@ class EffectOnUnification(
     }
 
     if(singleRef){
-      if(unifs.length == cpts.length && unifs.contains((0,0))){
-        /*println(s"Avoiding unification with $unifs");*/ false
-// IMPROVE: catch this earlier.
-      }
-      // else if(acquiredCrossRef) true
+      if(unifs.length == cpts.length && unifs.contains((0,0))) false
 // IMPROVE:  case below?
-      else if(changedServers){
-        // if(unifs.isEmpty && cv.doneInducedContains(postServers))
-        //   println(s"Considering induced on $cv with $postServers")
-        true   
-        // I don't know why the following doesn't work.  Maybe the add in
-        // EffectOn.processInducedInfo should check !acquiredCrossRef
-        // unifs.nonEmpty || !cv.doneInducedContains(postServers)
-      }
-        // Following misses some views with lockFreeQueue
-        // unifs.nonEmpty || effectOnChangedServersCache.add((cv, postServers))
-      else // Is there a unification with a component that changes state?
-        changingUnif
+      else changedServers || changingUnif
     } // end of if(singleRef)
-    else if(changedServers)
-      unifs.nonEmpty || cv.addDoneInduced(postServers) // effectOnChangedServersCache.add((cv, postServers))
+    else if(changedServers) unifs.nonEmpty || cv.addDoneInduced(postServers)
       // Note, this can't be strengthened to
       // changingUnif || effectOnChangedServersCache.add((cv, postServers))
       // If there are two different ways of performing unification with a 
       // component that doesn't change state, this will find just one of them.
-    else // Is there a unification with a component that changes state?
-      changingUnif
+    else changingUnif
   }
 
 
@@ -312,12 +299,15 @@ class EffectOnUnification(
         // for(map1 <- res0){
         while(j < res0.length){
           val map1 = res0(j); j += 1
-          if(unifs.nonEmpty || 
-            !cv.containsDoneInducedPostServersRemaps(
+          val reducedMapInfo: ReducedMapInfo =
+            if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
 // IMPROVE: the rangeRestrictTo gets calculated again in
 // EffectOn.processInducedInfo
-              postServers, Remapper.rangeRestrictTo(map1, postServers)) )
-            result += ((map1, Remapper.applyRemapping(map1, cpts), unifs))
+            else null
+          if(unifs.nonEmpty || 
+            !cv.containsDoneInducedPostServersRemaps(
+              postServers, reducedMapInfo))
+            result += ((map1, Remapper.applyRemapping(map1, cpts), unifs /*, reducedMapInfo*/))
         }
         // combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, result)
       }
