@@ -124,11 +124,15 @@ object Unification{
   // type BitMap = Array[Array[Boolean]]
 
   
+  import ComponentView.ReducedMapInfo
 
-  /** Result returned from combine1.  Each entry represents a remapping map, its
-    * application to cv.components, and a UnificationList that contains (j,i)
-    * whenever cv.components(j) unifies with pre.components(i). */
-  type CombineResult = ArrayBuffer[(RemappingMap, Array[State], UnificationList)]
+  /** Result returned from combine1.  Each entry is of the form (map, cpts,
+    * unifs, null) where: map is a remapping map; cpts is map applied to
+    * cv.components; unifs is a UnificationList that contains (j,i) whenever
+    * cv.components(j) unifies with pre.components(i); the null is a
+    * ReducedMapInfo, not used here. */
+  type CombineResult = 
+    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMapInfo)]
 
   /** All ways of remapping cpts, consistent with map.  Parameters not in dom
     * map can be mapped: (1) to values of otherArgs, but, in the case of
@@ -155,7 +159,7 @@ object Unification{
     val res0 = new ArrayBuffer[RemappingMap]
     getCombiningMaps(map, otherArgs, bitMap, nextArg, cpts, res0)
     for(map1 <- res0) 
-      result += ((map1, Remapper.applyRemapping(map1, cpts), unifs))
+      result += ((map1, Remapper.applyRemapping(map1, cpts), unifs, null))
   }
 
 

@@ -213,6 +213,8 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     if(singleRef) new OpenHashSet[ServersReducedMap] // [(ServerStates, ReducedMap)]
     else null
 
+  import ComponentView.mkServersReducedMap
+
   /** Record that this has been used to create an induced transition, with
     * post.servers = servers, and such that pair._1 is the range restriction
     * of the remapping map to the parameters of servers.  pair._2 is a
@@ -221,7 +223,7 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     servers: ServerStates, pair: ReducedMapInfo)
       : Boolean = {
     val (map, h) = pair
-    val key = new ServersReducedMap(servers, map, h)
+    val key = mkServersReducedMap(servers, map, h)
     doneInducedPostServersRemaps.add(key) // ((servers, map))
   }
 
@@ -233,7 +235,7 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     servers: ServerStates, pair: ReducedMapInfo)
       : Boolean = {
     val (map, h) = pair
-    val key = new ServersReducedMap(servers, map, h)
+    val key = mkServersReducedMap(servers, map, h)
     doneInducedPostServersRemaps.contains(key) // ((servers, map))
   }
 
@@ -297,6 +299,8 @@ object View{
     servers.toString+" || "+StateArray.show(states)
 }
 
+// ==================================================================
+
 object ComponentView{
   /** Is v1 < v2. */
   def compare(v1: ComponentView, v2: ComponentView): Boolean = v1.compare(v2) < 0
@@ -311,16 +315,51 @@ object ComponentView{
 
   /** A class of objects used to key the doneInducedPostServersRemaps mapping in
     * each ComponentView. */
-  class ServersReducedMap(
-      val servers: ServerStates, val map: ReducedMap, h: Int){
-    override def equals(that: Any) = {
-      val srm = that.asInstanceOf[ServersReducedMap]
-      srm.servers == servers && srm.map.sameElements(map)
+  abstract class ServersReducedMap(servers: ServerStates, h: Int){
+    override def hashCode = servers.hashCode ^ h
+  }
+
+  /** A ServersReducedMap corresponding to an empty map. */
+  class ServersReducedMap0(val servers: ServerStates, h: Int)
+  extends ServersReducedMap(servers, h){
+    override def equals(that: Any) = that match{
+      case srm: ServersReducedMap0 => srm.servers == servers
+      case _: ServersReducedMap => false
+    }
+  }
+
+  /** A ServersReducedMap whose map is a single Long. */
+  class ServersReducedMap1(val servers: ServerStates, val map: Long, h: Int)
+  extends ServersReducedMap(servers, h){
+    override def equals(that: Any) = that match{
+      case srm: ServersReducedMap1 => srm.servers == servers && srm.map == map
+      case _: ServersReducedMap => false
     }
 
-    override def hashCode = servers.hashCode ^ h
-
+    //override def hashCode = servers.hashCode ^ h
   }
+
+  /** A ServersReducedMap whose map contains at least two Longs. */
+  class ServersReducedMapN(
+      val servers: ServerStates, val map: ReducedMap, h: Int)
+  extends ServersReducedMap(servers, h){
+    override def equals(that: Any) = that match{
+      case srm: ServersReducedMapN => 
+        srm.servers == servers && srm.map.sameElements(map)
+      case _: ServersReducedMap => false
+    }
+
+    //override def hashCode = servers.hashCode ^ h
+  }
+  // IMPROVE: it might be worth having a special case for N=2
+
+  def mkServersReducedMap(servers: ServerStates, map: ReducedMap, h: Int)
+  : ServersReducedMap =
+    if(map.isEmpty) new ServersReducedMap0(servers, h)
+    else if(map.length == 1) new ServersReducedMap1(servers, map(0), h)
+    else new ServersReducedMapN(servers, map, h)
+
+
 }
 
 // =======================================================

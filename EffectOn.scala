@@ -45,6 +45,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   import Unification.UnificationList //  = List[(Int,Int)]
 
+  import ComponentView.ReducedMapInfo
+
   // Following used to check no repeat calls.
   // private val previous = new scala.collection.mutable.HashSet[
   //   (Concretization, EventInt, Concretization, ComponentView)]
@@ -69,7 +71,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     // induced transitions, where the final component is the index of
     // preCpts/postCpts that gains a reference to cv.principal.
     val (inducedInfo, secondaryInduced)
-        : (ArrayBuffer[(RemappingMap, Array[State], UnificationList)],
+        : (ArrayBuffer[
+            (RemappingMap, Array[State], UnificationList, ReducedMapInfo)],
            ArrayBuffer[(Array[State], UnificationList, Int)]) =
       EffectOnUnification.combine(pre, post, cv)
 
@@ -85,12 +88,21 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     // Process inducedInfo
     var index = 0
     while(index < inducedInfo.length){
-      val (map, cpts, unifs) = inducedInfo(index); index += 1
+      val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
       Profiler.count("EffectOn step "+unifs.isEmpty)
+      // The components needed for condition (b).  IMPROVE: pass through to
+      // create missingCrossRefs.
+      val crossRefCs: List[Array[State]] = 
+        if(singleRef) StateArray.crossRefs(cpts, pre.components) else List()
+      println(s"pre.cpts = ${StateArray.show(pre.components)}\n"+
+        s"cpts = ${StateArray.show(cpts)}\n"+
+        s"cv.cpts = ${StateArray.show(cv.components)}\n"+
+        crossRefs.map(StateArray.show))
+
       val newPrinc = getNewPrinc(cpts(0), unifs) 
       var newComponentsList =
         StateArray.makePostComponents(newPrinc, postCpts, cpts)
-      processInducedInfo1(map, cpts, unifs, true, newComponentsList)
+      processInducedInfo1(map, cpts, unifs, reducedMapInfo, true, newComponentsList)
     } // end of while loop
     // Process secondaryInduced
     index = 0
@@ -99,7 +111,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       Profiler.count("SecondaryInduced")
       val newPrinc = getNewPrinc(cpts(0), unifs) 
       val newComponentsList = List(Array(postCpts(k), newPrinc))
-      processInducedInfo1(null, cpts, unifs, false, newComponentsList)
+      processInducedInfo1(null, cpts, unifs, null, false, newComponentsList)
     }
   }
 
@@ -120,6 +132,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     pre: Concretization,  e: EventInt, post: Concretization,
     cv: ComponentView, ply: Int, nextNewViews: MyHashSet[ComponentView])
     (map: RemappingMap, cpts: Array[State], unifs: UnificationList, 
+      reducedMapInfo: ReducedMapInfo,
       isPrimary: Boolean, newComponentsList: List[Array[State]])
   : Unit = {
     // if(verbose) println("cpts = "+StateArray.show(cpts))
@@ -129,8 +142,10 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     // Record this induced transition if singleRef, if primary and no unifs
     @inline def recordInduced(): Boolean = {
       if(singleRef && isPrimary && unifs.isEmpty){
-        val resMap = Remapper.rangeRestrictTo(map, post.servers)
-        cv.addDoneInducedPostServersRemaps(post.servers, resMap)
+        // reducedMapInfo equals Remapper.rangeRestrictTo(map, post.servers):
+        // val (rm,h) = Remapper.rangeRestrictTo(map, post.servers)
+        // val (rm1,h1) = reducedMapInfo; assert(rm.sameElements(rm1) && h == h1)
+        cv.addDoneInducedPostServersRemaps(post.servers, reducedMapInfo)
       }
       else true
     }
@@ -251,7 +266,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     assert(singleRef)
     var missing = List[ComponentView]() // missing necessary Views
     for(cptsx <- StateArray.crossRefs(cpts1, cpts2)){
-      //trivialSideConditions = false
       val cvx = Remapper.mkComponentView(servers, cptsx)
       if(!views.contains(cvx)) missing ::= cvx
     }
@@ -260,6 +274,29 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         s"${StateArray.show(cpts2)}):\n  $missing")
     missing
   }
+
+  // /** Class to represent a single crossRef, as needed for an optimisation. */
+  // class CrossRef(val c: State, val i: Int, val resMap: Remapper.ResMap){
+  //   override def equals(that: Any) = that match{
+  //     case cr: CrossRef => 
+  //       cr.c == c && cr.i == i && cr.resMap.sameElements(resMap)
+  //   }
+
+  //   // I don't think we need a hash code....?
+
+  //   override def toString = 
+  //     s"CrossRef($c, $i, ${resMap.mkString("<", ",", ">")}"
+  // }
+    
+  // /** Representation of the cross references between cpts(i) and c (where (c,i)
+  //   * = pair), as needed for an optimisation. */
+  // @inline private 
+  // def mkCrossRefInfo(map: RemappingMap, cpts: Array[State], pair: (Int, State))
+  //     : CrossRef = {
+  //   val i = pair._1; val c = pair._2; val c1 = cpts(i)
+  //   val resMap = Remapper.domainRestrictTo(map, c1)
+  //   new CrossRef(c, i, resMap)
+  // }
 
   /** If cv completes a delayed transition in effectOnStore, then complete it. */
   def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])

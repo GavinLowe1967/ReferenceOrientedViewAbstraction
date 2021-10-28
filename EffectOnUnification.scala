@@ -58,7 +58,7 @@ class EffectOnUnification(
   import ComponentView.ReducedMapInfo
 
   type CombineResult1 = 
-    ArrayBuffer[(RemappingMap, Array[State], UnificationList /*, ReducedMapInfo*/)]
+    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMapInfo)]
 
   /** The part of the result corresponding to secondary induced transitions.
     * The Int field is the index of the component in pre/post that gains
@@ -306,8 +306,10 @@ class EffectOnUnification(
             else null
           if(unifs.nonEmpty || 
             !cv.containsDoneInducedPostServersRemaps(
-              postServers, reducedMapInfo))
-            result += ((map1, Remapper.applyRemapping(map1, cpts), unifs /*, reducedMapInfo*/))
+              postServers, reducedMapInfo)){
+            val newCpts = Remapper.applyRemapping(map1, cpts)
+            result += ((map1, newCpts, unifs, reducedMapInfo))
+          }
         }
         // combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, result)
       }
@@ -382,7 +384,7 @@ class EffectOnUnification(
           Remapper.show(map1)+"\n"+otherArgs.mkString(";"))
       Unification.combine1(
         map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, tempRes)
-      for((_, newSts, us) <- tempRes){ // IMPROVE
+      for((_, newSts, us, _) <- tempRes){ // IMPROVE
         assert(us eq unifs); StateArray.checkDistinct(newSts)
         result2 += ((newSts, us, k))
       }

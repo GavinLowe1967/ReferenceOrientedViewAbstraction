@@ -3,11 +3,13 @@ Optimisation 8
 - Function to define crossRefs.  Summarise v.cpts(i) <| pi as Array[Long].
   Then crossRefs is a List of (State, Int, Array[Long]) tuples.
 
+??? Why don't we just store the two states? 
+
 - Subset relation over crossRefs.  It might help to keep each crossRefs
   sorted.
 
 - In EffectOn.processInducedInfo, case missing empty, missingCommons
-  non-empty, store against v (post.fixed, pi |> post.fixed, crossRefs): in v,
+  non-empty, store (post.fixed, v, pi |> post.fixed, crossRefs): in v,
   have a mapping from (post.fixed, pi |> post.fixed) to the set of all such
   crossRefs.
 

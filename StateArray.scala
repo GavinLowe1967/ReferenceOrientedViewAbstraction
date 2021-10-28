@@ -199,7 +199,7 @@ object StateArray{
 
   /** Find all references from a component c1 of cpts1 to a component c2 of
     * cpts2 (with neither in the other), or vice versa.  Return Array(c1, c2)
-    * for each such pair found. */
+    * for each such pair found (where c1 has a refernece to c2). */
   def crossRefs(cpts1: Array[State], cpts2: Array[State])
       : List[Array[State]] = {
     require(singleRef)
@@ -218,6 +218,31 @@ object StateArray{
           }
         }
       }
+    }
+    result
+  }
+
+  /** A representation of cross references between cpts1 and cpts2.  List of
+    * pairs (i,c) such that c in cpts2, and cpts1(i) has a reference to c or
+    * vice versa. */
+  def crossRefsX(cpts1: Array[State], cpts2: Array[State])
+      : List[(Int, State)] = {
+    require(singleRef)
+    var result = List[(Int,State)](); var i = 0
+    while(i < cpts1.length){
+      val c1 = cpts1(i)
+      if(! contains(cpts2, c1)){
+        var j = 0
+        while(j < cpts2.length){
+          val c2 = cpts2(j); j += 1
+          if(! contains(cpts1, c2)){
+            if(c1.hasIncludedParam(c2.family, c2.id) ||
+                c2.hasIncludedParam(c1.family, c1.id))
+              result ::= (i, c2)
+          }
+        }
+      } // end of if
+      i += 1
     }
     result
   }
