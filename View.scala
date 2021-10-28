@@ -201,7 +201,7 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   def addDoneInduced(postServers: ServerStates): Boolean = 
     doneInducedPostServers.add(postServers)
 
-  import ComponentView.{ReducedMap,ReducedMapInfo}  
+  import ComponentView.ReducedMap // = Array[Long]  // ,ReducedMapInfo}  
     // = Array[Long], (Array[Long],Int)
 
   import ComponentView.ServersReducedMap
@@ -220,10 +220,10 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     * of the remapping map to the parameters of servers.  pair._2 is a
     * hashCode for pair._1.  */
   @inline def addDoneInducedPostServersRemaps(
-    servers: ServerStates, pair: ReducedMapInfo)
+    servers: ServerStates, map: ReducedMap)
       : Boolean = {
-    val (map, h) = pair
-    val key = mkServersReducedMap(servers, map, h)
+    // val (map, h) = pair
+    val key = mkServersReducedMap(servers, map)
     doneInducedPostServersRemaps.add(key) // ((servers, map))
   }
 
@@ -232,10 +232,10 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     * map to the parameters of servers.  pair._2 is a hashCode for
     * pair._1.  */
   def containsDoneInducedPostServersRemaps(
-    servers: ServerStates, pair: ReducedMapInfo)
+    servers: ServerStates, map: ReducedMap)
       : Boolean = {
-    val (map, h) = pair
-    val key = mkServersReducedMap(servers, map, h)
+    // val (map, h) = pair
+    val key = mkServersReducedMap(servers, map)
     doneInducedPostServersRemaps.contains(key) // ((servers, map))
   }
 
@@ -311,53 +311,65 @@ object ComponentView{
 
   /** Type representing the range restriction of a RemappingMap, together with a
     * hash code. */
-  type ReducedMapInfo = (ReducedMap, Int)
+  // type ReducedMapInfo = (ReducedMap, Int)
 
   /** A class of objects used to key the doneInducedPostServersRemaps mapping in
     * each ComponentView. */
-  abstract class ServersReducedMap(servers: ServerStates, h: Int){
-    override def hashCode = servers.hashCode ^ h
+  abstract class ServersReducedMap{
+    /** Combine h and l: used in creating hashCodes. */
+    @inline protected def combine(h: Int, l: Long) =
+      h ^ l.toInt ^ (l >> 32).toInt
   }
 
   /** A ServersReducedMap corresponding to an empty map. */
-  class ServersReducedMap0(val servers: ServerStates, h: Int)
-  extends ServersReducedMap(servers, h){
+  class ServersReducedMap0(val servers: ServerStates)
+  extends ServersReducedMap{
     override def equals(that: Any) = that match{
       case srm: ServersReducedMap0 => srm.servers == servers
       case _: ServersReducedMap => false
     }
+
+    override def hashCode = servers.hashCode
   }
 
   /** A ServersReducedMap whose map is a single Long. */
-  class ServersReducedMap1(val servers: ServerStates, val map: Long, h: Int)
-  extends ServersReducedMap(servers, h){
+  class ServersReducedMap1(val servers: ServerStates, val map: Long)
+  extends ServersReducedMap{
     override def equals(that: Any) = that match{
       case srm: ServersReducedMap1 => srm.servers == servers && srm.map == map
       case _: ServersReducedMap => false
     }
 
-    //override def hashCode = servers.hashCode ^ h
+    override def hashCode = combine(servers.hashCode, map)
   }
 
   /** A ServersReducedMap whose map contains at least two Longs. */
   class ServersReducedMapN(
-      val servers: ServerStates, val map: ReducedMap, h: Int)
-  extends ServersReducedMap(servers, h){
+      val servers: ServerStates, val map: ReducedMap)
+  extends ServersReducedMap{
     override def equals(that: Any) = that match{
       case srm: ServersReducedMapN => 
         srm.servers == servers && srm.map.sameElements(map)
       case _: ServersReducedMap => false
     }
 
-    //override def hashCode = servers.hashCode ^ h
+    override val hashCode = mkHash
+
+    /** Make the hash function. */ 
+    private def mkHash = {
+      // effectively foldl combine servers.hashCode map
+      var h = servers.hashCode; var i = 0
+      while(i < map.length){ h = combine(h, map(i)); i += 1 }
+      h
+    }
   }
   // IMPROVE: it might be worth having a special case for N=2
 
-  def mkServersReducedMap(servers: ServerStates, map: ReducedMap, h: Int)
+  def mkServersReducedMap(servers: ServerStates, map: ReducedMap)
   : ServersReducedMap =
-    if(map.isEmpty) new ServersReducedMap0(servers, h)
-    else if(map.length == 1) new ServersReducedMap1(servers, map(0), h)
-    else new ServersReducedMapN(servers, map, h)
+    if(map.isEmpty) new ServersReducedMap0(servers)
+    else if(map.length == 1) new ServersReducedMap1(servers, map(0))
+    else new ServersReducedMapN(servers, map)
 
 
 }

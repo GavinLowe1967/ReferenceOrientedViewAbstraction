@@ -45,7 +45,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   import Unification.UnificationList //  = List[(Int,Int)]
 
-  import ComponentView.ReducedMapInfo
+  import ComponentView.ReducedMap 
 
   // Following used to check no repeat calls.
   // private val previous = new scala.collection.mutable.HashSet[
@@ -72,7 +72,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     // preCpts/postCpts that gains a reference to cv.principal.
     val (inducedInfo, secondaryInduced)
         : (ArrayBuffer[
-            (RemappingMap, Array[State], UnificationList, ReducedMapInfo)],
+            (RemappingMap, Array[State], UnificationList, ReducedMap)],
            ArrayBuffer[(Array[State], UnificationList, Int)]) =
       EffectOnUnification.combine(pre, post, cv)
 
@@ -129,15 +129,14 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     * large.  Most other parameters are as there (most are used only for
     * setting creation information or textual output).
     * @param isPrimary are we creating a primary transition?
-    * @param reducedMapInfo a pair (reducedMap, h) where reducedMap is a
-    * representation of map |> post.servers, and h is a hash code. */
+    * @param reducedMap a representation of map |> post.servers. */
   @inline private 
   def processInducedInfo(
     pre: Concretization,  e: EventInt, post: Concretization,
     cv: ComponentView, ply: Int, nextNewViews: MyHashSet[ComponentView])
     (map: RemappingMap, cpts: Array[State], unifs: UnificationList, 
-      reducedMapInfo: ReducedMapInfo,
-      isPrimary: Boolean, newComponentsList: List[Array[State]])
+      reducedMap: ReducedMap, isPrimary: Boolean, 
+      newComponentsList: List[Array[State]])
   : Unit = {
 
       // val newPrinc = getNewPrinc(cpts(0), unifs) 
@@ -154,7 +153,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         // reducedMapInfo equals Remapper.rangeRestrictTo(map, post.servers):
         // val (rm,h) = Remapper.rangeRestrictTo(map, post.servers)
         // val (rm1,h1) = reducedMapInfo; assert(rm.sameElements(rm1) && h == h1)
-        cv.addDoneInducedPostServersRemaps(post.servers, reducedMapInfo)
+        cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
       }
       else true
     }

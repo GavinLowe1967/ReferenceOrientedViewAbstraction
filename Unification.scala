@@ -124,7 +124,7 @@ object Unification{
   // type BitMap = Array[Array[Boolean]]
 
   
-  import ComponentView.ReducedMapInfo
+  import ComponentView.ReducedMap // Info
 
   /** Result returned from combine1.  Each entry is of the form (map, cpts,
     * unifs, null) where: map is a remapping map; cpts is map applied to
@@ -132,7 +132,7 @@ object Unification{
     * cv.components(j) unifies with pre.components(i); the null is a
     * ReducedMapInfo, not used here. */
   type CombineResult = 
-    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMapInfo)]
+    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
 
   /** All ways of remapping cpts, consistent with map.  Parameters not in dom
     * map can be mapped: (1) to values of otherArgs, but, in the case of

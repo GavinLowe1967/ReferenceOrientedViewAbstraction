@@ -55,10 +55,10 @@ class EffectOnUnification(
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
 
-  import ComponentView.ReducedMapInfo
+  import ComponentView.ReducedMap // Info
 
   type CombineResult1 = 
-    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMapInfo)]
+    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
 
   /** The part of the result corresponding to secondary induced transitions.
     * The Int field is the index of the component in pre/post that gains
@@ -299,7 +299,7 @@ class EffectOnUnification(
         // for(map1 <- res0){
         while(j < res0.length){
           val map1 = res0(j); j += 1
-          val reducedMapInfo: ReducedMapInfo =
+          val reducedMapInfo: ReducedMap = // Info =
             if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
 // IMPROVE: the rangeRestrictTo gets calculated again in
 // EffectOn.processInducedInfo
