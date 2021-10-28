@@ -92,9 +92,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       Profiler.count("EffectOn step "+unifs.isEmpty)
       // The components needed for condition (b).  IMPROVE: pass through to
       // create missingCrossRefs.
-      val crossRefCs: List[Array[State]] = 
+      val crossRefs: List[Array[State]] = 
         if(singleRef) StateArray.crossRefs(cpts, pre.components) else List()
-      println(s"pre.cpts = ${StateArray.show(pre.components)}\n"+
+      if(false) println(s"pre.cpts = ${StateArray.show(pre.components)}\n"+
         s"cpts = ${StateArray.show(cpts)}\n"+
         s"cv.cpts = ${StateArray.show(cv.components)}\n"+
         crossRefs.map(StateArray.show))
@@ -102,7 +102,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       val newPrinc = getNewPrinc(cpts(0), unifs) 
       var newComponentsList =
         StateArray.makePostComponents(newPrinc, postCpts, cpts)
-      processInducedInfo1(map, cpts, unifs, reducedMapInfo, true, newComponentsList)
+      processInducedInfo1(
+        map, cpts, unifs, reducedMapInfo, true, newComponentsList)
     } // end of while loop
     // Process secondaryInduced
     index = 0
@@ -125,8 +126,11 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     * to produce cpts.  Add result to nextNewViews.
     * 
     * This function would live better inside apply; but that function is too
-    * large.  Other parameters are as there (most are used only for setting
-    * creation information or textual output). */
+    * large.  Most other parameters are as there (most are used only for
+    * setting creation information or textual output).
+    * @param isPrimary are we creating a primary transition?
+    * @param reducedMapInfo a pair (reducedMap, h) where reducedMap is a
+    * representation of map |> post.servers, and h is a hash code. */
   @inline private 
   def processInducedInfo(
     pre: Concretization,  e: EventInt, post: Concretization,
@@ -135,6 +139,11 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       reducedMapInfo: ReducedMapInfo,
       isPrimary: Boolean, newComponentsList: List[Array[State]])
   : Unit = {
+
+      // val newPrinc = getNewPrinc(cpts(0), unifs) 
+      // var newComponentsList =
+      //   StateArray.makePostComponents(newPrinc, postCpts, cpts)
+
     // if(verbose) println("cpts = "+StateArray.show(cpts))
     if(debugging){
       StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)

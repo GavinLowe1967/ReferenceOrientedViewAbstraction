@@ -225,27 +225,27 @@ object StateArray{
   /** A representation of cross references between cpts1 and cpts2.  List of
     * pairs (i,c) such that c in cpts2, and cpts1(i) has a reference to c or
     * vice versa. */
-  def crossRefsX(cpts1: Array[State], cpts2: Array[State])
-      : List[(Int, State)] = {
-    require(singleRef)
-    var result = List[(Int,State)](); var i = 0
-    while(i < cpts1.length){
-      val c1 = cpts1(i)
-      if(! contains(cpts2, c1)){
-        var j = 0
-        while(j < cpts2.length){
-          val c2 = cpts2(j); j += 1
-          if(! contains(cpts1, c2)){
-            if(c1.hasIncludedParam(c2.family, c2.id) ||
-                c2.hasIncludedParam(c1.family, c1.id))
-              result ::= (i, c2)
-          }
-        }
-      } // end of if
-      i += 1
-    }
-    result
-  }
+  // def crossRefsX(cpts1: Array[State], cpts2: Array[State])
+  //     : List[(Int, State)] = {
+  //   require(singleRef)
+  //   var result = List[(Int,State)](); var i = 0
+  //   while(i < cpts1.length){
+  //     val c1 = cpts1(i)
+  //     if(! contains(cpts2, c1)){
+  //       var j = 0
+  //       while(j < cpts2.length){
+  //         val c2 = cpts2(j); j += 1
+  //         if(! contains(cpts1, c2)){
+  //           if(c1.hasIncludedParam(c2.family, c2.id) ||
+  //               c2.hasIncludedParam(c1.family, c1.id))
+  //             result ::= (i, c2)
+  //         }
+  //       }
+  //     } // end of if
+  //     i += 1
+  //   }
+  //   result
+  // }
 
   /** Remove identities of components in cpts from bitMap. */
   def removeIdsFromBitMap(cpts: Array[State], bitMap: Array[Array[Boolean]]) = {
