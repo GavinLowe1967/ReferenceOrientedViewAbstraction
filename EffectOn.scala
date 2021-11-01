@@ -47,10 +47,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   import ComponentView.ReducedMap 
 
-  // Following used to check no repeat calls.
-  // private val previous = new scala.collection.mutable.HashSet[
-  //   (Concretization, EventInt, Concretization, ComponentView)]
-
   /** The effect of the transition pre -e-> post on cv.  Create extra views
     * caused by the way the transition changes cv, and add them to
     * nextNewViews. */
@@ -93,17 +89,23 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       // The components needed for condition (b).  IMPROVE: pass through to
       // create missingCrossRefs.
       val crossRefs: List[Array[State]] = 
-        if(singleRef) StateArray.crossRefs(cpts, pre.components) else List()
+        // IMPROVE
+        if(singleRef) 
+          getCrossRefs(pre.servers, cpts, pre.components).map(_.components)
+        else List()
       if(false) println(s"pre.cpts = ${StateArray.show(pre.components)}\n"+
         s"cpts = ${StateArray.show(cpts)}\n"+
         s"cv.cpts = ${StateArray.show(cv.components)}\n"+
         crossRefs.map(StateArray.show))
-
-      val newPrinc = getNewPrinc(cpts(0), unifs) 
-      var newComponentsList =
-        StateArray.makePostComponents(newPrinc, postCpts, cpts)
-      processInducedInfo1(
-        map, cpts, unifs, reducedMapInfo, true, newComponentsList)
+      if(reducedMapInfo == null ||
+         !cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)){
+        val newPrinc = getNewPrinc(cpts(0), unifs)
+        var newComponentsList =
+          StateArray.makePostComponents(newPrinc, postCpts, cpts)
+        processInducedInfo1(
+          map, cpts, unifs, reducedMapInfo, true, newComponentsList)
+      }
+      // else println(s"Omitting")
     } // end of while loop
     // Process secondaryInduced
     index = 0
@@ -115,10 +117,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       processInducedInfo1(null, cpts, unifs, null, false, newComponentsList)
     }
   }
-
-  // Used in profiling to test if side conditions are trivially satisfied.
-  // IMPROVE
-  //var trivialSideConditions = false
 
   /** Create induced transition producing views with post.servers and each
     * element of newComponentsList.  The transition is induced by pre -e->
@@ -138,23 +136,14 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       reducedMap: ReducedMap, isPrimary: Boolean, 
       newComponentsList: List[Array[State]])
   : Unit = {
-
-      // val newPrinc = getNewPrinc(cpts(0), unifs) 
-      // var newComponentsList =
-      //   StateArray.makePostComponents(newPrinc, postCpts, cpts)
-
     // if(verbose) println("cpts = "+StateArray.show(cpts))
     if(debugging){
       StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     }
     // Record this induced transition if singleRef, if primary and no unifs
     @inline def recordInduced(): Boolean = {
-      if(singleRef && isPrimary && unifs.isEmpty){
-        // reducedMapInfo equals Remapper.rangeRestrictTo(map, post.servers):
-        // val (rm,h) = Remapper.rangeRestrictTo(map, post.servers)
-        // val (rm1,h1) = reducedMapInfo; assert(rm.sameElements(rm1) && h == h1)
+      if(singleRef && isPrimary && unifs.isEmpty)
         cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
-      }
       else true
     }
     // If singleRef, identities of components referenced by both principals,
@@ -178,8 +167,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           Profiler.count("addedViewCount")
           if(showTransitions) println(
             s"$pre -${system.showEvent(e)}->\n  $post\n"+
-              s"  with unifications $unifs\n"+
-              s"  induces $cv\n"+
+              s"  with unifications $unifs\n  induces $cv\n"+
               (if(!cv.components.sameElements(cpts)) 
                 s"  == ${View.show(pre.servers, cpts)}\n"
               else "")+
@@ -206,6 +194,13 @@ class EffectOn(views: ViewSet, system: SystemP.System){
             s"-${pre.servers==post.servers}-${missing.nonEmpty}-"+
             missingCommons.nonEmpty)
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
+// IMPROVE: do we need to check isPrimary here? 
+          if(isPrimary && reducedMap != null && missingCommons.isEmpty){
+            val crossRefs = missing.map(_.components) // StateArray.crossRefs(cpts, pre.components)
+            // IMPROVE: repeated work
+            val ok = cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
+            assert(ok)
+          }
         }
         else{ // nv was in nextNewViews 
           recordInduced() // might give false
@@ -263,6 +258,14 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     missingCommons
   }
 
+  @inline private def getCrossRefs(
+    servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
+      : List[ComponentView] = {
+    assert(singleRef)
+    StateArray.crossRefs(cpts1, cpts2).map(Remapper.mkComponentView(servers,_))
+// IMPROVE: we don't really need the whole ComponentView here
+  }
+
   /** Missing cross references, if singleRef.  For each reference from a
     * component c1 of cpts2 to a component c2 of cpts2, or vice versa, test if
     * sysAbsViews contains the view servers || c1 || c2.  Return all such
@@ -282,29 +285,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         s"${StateArray.show(cpts2)}):\n  $missing")
     missing
   }
-
-  // /** Class to represent a single crossRef, as needed for an optimisation. */
-  // class CrossRef(val c: State, val i: Int, val resMap: Remapper.ResMap){
-  //   override def equals(that: Any) = that match{
-  //     case cr: CrossRef => 
-  //       cr.c == c && cr.i == i && cr.resMap.sameElements(resMap)
-  //   }
-
-  //   // I don't think we need a hash code....?
-
-  //   override def toString = 
-  //     s"CrossRef($c, $i, ${resMap.mkString("<", ",", ">")}"
-  // }
-    
-  // /** Representation of the cross references between cpts(i) and c (where (c,i)
-  //   * = pair), as needed for an optimisation. */
-  // @inline private 
-  // def mkCrossRefInfo(map: RemappingMap, cpts: Array[State], pair: (Int, State))
-  //     : CrossRef = {
-  //   val i = pair._1; val c = pair._2; val c1 = cpts(i)
-  //   val resMap = Remapper.domainRestrictTo(map, c1)
-  //   new CrossRef(c, i, resMap)
-  // }
 
   /** If cv completes a delayed transition in effectOnStore, then complete it. */
   def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])

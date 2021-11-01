@@ -201,19 +201,18 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   def addDoneInduced(postServers: ServerStates): Boolean = 
     doneInducedPostServers.add(postServers)
 
-  import ComponentView.ReducedMap // = Array[Long]  // ,ReducedMapInfo}  
-    // = Array[Long], (Array[Long],Int)
+  // A representation of map |> post.servers
+  import ComponentView.ReducedMap // = Array[Long] 
 
-  import ComponentView.ServersReducedMap
+  // Abstractly, ReducedMap plus ServerStates
+  import ComponentView.ServersReducedMap 
 
   /** If singleRef, pairs (post.servers, Remapper.rangeRestrictTo(map,
     * post.servers)) for which we have produced a primary induced transition
     * from this with no unifications.  */
   private val doneInducedPostServersRemaps = 
-    if(singleRef) new OpenHashSet[ServersReducedMap] // [(ServerStates, ReducedMap)]
+    if(singleRef) new OpenHashSet[ServersReducedMap] 
     else null
-
-  import ComponentView.mkServersReducedMap
 
   /** Record that this has been used to create an induced transition, with
     * post.servers = servers, and such that pair._1 is the range restriction
@@ -222,9 +221,8 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   @inline def addDoneInducedPostServersRemaps(
     servers: ServerStates, map: ReducedMap)
       : Boolean = {
-    // val (map, h) = pair
-    val key = mkServersReducedMap(servers, map)
-    doneInducedPostServersRemaps.add(key) // ((servers, map))
+    val key = ComponentView.mkServersReducedMap(servers, map)
+    doneInducedPostServersRemaps.add(key)
   }
 
   /** Has this been used to create an induced transition, with post.servers =
@@ -234,16 +232,121 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   def containsDoneInducedPostServersRemaps(
     servers: ServerStates, map: ReducedMap)
       : Boolean = {
-    // val (map, h) = pair
-    val key = mkServersReducedMap(servers, map)
-    doneInducedPostServersRemaps.contains(key) // ((servers, map))
+    val key = ComponentView.mkServersReducedMap(servers, map)
+    doneInducedPostServersRemaps.contains(key) 
   }
 
-  // def doneInducedContains(postServers: ServerStates): Boolean = 
-  //   doneInducedPostServers.contains(postServers)
+  // ======
+
+  /* We store information about primary induced transitions with no unifications
+   * that are currently prevented by condition (b).  For a transition induced
+   * by pre -> post on v, the information can be thought of as a tuple
+   * 
+   *  (post.servers, v, map |> post.servers, crossRefs)
+   * 
+   * where crossRefs is the required views for condition (b).  Each tuple is
+   * stored in the View object for v.  Each element of crossRefs can be
+   * represented by the states of the components (the servers match
+   * v.servers), so the set of crossRefs is represented by a value of type
+   * CrossRefInfo.  The transition will create a view equivalent to
+   * (post.servers, map(v.components))*/
+
+  /** A representation of the views needed for condition (b) of an induced
+    * transition: the list of component states. */
+  private type CrossRefInfo = List[Array[State]]
+
+  private def showCRI(crossRefs: CrossRefInfo) =
+    crossRefs.map(StateArray.show)
+
+  /** A map storing information about primary induced transitions with no
+    * unifications that are currently prevented by condition (b).  This
+    * represents the set of tuples (servers, this, map, crossRefs) for
+    * crossRefs in conditionBInducedMap(srm), where srm is the
+    * ServersReducedMap representing (servers, map).  Inv: for each such
+    * mapping, post.servers != this.servers; and for each list in the range,
+    * no element of the list is a subset of another.  */
+  private val conditionBInducedMap = 
+    if(singleRef) 
+      new scala.collection.mutable.HashMap[ServersReducedMap, List[CrossRefInfo]]
+    else null
+
+  /** Is crossRefs1 a subset of crossRefs2? */
+  @inline private 
+  def subset(crossRefs1: CrossRefInfo, crossRefs2: CrossRefInfo): Boolean = {
+    // crossRefs1.forall(cs1 => crossRefs2.exists(cs => cs.sameElements(cs1) ))
+    var crs1 = crossRefs1; var ok = true
+    // Inv: ok is true if all elements of crossRefs1 so far are in crossrefs2
+    while(crs1.nonEmpty && ok){
+      val cs1 = crs1.head; crs1 = crs1.tail
+      // test if crossRefs2 contains cs1
+      // ok = crossRefs2.exists(cs => cs.sameElements(cs1))
+      var crs2 = crossRefs2
+      while(crs2.nonEmpty && !sameElements(crs2.head, cs1)) crs2 = crs2.tail
+      ok = crs2.nonEmpty
+    }
+    ok
+  }
+  // IMPROVE.  Maybe keep lists sorted.
+
+  @inline private def sameElements(cr1: Array[State], cr2: Array[State]) = {
+    assert(cr1.length == 2 && cr2.length == 2) // IMPROVE
+    cr1(0) == cr2(0) && cr1(1) == cr2(1)
+  }
+
+  /** Is there a stored primary induced transition with no unifications that
+    * subsumes the transition corresponding to (servers, map, crossRefs)? */
+  def containsConditionBInduced(
+    servers: ServerStates, map: ReducedMap, crossRefs: CrossRefInfo)
+      : Boolean = {
+    val key = ComponentView.mkServersReducedMap(servers, map)
+    conditionBInducedMap.get(key) match{
+      case Some(crl) =>
+        var crossRefsList = crl; var done = false
+        while(crossRefsList.nonEmpty && !done){
+          val crossRefs1 = crossRefsList.head; crossRefsList = crossRefsList.tail
+          // If crossRefs1 is a subset of crossRefs, return true
+          done = subset(crossRefs1, crossRefs)
+        }
+        done
+      case None => false
+    }
+  }
+
+  /** Record that there is a stored primary induced transition with no
+    * unifications corresponding to (servers, map, crossRefs)?  Return true if
+    * this is a genuine addition, i.e. not subsumed in an existing record
+    * (with a subset of the crossRefs) */
+  def addConditionBInduced(
+    servers: ServerStates, map: ReducedMap, crossRefs: CrossRefInfo)
+      : Boolean = {
+    val key = ComponentView.mkServersReducedMap(servers, map)
+    conditionBInducedMap.get(key) match{
+      case Some(crl) => 
+        // Profiler.count(s"addConditionBInduced:"+crl.length)
+        // Up to ~150, but mostly below 10.
+        // Remove all supersets of crossRefs
+        var newList = List[CrossRefInfo](); var crossRefsList = crl
+        var foundSubset = false // have we found a subset of crossRefs?
+        while(crossRefsList.nonEmpty){
+          val crossRefs1 = crossRefsList.head; crossRefsList = crossRefsList.tail
+          if(!subset(crossRefs, crossRefs1)) newList ::= crossRefs1
+          foundSubset ||= subset(crossRefs1, crossRefs)
+          // If crossRefs and crossRefs1 are equivalent (permutations), we
+          // retain the latter.
+        }
+        if(!foundSubset) newList ::= crossRefs
+        else println(s"Not added: ${showCRI(crossRefs)}\n${crl.map(showCRI)}")
+        conditionBInducedMap += key -> newList; !foundSubset
+
+      case None =>
+        conditionBInducedMap += key -> List(crossRefs); true
+    }
+  }
 
   /** Clear information about induced transitions.  Used in unit testing. */
-  def clearInduced = doneInducedPostServers.clear
+  def clearInduced = { doneInducedPostServers.clear; conditionBInducedMap.clear }
+
+  // ==========
 
   override def toString = 
     s"$servers || "+components.mkString("[", " || ", "]") // +s" <$ply>"
@@ -309,10 +412,6 @@ object ComponentView{
     * representation is described in Remapper.scala. */
   type ReducedMap = Array[Long]  
 
-  /** Type representing the range restriction of a RemappingMap, together with a
-    * hash code. */
-  // type ReducedMapInfo = (ReducedMap, Int)
-
   /** A class of objects used to key the doneInducedPostServersRemaps mapping in
     * each ComponentView. */
   abstract class ServersReducedMap{
@@ -344,8 +443,7 @@ object ComponentView{
   }
 
   /** A ServersReducedMap whose map contains at least two Longs. */
-  class ServersReducedMapN(
-      val servers: ServerStates, val map: ReducedMap)
+  class ServersReducedMapN(val servers: ServerStates, val map: ReducedMap)
   extends ServersReducedMap{
     override def equals(that: Any) = that match{
       case srm: ServersReducedMapN => 
@@ -363,6 +461,7 @@ object ComponentView{
       h
     }
   }
+
   // IMPROVE: it might be worth having a special case for N=2
 
   def mkServersReducedMap(servers: ServerStates, map: ReducedMap)
@@ -370,7 +469,6 @@ object ComponentView{
     if(map.isEmpty) new ServersReducedMap0(servers)
     else if(map.length == 1) new ServersReducedMap1(servers, map(0))
     else new ServersReducedMapN(servers, map)
-
 
 }
 
@@ -463,7 +561,6 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       i == length
     }
   }
-
 
   // ============= Debugging info
 

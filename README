@@ -1,25 +1,37 @@
 Optimisation 8
 
-- Function to define crossRefs.  Summarise v.cpts(i) <| pi as Array[Long].
-  Then crossRefs is a List of (State, Int, Array[Long]) tuples.
+*** Should we be normalising the missing views?  Sometimes lists contain 3000+
+    elements!
 
-??? Why don't we just store the two states? 
+-- Normalise cross refs -- done
+
+-- pass through for subsequent use
+
+-- in crossRefs, just create the components.
+
+- Calculate crossRefs in EffectOn.apply -- done
 
 - Subset relation over crossRefs.  It might help to keep each crossRefs
-  sorted.
+  sorted. -- done
+
+- In ComponentView store set of (post.fixed, v, pi |> post.fixed, crossRefs)
+  tuples: map within v from (post.fixed, pi |> post.fixed) to the set of all
+  such crossRefs. -- done
+
+- In EffectOn.apply, calculate crossRefs for each pi -- done
+
+- If there is a corresponding tuple stored against v, bail out before calling
+  processInducedInfo. -- done
 
 - In EffectOn.processInducedInfo, case missing empty, missingCommons
-  non-empty, store (post.fixed, v, pi |> post.fixed, crossRefs): in v,
-  have a mapping from (post.fixed, pi |> post.fixed) to the set of all such
-  crossRefs.
+  non-empty, store (post.fixed, v, pi |> post.fixed, crossRefs). -- done
 
-- In EffectOn.apply, calculate crossRefs for each pi (using
-  StateArray.crossRefs(cpts1, cpts2) -- pass through for subsequent use).  If
-  there is a corresponding tuple stored against v, bail out before calling
-  processInducedInfo.
+-------------------------------------------------
 
--- With reducedMap, calculate hash when ServersReducedMap is built.
-
+-- Split Concretization into separate class from ComponentView: (1) combine
+   View and ComponentView; (2) remove plies; (3) factor out debugging
+   information (class ComponentView without debugging information).  Then
+   compile in the order ComponentView0 -> Concretization -> ComponentView. ??
 
 -- Return information about cross references from EffectOnUnification.combine,
    and use in missingCrossRefs.

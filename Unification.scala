@@ -120,11 +120,8 @@ object Unification{
     result
   }
 
-  /** Bit map, indexed by process identities. */
-  // type BitMap = Array[Array[Boolean]]
-
-  
-  import ComponentView.ReducedMap // Info
+  // A representation of map |> post.servers
+  import ComponentView.ReducedMap 
 
   /** Result returned from combine1.  Each entry is of the form (map, cpts,
     * unifs, null) where: map is a remapping map; cpts is map applied to

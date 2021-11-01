@@ -92,8 +92,7 @@ object Remapper{
     result
   }
 
-  import ComponentView.ReducedMap // Array[Long]
-  // Info // (Array[Long], Int)
+  import ComponentView.ReducedMap // = Array[Long]
 
   /** The range restriction of map to the parameters of servers, i.e. 
     * 
@@ -105,7 +104,7 @@ object Remapper{
     * order of (t,x).  Also returns a hashCode for that result.  */
   def rangeRestrictTo(map: RemappingMap, servers: ServerStates)
       : ReducedMap = {
-    val sIds = servers.idsBitMap //; var h = 0 // h is the hashCode
+    val sIds = servers.idsBitMap
 
     // Calculate number of x values overall to consider
     var t = 0; var len = 0
@@ -129,7 +128,6 @@ object Remapper{
           //assert(0 < summary && summary < 65536)
           bits = (bits << 16) + summary; k += 1
           if(k == 4){ result0(i) = summary; i += 1; bits = 0; k = 0 }
-          // h = (h << 5) + (h << 2) + h + summary // = (h*37+summary)
         }
         x += 1
       }
@@ -143,7 +141,7 @@ object Remapper{
     val result = new Array[Long](i); var j = 0
     while(j < i){ result(j) = result0(j); j += 1 }
 
-    result // (result, h)
+    result
   }  
 
   // The following assumption is necessary to ensure summarise forms a bijection.

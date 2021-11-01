@@ -55,7 +55,8 @@ class EffectOnUnification(
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
 
-  import ComponentView.ReducedMap // Info
+  // A representation of map |> post.servers
+  import ComponentView.ReducedMap 
 
   type CombineResult1 = 
     ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
@@ -144,7 +145,6 @@ class EffectOnUnification(
     (result, result2)
   }
 
-
 // IMPROVE: do we need all of unifs?
 // IMPROVE, try to identify second case for sufficientUnifs within allUnifs,
 // by trying to unify components that change state first.
@@ -204,17 +204,15 @@ class EffectOnUnification(
       // (3) If this is the unification of the principal of cv, which changes
       // state and gains a reference to another component c, include the
       // parameters of c from postCpts.
-      if(j == 0 && changedStateBitMap(i)) 
-        addIdsFromNewRef(otherArgsBitMap, /*servers.numParams,*/ i)
+      if(j == 0 && changedStateBitMap(i)) addIdsFromNewRef(otherArgsBitMap, i)
     }
     otherArgsBitMap
   }
 
   /** Add to otherArgsBitMap any parameters of a component c to which preCpts(i)
     * gains a reference as the result of the transition. */ 
-  @inline private def addIdsFromNewRef(
-    otherArgsBitMap: Array[Array[Boolean]], /*serverNumParams: Array[Int],*/ i: Int)
-  = {
+  @inline private 
+  def addIdsFromNewRef(otherArgsBitMap: Array[Array[Boolean]], i: Int) = {
     val prePids = preCpts(i).processIdentities
     val postPids = postCpts(i).processIdentities
     val serverIds = servers.idsBitMap
@@ -296,13 +294,10 @@ class EffectOnUnification(
         Unification.getCombiningMaps(
           map1, otherArgs, otherArgsBitMap, nextArg, cpts, res0)
         var j = 0
-        // for(map1 <- res0){
         while(j < res0.length){
           val map1 = res0(j); j += 1
-          val reducedMapInfo: ReducedMap = // Info =
+          val reducedMapInfo: ReducedMap = 
             if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
-// IMPROVE: the rangeRestrictTo gets calculated again in
-// EffectOn.processInducedInfo
             else null
           if(unifs.nonEmpty || 
             !cv.containsDoneInducedPostServersRemaps(
@@ -362,8 +357,6 @@ class EffectOnUnification(
         else otherArgs(f) = otherArgs0(f)
         f += 1
       }
-      // val otherArgs = otherArgs0.clone;
-      // otherArgs(cvpf) = otherArgs(cvpf).filter(_ != id)
       val otherArgsBitMap = otherArgsBitMap0.map(_.clone)
       otherArgsBitMap(cvpf)(id) = false
       require(map1(cvpf)(cvpid) == id && 
@@ -509,7 +502,6 @@ object EffectOnUnification{
     def rec(tuples: List[MatchingTuple],
       i1: Int, j1: Int, i2: Int, j2: Int)
         : Unit = {
-      // println(s"i1 = $i1, j1 = $j1; i2 = $i2, j2 = $j2")
       assert((j1 == 0) ^ (j2 == 0), s"j1 = $j1; j2 = $j2")
       assert(i1 == preCpts.length || j1 == preCpts(i1).length ||
         rangeBitMap(i1)(j1))
