@@ -9,11 +9,11 @@ abstract class View{
   private var e: EventInt = -1
 
   /** The ply on which this was created.  This is only used in assertions. */
-  var ply = Int.MaxValue
+  //var ply = Int.MaxValue
 
-  def setPly(p: Int) = { 
-    require(ply == Int.MaxValue || ply == p, s"$ply $p"); ply = p 
-  }
+  // def setPly(p: Int) = { 
+  //   require(ply == Int.MaxValue || ply == p, s"$ply $p"); ply = p 
+  // }
 
   /** Ingredients for making an extended transition.  If this contains a tuple
     * (pre1, cpts, cv, post1, newCpts) then this was created by the extended
@@ -37,13 +37,13 @@ abstract class View{
   /** Record that this view was created by the extended transition 
     * pre1 -e1-> post1. */
   def setCreationInfo(
-    pre1: Concretization, e1: EventInt, post1: Concretization, ply1: Int)
+    pre1: Concretization, e1: EventInt, post1: Concretization)
   = {
-    require(ply == Int.MaxValue || ply == ply1, s"$ply $ply1")
+    //require(ply == Int.MaxValue || ply == ply1, s"$ply $ply1")
     require(creationIngredients == null && pre == null)
-    require(pre1.ply <= ply1, s"${pre1.ply} $ply1")
-    require(post1.ply <= ply1)
-    pre = pre1; e = e1; post = post1; ply = ply1
+    //require(pre1.ply <= ply1, s"${pre1.ply} $ply1")
+    //require(post1.ply <= ply1)
+    pre = pre1; e = e1; post = post1;// ply = ply1
   }
 
   /** Record that this view was created by the extended transition
@@ -51,13 +51,13 @@ abstract class View{
     */
   def setCreationInfoIndirect(
     pre1: Concretization, cpts: Array[State], cv: ComponentView,
-    e1: EventInt, post1: Concretization, newCpts: Array[State], ply1: Int) 
+    e1: EventInt, post1: Concretization, newCpts: Array[State]) 
   = {
-    require(ply == Int.MaxValue || ply == ply1, s"$ply $ply1")
-    require(pre == null && creationIngredients == null)
-    require(pre1.ply <= ply1 && cv.ply <= ply1 && post1.ply <= ply1,
-      s"pre1 = $pre1 \ncv = $cv \npost1 = $post1 \n ply1 = $ply1")
-    creationIngredients = (pre1, cpts, cv, post1, newCpts); e = e1; ply = ply1
+    // require(ply == Int.MaxValue || ply == ply1, s"$ply $ply1")
+    // require(pre == null && creationIngredients == null)
+    // require(pre1.ply <= ply1 && cv.ply <= ply1 && post1.ply <= ply1,
+    //   s"pre1 = $pre1 \ncv = $cv \npost1 = $post1 \n ply1 = $ply1")
+    creationIngredients = (pre1, cpts, cv, post1, newCpts); e = e1; // ply = ply1
   }
 
   /** Make the extended pre-state by extending pre1 with cpts, and setting cv as
@@ -67,7 +67,7 @@ abstract class View{
       : Concretization = {
     val extendedPre = new Concretization(pre1.servers,
       StateArray.union(pre1.components, cpts))
-    extendedPre.setSecondaryView(cv, null, ply)
+    extendedPre.setSecondaryView(cv, null)
     extendedPre
   }
 
@@ -505,7 +505,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
         if(include(i)){
           val st1 = StateArray.find(princIds(i), components)
           if(st1 != null){
-            val v = new ComponentView(servers, Array(princ, st1)); v.setPly(ply)
+            val v = new ComponentView(servers, Array(princ, st1))//; v.setPly(ply)
             result ::= v
           }
           else otherRef = true
@@ -518,7 +518,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       // If all the refs from newPrinc are distinguished or omitted, we need
       // to include the singleton view.
       else{
-        val v = new ComponentView(servers, Array(princ)); v.setPly(ply)
+        val v = new ComponentView(servers, Array(princ)) // ; v.setPly(ply)
         List(v)
       }
     }
@@ -541,7 +541,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
         while(k < j){ nc(k) = components1(k); k += 1 }
         components1 = nc
       }
-      val v = new ComponentView(servers, components1); v.setPly(ply)
+      val v = new ComponentView(servers, components1) // ; v.setPly(ply)
       List(v)
     }
   }
@@ -575,21 +575,21 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   // less memory?
 
   /** The ply on which this was created. */
-  var ply = Int.MaxValue
+  //var ply = Int.MaxValue
 
-  def setPly(p: Int) = { assert(ply == Int.MaxValue); ply = p }
+  //def setPly(p: Int) = { assert(ply == Int.MaxValue); ply = p }
 
   /** Set the secondary view. */
-  def setSecondaryView(sv: ComponentView, rv: Array[ComponentView], ply1: Int) 
+  def setSecondaryView(sv: ComponentView, rv: Array[ComponentView]) 
   = {
-    require(ply == Int.MaxValue, s"$ply $ply1")
+    //require(ply == Int.MaxValue, s"$ply $ply1")
     require(secondaryView == null || secondaryView == sv,
     s"this = $this\nsecondaryView = $secondaryView\nsv = $sv")
     require(sv != null)
-    require(sv.ply < ply1, s"$sv ${sv.ply} $ply1 ")
-    require(rv == null || rv.forall(c => c == null || c.ply < ply1), 
-      rv.filter(_ != null).map(_.ply).mkString(","))
-    secondaryView = sv; referencingViews = rv; ply = ply1
+    //require(sv.ply < ply1, s"$sv ${sv.ply} $ply1 ")
+    //require(rv == null || rv.forall(c => c == null )) // || c.ply < ply1  ), 
+      // rv.filter(_ != null).map(_.ply).mkString(","))
+    secondaryView = sv; referencingViews = rv //; ply = ply1
   }
 
   /** Get the secondary view. */
@@ -713,7 +713,8 @@ object Concretization{
   /** Make a concretization from cv. */
   def apply(cv: ComponentView) = {
     val c = new Concretization(cv.servers, cv.components)
-    c.setPly(cv.ply); c
+    // c.setPly(cv.ply); 
+    c
   }
 
 

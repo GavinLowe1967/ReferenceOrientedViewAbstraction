@@ -18,10 +18,10 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
 
     def effectOn(pre: Concretization, e: EventInt, post: Concretization, 
         cv: ComponentView) =
-      effectOnO(pre, e, post, cv, 2, nextNewViews)
+      effectOnO(pre, e, post, cv, nextNewViews)
 
     def mkCV(servers: ServerStates, princ: State, others: Array[State]) = {
-      val cv = new ComponentView(servers, princ, others); cv.ply = 0; cv
+      val cv = new ComponentView(servers, princ, others); /*cv.ply = 0;*/ cv
     }
 
     println("== effectOnTest ==")
@@ -29,7 +29,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
     def test1 = {
       val pre = new Concretization(servers0, Array(initSt(T0)))
       val post = new Concretization(servers1, Array(gotLock(T0)))
-      pre.ply = 0; post.ply = 0
+      // pre.ply = 0; post.ply = 0
       // servers should evolve to servers1 on following two
       ply = 2
       effectOn(pre, 1, post, mkCV(servers0, initNode(N0), Array()))
@@ -58,7 +58,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
       val serversB = ServerStates(List(lock1(T0), top(N1), wd1))
       val post = new Concretization(serversB, Array(unlock(T0), bNode(N1,N0)))
       val serversB1 = ServerStates(List(lock1(T0), top(N0), wd1))
-      pre.ply = 0; post.ply = 0
+      // pre.ply = 0; post.ply = 0
 
       // On following: servers evolves to serversB1 and aNode renamed to N1.
       effectOn(pre, 1, post, mkCV(serversA, aNode(N0, Null), Array()))
@@ -96,7 +96,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
       assert(nextNewViews.size == 4)
 
       val cv1 = new ComponentView(serversA, pushSt(T1,N1), Array(bNode(N1,N0)))
-      cv1.ply = 1
+      // cv1.ply = 1
       effectOn(pre, 1, post, cv1)
       // println("\n"+nextNewViews.mkString("\n"))
       // The two bNodes unify
@@ -117,11 +117,11 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
       // servers1 has reference to T0
       val post = new Concretization(servers1,
         Array(setTopB(T0,N0), bNode(N0,Null)))
-      pre.ply = 0; post.ply = 0
+      // pre.ply = 0; post.ply = 0
 
       // Principal unifies with principal.
       val cv1 = new ComponentView(servers1, Array(initNodeSt(T0,Null)))
-      cv1.ply = 1
+      // cv1.ply = 1
       effectOn(pre, 1, post, cv1)        
       // println("\n"+nextNewViews.mkString("\n"))
       assert(nextNewViews.contains(
@@ -130,7 +130,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
 
       // Principal unifies with secondary component.
       println("cv2")
-      val cv2 = new ComponentView(servers1, Array(initNode(N0))); cv2.ply = 1
+      val cv2 = new ComponentView(servers1, Array(initNode(N0))) //; cv2.ply = 1
       effectOn(pre, 1, post, cv2)        
       //println("\n"+nextNewViews.mkString("\n"))
       // With unification
@@ -142,7 +142,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
       assert(nextNewViews.size == 2)
 
       println("cv3")
-      val cv3 = new ComponentView(servers1, Array(aNode(N0,Null))); cv3.ply = 1
+      val cv3 = new ComponentView(servers1, Array(aNode(N0,Null))) //; cv3.ply = 1
       effectOn(pre, 1, post, cv3)        
       //println("\n"+nextNewViews.mkString("\n"))
       // Without unification -- not included
@@ -161,9 +161,9 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
         Array(getDatumSt(T0, N0, N1), aNode(N0, N2), bNode(N1, N3)) )
       val post = new Concretization(servers0,
         Array(popSt(T0, N0, N1), dNode(N0, N1, N2), bNode(N1, N3)) )
-      pre.ply = 0; post.ply = 0
+      // pre.ply = 0; post.ply = 0
       val cv = new ComponentView(servers0,  Array(aNode(N0, N1), cNode(N1, N2)))
-      cv.ply = 1
+      // cv.ply = 1
       effectOn(pre, 1, post, cv)
       // The aNode in cv unifies with that in pre, and evolves to
       // dNode(N0,N1,N2), gaining a reference to N2.  The second parameter in

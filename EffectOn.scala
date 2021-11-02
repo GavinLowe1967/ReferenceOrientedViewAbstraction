@@ -52,7 +52,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     * nextNewViews. */
   def apply(
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView, 
-    ply: Int, nextNewViews: MyHashSet[ComponentView])
+    nextNewViews: MyHashSet[ComponentView])
   = {
     require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
     val postCpts = post.components; val preCpts = pre.components
@@ -71,7 +71,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
     /* Function to process induced transition. */
     val processInducedInfo1 = 
-      processInducedInfo(pre, e, post, cv, ply, nextNewViews) _
+      processInducedInfo(pre, e, post, cv, nextNewViews) _
     /* What does cpt get mapped to given unifications unifs? */
     @inline def getNewPrinc(cpt: State, unifs: UnificationList): State = {
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
@@ -124,7 +124,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   @inline private 
   def processInducedInfo(
     pre: Concretization,  e: EventInt, post: Concretization,
-    cv: ComponentView, ply: Int, nextNewViews: MyHashSet[ComponentView])
+    cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
     (map: RemappingMap, cpts: Array[State], unifs: UnificationList, 
       reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
       newComponentsList: List[Array[State]])
@@ -167,7 +167,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
                   !newComponents.sameElements(nv.components))
                 " ==\n  $nv"
               else ""))
-          nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
+          nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents)
           val ok = recordInduced(); assert(ok)
           if(!nv.representableInScript){
             println("Not enough identities in script to combine transition\n"+
@@ -184,7 +184,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           Profiler.count(s"EffectOn add to store-$isPrimary-${unifs.nonEmpty}"+
             s"-${pre.servers==post.servers}-${missing.nonEmpty}-"+
             missingCommons.nonEmpty)
-          nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
+          nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents)
 // IMPROVE: do we need to check isPrimary here? 
           if(isPrimary && reducedMap != null && missingCommons.isEmpty){
             val ok = cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
