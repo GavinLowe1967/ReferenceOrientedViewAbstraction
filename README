@@ -1,13 +1,35 @@
-Optimisation 8
+-- Review Optimisation 8, and tidy up.
 
-*** Should we be normalising the missing views?  Sometimes lists contain 3000+
-    elements!
+-- Based on the choice of which parameters to unify, can we perform
+   optimisation 8 earlier?
+
+-- Split Concretization into separate class from ComponentView: (1) combine
+   View and ComponentView; (2) remove plies; (3) factor out debugging
+   information (class ComponentView without debugging information).  Then
+   compile in the order ComponentView0 -> Concretization -> ComponentView. ??
+
+-- Look at EffectOnUnification.combine: it's about 80% of Checker time. 
+
+-- Return information about cross references from EffectOnUnification.combine,
+   and use in missingCrossRefs.
+
+*** Do we do what's described in clause 3 of Def 13 (concerning missing
+    components in primary induced transitions with singleRef.)?
+
+*** Consider the optimisations at the end of Section 9.
+
+Make maps smaller.
+
+------------------------------------------------------------------
+
+Optimisation 8
 
 -- Normalise cross refs -- done
 
--- pass through for subsequent use
+-- pass through for subsequent use -- done
 
--- in crossRefs, just create the components.
+-- Should we also be storing when induced transition happens, or is that
+   captured elsewhere? -- captured by the earlier optimisation.
 
 - Calculate crossRefs in EffectOn.apply -- done
 
@@ -25,23 +47,6 @@ Optimisation 8
 
 - In EffectOn.processInducedInfo, case missing empty, missingCommons
   non-empty, store (post.fixed, v, pi |> post.fixed, crossRefs). -- done
-
--------------------------------------------------
-
--- Split Concretization into separate class from ComponentView: (1) combine
-   View and ComponentView; (2) remove plies; (3) factor out debugging
-   information (class ComponentView without debugging information).  Then
-   compile in the order ComponentView0 -> Concretization -> ComponentView. ??
-
--- Return information about cross references from EffectOnUnification.combine,
-   and use in missingCrossRefs.
-
-*** Do we do what's described in clause 3 of Def 13 (concerning missing
-    components in primary induced transitions with singleRef.)?
-
-*** Consider the optimisations at the end of Section 9.
-
-Make maps smaller.
 
 ============
 

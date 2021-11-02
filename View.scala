@@ -344,7 +344,10 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   }
 
   /** Clear information about induced transitions.  Used in unit testing. */
-  def clearInduced = { doneInducedPostServers.clear; conditionBInducedMap.clear }
+  def clearInduced = {
+    if(doneInducedPostServers != null) doneInducedPostServers.clear
+    if(conditionBInducedMap != null) conditionBInducedMap.clear 
+  }
 
   // ==========
 

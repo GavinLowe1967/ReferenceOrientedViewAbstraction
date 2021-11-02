@@ -186,7 +186,6 @@ class EffectOnUnification(
     else changingUnif
   }
 
-
   /** Create a bit map corresponding to an OtherArgMap and containing all
     * values: (1) in newServerIds (parameters in post.servers but not
     * pre.servers), or (2) in post.cpts for a unified parameter if not in
@@ -200,7 +199,7 @@ class EffectOnUnification(
       val (j, i) = us.head; us = us.tail
       // (2) Add parameters of postCpts(i), which is unified with a component
       // of cv.
-      postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap) // numParams)
+      postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap) 
       // (3) If this is the unification of the principal of cv, which changes
       // state and gains a reference to another component c, include the
       // parameters of c from postCpts.

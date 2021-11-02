@@ -171,7 +171,7 @@ object Unification{
     map: RemappingMap, otherArgs: OtherArgMap, bitMap: BitMap, 
     nextArg: NextArgMap, cpts: Array[State], result: ArrayBuffer[RemappingMap])
       : Unit = {
-    if(debugging){ // IMPROVE
+    if(false && debugging){ // IMPROVE
       assert(Remapper.isInjective(map), Remapper.show(map))
       for(f <- 0 until numTypes) assert(otherArgs(f) == otherArgs(f).distinct)
       // Check otherArgs disjoint from ran map

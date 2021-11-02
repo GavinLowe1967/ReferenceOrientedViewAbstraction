@@ -156,7 +156,7 @@ object UnificationTest
       cv.clearInduced
       val (buffer2,_) = combine(pre, post, cv /*, List()*/) // , false
       // Unifying, N0 -> N0, N1 -> N1
-      //println(showBuffer(buffer2))
+      println(showBuffer(buffer2))
       assert(buffer2.exists{case (map, states, unifs, _) =>
         unifs == List((0,1)) && 
         states.sameElements(Array(aNode(N0,N2), cNode(N2,Null)))

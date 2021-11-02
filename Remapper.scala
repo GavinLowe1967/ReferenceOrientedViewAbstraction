@@ -429,6 +429,12 @@ object Remapper{
     new ComponentView(servers1, components1) // principal1, others1)
   }
 
+  /** Remap components so they are in normal form based on servers.  Pre:
+    * servers are normalised. */
+  @inline def remapComponents(servers: ServerStates, components: Array[State])
+      : Array[State] = 
+    remapStates(servers.remappingMap, servers.nextArgMap, components)
+
   /** Make a ComponentView from servers, principal and others, remapping to
     * canonical form. */
   @inline def mkComponentView(
