@@ -54,9 +54,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView, 
     ply: Int, nextNewViews: MyHashSet[ComponentView])
   = {
-    // Profiler.count("effectOn")
-    // if(/* !previous.add((pre,e,post,cv)) || */ verbose) 
-    //   println(s"effectOn($pre, ${system.showEvent(e)},\n  $post, $cv)")
     require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
     val postCpts = post.components; val preCpts = pre.components
 
@@ -90,10 +87,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       val crossRefs: List[Array[State]] = 
         if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
         else List()
-      if(false) println(s"pre.cpts = ${StateArray.show(pre.components)}\n"+
-        s"cpts = ${StateArray.show(cpts)}\n"+
-        s"cv.cpts = ${StateArray.show(cv.components)}\n"+
-        crossRefs.map(StateArray.show))
       if(reducedMapInfo == null ||
          !cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)){
         val newPrinc = getNewPrinc(cpts(0), unifs)
@@ -102,7 +95,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         processInducedInfo1(
           map, cpts, unifs, reducedMapInfo, true, crossRefs, newComponentsList)
       }
-      // else println(s"Omitting")
     } // end of while loop
     // Process secondaryInduced
     index = 0
@@ -137,7 +129,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
       newComponentsList: List[Array[State]])
   : Unit = {
-    // if(verbose) println("cpts = "+StateArray.show(cpts))
     if(debugging){
       StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     }
@@ -159,9 +150,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     // those that are missing.
     val missing: List[ComponentView] =
       crossRefs.map(new ComponentView(pre.servers, _)).filter(!views.contains(_))
-      // if(singleRef) missingCrossRefs(pre.servers, cpts, pre.components) 
-      // else List()
-// IMPROVE
     for(newComponents <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newComponents)
       Profiler.count("newViewCount") 
@@ -199,8 +187,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents, ply)
 // IMPROVE: do we need to check isPrimary here? 
           if(isPrimary && reducedMap != null && missingCommons.isEmpty){
-            //val crossRefs = missing.map(_.components) // StateArray.crossRefs(cpts, pre.components)
-            // IMPROVE: repeated work
             val ok = cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
             assert(ok)
           }
@@ -216,12 +202,10 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         Profiler.count("EffectOn redundancy:"+isPrimary+unifs.isEmpty)
         if(false){ // give information about redundancies
           val v1 = views.get(nv)
-          if(v1.inducedFrom(cv)){
-            println(
-              s"$pre -${system.showEvent(e)}-> $post\n"+
-                s"  with unifications $unifs induces $cv --> $nv")
-            println(s"Previously "+v1.showCreationInfo)
-          }
+          if(v1.inducedFrom(cv))
+            println(s"$pre -${system.showEvent(e)}-> $post\n"+
+              s"  with unifications $unifs induces $cv --> $nv"+
+              s"Previously "+v1.showCreationInfo)
         }
       }
     } // end of for loop
@@ -236,7 +220,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
       : List[MissingCommon]  = {
     require(singleRef)
-    //val princ1 = cpts1(0); val princ2 = cpts2(0)
     val missingRefs1 = StateArray.missingRefs(cpts1)
     val missingRefs2 = StateArray.missingRefs(cpts2)
     // The common references considered so far for which there is no way of
@@ -244,7 +227,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     var missingCommonRefs = List[ProcessIdentity]()
     var missingCommons = List[MissingCommon]()
     for(pid <- missingRefs1; if missingRefs2.contains(pid)){
-      //trivialSideConditions = false
       val mc = MissingCommon.makeMissingCommon(servers, cpts1, cpts2, pid, views)
       if(mc != null){
 // FIXME: if the component c has a reference to one of the present secondary
@@ -268,10 +250,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       : List[Array[State]] = {
     assert(singleRef)
     StateArray.crossRefs(cpts1, cpts2).map(Remapper.remapComponents(servers,_))
-      // .map(Remapper.mkComponentView(servers,_).components)
-// IMPROVE: no need to create the whole component view.
   }
 
+/*
   /** Missing cross references, if singleRef.  For each reference from a
     * component c1 of cpts2 to a component c2 of cpts2, or vice versa, test if
     * sysAbsViews contains the view servers || c1 || c2.  Return all such
@@ -291,10 +272,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         s"${StateArray.show(cpts2)}):\n  $missing")
     missing
   }
-
-  // @inline private def mkMissingCrossRefs(servers: ServerStates, crossrefs: List[Array[State]]) = {
-
-  // }
+ */
 
   /** If cv completes a delayed transition in effectOnStore, then complete it. */
   def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
@@ -310,14 +288,15 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   def tryAddView(nv: ComponentView, nextNewViews: MyHashSet[ComponentView]) = {
     // require(mi.done); val nv = mi.newView
     if(nextNewViews.add(nv)){
-      val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
       if(verbose){
+        val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
         println(s"Adding via completeDelayed $cv -> $nv\n"+
           s"$pre --> $post\n"+
           s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
           s"  --> ${View.show(post.servers, newComponents)} == $nv")
       }
       if(!nv.representableInScript){
+        val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
         println("Not enough identities in script to combine transition\n"+
           s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
         sys.exit

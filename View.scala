@@ -106,16 +106,14 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   /** Check all components referenced by principal are included, and no more. */
   // IMRPOVE: this is moderately expensive
   @noinline private def checkValid = if(debugging){ 
-    assert(components.forall(_ != null)) // IMPROVE
     val len = principal.ids.length; val cptsLen = components.length
-    // val includeInfo = State.getIncludeInfo(principal.cs)
     if(singleRef){
       if(cptsLen == 2){
         // Check principal has a reference to the other component
         val cPid = components(1).componentProcessIdentity; var i = 0
         while(i < len && principal.processIdentity(i) != cPid) i += 1
         assert(i < len, s"Not a correct ComponentView: $this")
-        assert(principal.includeParam(i), //includeInfo == null || includeInfo(i),
+        assert(principal.includeParam(i),
           s"Not a correct ComponentView, omitted component included: $this")
       }
       else{ 
@@ -131,7 +129,6 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
       while(i < len){
         val pid = principal.processIdentity(i)
         if(!isDistinguished(pid._2) && principal.includeParam(i)){
-          // (includeInfo == null || includeInfo(i))){
           // Test if there is a component with identity pid
           var j = 1
           while(j < cptsLen && components(j).componentProcessIdentity != pid)
@@ -148,7 +145,7 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
         var i = 0
         while(i < len && principal.processIdentity(i) != otherId) i += 1
         assert(i < len, s"Not a correct ComponentView: $this")
-        assert(principal.includeParam(i), //includeInfo == null || includeInfo(i),
+        assert(principal.includeParam(i),
           s"Not a correct ComponentView, omitted component included: $this")
         j += 1
       }
@@ -279,7 +276,6 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     while(crs1.nonEmpty && ok){
       val cs1 = crs1.head; crs1 = crs1.tail
       // test if crossRefs2 contains cs1
-      // ok = crossRefs2.exists(cs => cs.sameElements(cs1))
       var crs2 = crossRefs2
       while(crs2.nonEmpty && !sameElements(crs2.head, cs1)) crs2 = crs2.tail
       ok = crs2.nonEmpty
@@ -289,7 +285,7 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   // IMPROVE.  Maybe keep lists sorted.
 
   @inline private def sameElements(cr1: Array[State], cr2: Array[State]) = {
-    assert(cr1.length == 2 && cr2.length == 2) // IMPROVE
+    // assert(cr1.length == 2 && cr2.length == 2) 
     cr1(0) == cr2(0) && cr1(1) == cr2(1)
   }
 
@@ -334,12 +330,12 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
           // If crossRefs and crossRefs1 are equivalent (permutations), we
           // retain the latter.
         }
+        // At present, we should always have !foundSubSet.  
         if(!foundSubset) newList ::= crossRefs
         else println(s"Not added: ${showCRI(crossRefs)}\n${crl.map(showCRI)}")
         conditionBInducedMap += key -> newList; !foundSubset
 
-      case None =>
-        conditionBInducedMap += key -> List(crossRefs); true
+      case None => conditionBInducedMap += key -> List(crossRefs); true
     }
   }
 

@@ -1,7 +1,8 @@
 -- Review Optimisation 8, and tidy up.
 
 -- Based on the choice of which parameters to unify, can we perform
-   optimisation 8 earlier?
+   optimisation 8 earlier?  In EffectOnUnification.extendUnifSingleref,
+   immediately after calulating crossRefs?
 
 -- Split Concretization into separate class from ComponentView: (1) combine
    View and ComponentView; (2) remove plies; (3) factor out debugging
