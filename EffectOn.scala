@@ -78,10 +78,27 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       if(us.isEmpty) cpt else postCpts(us.head._2)
     }
 
+    // IMPROVE
+/*
+    for(i <- 0 until inducedInfo.length; j <- i+1 until inducedInfo.length){
+      val rm1 = inducedInfo(i)._4; val rm2 = inducedInfo(j)._4
+      if(rm1 != null && rm2 != null && rm1.sameElements(rm2))
+        println(s"matching cases: $cv $pre $post\n"+
+          rm1.mkString(", ")+"; "+rm2.mkString(", "))
+    }
+ */
+
+    if(false)
+      for((_, _, _, reducedMapInfo) <- inducedInfo; if reducedMapInfo != null)
+        assert(!cv.containsDoneInducedPostServersRemaps(
+          post.servers, reducedMapInfo)) // IMPROVE
     // Process inducedInfo
     var index = 0
     while(index < inducedInfo.length){
       val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
+      // if(unifs.isEmpty && reducedMapInfo != null) 
+      //   assert(!cv.containsDoneInducedPostServersRemaps(
+      //     post.servers, reducedMapInfo)) // IMPROVE
       Profiler.count("EffectOn step "+unifs.isEmpty)
       // The components needed for condition (b).
       val crossRefs: List[Array[State]] = 
@@ -168,7 +185,10 @@ class EffectOn(views: ViewSet, system: SystemP.System){
                 " ==\n  $nv"
               else ""))
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents)
-          val ok = recordInduced(); assert(ok)
+          val ok = recordInduced() 
+          //if(!ok) println(s"not ok  $cv $pre $post\n"+reducedMap.mkString(", "))
+          // assert(ok) I think this can fail if there are two similar cases
+          //in this batch
           if(!nv.representableInScript){
             println("Not enough identities in script to combine transition\n"+
               s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)

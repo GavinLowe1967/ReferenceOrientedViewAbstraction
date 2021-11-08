@@ -16,23 +16,22 @@ class EffectOnUnification(
   /* Relationship of main functions:
    * 
    * apply
-   * |--getChangedStateBitMap
    * |--Unification.allUnifs
    * |--isSufficientUnif
    * |--mkOtherArgsBitMap
    * |  |--addIdsFromNewRef
    * |--extendUnif
    * |  |--Unification.combine1
-   * |--extendUnifSingleRef
-   *    |--EffectOnUnification.remapToCreateCrossRefs
-   *    |--getOtherArgsBitMapForSingleRef
-   *    |--Unification.getCombiningMaps 
-   *    |--makeSecondaryInducedTransitions
+   * |--extendUnifSingleRef                    (~95% of time with lazySet)
+   *    |--EffectOnUnification.remapToCreateCrossRefs  (~25%)
+   *    |--getOtherArgsBitMapForSingleRef              (~12%)
+   *    |--Unification.getCombiningMaps                (~25%)
+   *    |--makeSecondaryInducedTransitions             (~10%)
    */ 
 
   /* A few object variables, extracted directly from pre, post and cv, used in
    * several functions. */
-  private val servers = pre.servers; 
+  private val servers = pre.servers
   require(servers == cv.servers && servers.isNormalised)
   private val postServers = post.servers
   private val preCpts = pre.components; private val postCpts = post.components
@@ -275,7 +274,6 @@ class EffectOnUnification(
     val crossRefs = 
       EffectOnUnification.remapToCreateCrossRefs(preCpts, cpts, map0)
     var i = 0
-    // for((map1, tuples) <- crossRefs){
     while(i < crossRefs.length){
       val (map1, tuples) = crossRefs(i); i += 1
       // Profiler.count("tuples size "+tuples.length) -- mostly 0 or 1
@@ -321,10 +319,25 @@ class EffectOnUnification(
       : BitMap = {
     // Clone, to avoid interference between different iterations.
     val otherArgsBitMap = otherArgsBitMap0.map(_.clone)
-    // Indices of components of preCpts that are mapped onto.
-    val rangeIndices = tuples.map{ case ((i1,_),_) => i1 }.distinct
-    for(i <- rangeIndices)
-      preCpts(i).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap)
+    if(false){
+      // Indices of components of preCpts that are mapped onto.
+      val rangeIndices = tuples.map{ case ((i1,_),_) => i1 }.distinct
+      for(i1 <- rangeIndices)
+        preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap)
+    }
+    else{
+      // Indices of components of preCpts for which we have added the parameters
+      var doneIndices = List[Int](); var tups = tuples
+      while(tups.nonEmpty){
+        val i1 = tups.head._1._1; tups = tups.tail
+        // for(((i1,_),_) <- tuples;
+        if(!contains(doneIndices,i1)){
+          doneIndices ::= i1
+          preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap)
+        }
+        //Profiler.count("getOtherArgsBitMapForSingleRef"+doneIndices.length)
+      }
+    }
     // IMPROVE: we need only map parameters of cpts(i2) like this, where
     // i2 is the relevant index in the current tuple.
     // for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
@@ -475,6 +488,8 @@ object EffectOnUnification{
     // the first instance in cpts, resp preCpts.
     val domBitMap = getDomBitMap(cpts); val rangeBitMap = getRangeBitMap(preCpts)
     val result = new ArrayBuffer[(RemappingMap, List[MatchingTuple])]
+    // Bitmap showing the range of map
+    val inRangeBitMap = Remapper.rangeBitMap(map)
 
     // Next component of preCpts(i1) to try mapping on to.  The minimum j in
     // [j1 .. preCpts(i1).length) s.t. rangeBitMap(i1)(j); or
@@ -498,8 +513,7 @@ object EffectOnUnification{
      * parameters in lexicographic order.  All updates to map are backtracked.
      * Pre: (1) Exactly one of j1 and j2 is 0.  (2) rangeBitMap(i1)(j1), or one
      * of i1, j1 is out of range. */
-    def rec(tuples: List[MatchingTuple],
-      i1: Int, j1: Int, i2: Int, j2: Int)
+    def rec(tuples: List[MatchingTuple], i1: Int, j1: Int, i2: Int, j2: Int)
         : Unit = {
       assert((j1 == 0) ^ (j2 == 0), s"j1 = $j1; j2 = $j2")
       assert(i1 == preCpts.length || j1 == preCpts(i1).length ||
@@ -525,14 +539,16 @@ object EffectOnUnification{
         val id1 = preCpts(i1).ids(j1); val id2 = cpts(i2).ids(j2)
         val t = preCpts(i1).typeMap(j1)
         assert(!isDistinguished(id1) && !isDistinguished(id2))
-        if(t == cpts(i2).typeMap(j2) && map(t)(id2) < 0 &&
-          !map(t).contains(id1) ){ // IMPROVE
-          map(t)(id2) = id1 // temporary update (*)
+        // assert(inRangeBitMap(t)(id1) == map(t).contains(id1)) // IMPROVE
+        if(t == cpts(i2).typeMap(j2) && map(t)(id2) < 0 && 
+          !inRangeBitMap(t)(id1) ){
+//          !map(t).contains(id1) ){ // IMPROVE
+          map(t)(id2) = id1; inRangeBitMap(t)(id1) = true // temporary update (*)
           val newTuples = ((i1,j1),(i2,j2))::tuples
           // Advance
           if(j1 == 0) rec(newTuples, i1, j1, i2, advanceInCpts(i2, j2+1))
           else rec(newTuples, i1, j1, i2+1, 0)
-          map(t)(id2) = -1 // backtrack (*)
+          map(t)(id2) = -1; inRangeBitMap(t)(id1) = false  // backtrack (*)
         }
         // Also just advance (whether or not we did the if)
         if(j1 == 0) rec(tuples, i1, j1, i2, advanceInCpts(i2, j2+1))

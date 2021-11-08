@@ -14,7 +14,6 @@ import scala.collection.mutable.{ArrayBuffer,HashMap}
 object Remapper{
   // ----- RemappingMaps
 
-
   /* The type of maps recording the values that parameters get remapped to.  
    * map(t)(arg) records the value that arg of type t gets remapped to,
    * or -1 if no value has been allocated yet.  I.e., it represents the
@@ -90,6 +89,17 @@ object Remapper{
       t += 1
     }
     result
+  }
+
+  /** A bitmap showing the range of map. */
+  def rangeBitMap(map: RemappingMap): BitMap = {
+    val bitmap = 
+      Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)+2))
+    // Note: the size above is a bit arbitrary.  FIXME
+    for(t <- 0 until numTypes; i <- 0 until map(t).length){
+      val id = map(t)(i); if(id >= 0) bitmap(t)(id) = true
+    }
+    bitmap
   }
 
   import ComponentView.ReducedMap // = Array[Long]

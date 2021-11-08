@@ -1,15 +1,33 @@
--- Review Optimisation 8, and tidy up.
+-- If there are no unifications, and we have previously seen this change of
+   servers, and that led to a view being added, do we need to consider this
+   again?  This is part 4 of optimisation 5.
+
+  * In EffectOn.processInducedInfo, if view is added (or already there), call
+     cv.addDoneInduced.
+
+  * In EffectOnUnification.isSufficientUnif, call cv.doneInducedContains :
+
+    if(changedServers) unifs.nonEmpty || cv.addDoneInduced(postServers)
+
+    Better: change the map to store (unification,postServers) pairs. 
+
+** EffectOnUnification.remapToCreateCrossrefs: maintain bitmap corresponding
+   to map.  -- done
+
+-- Tidy up EffectOnUnification.getOtherArgsBitMapForSingleRef, and improve
 
 -- Based on the choice of which parameters to unify, can we perform
    optimisation 8 earlier?  In EffectOnUnification.extendUnifSingleref,
    immediately after calulating crossRefs?
 
 -- Split Concretization into separate class from ComponentView: (1) combine
-   View and ComponentView; (2) remove plies; (3) factor out debugging
-   information (class ComponentView without debugging information).  Then
-   compile in the order ComponentView0 -> Concretization -> ComponentView. ??
+   View and ComponentView; (2) factor out debugging information (classes
+   ComponentView0, Concretization0 without debugging information).  Then
+   compile in the order ComponentView0 -> Concretization0 -> (ComponentView,
+   Concretization). ??
 
--- Look at EffectOnUnification.combine: it's about 80% of Checker time. 
+-- Look at EffectOnUnification.combine: it's about 80% of Checker time.  Idea
+   on page 38 of printout.
 
 -- Return information about cross references from EffectOnUnification.combine,
    and use in missingCrossRefs.

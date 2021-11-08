@@ -8,13 +8,6 @@ abstract class View{
   private var pre, post: Concretization = null
   private var e: EventInt = -1
 
-  /** The ply on which this was created.  This is only used in assertions. */
-  //var ply = Int.MaxValue
-
-  // def setPly(p: Int) = { 
-  //   require(ply == Int.MaxValue || ply == p, s"$ply $p"); ply = p 
-  // }
-
   /** Ingredients for making an extended transition.  If this contains a tuple
     * (pre1, cpts, cv, post1, newCpts) then this was created by the extended
     * transition 
@@ -36,14 +29,10 @@ abstract class View{
 
   /** Record that this view was created by the extended transition 
     * pre1 -e1-> post1. */
-  def setCreationInfo(
-    pre1: Concretization, e1: EventInt, post1: Concretization)
+  def setCreationInfo(pre1: Concretization, e1: EventInt, post1: Concretization)
   = {
-    //require(ply == Int.MaxValue || ply == ply1, s"$ply $ply1")
     require(creationIngredients == null && pre == null)
-    //require(pre1.ply <= ply1, s"${pre1.ply} $ply1")
-    //require(post1.ply <= ply1)
-    pre = pre1; e = e1; post = post1;// ply = ply1
+    pre = pre1; e = e1; post = post1
   }
 
   /** Record that this view was created by the extended transition
@@ -53,11 +42,7 @@ abstract class View{
     pre1: Concretization, cpts: Array[State], cv: ComponentView,
     e1: EventInt, post1: Concretization, newCpts: Array[State]) 
   = {
-    // require(ply == Int.MaxValue || ply == ply1, s"$ply $ply1")
-    // require(pre == null && creationIngredients == null)
-    // require(pre1.ply <= ply1 && cv.ply <= ply1 && post1.ply <= ply1,
-    //   s"pre1 = $pre1 \ncv = $cv \npost1 = $post1 \n ply1 = $ply1")
-    creationIngredients = (pre1, cpts, cv, post1, newCpts); e = e1; // ply = ply1
+    creationIngredients = (pre1, cpts, cv, post1, newCpts); e = e1
   }
 
   /** Make the extended pre-state by extending pre1 with cpts, and setting cv as
@@ -184,7 +169,6 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     }
     paramsBound
   }
-
 
   /** Information about transitions pre -> post for which we have considered
     * induced transitions from this view, with pre.servers = this.servers !=
@@ -347,12 +331,11 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
 
   // ==========
 
-  override def toString = 
-    s"$servers || "+components.mkString("[", " || ", "]") // +s" <$ply>"
+  override def toString = s"$servers || "+components.mkString("[", " || ", "]")
 
   def toString0 = 
     servers.toString0+" || "+
-      components.map(_.toString0).mkString("[", " || ", "]") // +s" <$ply>"
+      components.map(_.toString0).mkString("[", " || ", "]")
 
   override def equals(that: Any) = {
     if(that != null){
@@ -504,23 +487,16 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       while(i < len){
         if(include(i)){
           val st1 = StateArray.find(princIds(i), components)
-          if(st1 != null){
-            val v = new ComponentView(servers, Array(princ, st1))//; v.setPly(ply)
-            result ::= v
-          }
+          if(st1 != null)
+            result ::= new ComponentView(servers, Array(princ, st1))
           else otherRef = true
-          // println(s"getViewOf: omitting View for ${princIds(i)}")
         }
         i += 1
       }
-      // if(result.length > 1) println(s"getViewOf: $result")
       if(result.nonEmpty || otherRef) result 
       // If all the refs from newPrinc are distinguished or omitted, we need
       // to include the singleton view.
-      else{
-        val v = new ComponentView(servers, Array(princ)) // ; v.setPly(ply)
-        List(v)
-      }
+      else List( new ComponentView(servers, Array(princ)) )
     }
     else{
       var components1 = new Array[State](len); components1(0) = princ
@@ -541,8 +517,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
         while(k < j){ nc(k) = components1(k); k += 1 }
         components1 = nc
       }
-      val v = new ComponentView(servers, components1) // ; v.setPly(ply)
-      List(v)
+      List( new ComponentView(servers, components1) )
     }
   }
 
@@ -574,22 +549,11 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   // IMPROVE: would it be enough to store just the non-null elements, to use
   // less memory?
 
-  /** The ply on which this was created. */
-  //var ply = Int.MaxValue
-
-  //def setPly(p: Int) = { assert(ply == Int.MaxValue); ply = p }
-
   /** Set the secondary view. */
-  def setSecondaryView(sv: ComponentView, rv: Array[ComponentView]) 
-  = {
-    //require(ply == Int.MaxValue, s"$ply $ply1")
-    require(secondaryView == null || secondaryView == sv,
+  def setSecondaryView(sv: ComponentView, rv: Array[ComponentView]) = {
+    require(sv != null && (secondaryView == null || secondaryView == sv),
     s"this = $this\nsecondaryView = $secondaryView\nsv = $sv")
-    require(sv != null)
-    //require(sv.ply < ply1, s"$sv ${sv.ply} $ply1 ")
-    //require(rv == null || rv.forall(c => c == null )) // || c.ply < ply1  ), 
-      // rv.filter(_ != null).map(_.ply).mkString(","))
-    secondaryView = sv; referencingViews = rv //; ply = ply1
+    secondaryView = sv; referencingViews = rv 
   }
 
   /** Get the secondary view. */
@@ -601,7 +565,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   // =========== Combining maps
 
   /** Maps used in combining with this.  */
-  private var map: RemappingMap = servers.remappingMap // (getParamsBound)
+  private var map: RemappingMap = servers.remappingMap 
   // Note: map is null if servers is not normalised. 
   private var nextArg: NextArgMap = null 
   private var otherArgs: OtherArgMap = null
@@ -680,11 +644,11 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   }
 
   override def toString = 
-    s"$servers || ${components.mkString("[", " || ", "]")}" // +s" <$ply>"
+    s"$servers || ${components.mkString("[", " || ", "]")}"
 
   def toString0 = 
     servers.toString0+" || "+
-      components.map(_.toString0).mkString("[", " || ", "]") // +s" <$ply>"
+      components.map(_.toString0).mkString("[", " || ", "]")
 
   /** A new concretization, extending this with component newState. */
   def extend(newState: State): Concretization =
@@ -711,11 +675,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
 object Concretization{
   /** Make a concretization from cv. */
-  def apply(cv: ComponentView) = {
-    val c = new Concretization(cv.servers, cv.components)
-    // c.setPly(cv.ply); 
-    c
-  }
+  def apply(cv: ComponentView) = new Concretization(cv.servers, cv.components)
 
 
 }
