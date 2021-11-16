@@ -162,6 +162,10 @@ package object ViewAbstraction{
   /** Should each transition be shown? */
   var showTransitions = false
 
+  /** Should information about redundancies be shown in
+    * EffectOn.processInducedInfo? */
+  var showRedundancies = false
+
   /** Switch to activate various assertions. */
   val debugging = true // false
 

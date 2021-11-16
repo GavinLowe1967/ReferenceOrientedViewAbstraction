@@ -12,11 +12,11 @@ object Unification{
     * allUnifs      (called from EffectOnUnification)
     * |--unify      (called from Extendability.findReferencingView)
     * 
-    * combine1      (called from EffectOnUnification)
-    * |--combineX
+    * combine1      (called from EffectOnUnification.extendUnif, makeSecondaryInducedTransitions)
+    * |--getCombiningMaps (called from EffectOnUnification.extendUnifSingleRef)
     * 
     * remapToJoin      (called from MissingCommon)
-    * |--combineX
+    * |--getCombiningMaps
     */
 
   /** Try to extend map to map' such that map'(st2) = st1.
@@ -155,8 +155,13 @@ object Unification{
     }
     val res0 = new ArrayBuffer[RemappingMap]
     getCombiningMaps(map, otherArgs, bitMap, nextArg, cpts, res0)
-    for(map1 <- res0) 
+    for(map1 <- res0){ 
+// IMPROVE
+      // assert(!result.exists{ case(map11, states, unifs1,_) =>
+      //   states.sameElements(Remapper.applyRemapping(map1, cpts)) && 
+      //   unifs == unifs1})
       result += ((map1, Remapper.applyRemapping(map1, cpts), unifs, null))
+    }
   }
 
 
@@ -184,7 +189,12 @@ object Unification{
     def rec(i: Int, j: Int): Unit = {
       if(false && debugging) // Following is very expensive
         assert(Remapper.isInjective(map), Remapper.show(map))
-      if(i == cpts.length) result += Remapper.cloneMap(map)
+      if(i == cpts.length){
+// IMPROVE
+        // assert(!result.exists(map1 => (0 until numTypes).forall(t => 
+        //   map1(t).sameElements(map(t)))))
+        result += Remapper.cloneMap(map)
+      }
       else{
         val c = cpts(i); val ids = c.ids
         if(j == ids.length) // End of this component; move to next component

@@ -122,6 +122,7 @@ class EffectOnUnification(
 
     // Get all ways of unifying pre and cv. 
     val allUs = Unification.allUnifs(map0, preCpts, cpts)
+    // assert(allUs.distinct.length == allUs.length)
     var ix = 0
     while(ix < allUs.length){
       val (map1, unifs) = allUs(ix); ix += 1
@@ -175,9 +176,14 @@ class EffectOnUnification(
     if(singleRef){
       if(unifs.length == cpts.length && unifs.contains((0,0))) false
 // IMPROVE:  case below?
-      else changedServers || changingUnif
+      else // changedServers || changingUnif
+        if(changedServers) true // unifs.nonEmpty || !cv.containsDoneInduced(postServers)
+      else changingUnif
     } // end of if(singleRef)
-    else if(changedServers) unifs.nonEmpty || cv.addDoneInduced(postServers)
+    else if(changedServers)// {
+    //   if(changingUnif) true else cv.addDoneInduced(postServers, unifs)
+    // }
+      unifs.nonEmpty || cv.addDoneInduced(postServers)
       // Note, this can't be strengthened to
       // changingUnif || effectOnChangedServersCache.add((cv, postServers))
       // If there are two different ways of performing unification with a 
@@ -293,6 +299,9 @@ class EffectOnUnification(
         var j = 0
         while(j < res0.length){
           val map1 = res0(j); j += 1
+// IMPROVE
+          assert(!(j until res0.length).exists(i =>  
+            (0 until numTypes).forall(t => map1(t).sameElements(res0(i)(t)))))
           val reducedMapInfo: ReducedMap = 
             if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
             else null
@@ -300,6 +309,19 @@ class EffectOnUnification(
             !cv.containsDoneInducedPostServersRemaps(
               postServers, reducedMapInfo)){
             val newCpts = Remapper.applyRemapping(map1, cpts)
+if(true){
+  val matches = result.filter{ case (_,newCpts2,unifs2,_) => 
+    newCpts2.sameElements(newCpts) && unifs2 == unifs }
+  assert(matches.isEmpty,
+    s"\nnewCpts = "+StateArray.show(newCpts)+s"\nunifs = $unifs\n"+
+      "map1 = "+Remapper.show(map1)+"; matching: "+Remapper.show(matches(0)._1)+
+      s"\ncrossRefs = "+crossRefs.map{ case (map2,tuples2) => 
+        "("+Remapper.show(map2)+"; "+tuples2+")" }.mkString("; ")+
+      s"; tuples = $tuples\n"+
+      s"result = "+result.map{ case (map2,newCpts2,unifs2,_) =>
+        Remapper.show(map2)+"; "+StateArray.show(newCpts2)+"; "+unifs2 }
+      .mkString("\n"))
+} 
             result += ((map1, newCpts, unifs, reducedMapInfo))
           }
         }

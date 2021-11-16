@@ -170,17 +170,30 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
     paramsBound
   }
 
+  type UnificationList = List[(Int,Int)]
+
   /** Information about transitions pre -> post for which we have considered
     * induced transitions from this view, with pre.servers = this.servers !=
     * post.servers and with no unification.  The set of post.servers for all
     * such transitions. */
   private val doneInducedPostServers = new BasicHashSet[ServerStates]
+  // private val doneInducedPostServers = 
+  //   new BasicHashSet[(ServerStates, UnificationList)]
 
   /** Record that we are considering an induced transition with this, with no
     * unification, and whose post-state has postServers.  Return true if this
     * is the first such. */
+  // def addDoneInduced(postServers: ServerStates, unifs: UnificationList)
+  //     : Boolean = {
+  //   assert(!singleRef)
+  //   doneInducedPostServers.add((postServers, unifs))
+  // }
   def addDoneInduced(postServers: ServerStates): Boolean = 
     doneInducedPostServers.add(postServers)
+  
+  /** (With singleRef.) Have we previously stored postServers against this?  */
+  def containsDoneInduced(postServers: ServerStates): Boolean = 
+    doneInducedPostServers.contains(postServers)
 
   // A representation of map |> post.servers
   import ComponentView.ReducedMap // = Array[Long] 

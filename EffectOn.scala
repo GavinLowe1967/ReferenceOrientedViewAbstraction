@@ -54,6 +54,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView, 
     nextNewViews: MyHashSet[ComponentView])
   = {
+    println(s"EffectOn($pre, $post, $cv)")
     require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
     val postCpts = post.components; val preCpts = pre.components
 
@@ -96,6 +97,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     var index = 0
     while(index < inducedInfo.length){
       val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
+      assert(!(index until inducedInfo.length).exists( i => 
+        inducedInfo(i)._2.sameElements(cpts) && inducedInfo(i)._3 == unifs))
       // if(unifs.isEmpty && reducedMapInfo != null) 
       //   assert(!cv.containsDoneInducedPostServersRemaps(
       //     post.servers, reducedMapInfo)) // IMPROVE
@@ -155,6 +158,36 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
       else true
     }
+    // Show the transition
+    @inline def showTransition(newComponents: Array[State], nv: ComponentView)
+    = println(
+        s"$pre -${system.showEvent(e)}->\n  $post\n"+
+          s"  with unifications $unifs, isPrimary == $isPrimary\n  induces $cv\n"+
+          (if(!cv.components.sameElements(cpts))
+            s"  == ${View.show(pre.servers, cpts)}\n"
+          else "")+
+          s"  --> ${View.show(post.servers, newComponents)}\n"+
+          (if(post.servers != nv.servers ||
+            !newComponents.sameElements(nv.components))
+            s"  ==  $nv"
+          else "")
+    )
+    // Show information about a redundancy
+    @inline def showRedundancy(
+      v1: => ComponentView, newComponents: Array[State], nv: ComponentView)
+    = {
+      Profiler.count("EffectOn redundancy:"+isPrimary+unifs.isEmpty)
+      if(showRedundancies){ // give information about redundancies
+        //val v1 =  if(thisPly) nextNewViews.get(nv) else views.get(nv)
+        if(v1.inducedFrom(cv)){
+          showTransition(newComponents, nv)
+          // println(s"$pre -${system.showEvent(e)}-> $post\n"+
+          //   s"  with unifications $unifs induces $cv --> $nv\n"+
+          println(s"Previously "+v1.showCreationInfo)
+        }
+      }
+    }
+
     // If singleRef, identities of components referenced by both principals,
     // but not included in the views, and such that there is no way of
     // instantiating them consistently within sysAbsViews.
@@ -173,19 +206,12 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       if(!views.contains(nv)){
         if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){
           Profiler.count("addedViewCount")
-          if(showTransitions) println(
-            s"$pre -${system.showEvent(e)}->\n  $post\n"+
-              s"  with unifications $unifs\n  induces $cv\n"+
-              (if(!cv.components.sameElements(cpts)) 
-                s"  == ${View.show(pre.servers, cpts)}\n"
-              else "")+
-              s"  --> ${View.show(post.servers, newComponents)}\n"+
-              (if(post.servers != nv.servers || 
-                  !newComponents.sameElements(nv.components))
-                " ==\n  $nv"
-              else ""))
+          if(showTransitions) showTransition(newComponents, nv)
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents)
           val ok = recordInduced() 
+          if(false && singleRef && isPrimary && unifs.isEmpty){
+            val ok = cv.addDoneInduced(post.servers); assert(ok)
+          }
           //if(!ok) println(s"not ok  $cv $pre $post\n"+reducedMap.mkString(", "))
           // assert(ok) I think this can fail if there are two similar cases
           //in this batch
@@ -213,23 +239,17 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         }
         else{ // nv was in nextNewViews 
           recordInduced() // might give false
-          Profiler.count("EffectOn redundancy:"+isPrimary+unifs.isEmpty)
+          showRedundancy(nextNewViews.get(nv), newComponents, nv)
         }
       } // end of if(!views.contains(nv))
       // Try to work out why so many cases are redundant
       else{ // views already contains nv
         recordInduced()
-        Profiler.count("EffectOn redundancy:"+isPrimary+unifs.isEmpty)
-        if(false){ // give information about redundancies
-          val v1 = views.get(nv)
-          if(v1.inducedFrom(cv))
-            println(s"$pre -${system.showEvent(e)}-> $post\n"+
-              s"  with unifications $unifs induces $cv --> $nv"+
-              s"Previously "+v1.showCreationInfo)
-        }
+        showRedundancy(views.get(nv), newComponents, nv)
       }
     } // end of for loop
   }
+
 
 
   /** Test whether, if the principal components of cpts1 and cpts2 both have a

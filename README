@@ -1,15 +1,27 @@
+-- TUESDAY We are considering the same case twice for some reason.
+   EffectOnUnificaiton.extendUnifSingleRef see the same (newCpts,unifs)
+   twice (assertion line 315).  
+
+   I think getCombiningMaps is creating cross references beyond those in tuples. 
+
+
+- Investigate requiring cross refs only from the principal, or from a
+  secondary component if the principal has a reference to the same
+  component. -- done as switch; but this leads to more states with
+  laztSetNoDel.
+
 -- If there are no unifications, and we have previously seen this change of
    servers, and that led to a view being added, do we need to consider this
    again?  This is part 4 of optimisation 5.
-
   * In EffectOn.processInducedInfo, if view is added (or already there), call
      cv.addDoneInduced.
-
   * In EffectOnUnification.isSufficientUnif, call cv.doneInducedContains :
-
     if(changedServers) unifs.nonEmpty || cv.addDoneInduced(postServers)
-
-    Better: change the map to store (unification,postServers) pairs. 
+    Better: change the map to store (unification,postServers) pairs.  No, we
+    need to store the actual states of pre with which components are unified.
+  No.  There might be multiple renamings associated with this case, some of
+  which satisfy the side conditions and some don't.  We need to consider these
+  separately.
 
 ** EffectOnUnification.remapToCreateCrossrefs: maintain bitmap corresponding
    to map.  -- done

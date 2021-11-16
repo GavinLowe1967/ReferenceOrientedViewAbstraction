@@ -197,25 +197,65 @@ object StateArray{
     i < cpts.length
   }
 
+  /** Flag used in the definition of crossRefs. */
+  val CrossRefFlag = true
+  // Setting this false roughly doubles the number of views for lazySetNoDel.
+
   /** Find all references from a component c1 of cpts1 to a component c2 of
     * cpts2 (with neither in the other), or vice versa.  Return Array(c1, c2)
-    * for each such pair found (where c1 has a refernece to c2). */
+    * for each such pair found (where c1 has a reference to c2).  If
+    * crossRefFlag is false, include the cross reference only if a principal
+    * also has a reference to one of the components. */
   def crossRefs(cpts1: Array[State], cpts2: Array[State])
       : List[Array[State]] = {
     require(singleRef)
-    var result = List[Array[State]](); var i = 0
-    while(i < cpts1.length){
-      val c1 = cpts1(i); i += 1
-      if(! contains(cpts2, c1)){
-        var j = 0
-        while(j < cpts2.length){
-          val c2 = cpts2(j); j += 1
-          if(! contains(cpts1, c2)){
-            // Cross reference from cpts1 to cpts2
-            if(c1.hasIncludedParam(c2.family, c2.id)) result ::= Array(c1,c2)
-            // Cross reference from cpts2 to cpts1
-            if(c2.hasIncludedParam(c1.family, c1.id)) result ::= Array(c2,c1)
+    if(CrossRefFlag){
+      var result = List[Array[State]](); var i = 0
+      while(i < cpts1.length){
+        val c1 = cpts1(i); i += 1
+        if(! contains(cpts2, c1)){
+          var j = 0
+          while(j < cpts2.length){
+            val c2 = cpts2(j); j += 1
+            if(! contains(cpts1, c2)){
+              // Cross reference from cpts1 to cpts2
+              if(c1.hasIncludedParam(c2.family, c2.id)) result ::= Array(c1,c2)
+              // Cross reference from cpts2 to cpts1
+              if(c2.hasIncludedParam(c1.family, c1.id)) result ::= Array(c2,c1)
+            }
           }
+        }
+      }
+      result
+    }
+    else{
+      var res0 = crossRefs1(cpts1, cpts2) ++ crossRefs1(cpts2, cpts1)
+      // remove duplicates
+      var result = List[Array[State]]()
+      for(states <- res0){
+        if(!result.exists(states1 => states1.sameElements(states)))
+          result ::= states
+      }
+      result
+    }
+  }
+
+  /** All cross references between cpts1 and cpts2 that involve a component c2
+    * of cpts2 that is referenced by cpts1(0). */
+  @inline private def crossRefs1(cpts1: Array[State], cpts2: Array[State])
+      : List[Array[State]] = {
+    var result = List[Array[State]](); val c1 = cpts1(0); var j = 0
+    // References from c1 to components of cpts2
+    while(j < cpts2.length){
+      val c2 = cpts2(j); j += 1
+      if(! contains(cpts1, c2) && c1.hasIncludedParam(c2.family, c2.id)){
+        if(! contains(cpts2, c1)) result ::= Array(c1,c2)
+        // Cross references from other components of cpts1 to c2, or vice versa
+        for(j <- 1 until cpts1.length){
+          val c11 = cpts1(j)
+          if(!contains(cpts2, c11) && c11.hasIncludedParam(c2.family, c2.id))
+            result ::= Array(c11, c2)
+          if(c2.hasIncludedParam(c11.family, c11.id)) result ::= Array(c2, c11)
         }
       }
     }
