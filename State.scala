@@ -119,30 +119,20 @@ class State(val family: Family, val cs: ControlState,
   val representableInScript = 
     isNew || (0 until ids.length).forall(i => ids(i) < typeSizes(typeMap(i)))
 
-  // /** Add each identity (f,id) of this, with id >= serverNumParams(f), to
-  //   * bitmap. */
-  // def addIdsToBitMap(bitmap: Array[Array[Boolean]], serversNumParams: Array[Int])
-  // = {
-  //   var j = 0
-  //   while(j < ids.length){
-  //     val f = typeMap(j); val id = ids(j); j += 1
-  //     assert(id < bitmap(f).length)
-  //     if(id >= serversNumParams(f)) bitmap(f)(id) = true
-  //   }
-  // }
-
-  /** Add each identity (f,id) of this that is not an identity of
-    * serversIds to bitmap. */
+  /** Add each identity (f,id) of this, from index `from` upwards, that is not
+    * an identity of serversIds to bitmap. */
   def addIdsToBitMap(
-    bitmap: Array[Array[Boolean]], serverIds: Array[Array[Boolean]])
+    bitmap: Array[Array[Boolean]], serverIds: Array[Array[Boolean]], 
+    from: Int = 0)
   = {
-    var j = 0
+    var j = from
     while(j < ids.length){
       val f = typeMap(j); val id = ids(j); j += 1
       assert(id < bitmap(f).length && id < serverIds(f).length)
       if(!isDistinguished(id) && !serverIds(f)(id)) bitmap(f)(id) = true
     }
   }
+
 
   // Note: Equality is reference equality, as we avoid creating duplicate
   // states.

@@ -342,29 +342,32 @@ if(false){
       : BitMap = {
     // Clone, to avoid interference between different iterations.
     val otherArgsBitMap = otherArgsBitMap0.map(_.clone)
-    if(false){
-      // Indices of components of preCpts that are mapped onto.
-      val rangeIndices = tuples.map{ case ((i1,_),_) => i1 }.distinct
-      for(i1 <- rangeIndices)
-        preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap)
-    }
-    else{
-      // Indices of components of preCpts for which we have added the parameters
-      var doneIndices = List[Int](); var tups = tuples
-      while(tups.nonEmpty){
-        val i1 = tups.head._1._1; tups = tups.tail
-        // for(((i1,_),_) <- tuples;
-        if(!contains(doneIndices,i1)){
-          doneIndices ::= i1
-          preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap)
-// IMPROVE: not the identities here: they get removed below
-        }
-        //Profiler.count("getOtherArgsBitMapForSingleRef"+doneIndices.length)
+    // if(false){
+    //   // Indices of components of preCpts that are mapped onto.
+    //   val rangeIndices = tuples.map{ case ((i1,_),_) => i1 }.distinct
+    //   for(i1 <- rangeIndices)
+    //     preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap)
+    // }
+    // else{
+    // Indices of components of preCpts for which we have added the parameters
+    val doneIndices = new Array[Boolean](preCpts.length) // List[Int](); 
+    var tups = tuples
+    while(tups.nonEmpty){
+      val i1 = tups.head._1._1; tups = tups.tail
+      // if(!contains(doneIndices,i1)){
+      if(!doneIndices(i1)){
+        doneIndices(i1) = true // doneIndices ::= i1
+        preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap, 1)
       }
+      //Profiler.count("getOtherArgsBitMapForSingleRef"+doneIndices.length)
     }
+    // }
     // Remove identities of components in preCpts
-    for(c <- preCpts){
-      val (t,id) = c.componentProcessIdentity; otherArgsBitMap(t)(id) = false
+    var i = 0
+    while(i < preCpts.length){
+      // val c = preCpts(i); i += 1
+      val (t,id) = preCpts(i).componentProcessIdentity; i += 1
+      otherArgsBitMap(t)(id) = false
     }
 
     // IMPROVE: we need only map parameters of cpts(i2) like this, where
