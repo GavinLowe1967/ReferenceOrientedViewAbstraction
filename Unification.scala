@@ -12,7 +12,8 @@ object Unification{
     * allUnifs      (called from EffectOnUnification)
     * |--unify      (called from Extendability.findReferencingView)
     * 
-    * combine1      (called from EffectOnUnification.extendUnif, makeSecondaryInducedTransitions)
+    * combine1      (called from EffectOnUnification.extendUnif,
+    * |                 makeSecondaryInducedTransitions)
     * |--getCombiningMaps (called from EffectOnUnification.extendUnifSingleRef)
     * 
     * remapToJoin      (called from MissingCommon)

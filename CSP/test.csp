@@ -1,0 +1,32 @@
+-- @VA component process = Node
+-- @VA component alphabet = alphaNode
+-- @VA component identity type = NodeID
+-- @VA component active = false
+-- @VA servers = ServerSet
+
+include "definitions.csp"
+
+datatype NodeID = N0 | N1
+
+channel nodeError : NodeID
+
+Node(me) = nodeError.me -> Node(me)
+
+alphaNode(me) = { nodeError.me }
+
+------------------------------------------------------- Servers
+
+Constructor = nodeError?_ -> STOP
+
+alphaConstructor = {| nodeError |}
+
+channel error
+
+WD = nodeError?_ -> error -> STOP 
+
+alphaWD = {| nodeError, error |}
+
+ServerSet = < (WD, alphaWD, false), (Constructor, alphaConstructor, true) > 
+
+
+assert STOP [T= STOP :[symmetry reduce]:

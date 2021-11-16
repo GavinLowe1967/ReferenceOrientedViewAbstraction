@@ -54,7 +54,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView, 
     nextNewViews: MyHashSet[ComponentView])
   = {
-    println(s"EffectOn($pre, $post, $cv)")
+    if(showTransitions) println(s"EffectOn($pre, $post, $cv)")
     require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
     val postCpts = post.components; val preCpts = pre.components
 
@@ -97,6 +97,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     var index = 0
     while(index < inducedInfo.length){
       val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
+if(false)
       assert(!(index until inducedInfo.length).exists( i => 
         inducedInfo(i)._2.sameElements(cpts) && inducedInfo(i)._3 == unifs))
       // if(unifs.isEmpty && reducedMapInfo != null) 

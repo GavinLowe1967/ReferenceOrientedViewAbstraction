@@ -2,7 +2,10 @@
    EffectOnUnificaiton.extendUnifSingleRef see the same (newCpts,unifs)
    twice (assertion line 315).  
 
-   I think getCombiningMaps is creating cross references beyond those in tuples. 
+   I think getCombiningMaps is creating cross references beyond those in
+   tuples.  Shouldn't include in otherArgs identities of components in
+   pre.components -- done.  Also shouldn't map identities to match parameters
+   in pre.components ....
 
 
 - Investigate requiring cross refs only from the principal, or from a

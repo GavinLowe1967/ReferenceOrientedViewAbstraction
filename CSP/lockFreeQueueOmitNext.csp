@@ -1,0 +1,280 @@
+-- This version omits views based on next references, so finds false errors.
+-- An A is enqueued, and then a B is dequeued.  This is because the header
+-- node seems to point to the B-node, beacuse the model doesn't record views
+-- based on next references.
+
+-- @VA component process = FreeNode
+-- @VA component alphabet = alphaNode
+-- @VA component identity type = NodeID
+-- @VA component active = false
+-- @VA component process = Thread
+-- @VA component alphabet = alphaThread
+-- @VA component identity type = ThreadID
+-- @VA component active = true
+-- @VA servers = ServerSet
+-- @VA omitInfo = omit next from Node(me: NodeID, datum: T, next: NodeID)
+
+-- A model of a lock-based queue, corresponding to the following pseudocode.
+
+-- class Node(x: D, next: Node)
+-- var Head = new Node(_, null); var Tail = Head
+-- def Enqueue(x: D) = {
+--   val myTail = tail.get; val next = myTail.next
+--   if(next == null){
+--     val node = new Node(x, null)
+--     if(myTail.CAS(null, node)) Tail.CAS(myTail, node)
+--     else Enqueue(x)
+--   }
+--   else{ Tail.CAS(myTail, next); Enqueue(x) }
+-- }
+-- def Dequeue: D = {
+--   val myHead = Head.get; val myTail = Tail.get
+--   if(myHead == myTail){
+--     val next = myHead.next
+--     if(next == null) return Empty else{ Tail.CAS(myTail, next); Dequeue }
+--   }
+--   else{
+--     val next = myHead.next; val value = next.value
+--     if(Head.CAS(myHead, next)) return value else Dequeue
+--   }
+-- }
+
+include "definitions.csp"
+
+-- Identities of nodes
+datatype NodeIDType =
+  Null | N0 | N1 | N2 | N3 | N4 | N5
+NodeID = diff(NodeIDType, {Null}) -- real nodes
+
+-- Data values
+datatype T = A | B | C
+
+-- Thread identities
+datatype ThreadIDType = Constr | T0 | T1
+ThreadID = diff(ThreadIDType, {Constr}) -- real threads, excluding constructor
+-- 3 threads enough for most shapes
+
+---------------------- Nodes
+
+-- initialise node to hold value
+channel initNode : ThreadIDType . NodeID . T
+
+-- get the value field
+channel getValue : ThreadID . NodeIDType . T
+
+-- get the next field
+channel getNext : ThreadID . NodeIDType . NodeIDType
+
+-- get the next field, corresponding to a possible LP
+channel getNext1 : ThreadID . NodeIDType . NodeIDType
+
+-- CAS on the next field; corresponds to LP of enqueue of T field if
+-- successful.
+channel CASnext : ThreadID . NodeIDType . NodeIDType . NodeIDType . Bool . T
+  
+-- A node process, with identity me, currently free
+FreeNode :: (NodeIDType) -> Proc
+FreeNode(me) = initNode?_!me?value -> Node(me, value, Null)
+
+-- A node process, identity me, holding datum value and next pointer next
+Node :: (NodeIDType, T, NodeIDType) -> Proc
+Node(me, value, next) = 
+  getValue?_!me.value -> Node(me, value, next)
+  []
+  getNext?_!me.next -> Node(me, value, next)
+  []
+  getNext1?_!me.next -> Node(me, value, next)
+  []
+  CASnext?_!me?expected?new!(expected==next)?_ -> 
+    Node(me, value, if expected==next then new else next)
+
+alphaNode(me) =
+  union(
+    {| getValue.t.me, getNext.t.me, getNext1.t.me, CASnext.t.me |
+        t <- ThreadID |},
+    {| initNode.t.me | t <- ThreadIDType |}
+  )
+
+AllNodes = || id : NodeID @ [alphaNode(id)] FreeNode(id)
+
+--------- An AtomicReference to a Node
+
+-- The IDs of such atomic references
+datatype AtomicRefID = Head | Tail
+
+-- Get the node from an atomic reference. 
+channel getNode : ThreadID . AtomicRefID . NodeIDType
+
+-- Do a CAS on the atomic reference
+channel CAS : ThreadID . AtomicRefID . NodeIDType . NodeIDType . Bool
+
+-- Do a CAS on the atomic reference; corresponds to the LP of the dequeue of
+-- the T value if successful.
+channel CAS1 : ThreadID . AtomicRefID . NodeIDType . NodeIDType . Bool . T
+
+-- An atomic reference to node
+AtomicRefNode :: (AtomicRefID, NodeIDType) -> Proc
+AtomicRefNode(me, node) = 
+  getNode?_!me.node -> AtomicRefNode(me, node)
+  []
+  CAS?_!me?expected?new!(expected==node) ->
+    AtomicRefNode(me, if expected==node then new else node)
+  []
+  CAS1?_!me?expected?new!(expected==node)?_ ->
+    AtomicRefNode(me, if expected==node then new else node)
+
+alphaAR(me) = {| initAR.me, getNode.t.me, CAS.t.me, CAS1.t.me | t <- ThreadID |}
+
+channel initAR : AtomicRefID.NodeID -- initialise the atomic references.
+
+HeadAR = initAR.Head?n -> AtomicRefNode(Head, n)
+TailAR = initAR.Tail?n -> AtomicRefNode(Tail, n) 
+
+AllARs = HeadAR ||| TailAR
+
+--------- An enqueuing thread
+
+
+Enqueue(me, value) =
+  getNode.me.Tail?myTail -> getNext.me.myTail?next ->
+    if next==Null then
+      initNode.me?node!value -> 
+      CASnext.me.myTail.Null.node?result!value -> -- LP if successful
+      if result then -- enqueue succeeded, so advance tail
+        CAS.me.Tail.myTail.node?_ -> Thread(me)
+      else -- CASnext failed; retry
+        Enqueue(me, value)
+    else -- next!=Null, try to advance tail
+      CAS.me.Tail.myTail.next?_ -> Enqueue(me, value) 
+
+--------- A dequeuing thread
+
+-- Dequeue :: (ThreadIDType) -> Proc
+Dequeue(me) = 
+  getNode.me.Head?myHead -> getNode.me.Tail?myTail -> 
+    if myHead==myTail then 
+      getNext1.me.myHead?next -> -- LP if next = Null
+      if next==Null then Thread(me) -- empty queue
+      else -- new item partially enqueued
+        CAS.me.Tail.myTail.next?_ -> -- try to advance tail; retry
+        Dequeue(me) 
+    else -- non-empty queue; try to remove node from queue
+      getNext1.me.myHead?next -> -- can't be Null
+      getValue.me.next?value -> 
+      CAS1.me.Head.myHead.next?result!value -> -- LP if successful
+      if result then Thread(me)
+      else -- next.value already taken; retry
+        Dequeue(me)
+
+--------- A thread, which enqueues or dequeues.
+
+Thread(me) = (|~| value : T @ Enqueue(me, value)) |~| Dequeue(me)
+
+AllThreads = ||| id : ThreadID @ Thread(id)
+
+alphaThread(me) =
+  {| initNode.me, getValue.me, getNext.me, getNext1.me, CASnext.me,
+     getNode.me, CAS.me, CAS1.me |}
+
+-------- The constructor.
+
+Constructor = initNode.Constr?n!A -> initAR.Head.n -> initAR.Tail.n -> STOP
+
+alphaConstr = {| initNode.Constr, initAR |} 
+
+--------- The watchdog
+
+-- We capture the specification as a linearization of a queue, using a
+-- watchdog, described using the following events.
+
+channel enqueue, dequeue : T
+channel dequeueEmpty 
+channel error
+
+-- The watchdog ensures that if enqueues are from A*BC*, then dequeues are
+-- from the same language; and dequeues are successful between the enqueue and
+-- dequeue of the B.
+
+-- Signal an error
+
+WDErr = error -> STOP
+
+-- In first state: enqueues so far from A*; allow enqueues of A or B; check
+-- dequeues of A or empty.
+
+WD0 =
+  CASnext?_?_?_?_!true!A -> WD0
+  [] CASnext?_?_?_?_!true!B -> WD1
+  [] CAS1?_!Head?_?_!true?x -> (if x==A then WD0 else WDErr)
+  [] getNext1?_?_!Null -> WD0
+
+-- Enqueues so far from A*BC*, dequeues from A*; allow enqueues of C; check
+-- dequeues from A*B.
+
+WD1 =
+  CASnext?_?_?_?_!true!C -> WD1
+  [] CAS1?_!Head?_?_!true!A -> WD1
+  [] CAS1?_!Head?_?_!true!B -> WD2
+  [] CAS1?_!Head?_?_!true!C -> WDErr
+  [] getNext1?_?_!Null -> WDErr
+
+-- Enqueues so far from A*BC*, dequeues from A*BC*; allow enqueues of C; check
+-- dequeues from C* or empty.
+
+WD2 =
+  CASnext?_?_?_?_!true!C -> WD2
+  [] CAS1?_!Head?_?_!true?x -> (if x==C then WD2 else WDErr)
+  [] getNext1?_?_!Null -> WD2
+
+WatchDog = WD0
+
+-- Alphabet of Watchdog: defined using filters for efficiency.
+
+okCASnext(CASnext.t.n.next0.next1.b._) = n != Null and next1 != Null and b
+okCAS1(CAS1.t.ar.head0.head1.b._) = ar == Head and b
+okgetNext1(getNext1.t.head.nxt) = head != Null and nxt == Null
+
+AlphaWD = Union({
+  { e | e <- {| CASnext |}, okCASnext(e) },
+  { e | e <- {| CAS1 |}, okCAS1(e) },
+  { e | e <- {| getNext1 |}, okgetNext1(e) },
+  { error }
+})
+
+-- -- old definition
+-- oldAlphaWD = Union({
+--   {| CASnext.t.n.next0.next1.true |
+--        t <- ThreadID, n <- NodeID, next0 <- NodeIDType, next1 <- NodeID |},
+--   {| CAS1.t.Head.head0.head1.true |
+--        t <- ThreadID, head0 <- NodeIDType, head1 <- NodeIDType |},
+--   {| getNext1.t.head.Null | t <- ThreadID, head <- NodeID |},
+--   { error }
+-- })
+
+-------------------------------------------- All the servers
+
+ServerSet :: <(Proc, {Event}, Bool)>
+ServerSet = 
+  < (HeadAR, alphaAR(Head), false), (TailAR, alphaAR(Tail), false),
+    (WatchDog, AlphaWD, false), (Constructor, alphaConstr, true) >
+
+Servers = || (S, Alpha, _) <- set(ServerSet) @ [Alpha] S
+
+-------------------------------------------- The system
+
+componentSyncSet =
+  {| initNode.t.n, getValue.t.n, getNext.t.n, getNext1.t.n, CASnext.t.n | 
+       t <- ThreadID, n <- NodeID |}
+
+AllComponents = AllThreads [| componentSyncSet |] AllNodes
+
+syncSet = union(componentSyncSet, {| initNode.Constr, getNode, CAS, CAS1 |})
+
+System = AllComponents [| syncSet |] Servers
+
+System1 = System \ diff(Events, {error})
+
+assert STOP [T= System1
+
+assert STOP [T= STOP :[symmetry reduce]:
+

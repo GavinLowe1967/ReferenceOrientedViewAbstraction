@@ -1,0 +1,229 @@
+-- This version omits views that follow next references from nodes, and so
+-- finds false errors.  A B-node is enqueued, and then a C-node is dequeued.
+-- This is because the header node is found to point to the C-node, because
+-- views following next references are not recorded.
+
+-- @VA component process = FreeNode
+-- @VA component alphabet = alphaNode
+-- @VA component identity type = NodeID
+-- @VA component active = false
+-- @VA component process = Thread
+-- @VA component alphabet = alphaThread
+-- @VA component identity type = ThreadID
+-- @VA component active = true
+-- @VA serversRename = ServerSet
+-- @VA omitInfo = omit next from Node(me: NodeID, datum: Data, next: NodeID)
+
+include "definitions.csp"
+
+-- A model of a lock-based queue, corresponding to the following pseudocode.
+
+-- In this version, the watchdog synchronises on two events of an enqueue, and
+-- two events of a dequeue..
+
+-- class Node(x: D, next: Node)
+-- var Head = new Node(_, null); var Tail = Head; val Lock = new Lock
+-- def Enqueue(x: D)) = {
+--   Lock.lock; val tail = Tail; val node = new Node(x, null); 
+--   tail.next = node; tail = node; Lock.unlock
+-- }
+-- def Dequeue: D = {
+--   Lock.lock; val h = Head; val next = h.next
+--   if(next != null){ Head = next; val d = next.datum; Lock.unlock; return d }
+--   else{ Lock.unlock; return Empty }
+-- }
+
+
+-------- Basic types
+-- the type of nodes
+datatype NodeIDType = Null | N0 | N1 | N2 | N3 | N4
+NodeID = diff(NodeIDType, {Null})               -- real nodes
+datatype Data = A | B | C                       -- the type of data
+-- threads, including the constructor
+datatype ThreadIDType = Constr | T0 | T1 
+ThreadID = diff(ThreadIDType, {Constr})         -- real threads
+
+-------------------- Component processes
+
+------------- Nodes
+
+channel initNode : ThreadIDType.NodeID.Data -- initialise a node
+channel getDatum : ThreadID.NodeID.Data -- read data from a node
+channel getNext : ThreadID.NodeID.NodeIDType -- read next reference from a node
+channel setNext : ThreadID.NodeID.NodeID
+
+-- A single node with identity me, initially free
+FreeNode(me) = initNode?t!me?datum -> Node(me, datum, Null)
+
+-- A node holding datum with reference to next
+Node(me, datum, next) = 
+  getDatum?t!me!datum -> Node(me, datum, next)
+  [] getNext?t!me!next -> Node(me, datum, next)
+  [] setNext?t!me?newNext -> Node(me, datum, newNext)
+
+alphaNode(n) =
+  union(
+    {| initNode.Constr.n |},
+    {| initNode.t.n, getDatum.t.n, getNext.t.n, setNext.t.n | t <- ThreadID |}
+  )
+
+Nodes = || n <- NodeID @ [alphaNode(n)] FreeNode(n)
+
+alphaNodes = Union({alphaNode(n) | n <- NodeID})
+
+-------- Threads
+channel dequeueEmpty : ThreadID         -- Signal start or end of operation
+
+-- The following events are used as a hack to ensure that a particular node ID
+-- remains in the state of a thread.  They are blocked by the constructor.
+channel dummy : ThreadID.NodeID 
+
+Dequeue(me) =
+  lock.me -> getHead.me?h -> getNext.me.h?next ->
+  if next != Null then setHead.me.next -> getDatum.me.next?d -> Unlock(me)
+  else dequeueEmpty.me -> Unlock(me)
+
+Unlock(me) = unlock.me -> Thread(me)
+
+Enqueue(me) =
+  lock.me -> getTail.me?tail -> initNode.me?node?d -> setNext.me.tail.node ->
+--  setTail.me.node -> Unlock(me) 
+  (setTail.me.node -> Unlock(me) [] Dummy(me, tail))
+
+Dummy(me, n) = dummy.me.n -> Dummy(me, n)
+
+Thread(me) = Dequeue(me) [] Enqueue(me)
+
+alphaThread(t) = 
+  {| getHead.t, setHead.t, getTail.t, setTail.t, lock.t, unlock.t,
+     initNode.t, getDatum.t, getNext.t, setNext.t, dequeueEmpty.t, dummy.t |}
+
+
+Threads = || t : ThreadID @ [alphaThread(t)] Thread(t)
+
+alphaThreads = Union({alphaThread(t) | t <- ThreadID})
+
+---------------------- Servers ----------------------
+
+-------- Variable storing the value of the header node
+
+channel getHead, setHead : ThreadID.NodeID -- get or set the header pointer
+
+channel initHead : NodeID
+
+Header = initHead?h -> Header'(h)
+
+Header'(h) = getHead?t!h -> Header'(h) [] setHead?t?h1 -> Header'(h1)
+
+alphaHeader = {| getHead, setHead, initHead |}
+
+-------- Variable storing the value of the tail node
+
+channel getTail, setTail : ThreadID.NodeID -- get or set the header pointer
+
+channel initTail : NodeID -- initialise tail
+
+Tail = initTail?tail -> Tail'(tail)
+
+Tail'(tail) = getTail?t!tail -> Tail'(tail) [] setTail?t?tail1 -> Tail'(tail1)
+
+alphaTail = {| getTail, setTail, initTail |}
+
+-------- A lock process
+
+channel lock, unlock : ThreadID
+
+channel initLock
+
+Lock = initLock -> Lock'
+
+Lock' = lock?t -> unlock.t -> Lock'
+
+alphaLock = {| lock, unlock, initLock |}
+
+-------- Constructor process
+
+-- Initialise the header node, the head and tail variables, and the lock.
+-- Note that the last step is an optimisation of the model, to reduce
+-- interleavings; but is very natural.
+
+Constructor = initNode.Constr?n!A -> initHead.n -> initTail.n -> initLock -> STOP
+
+alphaConstr = {| initNode.Constr, initHead, initTail, initLock, dummy |} 
+
+-------- Watchdog.  Ensure dequeues are from A*BC*
+
+-- Start of an enqueue; corresponds to the thread initialising the node
+channel enqueue1: ThreadID.Data
+-- End of the enqueue; corresponds to the setTail event
+channel enqueue2: ThreadID
+-- First update in a dequeue; corresponds to the setHead event
+channel dequeue1: ThreadID
+-- End of the dequeue; corresponds to the getDatum event
+channel dequeue2: ThreadID.Data
+
+channel error
+
+Error = error -> STOP
+
+-- Version that also acts as reg.  First state: B not yet enqueued.
+
+Watchdog =
+  enqueue1?t!A -> enqueue2.t -> Watchdog []
+  enqueue1?t!B -> enqueue2.t -> Watchdog' []
+  dequeue1?t -> dequeue2.t?x -> (if x==A then Watchdog else Error) []
+  dequeueEmpty?_ -> Watchdog
+
+-- B enqueued, not yet dequeued; allow dequeue of A or B. 
+
+Watchdog' =
+  enqueue1?t!C -> enqueue2.t -> Watchdog' []
+  dequeue1?t -> dequeue2.t?x ->
+    (if x==A then Watchdog' else if x==B then Watchdog'' else Error) []
+  dequeueEmpty?_ -> Error
+
+-- B dequeued; allow dequeue of C.
+
+Watchdog'' =
+  enqueue1?t!C -> enqueue2.t -> Watchdog'' []
+  dequeue1?t -> dequeue2.t?x -> (if x==C then Watchdog'' else Error) []
+  dequeueEmpty?_ -> Watchdog''  
+  
+WDRename = Union({
+  {(enqueue1.t.v, initNode.t.n.v) | t <- ThreadID, v <- Data, n <- NodeID},
+  {(enqueue2.t, setTail.t.n) | t <- ThreadID, n <- NodeID},
+  {(dequeue1.t, setHead.t.n) | t <- ThreadID, n <- NodeID},
+  {(dequeue2.t.v, getDatum.t.n.v) | t <- ThreadID, n <- NodeID, v <- Data}
+})
+
+alphaWD = union(
+  {|error, dequeueEmpty, setTail, setHead, getDatum |}, 
+  {|initNode.t | t <- ThreadID|}
+)
+
+-------- Put servers together
+
+ServerSet :: <(Proc, <(Event,Event)>, {Event}, Bool)>
+ServerSet =
+  < (Lock, <>, alphaLock, false), (Header, <>, alphaHeader, false), 
+    (Tail, <>, alphaTail, false), (Watchdog, seq(WDRename), alphaWD, false), 
+    (Constructor, <>, alphaConstr, true) >
+
+Servers = || (S, R_, Alpha, _) <- set(ServerSet) @ 
+  [Alpha] S[[ e1 <- e2 | (e1,e2) <- set(R_) ]]
+
+Components = Threads [| inter(alphaNodes, alphaThreads) |] Nodes 
+
+SyncSet =
+  {| getHead, setHead, getTail, setTail, lock, unlock, getDatum,
+     dequeueEmpty, initNode |}
+
+System = Components [| SyncSet |] Servers
+
+-- Watchdog-based specification
+
+assert STOP [T= System \ diff(Events, {error})
+
+assert System :[deadlock free]
+
+assert STOP [T= STOP :[symmetry reduce]:

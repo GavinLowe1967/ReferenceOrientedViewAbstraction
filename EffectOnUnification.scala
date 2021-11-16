@@ -290,6 +290,7 @@ class EffectOnUnification(
       val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
       // Values that identities can be mapped to: values in otherArgs, but not
       // identities of components in post; update otherArgsBitMap to record.
+// FIXME: also not secondary params in preCpts
       StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
       // Create primary induced transitions.
       if(sufficientUnif){
@@ -298,35 +299,35 @@ class EffectOnUnification(
           map1, otherArgs, otherArgsBitMap, nextArg, cpts, res0)
         var j = 0
         while(j < res0.length){
-          val map1 = res0(j); j += 1
+          val map11 = res0(j); j += 1
 // IMPROVE
           assert(!(j until res0.length).exists(i =>  
-            (0 until numTypes).forall(t => map1(t).sameElements(res0(i)(t)))))
+            (0 until numTypes).forall(t => map11(t).sameElements(res0(i)(t)))))
           val reducedMapInfo: ReducedMap = 
-            if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
+            if(unifs.isEmpty) Remapper.rangeRestrictTo(map11, postServers)
             else null
           if(unifs.nonEmpty || 
             !cv.containsDoneInducedPostServersRemaps(
               postServers, reducedMapInfo)){
-            val newCpts = Remapper.applyRemapping(map1, cpts)
+            val newCpts = Remapper.applyRemapping(map11, cpts)
 if(true){
   val matches = result.filter{ case (_,newCpts2,unifs2,_) => 
     newCpts2.sameElements(newCpts) && unifs2 == unifs }
   assert(matches.isEmpty,
-    s"\nnewCpts = "+StateArray.show(newCpts)+s"\nunifs = $unifs\n"+
-      "map1 = "+Remapper.show(map1)+"; matching: "+Remapper.show(matches(0)._1)+
-      s"\ncrossRefs = "+crossRefs.map{ case (map2,tuples2) => 
-        "("+Remapper.show(map2)+"; "+tuples2+")" }.mkString("; ")+
-      s"; tuples = $tuples\n"+
-      s"result = "+result.map{ case (map2,newCpts2,unifs2,_) =>
-        Remapper.show(map2)+"; "+StateArray.show(newCpts2)+"; "+unifs2 }
-      .mkString("\n"))
+    s"\nnewCpts = "+StateArray.show(newCpts)+s"; unifs = $unifs\n"+
+      "map1 = "+Remapper.show(map1)+"; otherArgs = "+otherArgs.mkString("; ")+
+      "; map11 = "+Remapper.show(map11)+s"; tuples = $tuples\n"+
+      s"crossRefs = "+crossRefs.map{ case (mapX,tuples2) => 
+        "("+Remapper.show(mapX)+"; "+tuples2+")" }.mkString("; ")+
+      s"\nresult = "+result.map{ case (mapX,newCpts2,unifs2,_) =>
+        Remapper.show(mapX)+"; "+StateArray.show(newCpts2)+"; "+unifs2 }
+      .mkString("\n  "))
 } 
-            result += ((map1, newCpts, unifs, reducedMapInfo))
+            result += ((map11, newCpts, unifs, reducedMapInfo))
           }
         }
         // combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, result)
-      }
+      } // end of if(sufficientUnif)
       makeSecondaryInducedTransitions(map1, otherArgs, otherArgsBitMap, unifs)
     } // end of outer for loop.
   } // end of extendUnifSingleRef
@@ -334,7 +335,7 @@ if(true){
   /** Extend otherArgsBitMap0.  Add parameters of components c of preCpts such
     * that a component of map1(cv) has a reference to c, or vice versa; such
     * components c are identified by the first index in an element of tuples.
-    * Also remove values in ran map1. */
+    * Also remove values in ran map1, and all identities in preCpts. */
   @inline private def getOtherArgsBitMapForSingleRef(
     map1: RemappingMap, otherArgsBitMap0: BitMap, 
     tuples: List[((Int,Int),(Int,Int))])
@@ -356,10 +357,16 @@ if(true){
         if(!contains(doneIndices,i1)){
           doneIndices ::= i1
           preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap)
+          // IMPROVE: not the identities here
         }
         //Profiler.count("getOtherArgsBitMapForSingleRef"+doneIndices.length)
       }
     }
+    // Remove identities of components in preCpts
+    for(c <- preCpts){
+      val (t,id) = c.componentProcessIdentity; otherArgsBitMap(t)(id) = false
+    }
+
     // IMPROVE: we need only map parameters of cpts(i2) like this, where
     // i2 is the relevant index in the current tuple.
     // for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
