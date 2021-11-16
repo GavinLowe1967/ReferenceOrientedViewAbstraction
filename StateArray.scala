@@ -288,10 +288,21 @@ object StateArray{
   // }
 
   /** Remove identities of components in cpts from bitMap. */
-  def removeIdsFromBitMap(cpts: Array[State], bitMap: Array[Array[Boolean]]) = {
+  def removeIdsFromBitMap(cpts: Array[State], bitMap: BitMap) = {
     var i = 0
     while(i < cpts.length){
       val st = cpts(i); i += 1; bitMap(st.family)(st.id) = false
+    }
+  }
+
+  /** Remove all parameters of cpts from bitMap. */
+  def removeParamsFromBitMap(cpts: Array[State], bitMap: BitMap) = {
+    var i = 0
+    while(i < cpts.length){
+      val st = cpts(i); i += 1; val pids = st.processIdentities; var j = 0
+      while(j < pids.length){
+        val (t,id) = pids(j); j += 1; if(id >= 0) bitMap(t)(id) = false
+      }
     }
   }
 

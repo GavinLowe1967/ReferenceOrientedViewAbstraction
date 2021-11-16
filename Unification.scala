@@ -157,10 +157,6 @@ object Unification{
     val res0 = new ArrayBuffer[RemappingMap]
     getCombiningMaps(map, otherArgs, bitMap, nextArg, cpts, res0)
     for(map1 <- res0){ 
-// IMPROVE
-      // assert(!result.exists{ case(map11, states, unifs1,_) =>
-      //   states.sameElements(Remapper.applyRemapping(map1, cpts)) && 
-      //   unifs == unifs1})
       result += ((map1, Remapper.applyRemapping(map1, cpts), unifs, null))
     }
   }
@@ -191,9 +187,6 @@ object Unification{
       if(false && debugging) // Following is very expensive
         assert(Remapper.isInjective(map), Remapper.show(map))
       if(i == cpts.length){
-// IMPROVE
-        // assert(!result.exists(map1 => (0 until numTypes).forall(t => 
-        //   map1(t).sameElements(map(t)))))
         result += Remapper.cloneMap(map)
       }
       else{

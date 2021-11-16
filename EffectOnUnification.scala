@@ -289,9 +289,9 @@ class EffectOnUnification(
       // Convert to OtherArgMap
       val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
       // Values that identities can be mapped to: values in otherArgs, but not
-      // identities of components in post; update otherArgsBitMap to record.
-// FIXME: also not secondary params in preCpts
-      StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
+      // parameters in preCpts; update otherArgsBitMap to record.
+      // StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
+      StateArray.removeParamsFromBitMap(preCpts, otherArgsBitMap)
       // Create primary induced transitions.
       if(sufficientUnif){
         val res0 = new ArrayBuffer[RemappingMap]
@@ -300,9 +300,8 @@ class EffectOnUnification(
         var j = 0
         while(j < res0.length){
           val map11 = res0(j); j += 1
-// IMPROVE
-          assert(!(j until res0.length).exists(i =>  
-            (0 until numTypes).forall(t => map11(t).sameElements(res0(i)(t)))))
+          // assert(!(j until res0.length).exists(i =>  
+          //   (0 until numTypes).forall(t => map11(t).sameElements(res0(i)(t)))))
           val reducedMapInfo: ReducedMap = 
             if(unifs.isEmpty) Remapper.rangeRestrictTo(map11, postServers)
             else null
@@ -310,7 +309,8 @@ class EffectOnUnification(
             !cv.containsDoneInducedPostServersRemaps(
               postServers, reducedMapInfo)){
             val newCpts = Remapper.applyRemapping(map11, cpts)
-if(true){
+// IMPROVE
+if(false){
   val matches = result.filter{ case (_,newCpts2,unifs2,_) => 
     newCpts2.sameElements(newCpts) && unifs2 == unifs }
   assert(matches.isEmpty,
@@ -357,7 +357,7 @@ if(true){
         if(!contains(doneIndices,i1)){
           doneIndices ::= i1
           preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap)
-          // IMPROVE: not the identities here
+// IMPROVE: not the identities here: they get removed below
         }
         //Profiler.count("getOtherArgsBitMapForSingleRef"+doneIndices.length)
       }
@@ -568,10 +568,8 @@ object EffectOnUnification{
         val id1 = preCpts(i1).ids(j1); val id2 = cpts(i2).ids(j2)
         val t = preCpts(i1).typeMap(j1)
         assert(!isDistinguished(id1) && !isDistinguished(id2))
-        // assert(inRangeBitMap(t)(id1) == map(t).contains(id1)) // IMPROVE
         if(t == cpts(i2).typeMap(j2) && map(t)(id2) < 0 && 
           !inRangeBitMap(t)(id1) ){
-//          !map(t).contains(id1) ){ // IMPROVE
           map(t)(id2) = id1; inRangeBitMap(t)(id1) = true // temporary update (*)
           val newTuples = ((i1,j1),(i2,j2))::tuples
           // Advance

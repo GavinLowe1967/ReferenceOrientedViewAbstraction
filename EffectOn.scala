@@ -78,21 +78,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
       if(us.isEmpty) cpt else postCpts(us.head._2)
     }
-
-    // IMPROVE
-/*
-    for(i <- 0 until inducedInfo.length; j <- i+1 until inducedInfo.length){
-      val rm1 = inducedInfo(i)._4; val rm2 = inducedInfo(j)._4
-      if(rm1 != null && rm2 != null && rm1.sameElements(rm2))
-        println(s"matching cases: $cv $pre $post\n"+
-          rm1.mkString(", ")+"; "+rm2.mkString(", "))
-    }
- */
-
-    if(false)
-      for((_, _, _, reducedMapInfo) <- inducedInfo; if reducedMapInfo != null)
-        assert(!cv.containsDoneInducedPostServersRemaps(
-          post.servers, reducedMapInfo)) // IMPROVE
+    // for((_, _, _, reducedMapInfo) <- inducedInfo; if reducedMapInfo != null)
+    //   assert(!cv.containsDoneInducedPostServersRemaps(
+    //     post.servers, reducedMapInfo)) // IMPROVE
     // Process inducedInfo
     var index = 0
     while(index < inducedInfo.length){
@@ -100,9 +88,6 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 if(false)
       assert(!(index until inducedInfo.length).exists( i => 
         inducedInfo(i)._2.sameElements(cpts) && inducedInfo(i)._3 == unifs))
-      // if(unifs.isEmpty && reducedMapInfo != null) 
-      //   assert(!cv.containsDoneInducedPostServersRemaps(
-      //     post.servers, reducedMapInfo)) // IMPROVE
       Profiler.count("EffectOn step "+unifs.isEmpty)
       // The components needed for condition (b).
       val crossRefs: List[Array[State]] = 
