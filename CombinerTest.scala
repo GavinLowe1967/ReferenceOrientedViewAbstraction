@@ -7,9 +7,10 @@ import scala.collection.mutable.ArrayBuffer
   * loaded. */
 object CombinerTest{
   import RemapperP.Remapper.{newRemappingMap,newOtherArgMap,show}
-  import RemapperP.RemapperTest.{checkMap,emptyMap}
+  // import RemapperP.RemapperTest.{checkMap,emptyMap}
   import CombinerP.Combiner._
   import TestStates._
+  import TestUtils._
 
   /** Test of remapSelectedStates. */
   def remapSelectedStatesTest = {

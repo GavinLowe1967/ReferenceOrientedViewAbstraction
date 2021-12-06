@@ -6,8 +6,9 @@ import scala.collection.mutable.ArrayBuffer
 object UnificationTest 
     extends Unification.Tester with EffectOnUnification.Tester{
   import TestStates._
+  import TestUtils._
   import RemapperP.Remapper.{show,newRemappingMap}
-  import RemapperP.RemapperTest.{emptyMap,checkMap}
+  // import RemapperP.RemapperTest.{emptyMap,checkMap}
   import Unification.{unify,CombineResult,remapToJoin}
   import EffectOnUnification.{combine,MatchingTuple}
 

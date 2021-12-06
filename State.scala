@@ -44,6 +44,15 @@ class State(val family: Family, val cs: ControlState,
     pIds
   }
 
+  /** Does this have a reference to (t,id) (other than its identity)? */
+  def hasRef(t: Family, id: Identity) = 
+    if(family == t && ids(0) == id) false
+    else{
+      var i = 1
+      while(i < length && (typeMap(i) != t || ids(i) != id)) i += 1
+      i < length
+    }
+
   /** Information about which references are used to create views.  It is set
     * the first time includeParam is called (it can't be done before
     * compilation is complete).  Subsequently, a value of null indicates that

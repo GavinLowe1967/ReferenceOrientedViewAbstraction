@@ -10,21 +10,22 @@ object RemapperTest{
   // import RemapperP.Unification._
   import TestStates._
   import Unification.CombineResult
+  import TestUtils._
 
-  // ======== Helper functions
+  // // ======== Helper functions
 
-  /** Check that map is the mapping {i -> j}. */
-  def checkMap(map: Array[Int], i: Int, j: Int) =
-    map(i) == j && map.indices.forall(i1 => i1 == i || map(i1) == -1)
+  // /** Check that map is the mapping {i -> j}. */
+  // def checkMap(map: Array[Int], i: Int, j: Int) =
+  //   map(i) == j && map.indices.forall(i1 => i1 == i || map(i1) == -1)
 
-  /** Check that map is the mapping {(i,j) | (i,j) <- pairs}. */
-  def checkMap(map: Array[Int], pairs: List[(Int,Int)]) =
-    map.indices.forall(i => pairs.filter(_._1 == i) match{
-      case List() => map(i) == -1
-      case List((i1,j)) => map(i) == j
-    })
+  // /** Check that map is the mapping {(i,j) | (i,j) <- pairs}. */
+  // def checkMap(map: Array[Int], pairs: List[(Int,Int)]) =
+  //   map.indices.forall(i => pairs.filter(_._1 == i) match{
+  //     case List() => map(i) == -1
+  //     case List((i1,j)) => map(i) == j
+  //   })
 
-  def emptyMap(map: Array[Int]) = map.forall(_ == -1)
+  // def emptyMap(map: Array[Int]) = map.forall(_ == -1)
 
   // ======== Now the tests
 

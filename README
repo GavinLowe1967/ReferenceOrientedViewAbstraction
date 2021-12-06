@@ -5,7 +5,21 @@
    I think getCombiningMaps is creating cross references beyond those in
    tuples.  Shouldn't include in otherArgs identities of components in
    pre.components -- done.  Also shouldn't map identities to match parameters
-   in pre.components ....
+   in pre.components -- done
+
+   Do we need to consider renamings that create cross references when there's
+   another that doesn't create a cross reference?  E.g.
+
+   (fixed(N0), 20(T0,N0) || 9(N0,N1) || 6(N2)) -> 
+     (fixed(N0)', 23(T0,N2) || 9(N0,N1) || 9(N2,N0)
+   on (fixed(N0), 9(N1,N2) || 9(N2,N3))
+
+   currently considers renamings producing <9[0](N1,N3) || 9[0](N3,N4)>,
+   <9[0](N3,N1) || 9[0](N1,N4)>, <9[0](N3,N4) || 9[0](N4,N5)>.  Is the last
+   enough?  It is here, but how can we generalise this? 
+
+   Think about when induced transitions are subsumed by other induced
+   transitions with fewer cross references/common references.
 
 
 - Investigate requiring cross refs only from the principal, or from a

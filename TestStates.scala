@@ -69,6 +69,7 @@ object TestStates{
   val servers0 = ServerStates(List(lock0, top(Null), wd0))
   val servers1 = ServerStates(List(lock1(T0), top(Null), wd0))
   val servers2 = ServerStates(List(lock1(T0), top(N0), wd0))
+  def servers3(n: Int) = ServerStates(List(lock0, top(n), wd0))
 
   // Combined components
   val components1 = Array(pushSt(T0,N0), aNode(0,1))

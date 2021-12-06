@@ -231,7 +231,7 @@ if(false)
       // Try to work out why so many cases are redundant
       else{ // views already contains nv
         recordInduced()
-        showRedundancy(views.get(nv), newComponents, nv)
+        // showRedundancy(views.get(nv), newComponents, nv)
       }
     } // end of for loop
   }

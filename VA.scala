@@ -176,6 +176,7 @@ object VA{
         SystemP.SystemTest.test(system); 
         new ExtendabilityP.ExtendabilityTest(system).test
         new CheckerTest(system).test
+        SingleRefEffectOnUnificationTest()
       }
       else if(testSuite){ assert(fname.isEmpty); runTestSuite() }
       else if(profiling || profilingFlat || profilingBoth) profiler(run(fname)) 
