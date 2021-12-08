@@ -8,12 +8,34 @@ import scala.collection.mutable.{ArrayBuffer}
 class SingleRefEffectOnUnification(
   pre: Concretization, post: Concretization, cv: ComponentView){
 
+  /* Relationship of main functions.
+   * apply
+   * |--Unification.allUnifs
+   * |--isSufficientUnif
+   * |--mkOtherArgsMap
+   * |  |--addIdsFromNewRef
+   * |--extendToRDMap
+   * |--extendMapping
+   * |  |--findLinkages
+   * |  |--extendForLinkages
+   * |     |--extendForLinkage
+   * |  |--mapUndefinedToFresh
+   * |--getSecondaryInfo
+   * |--mkSecondaryOtherArgsMap
+   */
+
+
   /* A few object variables, extracted directly from pre, post and cv, used in
    * several functions. */
   private val servers = pre.servers
   require(servers == cv.servers && servers.isNormalised)
   private val postServers = post.servers
   private val changedServers = servers != postServers
+
+  // All params in post.servers but not in pre.servers, as a bitmap.
+  val newServerIds: Array[Array[Boolean]] = // getNewServerIds
+    ServerStates.newParamsBitMap(servers, post.servers)
+
   private val preCpts = pre.components; private val postCpts = post.components
   require(preCpts.length == postCpts.length)
   private val cpts = cv.components
@@ -60,32 +82,59 @@ class SingleRefEffectOnUnification(
   private val nextArg: NextArgMap = pre.getNextArgMap
   post.updateNextArgMap(nextArg)
 
+
+  /** Which secondary components can gain a reference to cv.principal?  All
+    * pairs (i,p1) such that pre.components(i) changes state in the transition
+    * (with (i>0), and p1 is a new parameter of post.components(i), of the
+    * same type as cv.principal.id, and not matching . */
+  private val acquiredRefs: List[(Int,Parameter)] = getAcquiredRefs
+  private def getAcquiredRefs: List[(Int,Parameter)] = {
+    var result = List[(Int,Parameter)]()
+    for(i <- 1 until preCpts.length; if preCpts(i) != postCpts(i)){
+      val postParams = postCpts(i).processIdentities
+      val preParams = preCpts(i).processIdentities
+      for(j <- 1 until postParams.length){
+        val p1 = postParams(j)
+        if(p1._1 == cvpf && !preParams.contains(p1))
+          result ::= (i,p1)
+      }
+    }
+    result
+  }
+
+
+  // =======================================================
+
   /** The main function. */
   def apply(): (CombineResult1, CombineResult2) = {
     val map0 = servers.remappingMap(cv.getParamsBound)
-    // All params in post.servers but not in pre.servers, as a bitmap.
-    val newServerIds: Array[Array[Boolean]] = getNewServerIds
     val allUnifs = Unification.allUnifs(map0, preCpts, cpts)
 
     for((map1, unifs) <- allUnifs){
-      //println(Remapper.show(map1)+"; "+unifs)
       if(isSufficientUnif(unifs)){
         // Parameters to map params of cv to, in order to create result-defining
         // map.
-        val otherArgs = mkOtherArgsMap(newServerIds, map1, unifs)
+        val otherArgs = mkOtherArgsMap(map1, unifs)
         // Primary result-defining maps
-        val rdMaps = extendMap(map1,otherArgs)
+        val rdMaps = extendToRDMap(map1,otherArgs)
         // Extend with extra linkages and fresh parameters
         for(rdMap <- rdMaps) extendMapping(unifs, rdMap)
       }
-      else println("Not sufficient unif "+unifs)
+      // else println("Not sufficient unif "+unifs)
+
+      //Secondary induced transitions
+// IMPROVE: inside "if"?  
+      val secondaryInfo = getSecondaryInfo(map1)
+      for((map2, sc) <- secondaryInfo){
+        val otherArgs = mkSecondaryOtherArgsMap(map2, sc)
+        // Secondary result-defining maps
+// No, only over params of cv.princ
+        val rdsMaps = extendToRDMap(map2,otherArgs)
+
+      }
     }
     (result,result2)
   }
-
-  /** All params in post.servers but not in pre.servers, as a bitmap. */
-  private def getNewServerIds: Array[Array[Boolean]] =
-    ServerStates.newParamsBitMap(servers, post.servers)
 
   @inline private def isSufficientUnif(unifs: UnificationList)
       : Boolean = {
@@ -105,15 +154,13 @@ class SingleRefEffectOnUnification(
       // else changingUnif
   }
 
-  /** Create a bit map corresponding to an OtherArgMap and containing all
-    * parameters: (1) in newServerIds (parameters in post.servers but not
-    * pre.servers), or (2) in a unified component of post.cpts; (3) in
-    * post.cpts for a component to which cv.principal gains a reference.  But
-    * excluding parameters of servers or those in the range of map1 in all
-    * cases.  */
+  /** Create an OtherArgMap containing all parameters: (1) in newServerIds
+    * (parameters in post.servers but not pre.servers), or (2) in a unified
+    * component of post.cpts; (3) in post.cpts for a component to which
+    * cv.principal gains a reference.  But excluding parameters of servers or
+    * those in the range of map1 in all cases.  */
   @inline private 
-  def mkOtherArgsMap(
-    newServerIds: BitMap, map1: RemappingMap, unifs: UnificationList)
+  def mkOtherArgsMap(map1: RemappingMap, unifs: UnificationList)
       : OtherArgMap = {
     // (1) parameters in newServerIds
     val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
@@ -152,13 +199,12 @@ class SingleRefEffectOnUnification(
 
   /** Extend map, mapping undefined parameters to parameters in otherArgs, or
     * not. */
-  private def extendMap(map: RemappingMap, otherArgs: OtherArgMap)
+  private def extendToRDMap(map: RemappingMap, otherArgs: OtherArgMap)
       : ArrayBuffer[RemappingMap] = {
     val result = new ArrayBuffer[RemappingMap]
 
-    /** Extend map, remapping parameters from (t,i) onwards. */
+    /* Extend map, remapping parameters from (t,i) onwards. */
     def rec(t: Int, i: Int): Unit = {
-      // println(s"$t, $i), ${otherArgs.mkString("; ")}")
       if(t == numTypes) result += Remapper.cloneMap(map)  // done this branch
       else if(i == map(t).length) rec(t+1, 0) // advance
       else if(map(t)(i) >= 0) rec(t, i+1) // advance
@@ -173,7 +219,6 @@ class SingleRefEffectOnUnification(
           if(!(isId && preCptIds.contains((t,id1)))){
             otherArgs(t) = append1(doneIds, toDoIds) // temporary update (*)
             map(t)(i) = id1  // temporary update (+)
-            // println(s"($t,$i) -> $id1")
             rec(t, i+1)
             map(t)(i) = -1   // backtrack (+)
           }
@@ -189,8 +234,6 @@ class SingleRefEffectOnUnification(
   }
 
 
-  // private def extendUnif(unifs: UnificationList, mapU: RemappingMap) = {  }
-
   /** Representation of a linkage.  A tuple (i, j, id) represents a linkage
     * between cpts(i) and preCpts(j) on parameter id. */
   private type Linkage = (Int,Int,Identity)
@@ -199,12 +242,14 @@ class SingleRefEffectOnUnification(
     * id is a parameter of cpts(i), id1 = rdMap(id) is a parameter of
     * preCpts(j), and this doesn't represent a unification of components (with
     * identities id/id1). */
-  private def findLinkages(
-    unifs: UnificationList, rdMap: RemappingMap)
+// IMPROVE: I don't think we use the identity.  
+  private def findLinkages(unifs: UnificationList, rdMap: RemappingMap)
       : ArrayBuffer[Linkage] = {
     // indices of unified cpts in cv, resp, pre
     val cvUnifs = unifs.map(_._1); val preUnifs = unifs.map(_._2)
     val result = new ArrayBuffer[(Int, Int, Identity)]
+
+    // Linkages for condition (b).  Iterate through rdMap
     for(t <- 0 until numTypes; id <- 0 until rdMap(t).length){
       val id1 = rdMap(t)(id)
       if(id1 >= 0){
@@ -251,21 +296,19 @@ class SingleRefEffectOnUnification(
 
   /** Given a result-defining map rdMap that creates a linkage between c1 =
     * cpts(i) and c2 = preCpts(j), find all extensions that maps each
-    * parameter of c1 to a parameter of c2, or not, and add each to result. */
+    * parameter of c1 to a parameter of c2, or not.  Add each to result. */
   private def extendForLinkage(
     rdMap: RemappingMap, i: Int, j: Int, result: ArrayBuffer[RemappingMap])
   = {
     val c1 = cpts(i); val c2 = preCpts(j)
     val c1Params = c1.processIdentities; val c2Params = c2.processIdentities
-
-    // Create otherArgMap contaiing all params of c2 not in range rdMap
+    // Create otherArgMap containing all params of c2 not in range rdMap
     val otherArgs = Remapper.newOtherArgMap
     for(ix <- 0 until c2.length){
       val (t,id) = c2Params(ix)
       if(!rdMap(t).contains(id) && !otherArgs(t).contains(id))
         otherArgs(t) ::= id
     }
-    // println(s"otherArgs = "+otherArgs.mkString("; "))
 
     // Extend rdMap over params of c1 from ix onwards, based on otherArgs
     def rec(ix: Int): Unit = {
@@ -283,7 +326,6 @@ class SingleRefEffectOnUnification(
             if(!(isId && preCptIds.contains((t,id1)))){
               otherArgs(t) = append1(doneIds, toDoIds) // temporary update (*)
               rdMap(t)(i) = id1  // temporary update (+)
-              // println(s"($t,$i) -> $id1")
               rec(ix+1)
               rdMap(t)(i) = -1   // backtrack (+)
             }
@@ -302,8 +344,8 @@ class SingleRefEffectOnUnification(
 
   /** Extend rdMap corresponding to all linkages in linkages.  Note: this might
     * create new linkages. */
-  private def extendForLinkages(
-    rdMap: RemappingMap, linkages: ArrayBuffer[Linkage])
+  private 
+  def extendForLinkages(rdMap: RemappingMap, linkages: ArrayBuffer[Linkage])
       : ArrayBuffer[RemappingMap] = {
     assert(linkages.length <= 1) // FIXME
     // We iterate through linkages.  current represents the maps produced on
@@ -332,6 +374,7 @@ class SingleRefEffectOnUnification(
           ii == i && jj == j }}){
         // map remaining params to fresh and add to result
         mapUndefinedToFresh(map1)
+        if(debugging) assert(Remapper.isInjective(map1))
         val newCpts = Remapper.applyRemapping(map1, cpts)
         val reducedMapInfo: ReducedMap =
           if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
@@ -346,11 +389,10 @@ class SingleRefEffectOnUnification(
 // FIXME: recurse based on linkages in newLinkages not represented in linkages.
       }
     }
-    // resultX
   }
 
   /** Extend map to map all undefined values to distinct fresh values. */
-  private def mapUndefinedToFresh(map: RemappingMap) = {
+  @inline private def mapUndefinedToFresh(map: RemappingMap) = {
     for(t <- 0 until numTypes){
       var next = nextArg(t)
       for(i <- 0 until map(t).length)
@@ -358,6 +400,42 @@ class SingleRefEffectOnUnification(
     }
   }
 
+  // ========= Secondary induced transitions
+
+  /** Get information about secondary induced transitions: pairs (map2,sc) such
+    * that map2 extends map1 to map cv.principal's identity to match a
+    * reference of a secondary component of post. */ 
+  private def getSecondaryInfo(map1: RemappingMap)
+      : ArrayBuffer[(RemappingMap, State)] = {
+    val result = new ArrayBuffer[(RemappingMap, State)]
+    for((i,(t,id)) <- acquiredRefs){
+      assert(t == cvpf); val id1 = map1(t)(cvpid)
+      // Check extending map1 with cvpid -> id is consistent: either (1) it's
+      // already there; or (2) map1 is undefined on cvpid, id isn't in the
+      // range, and id isn't an identity in pre (which would imply
+      // unification).
+      if(id1 == id ||
+          id1 < 0 && !preCptIds.contains((t,id)) && !map1(t).contains(id) ){
+        val map2 = Remapper.cloneMap(map1); map2(cvpf)(cvpid) = id
+        result += ((map2, postCpts(i)))
+      }
+    }
+    result
+  }
+
+  /** Make an OtherArgsMap for a secondary induced transition based on sc: (1)
+    * parameters in newServerIds (parameters in post.servers but not
+    * pre.servers), or (2) parameters of sc; but excluding parameters in the
+    * range of map1. */
+  @inline private def mkSecondaryOtherArgsMap(map1: RemappingMap, sc: State) = {
+    // (1) parameters in newServerIds
+    val otherArgsBitMap = newServerIds.map(_.clone)
+    // (2) parameters of sc
+    sc.addIdsToBitMap(otherArgsBitMap, servers.idsBitMap) 
+    // Remove parameters of range map1
+    Remapper.removeFromBitMap(map1, otherArgsBitMap)
+    Remapper.makeOtherArgMap(otherArgsBitMap)
+  }
 
   // ========= Hooks for testing
 
@@ -366,10 +444,9 @@ class SingleRefEffectOnUnification(
   /** Object providing hooks for testing. */
   object TestHooks{
     /** The OtherArgMap corresponding to map and unifs. */
-    def mkOtherArgs(map: RemappingMap, unifs: UnificationList): OtherArgMap = 
-      mkOtherArgsMap(getNewServerIds, map, unifs)
+    val mkOtherArgs = mkOtherArgsMap _
 
-    val extendMap = outer.extendMap _
+    val extendToRDMap = outer.extendToRDMap _
 
     val findLinkages = outer.findLinkages _
 
@@ -388,6 +465,10 @@ class SingleRefEffectOnUnification(
       val res = result.map(_._1); result.clear; res
     }
 
-  }
+    val acquiredRefs = outer.acquiredRefs 
 
+    val getSecondaryInfo = outer.getSecondaryInfo _
+ 
+    val mkSecondaryOtherArgsMap = outer.mkSecondaryOtherArgsMap _
+  } // end of TestHooks
 }

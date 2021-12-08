@@ -28,20 +28,25 @@ object SingleRefEffectOnUnificationTest{
       val otherArgs = testHooks.mkOtherArgs(map1, unifs)
       assert(otherArgs(0) == List(N1) && otherArgs(1).isEmpty)
       assert(checkMap(map1(0), List((N0,N0))) && emptyMap(map1(1)))
-      val rdMaps = testHooks.extendMap(map1,otherArgs)
+      val rdMaps = testHooks.extendToRDMap(map1,otherArgs)
       // Can't map either N1 or N2 to N1, since all are ids
       assert(rdMaps.length == 1)
       for(rdMap <- rdMaps){
         assert(checkMap(rdMap(0), List((N0,N0))) && emptyMap(rdMap(1)))
-        val linkages = testHooks.findLinkages(unifs, rdMap)
-        assert(linkages.isEmpty)
+        assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
         val repMaps = testHooks.extendMapping(unifs, rdMap)
         assert(repMaps.length == 1); val repMap = repMaps(0)
         assert(checkMap(repMap(0), List((N0,N0),(N1,N3),(N2,N4))) && 
           emptyMap(repMap(1)))
       }
-    }
+      // No secondaries
+      assert(testHooks.getSecondaryInfo(map1).isEmpty)
+    } // end of for loop
 
+    // Secondary induced transitions
+    assert(testHooks.acquiredRefs.isEmpty)
+
+    // Overall result
     val (result,result1) = sreou()
     // println(result.map(tuple => StateArray.show(tuple._2)).mkString("\n"))
     assert(result.length == 1 && 
@@ -53,6 +58,7 @@ object SingleRefEffectOnUnificationTest{
    * acting on (fixed(N0); Nd_A(N1, N2), Nd_B(N2, N3)).
    */
   def test2 = {
+    println("=test2=")
     val pre = new Concretization(servers3(N0), 
       Array(getDatumSt(T0, N1, N2), aNode(N1, N3)))
     val post = new Concretization(servers3(N4),
@@ -68,7 +74,7 @@ object SingleRefEffectOnUnificationTest{
         // Just N4, from post.servers
         assert(otherArgs(0) == List(N4) && otherArgs(1).isEmpty)
         assert(checkMap(map1(0), List((N0,N0))) && emptyMap(map1(1)))
-        val rdMaps = testHooks.extendMap(map1,otherArgs)
+        val rdMaps = testHooks.extendToRDMap(map1,otherArgs)
         // Map any of (N1, N2, N3, none) to N4
         assert(rdMaps.length == 4 &&
           rdMaps.forall(map2 => (
@@ -77,8 +83,7 @@ object SingleRefEffectOnUnificationTest{
                 checkMap(map2(0), List((N0,N0), (n,N4))))
           ) && emptyMap(map2(1))))
         for(rdMap <- rdMaps){
-          val linkages = testHooks.findLinkages(unifs, rdMap)
-          assert(linkages.isEmpty)
+          assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
           val repMaps = testHooks.extendMapping(unifs, rdMap)
           assert(repMaps.length == 1); val repMap = repMaps(0)
           // Maps all other params to fresh params
@@ -91,8 +96,21 @@ object SingleRefEffectOnUnificationTest{
             assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N4))))
           else 
             assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N7))))
-        }
-      }
+        } // end of inner for
+
+        // Secondary info; link from the Nd_C
+        val secondaryInfo = testHooks.getSecondaryInfo(map1)
+        assert(secondaryInfo.length == 1); val (map2,sc) = secondaryInfo(0)
+        assert(sc == post.components(1) && 
+          checkMap(map2(0), List((N0,N0), (N1,N2))) && emptyMap(map2(1)))
+        val otherArgs1 = testHooks.mkSecondaryOtherArgsMap(map2, sc) 
+        // println("otherArgs1 = "+otherArgs1.mkString("; "))
+        // N4 from post.fixed; N1 from sc
+        assert(otherArgs1(0).sorted == List(N1,N4) && otherArgs1(1).isEmpty)
+        val rdsMaps = testHooks.extendToRDMap(map2,otherArgs1)
+        println(rdsMaps.map(Remapper.show).mkString("\n"))
+
+      } // end of no unifications case
       else{
         // unify the Nd_A's
         val map1List = List((N0,N0), (N1,N1), (N2,N3))
@@ -101,7 +119,7 @@ object SingleRefEffectOnUnificationTest{
         val otherArgs = testHooks.mkOtherArgs(map1, unifs)
         // N4 from post.servers; N2 from the post-state of the unified component
         assert(otherArgs(0).sorted == List(N2,N4) && otherArgs(1).isEmpty)
-        val rdMaps = testHooks.extendMap(map1,otherArgs)
+        val rdMaps = testHooks.extendToRDMap(map1,otherArgs)
         // Can map N3 to (N2, N4 or none)
         assert(rdMaps.length == 3 &&
           rdMaps.forall(map2 =>
@@ -116,9 +134,14 @@ object SingleRefEffectOnUnificationTest{
           // N3 should map to yy
           val xx = rdMap(0)(N3); val yy = if(xx >= 0) xx else N5
           assert(checkMap(repMap(0), (N3,yy)::map1List) && emptyMap(repMap(1)))
+          // No secondaries: prevented by unification
+          assert(testHooks.getSecondaryInfo(map1).isEmpty)
         }
-      }
+      } // end of unifying Nd_A's case
     } // end of for(... <- allUnifs)
+
+    // Secondary induced transitions
+    assert(testHooks.acquiredRefs == List((1,(0,N2))))
 
     // Check top-level result
     val (result,result1) = sreou()
@@ -130,17 +153,18 @@ object SingleRefEffectOnUnificationTest{
       Array(aNode(N1,N3), bNode(N3,N2)), Array(aNode(N1,N3), bNode(N3,N4)),
       Array(aNode(N1,N3), bNode(N3,N5))
     )
-    // println(result.map(tuple => StateArray.show(tuple._2)).mkString("\n"))
     assert(result.length == expected.length)
     for(exp <- expected) 
       assert(result.exists(tuple => exp.sameElements(tuple._2)))
   }
+
 
   /* Test based on (fixed(N0); Th(T0, N1, N2), Nd_A(N1, N3), Nd_B(N_2,N_4)) ->
    *  (fixed(N5); Th'(T0, N1, N2), Nd_C(N1, N2), Nd_B(N_2,N_4)),
    * acting on (fixed(N0); Nd_A(N1, N2), Nd_B(N2, N3)).
    */
   def test3 = {
+    println("=test3=")
     val pre = new Concretization(servers3(N0), 
       Array(getDatumSt(T0, N1, N2), aNode(N1, N3), bNode(N2,N4)))
     val post = new Concretization(servers3(N5),
@@ -157,7 +181,7 @@ object SingleRefEffectOnUnificationTest{
         val otherArgs = testHooks.mkOtherArgs(map1, unifs)
         // Just N5, from post.servers
         assert(otherArgs(0) == List(N5) && otherArgs(1).isEmpty)
-        val rdMaps = testHooks.extendMap(map1,otherArgs)
+        val rdMaps = testHooks.extendToRDMap(map1,otherArgs)
         // Map any of (N1,N2,N3,none) to N5
         assert(rdMaps.length == 4 &&
           rdMaps.forall(map2 => (
@@ -165,8 +189,7 @@ object SingleRefEffectOnUnificationTest{
               List(N1,N2,N3).exists(n => checkMap(map2(0), (n,N5)::map1List))
           ) && emptyMap(map2(1)) ))
         for(rdMap <- rdMaps){
-          val linkages = testHooks.findLinkages(unifs, rdMap)
-          assert(linkages.isEmpty)
+          assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
           val repMaps = testHooks.extendMapping(unifs, rdMap)
           assert(repMaps.length == 1); val repMap = repMaps(0)
           // Maps all other params to fresh params
@@ -188,23 +211,20 @@ object SingleRefEffectOnUnificationTest{
         // N5 from post.servers; N2 from the post-state of the Nd_A; N4 from
         // the post-state of the Nd_B (acquired reference).
         assert(otherArgs(0).sorted == List(N2,N4,N5) && otherArgs(1).isEmpty)
-        val rdMaps = testHooks.extendMap(map1,otherArgs)
+        val rdMaps = testHooks.extendToRDMap(map1,otherArgs)
         // Map N3 to any of (N2,N4,N5,none)
         assert(rdMaps.length == 4 &&
           rdMaps.forall(map2 => emptyMap(map2(1)) && 
             List(N2,N4,N5,-1).exists(n => checkMap(map2(0), (N3,n)::map1List))))
         for(rdMap <- rdMaps){
-          // println(s"rdMap = "+Remapper.show(rdMap))
           val linkages = testHooks.findLinkages(unifs, rdMap)
           if(rdMap(0)(N3) == N2)  // linkage Nd_B -> Nd_B via N3 -> N2
             assert(linkages.sorted == List((1,2,N2))) 
           else assert(linkages.isEmpty)
-
           // Each representative map extends the corresponding result-defining
           // map, maybe mapping undefined N3 to fresh N6
           val repMaps = testHooks.extendMapping(unifs, rdMap)
           assert(repMaps.length == 1); val repMap = repMaps(0)
-          // println(repMaps.map(Remapper.show).mkString("\n"))
           // N3 should map to yy
           val xx = rdMap(0)(N3); val yy = if(xx >= 0) xx else N6
           assert(checkMap(repMap(0), (N3,yy)::map1List) && emptyMap(repMap(1)))
@@ -217,14 +237,13 @@ object SingleRefEffectOnUnificationTest{
         val otherArgs = testHooks.mkOtherArgs(map1, unifs)
         // Just N5 from post.servers
         assert(otherArgs(0) == List(N5) && otherArgs(1).isEmpty)
-        val rdMaps = testHooks.extendMap(map1,otherArgs)
+        val rdMaps = testHooks.extendToRDMap(map1,otherArgs)
         // Map N1 to N5 or nothing
         assert(rdMaps.length == 2 && 
           rdMaps.forall(map2 => emptyMap(map2(1)) &&
             List(N5,-1).exists(n => checkMap(map2(0), (N1,n)::map1List))))
         for(rdMap <- rdMaps){
-          val linkages = testHooks.findLinkages(unifs, rdMap)
-          assert(linkages.isEmpty)
+          assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
           val repMaps = testHooks.extendMapping(unifs, rdMap)
           // println(repMaps.map(Remapper.show).mkString("\n"))
           assert(repMaps.length == 1); val repMap = repMaps(0)
@@ -232,8 +251,14 @@ object SingleRefEffectOnUnificationTest{
           val xx = rdMap(0)(N1); val yy = if(xx >= 0) xx else N6
           assert(checkMap(repMap(0), (N1,yy)::map1List) && emptyMap(repMap(1)))
         }
-      }
+      } // end of unifying Nd_B's case
+      // No secondary transitions, since mapping N1 to N2 requires unifying
+      // Nd_A(N1) with Nd_B(N_2)
+      assert(testHooks.getSecondaryInfo(map1).isEmpty)
     } // end of outer for loop
+
+    // Secondary induced transitions; but not achievable
+    assert(testHooks.acquiredRefs == List((1,(0,N2))))
 
     // Check top-level result
     val (result,result1) = sreou()
@@ -253,10 +278,12 @@ object SingleRefEffectOnUnificationTest{
       assert(result.exists(tuple => exp.sameElements(tuple._2)))
   }
 
+
   /* Test based on (fixed(N0); Th(T0, N1, N2), Nd_A(N1, N3)) ->
    *   (fixed(N4); Th'(T0, N1, N2), Nd_B(N1,N2))
    * acting on (fixed(N0); Th(T0, N1, N2), Nd_A(N1, N3)). */
   def test4 = {
+    println("=test4=")
     val pre = new Concretization(servers3(N0), 
       Array(getDatumSt(T0, N1, N2), aNode(N1, N3)))
     val post = new Concretization(servers3(N4),
@@ -275,17 +302,16 @@ object SingleRefEffectOnUnificationTest{
         assert(checkMap(map1(0), map1List) && emptyMap(map1(1)))
         val otherArgs = testHooks.mkOtherArgs(map1, unifs)
         assert(otherArgs(0) == List(N4) && otherArgs(1).isEmpty)
-        val rdMaps = testHooks.extendMap(map1,otherArgs)
+        val rdMaps = testHooks.extendToRDMap(map1,otherArgs)
         // Map any of (N1,N2,N3,none) to N4
-        assert(rdMaps.length == 4 &&
-          rdMaps.forall(map2 => emptyMap(map2(1)) &&
-            checkMap(map2(0), map1List) ||
+        assert(rdMaps.length == 4) 
+        for(map2 <- rdMaps) assert(
+          emptyMap(map2(1)) &&
+            (checkMap(map2(0), map1List) ||
               List(N1,N2,N3).exists(n => checkMap(map2(0), (n,N4)::map1List))))
         for(rdMap <- rdMaps){
-          val linkages = testHooks.findLinkages(unifs, rdMap)
-          assert(linkages.isEmpty)
+          assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
           val repMaps = testHooks.extendMapping(unifs, rdMap)
-          // println(repMaps.map(Remapper.show).mkString("\n"))
           assert(repMaps.length == 1); val repMap = repMaps(0)
           // Maps all other params to fresh params
           assert(checkMap(repMap(1), List((T0,T1))))
@@ -303,27 +329,21 @@ object SingleRefEffectOnUnificationTest{
         val map1List = List((N0,N0), (N1,N1), (N3,N3))
         assert(checkMap(map1(0), map1List) && emptyMap(map1(1)))
         val otherArgs = testHooks.mkOtherArgs(map1, unifs)
-        // println(otherArgs.mkString("; "))
         assert(otherArgs(0).sorted == List(N2,N4) && otherArgs(1).isEmpty)
-        val rdMaps = testHooks.extendMap(map1,otherArgs)
-        // println(rdMaps.map(Remapper.show).mkString("\n"))
+        val rdMaps = testHooks.extendToRDMap(map1,otherArgs)
         // Map N2 to any of (N2,N4,none)
         assert(rdMaps.length == 3 &&
           rdMaps.forall(map2 => emptyMap(map2(1)) &&
             List(N2,N4,-1).exists(n => checkMap(map2(0), (N2,n)::map1List))))
-
         for(rdMap <- rdMaps){
           val xx = rdMap(0)(N2) // Note: gets overwritten
           val linkages = testHooks.findLinkages(unifs, rdMap)
-          // println(Remapper.show(rdMap)+" -> "+linkages.mkString(", "))
           val repMaps = testHooks.extendMapping(unifs, rdMap)
-          //println(repMaps.map(Remapper.show).mkString("\n"))
           assert(repMaps.length == 1); val repMap = repMaps(0)
           assert(checkMap(repMap(1), List((T0,T1)))) // fresh value
           if(xx == N2){  // Common missing component with id N2
             assert(linkages == List((0,0,2)))
             val extendedMaps = testHooks.extendForLinkages(rdMap, linkages)
-            // println(extendedMaps.map(Remapper.show).mkString("\n"))
             // rdMap is already defined on N1,N2; can't map T0 -> T0 
             assert(extendedMaps.length == 1); val eMap = extendedMaps(0)
             assert(checkMap(eMap(0), (N2,N2)::map1List) && emptyMap(eMap(1)))
@@ -342,11 +362,15 @@ object SingleRefEffectOnUnificationTest{
         assert(unifs.sorted == List((0,0), (1,1)))
         assert(!testHooks.isSufficientUnif(unifs))
       }
+      // No secondaries: cv.principal has the wrong type
+      assert(testHooks.getSecondaryInfo(map1).isEmpty)
     } // end of for loop
+
+    // Secondary induced transitions
+    assert(testHooks.acquiredRefs.isEmpty) // wrong type
 
     // Check overall result
     val (result,result1) = sreou()
-    println(result.map(tuple => StateArray.show(tuple._2)).mkString("\n"))
     val expected = List(
       // No unifs
       Array(getDatumSt(T1,N4,N5), aNode(N4,N6)),
@@ -362,6 +386,7 @@ object SingleRefEffectOnUnificationTest{
     for(exp <- expected) 
       assert(result.exists(tuple => exp.sameElements(tuple._2)))
   }
+
 
   /** Test based on (fixed(N0); Th(T0, N1), Nd_A(N1,N0)) ->
     *   (fixed(N2); Th'(T0), Nd_A(N1,N0))
@@ -382,9 +407,7 @@ object SingleRefEffectOnUnificationTest{
     val otherArgs = testHooks.mkOtherArgs(map1, unifs)
     // Just N2 from post.fixed
     assert(otherArgs(0) == List(N2) && otherArgs(1).isEmpty)
-    // println(otherArgs.mkString("; "))
-    val rdMaps = testHooks.extendMap(map1,otherArgs)
-    // println(rdMaps.map(Remapper.show).mkString("\n"))
+    val rdMaps = testHooks.extendToRDMap(map1,otherArgs)
     // is map2 N0->N0, N1->n ?
     def isMap(map2: RemappingMap, n: Int) = 
       emptyMap(map2(1)) && checkMap(map2(0), (N1,n)::map1List)
@@ -393,17 +416,11 @@ object SingleRefEffectOnUnificationTest{
       rdMaps.forall(map2 => List(N2,-1).exists(n => isMap(map2,n))))
     for(rdMap <- rdMaps){
       val xx = rdMap(0)(N1) // gets overwritten
-      // println("rdMap = "+Remapper.show(rdMap))
       val linkages = testHooks.findLinkages(unifs, rdMap)
-      // println(Remapper.show(rdMap)+" -> "+linkages.mkString(", "))
       // linkage Nd_A -> Nd_B on N0 (whether N1 maps to N0 or not)
-      assert(linkages == List((1,1,0))) // *******
+      assert(linkages == List((1,1,0))) 
       val extendedMaps = testHooks.extendForLinkages(rdMap, linkages)
-      // println(extendedMaps.map(Remapper.show).mkString("\n"))
-
       val repMaps = testHooks.extendMapping(unifs, rdMap)
-      // println(repMaps.map(Remapper.show).mkString("\n"))
-
       if(xx == N2){
         // rdMap already total on params of Nd_B 
         assert(extendedMaps.length == 1 && isMap(extendedMaps(0), N2))
@@ -422,8 +439,21 @@ object SingleRefEffectOnUnificationTest{
           checkMap(repMap(1), List((T0,T1))) &&
             List(N1,N3).exists(n => checkMap(repMap(0), (N1,n)::map1List))))
       }
+    } // end of for loop
 
-    }
+    // Secondary induced transitions
+    assert(testHooks.getSecondaryInfo(map1).isEmpty)
+    assert(testHooks.acquiredRefs.isEmpty)
+
+    // Check overall result
+    val (result,result1) = sreou()
+    val expected = List(
+      Array(setTopB(T1,N0), bNode(N0,N2)), Array(setTopB(T1,N0), bNode(N0,N1)),
+      Array(setTopB(T1,N0), bNode(N0,N3)),
+    )
+    assert(result.length == expected.length)
+    for(exp <- expected) 
+      assert(result.exists(tuple => exp.sameElements(tuple._2)))
   }
 
   /** Main function. */
