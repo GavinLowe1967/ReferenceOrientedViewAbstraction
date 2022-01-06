@@ -1,6 +1,7 @@
 package ViewAbstraction
 
 import RemapperP._
+import scala.collection.mutable.ArrayBuffer
 
 object SingleRefEffectOnUnificationTest{
   import TestStates._
@@ -34,7 +35,7 @@ object SingleRefEffectOnUnificationTest{
       for(rdMap <- rdMaps){
         assert(checkMap(rdMap(0), List((N0,N0))) && emptyMap(rdMap(1)))
         assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
-        val repMaps = testHooks.extendMapping(unifs, rdMap)
+        val repMaps = testHooks.extendPrimaryMapping(unifs, rdMap)
         assert(repMaps.length == 1); val repMap = repMaps(0)
         assert(checkMap(repMap(0), List((N0,N0),(N1,N3),(N2,N4))) && 
           emptyMap(repMap(1)))
@@ -84,7 +85,7 @@ object SingleRefEffectOnUnificationTest{
           ) && emptyMap(map2(1))))
         for(rdMap <- rdMaps){
           assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
-          val repMaps = testHooks.extendMapping(unifs, rdMap)
+          val repMaps = testHooks.extendPrimaryMapping(unifs, rdMap)
           assert(repMaps.length == 1); val repMap = repMaps(0)
           // Maps all other params to fresh params
           assert(emptyMap(repMap(1)))
@@ -100,16 +101,37 @@ object SingleRefEffectOnUnificationTest{
 
         // Secondary info; link from the Nd_C
         val secondaryInfo = testHooks.getSecondaryInfo(map1)
-        assert(secondaryInfo.length == 1); val (map2,sc) = secondaryInfo(0)
-        assert(sc == post.components(1) && 
-          checkMap(map2(0), List((N0,N0), (N1,N2))) && emptyMap(map2(1)))
+        assert(secondaryInfo.length == 1); val (map2,i) = secondaryInfo(0)
+        assert(i == 1 && checkMap(map2(0), List((N0,N0), (N1,N2))) && 
+          emptyMap(map2(1)))
+        val sc = post.components(i)
         val otherArgs1 = testHooks.mkSecondaryOtherArgsMap(map2, sc) 
         // println("otherArgs1 = "+otherArgs1.mkString("; "))
         // N4 from post.fixed; N1 from sc
         assert(otherArgs1(0).sorted == List(N1,N4) && otherArgs1(1).isEmpty)
-        val rdsMaps = testHooks.extendToRDMap(map2,otherArgs1)
-        println(rdsMaps.map(Remapper.show).mkString("\n"))
-
+        val rdsMaps = new ArrayBuffer[RemappingMap]
+        testHooks.extendMapOverComponent(
+          map2, cv.components(0), otherArgs1, rdsMaps)
+        // val rdsMaps = testHooks.extendToRDMap(map2,otherArgs1)
+        //println(rdsMaps.map(Remapper.show).mkString("\n"))
+        // Can't map N2 -> N1 as that would imply a unification
+        assert(rdsMaps.length == 2 && rdsMaps.forall(map2 => 
+          emptyMap(map2(1)) &&
+            List(N4,-1).exists(n => 
+              checkMap(map2(0), (N2,n)::List((N0,N0), (N1,N2))))))
+        for(rdsMap <- rdsMaps){
+          val linkages = testHooks.findLinkages(unifs, rdsMap)
+          println(Remapper.show(rdsMap))
+          println(linkages.mkString("\n"))
+          // Linkage from Nd_A to Th via N2
+          assert(linkages.toList == List( (0,0,N2) ))
+          val extendedMaps = testHooks.extendForLinkages(rdsMap, linkages)
+          println(extendedMaps.map(Remapper.show).mkString("\n"))
+// IMPROVE: test here
+// IMPROVE: linkage using N2
+          val repSts = testHooks.extendSecondaryMapping(unifs, rdsMap, i)
+          for(states <- repSts) println(StateArray.show(states))
+        }
       } // end of no unifications case
       else{
         // unify the Nd_A's
@@ -129,7 +151,7 @@ object SingleRefEffectOnUnificationTest{
           val linkages = testHooks.findLinkages(unifs, rdMap)
           // All linkages involve a unified component
           assert(linkages.isEmpty)
-          val repMaps = testHooks.extendMapping(unifs, rdMap)
+          val repMaps = testHooks.extendPrimaryMapping(unifs, rdMap)
           assert(repMaps.length == 1); val repMap = repMaps(0)
           // N3 should map to yy
           val xx = rdMap(0)(N3); val yy = if(xx >= 0) xx else N5
@@ -190,7 +212,7 @@ object SingleRefEffectOnUnificationTest{
           ) && emptyMap(map2(1)) ))
         for(rdMap <- rdMaps){
           assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
-          val repMaps = testHooks.extendMapping(unifs, rdMap)
+          val repMaps = testHooks.extendPrimaryMapping(unifs, rdMap)
           assert(repMaps.length == 1); val repMap = repMaps(0)
           // Maps all other params to fresh params
           assert(emptyMap(repMap(1)))
@@ -223,7 +245,7 @@ object SingleRefEffectOnUnificationTest{
           else assert(linkages.isEmpty)
           // Each representative map extends the corresponding result-defining
           // map, maybe mapping undefined N3 to fresh N6
-          val repMaps = testHooks.extendMapping(unifs, rdMap)
+          val repMaps = testHooks.extendPrimaryMapping(unifs, rdMap)
           assert(repMaps.length == 1); val repMap = repMaps(0)
           // N3 should map to yy
           val xx = rdMap(0)(N3); val yy = if(xx >= 0) xx else N6
@@ -244,7 +266,7 @@ object SingleRefEffectOnUnificationTest{
             List(N5,-1).exists(n => checkMap(map2(0), (N1,n)::map1List))))
         for(rdMap <- rdMaps){
           assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
-          val repMaps = testHooks.extendMapping(unifs, rdMap)
+          val repMaps = testHooks.extendPrimaryMapping(unifs, rdMap)
           // println(repMaps.map(Remapper.show).mkString("\n"))
           assert(repMaps.length == 1); val repMap = repMaps(0)
           // N1 should map to yy
@@ -311,7 +333,7 @@ object SingleRefEffectOnUnificationTest{
               List(N1,N2,N3).exists(n => checkMap(map2(0), (n,N4)::map1List))))
         for(rdMap <- rdMaps){
           assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
-          val repMaps = testHooks.extendMapping(unifs, rdMap)
+          val repMaps = testHooks.extendPrimaryMapping(unifs, rdMap)
           assert(repMaps.length == 1); val repMap = repMaps(0)
           // Maps all other params to fresh params
           assert(checkMap(repMap(1), List((T0,T1))))
@@ -338,7 +360,7 @@ object SingleRefEffectOnUnificationTest{
         for(rdMap <- rdMaps){
           val xx = rdMap(0)(N2) // Note: gets overwritten
           val linkages = testHooks.findLinkages(unifs, rdMap)
-          val repMaps = testHooks.extendMapping(unifs, rdMap)
+          val repMaps = testHooks.extendPrimaryMapping(unifs, rdMap)
           assert(repMaps.length == 1); val repMap = repMaps(0)
           assert(checkMap(repMap(1), List((T0,T1)))) // fresh value
           if(xx == N2){  // Common missing component with id N2
@@ -420,7 +442,7 @@ object SingleRefEffectOnUnificationTest{
       // linkage Nd_A -> Nd_B on N0 (whether N1 maps to N0 or not)
       assert(linkages == List((1,1,0))) 
       val extendedMaps = testHooks.extendForLinkages(rdMap, linkages)
-      val repMaps = testHooks.extendMapping(unifs, rdMap)
+      val repMaps = testHooks.extendPrimaryMapping(unifs, rdMap)
       if(xx == N2){
         // rdMap already total on params of Nd_B 
         assert(extendedMaps.length == 1 && isMap(extendedMaps(0), N2))

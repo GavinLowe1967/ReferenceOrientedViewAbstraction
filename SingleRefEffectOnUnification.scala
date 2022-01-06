@@ -12,16 +12,17 @@ class SingleRefEffectOnUnification(
    * apply
    * |--Unification.allUnifs
    * |--isSufficientUnif
-   * |--mkOtherArgsMap
+   * |--mkOtherArgsMap       
    * |  |--addIdsFromNewRef
-   * |--extendToRDMap
-   * |--extendMapping
+   * |--extendToRDMap     (produces primary result-defining maps)
+   * |--extendMapping     (adds extra linkages and fresh params)
    * |  |--findLinkages
    * |  |--extendForLinkages
    * |     |--extendForLinkage
    * |  |--mapUndefinedToFresh
    * |--getSecondaryInfo
    * |--mkSecondaryOtherArgsMap
+   * |--extendMapOverComponent
    */
 
 
@@ -33,7 +34,7 @@ class SingleRefEffectOnUnification(
   private val changedServers = servers != postServers
 
   // All params in post.servers but not in pre.servers, as a bitmap.
-  val newServerIds: Array[Array[Boolean]] = // getNewServerIds
+  private val newServerIds: Array[Array[Boolean]] = 
     ServerStates.newParamsBitMap(servers, post.servers)
 
   private val preCpts = pre.components; private val postCpts = post.components
@@ -118,24 +119,31 @@ class SingleRefEffectOnUnification(
         // Primary result-defining maps
         val rdMaps = extendToRDMap(map1,otherArgs)
         // Extend with extra linkages and fresh parameters
-        for(rdMap <- rdMaps) extendMapping(unifs, rdMap)
+        for(rdMap <- rdMaps) extendMapping(unifs, rdMap, None)
       }
       // else println("Not sufficient unif "+unifs)
 
       //Secondary induced transitions
 // IMPROVE: inside "if"?  
       val secondaryInfo = getSecondaryInfo(map1)
-      for((map2, sc) <- secondaryInfo){
+      for((map2, i) <- secondaryInfo){
+        val sc = postCpts(i)
         val otherArgs = mkSecondaryOtherArgsMap(map2, sc)
         // Secondary result-defining maps
-// No, only over params of cv.princ
-        val rdsMaps = extendToRDMap(map2,otherArgs)
+        val rdMaps = new ArrayBuffer[RemappingMap]
+        extendMapOverComponent(map2, cpts(0), otherArgs, rdMaps)
+        // Then consider linkages
+        for(rdMap <- rdMaps) extendMapping(unifs, rdMap, Some(i))
+        // No: add to result2
+// FIXME: carry on here ..................................
 
       }
     }
     (result,result2)
   }
 
+  /** Does unifs give sufficient unifications such that it might produce a new
+    * view?  ??? Primary or secondary ???  */
   @inline private def isSufficientUnif(unifs: UnificationList)
       : Boolean = {
     // Is there a unification with a component that changes state?
@@ -300,8 +308,10 @@ class SingleRefEffectOnUnification(
   private def extendForLinkage(
     rdMap: RemappingMap, i: Int, j: Int, result: ArrayBuffer[RemappingMap])
   = {
-    val c1 = cpts(i); val c2 = preCpts(j)
-    val c1Params = c1.processIdentities; val c2Params = c2.processIdentities
+    //val c1 = cpts(i); 
+    val c2 = preCpts(j)
+    // val c1Params = c1.processIdentities; 
+    val c2Params = c2.processIdentities
     // Create otherArgMap containing all params of c2 not in range rdMap
     val otherArgs = Remapper.newOtherArgMap
     for(ix <- 0 until c2.length){
@@ -309,15 +319,25 @@ class SingleRefEffectOnUnification(
       if(!rdMap(t).contains(id) && !otherArgs(t).contains(id))
         otherArgs(t) ::= id
     }
+    extendMapOverComponent(rdMap, cpts(i), otherArgs, result)
+  }
 
-    // Extend rdMap over params of c1 from ix onwards, based on otherArgs
+  /** Find all consistent extensions of map over the parameters of c, mapping
+    * each parameter to an element of otherArgs, or not. */
+  private def extendMapOverComponent(
+    map: RemappingMap, c: State, otherArgs: OtherArgMap, 
+    result: ArrayBuffer[RemappingMap]) 
+  = {
+    val cParams = c.processIdentities
+
+    // Extend map over params of c1 from ix onwards, based on otherArgs
     def rec(ix: Int): Unit = {
-      if(ix == c1.length) result += Remapper.cloneMap(rdMap)
+      if(ix == c.length) result += Remapper.cloneMap(map)
       else{
-        val (t,id1) = c1Params(ix)
-        if(!isDistinguished(id1) && rdMap(t)(id1) < 0){
-          val isId = cptIds.contains((t,i)) // Is this an identity?
-          // map (t,i) to each element of otherArgs(t)
+        val (t,id0) = cParams(ix)
+        if(!isDistinguished(id0) && map(t)(id0) < 0){
+          val isId = cptIds.contains((t,id0)) // Is this an identity?
+          // map (t,id0) to each element of otherArgs(t)
           var toDoIds = otherArgs(t); var doneIds = List[Identity]()
           // Inv: reverse(doneIds) ++ toDoIds = otherArgs(t)
           while(toDoIds.nonEmpty){
@@ -325,9 +345,9 @@ class SingleRefEffectOnUnification(
             // Don't map an identity to an identity
             if(!(isId && preCptIds.contains((t,id1)))){
               otherArgs(t) = append1(doneIds, toDoIds) // temporary update (*)
-              rdMap(t)(i) = id1  // temporary update (+)
+              map(t)(id0) = id1  // temporary update (+)
               rec(ix+1)
-              rdMap(t)(i) = -1   // backtrack (+)
+              map(t)(id0) = -1   // backtrack (+)
             }
             doneIds ::= id1 // order doesn't matter
           } // end of while loop
@@ -338,8 +358,8 @@ class SingleRefEffectOnUnification(
       }
     } // end of rec
 
-// IMPROVE: if otherArgs is empty, just add rdMap
-    rec(0); result
+// // IMPROVE: if otherArgs is empty, just add rdMap
+    rec(0)
   }
 
   /** Extend rdMap corresponding to all linkages in linkages.  Note: this might
@@ -364,22 +384,33 @@ class SingleRefEffectOnUnification(
   /** Extend the result-defining map rdMap, based on unifications unifs, to
     * produce all representative extensions, recursively mapping parameters
     * based on linkages, and then mapping other parameters to fresh
-    * parameters.  For each such map, add an appropriate tuple to result. */
-  private def extendMapping(unifs: UnificationList, rdMap: RemappingMap) = {
+    * parameters.  If osci = None, for each such map, add an appropriate tuple
+    * to result; this corresponds to a primary induced transition.  If osci =
+    * Some(ix) then add an appropriate tuple to result2; this corresponds to a
+    * secondary induced transition with postCpts(ix). 
+    * @param osci optionally the index in postCpts for which this represents a
+    * secondary induced transition. */
+  private def extendMapping(
+    unifs: UnificationList, rdMap: RemappingMap, osci: Option[Int]) 
+  = {
     val linkages = findLinkages(unifs, rdMap)
     val extendedMaps = extendForLinkages(rdMap, linkages)
     for(map1 <- extendedMaps){
       val newLinkages = findLinkages(unifs, map1)
+      // Are all linkages included in linkages?
       if(newLinkages.forall{ case (i,j,_) => linkages.exists{ case (ii,jj,_) =>
           ii == i && jj == j }}){
         // map remaining params to fresh and add to result
         mapUndefinedToFresh(map1)
         if(debugging) assert(Remapper.isInjective(map1))
         val newCpts = Remapper.applyRemapping(map1, cpts)
-        val reducedMapInfo: ReducedMap =
-          if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
-          else null
-        result += ((map1, newCpts, unifs, reducedMapInfo))
+        if(osci == None){
+          val reducedMapInfo: ReducedMap =
+            if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
+            else null
+          result += ((map1, newCpts, unifs, reducedMapInfo))
+        }
+        else{ val ix = osci.get; result2 += ((newCpts, unifs, ix)) }
       }
       else{
         println(s"pre = $pre;\n cv = $cv;\n unifs = $unifs; rdMap = "+
@@ -402,12 +433,12 @@ class SingleRefEffectOnUnification(
 
   // ========= Secondary induced transitions
 
-  /** Get information about secondary induced transitions: pairs (map2,sc) such
+  /** Get information about secondary induced transitions: pairs (map2,i) such
     * that map2 extends map1 to map cv.principal's identity to match a
-    * reference of a secondary component of post. */ 
+    * reference of a secondary component of post, postCpts(i). */ 
   private def getSecondaryInfo(map1: RemappingMap)
-      : ArrayBuffer[(RemappingMap, State)] = {
-    val result = new ArrayBuffer[(RemappingMap, State)]
+      : ArrayBuffer[(RemappingMap, Int)] = {
+    val result = new ArrayBuffer[(RemappingMap, Int)]
     for((i,(t,id)) <- acquiredRefs){
       assert(t == cvpf); val id1 = map1(t)(cvpid)
       // Check extending map1 with cvpid -> id is consistent: either (1) it's
@@ -417,7 +448,7 @@ class SingleRefEffectOnUnification(
       if(id1 == id ||
           id1 < 0 && !preCptIds.contains((t,id)) && !map1(t).contains(id) ){
         val map2 = Remapper.cloneMap(map1); map2(cvpf)(cvpid) = id
-        result += ((map2, postCpts(i)))
+        result += ((map2, i))
       }
     }
     result
@@ -458,17 +489,28 @@ class SingleRefEffectOnUnification(
       * produce all representative extensions, recursively mapping parameters
       * based on linkages, and then mapping other parameters to fresh
       * parameters. Return all resulting maps. */
-    def extendMapping(unifs: UnificationList, rdMap: RemappingMap)
+    def extendPrimaryMapping(unifs: UnificationList, rdMap: RemappingMap)
         : ArrayBuffer[RemappingMap] = {
       result.clear
-      outer.extendMapping(unifs, rdMap)
+      outer.extendMapping(unifs, rdMap, None)
       val res = result.map(_._1); result.clear; res
     }
+
+    def extendSecondaryMapping(
+      unifs: UnificationList, rdMap: RemappingMap, i: Int)
+        : ArrayBuffer[Array[State]] = {
+      result2.clear
+      outer.extendMapping(unifs, rdMap, Some(i))
+      val res = result2.map(_._1); result2.clear; res
+    }
+
 
     val acquiredRefs = outer.acquiredRefs 
 
     val getSecondaryInfo = outer.getSecondaryInfo _
  
     val mkSecondaryOtherArgsMap = outer.mkSecondaryOtherArgsMap _
+
+    val extendMapOverComponent = outer.extendMapOverComponent _
   } // end of TestHooks
 }
