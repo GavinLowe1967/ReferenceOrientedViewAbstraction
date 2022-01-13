@@ -3,7 +3,19 @@ package ViewAbstraction
 import RemapperP.Remapper
 import scala.collection.mutable.{ArrayBuffer}
 
-class RemappingExtender(pre: Concretization, post: Concretization, cv: ComponentView){
+/** Class that extends a result-defining map to a full mapping. */
+class RemappingExtender(
+  pre: Concretization, post: Concretization, cv: ComponentView){
+
+  /* Relationship of main functions.
+   * makeExtensions
+   * |--findLinkagesC
+   * |--findLinkages
+   * |--mapUndefinedToFresh
+   * |--extendForLinkage
+   * |  |--extendMapOverComponent (also visible externally)
+   */
+
   /* A few object variables, extracted directly from pre and cv, used in
    * several functions. */
   private val preCpts = pre.components;
@@ -28,7 +40,7 @@ class RemappingExtender(pre: Concretization, post: Concretization, cv: Component
     * parameter of preCpts(j), with one of those being the identity; and such
     * this doesn't represent a unification of components (with identities
     * id/id1). */
-  def findLinkages(unifs: UnificationList, rdMap: RemappingMap)
+  private def findLinkages(unifs: UnificationList, rdMap: RemappingMap)
       : ArrayBuffer[Linkage] = {
     // indices of unified cpts in cv, resp, pre
     val cvUnifs = unifs.map(_._1); val preUnifs = unifs.map(_._2)
@@ -64,7 +76,7 @@ class RemappingExtender(pre: Concretization, post: Concretization, cv: Component
 
 // IMPROVE: below isn't what we want.
   /** Linkages for condition (c). */
-  def findLinkagesC(unifs: UnificationList, rdMap: RemappingMap)
+  private def findLinkagesC(unifs: UnificationList, rdMap: RemappingMap)
       : ArrayBuffer[Linkage] = {
     val result = new ArrayBuffer[Linkage]
     // Linkages for condition (c).  Iterate through the parameters of
@@ -88,7 +100,7 @@ class RemappingExtender(pre: Concretization, post: Concretization, cv: Component
   }
 
   /** Extend map to map all undefined values to distinct fresh values. */
-  @inline  def mapUndefinedToFresh(map: RemappingMap) = {
+  @inline private def mapUndefinedToFresh(map: RemappingMap) = {
     for(t <- 0 until numTypes){
       var next = nextArg(t)
       for(i <- 0 until map(t).length)
@@ -100,7 +112,7 @@ class RemappingExtender(pre: Concretization, post: Concretization, cv: Component
     * cpts(i) and c2 = preCpts(j), find all extensions that maps each
     * parameter of c1 to a parameter of c2, or not; but avoiding mapping to
     * elements of resultRelevantParams.  Add each to result. */
-  def extendForLinkage(
+  private def extendForLinkage(
     rdMap: RemappingMap, resultRelevantParams: BitMap, 
     i: Int, j: Int, result: ArrayBuffer[RemappingMap])
   = {
@@ -158,7 +170,6 @@ class RemappingExtender(pre: Concretization, post: Concretization, cv: Component
     rec(0)
   }
 
-
   /** Implementation of makeExtensions from the paper.  Create all required
     * extensions of result-defiling map rdMap.  Add all such to extensions.
     * doneB gives the instances of condition (b) that we have dealt with so
@@ -191,4 +202,15 @@ class RemappingExtender(pre: Concretization, post: Concretization, cv: Component
     }
   }
 
+  // ========= Hooks for testing
+
+  private val outer = this
+
+  /** Object providing hooks for testing. */
+  object TestHooks{
+
+    val findLinkages = outer.findLinkages _
+
+    val findLinkagesC = outer.findLinkagesC _
+  }
 }
