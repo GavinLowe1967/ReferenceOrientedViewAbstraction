@@ -142,7 +142,7 @@ object SingleRefEffectOnUnificationTest{
           // Linkage from Nd_A to Th via N2
           assert(linkages.toList == List( (0,0) ))
           assert(testHooks.findLinkagesC(unifs, rdsMap).isEmpty)
-          val extendedMaps = testHooks.extendForLinkages(rdsMap, oaBitMap1, linkages)
+          //val extendedMaps = testHooks.extendForLinkages(rdsMap, oaBitMap1, linkages)
           // println(extendedMaps.map(Remapper.show).mkString("\n"))
 // IMPROVE: test here
 // IMPROVE: linkage using N2

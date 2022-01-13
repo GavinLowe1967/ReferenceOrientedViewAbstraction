@@ -370,23 +370,23 @@ class SingleRefEffectOnUnification(
   /** Extend rdMap corresponding to all linkages in linkages.  Note: this might
     * create new linkages.  Avoid mapping parameters to elements of
     * resultRelevantParams. */
-  private def extendForLinkages(
-    rdMap: RemappingMap, resultRelevantParams: BitMap,
-    linkages: ArrayBuffer[Linkage])
-      : ArrayBuffer[RemappingMap] = {
-    assert(linkages.length <= 1) // FIXME
-    // We iterate through linkages.  current represents the maps produced on
-    // the previous round.
-    var current = new ArrayBuffer[RemappingMap]; current += rdMap
-    for(ix <- 0 until linkages.length){
-      val (i, j) = linkages(ix)
-      val res = new ArrayBuffer[RemappingMap]
-      for(map <- current) extendForLinkage(map, resultRelevantParams, i, j, res)
-      current = res
-    }
+  // private def extendForLinkages(
+  //   rdMap: RemappingMap, resultRelevantParams: BitMap,
+  //   linkages: ArrayBuffer[Linkage])
+  //     : ArrayBuffer[RemappingMap] = {
+  //   assert(linkages.length <= 1) // FIXME
+  //   // We iterate through linkages.  current represents the maps produced on
+  //   // the previous round.
+  //   var current = new ArrayBuffer[RemappingMap]; current += rdMap
+  //   for(ix <- 0 until linkages.length){
+  //     val (i, j) = linkages(ix)
+  //     val res = new ArrayBuffer[RemappingMap]
+  //     for(map <- current) extendForLinkage(map, resultRelevantParams, i, j, res)
+  //     current = res
+  //   }
 
-    current
-  }
+  //   current
+  // }
 
   /** Extend the result-defining map rdMap, based on unifications unifs, to
     * produce all representative extensions, recursively mapping parameters
@@ -399,39 +399,39 @@ class SingleRefEffectOnUnification(
     * parameters, that more parameters should not be mapped to.
     * @param osci optionally the index in postCpts for which this represents a
     * secondary induced transition. */
-  private def extendMapping(
-    unifs: UnificationList, resultRelevantParams: BitMap, 
-    rdMap: RemappingMap, osci: Option[Int])
-  = {
-    val linkagesB = findLinkages(unifs, rdMap)
-    val linkagesC = findLinkagesC(unifs, rdMap)
-    val extendedMaps = extendForLinkages(rdMap, resultRelevantParams, linkagesB)
-    // FIXME: do something different with linkagesC
-    for(map1 <- extendedMaps){
-      val newLinkages = findLinkages(unifs, map1)
-      // Are all linkages included in linkages?
-      if(newLinkages.forall{ case (i,j) => linkagesB.contains((i,j)) }){
-        // map remaining params to fresh and add to result
-        mapUndefinedToFresh(map1)
-        if(debugging) assert(Remapper.isInjective(map1))
-        val newCpts = Remapper.applyRemapping(map1, cpts)
-        if(osci == None){
-          val reducedMapInfo: ReducedMap =
-            if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
-            else null
-          result += ((map1, newCpts, unifs, reducedMapInfo))
-        }
-        else{ val ix = osci.get; result2 += ((newCpts, unifs, ix)) }
-      }
-      else{
-        println(s"pre = $pre;\n cv = $cv;\n unifs = $unifs; rdMap = "+
-          Remapper.show(rdMap)+s"; linkagesB = $linkagesB; map1 = "+
-          Remapper.show(map1))
-        sys.exit
-// FIXME: recurse based on linkages in newLinkages not represented in linkages.
-      }
-    }
-  }
+//   private def extendMapping(
+//     unifs: UnificationList, resultRelevantParams: BitMap, 
+//     rdMap: RemappingMap, osci: Option[Int])
+//   = {
+//     val linkagesB = findLinkages(unifs, rdMap)
+//     val linkagesC = findLinkagesC(unifs, rdMap)
+//     val extendedMaps = extendForLinkages(rdMap, resultRelevantParams, linkagesB)
+//     // FIXME: do something different with linkagesC
+//     for(map1 <- extendedMaps){
+//       val newLinkages = findLinkages(unifs, map1)
+//       // Are all linkages included in linkages?
+//       if(newLinkages.forall{ case (i,j) => linkagesB.contains((i,j)) }){
+//         // map remaining params to fresh and add to result
+//         mapUndefinedToFresh(map1)
+//         if(debugging) assert(Remapper.isInjective(map1))
+//         val newCpts = Remapper.applyRemapping(map1, cpts)
+//         if(osci == None){
+//           val reducedMapInfo: ReducedMap =
+//             if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
+//             else null
+//           result += ((map1, newCpts, unifs, reducedMapInfo))
+//         }
+//         else{ val ix = osci.get; result2 += ((newCpts, unifs, ix)) }
+//       }
+//       else{
+//         println(s"pre = $pre;\n cv = $cv;\n unifs = $unifs; rdMap = "+
+//           Remapper.show(rdMap)+s"; linkagesB = $linkagesB; map1 = "+
+//           Remapper.show(map1))
+//         sys.exit
+// // FIXME: recurse based on linkages in newLinkages not represented in linkages.
+//       }
+//     }
+//   }
 
   /** Implementation of makeExtensions from the paper.  Create all required
     * extensions of result-defiling map rdMap.  Add all such to extensions.
@@ -576,7 +576,7 @@ class SingleRefEffectOnUnification(
 
     val findLinkagesC = outer.findLinkagesC _
 
-    val extendForLinkages = outer.extendForLinkages _
+    //val extendForLinkages = outer.extendForLinkages _
 
     val isSufficientUnif = outer.isSufficientUnif _
 
@@ -598,7 +598,8 @@ class SingleRefEffectOnUnification(
       rdMap: RemappingMap, i: Int)
         : ArrayBuffer[Array[State]] = {
       result2.clear
-      outer.extendMapping(unifs, otherArgs, rdMap, Some(i))
+      outer.makeSecondaryExtension(unifs, otherArgs, rdMap, i)
+      // outer.extendMapping(unifs, otherArgs, rdMap, Some(i))
       val res = result2.map(_._1); result2.clear; res
     }
 

@@ -186,11 +186,11 @@ if(false){
       // linkage Nd_A -> Nd_B on N0 (whether N1 maps to N0 or not)
       assert(linkages == List((1,1))) 
       assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
-      val extendedMaps = testHooks.extendForLinkages(rdMap, oaBitMap, linkages)
+      //val extendedMaps = testHooks.extendForLinkages(rdMap, oaBitMap, linkages)
       val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap)
       if(xx == N2){
         // rdMap already total on params of Nd_B 
-        assert(extendedMaps.length == 1 && isMap(extendedMaps(0), N2))
+        //assert(extendedMaps.length == 1 && isMap(extendedMaps(0), N2))
         assert(repMaps.length == 1); val repMap = repMaps(0)
         // Map T0 to fresh value
         assert(checkMap(repMap(0), (N1,N2)::map1List) &&
@@ -199,8 +199,8 @@ if(false){
       else{
         assert(xx < 0)
         // Can map N1 to N1 or not
-        assert(extendedMaps.length == 2 &&
-          extendedMaps.forall(eMap => List(N1,-1).exists(n => isMap(eMap,n))))
+        //assert(extendedMaps.length == 2 &&
+        //  extendedMaps.forall(eMap => List(N1,-1).exists(n => isMap(eMap,n))))
         // N1 maps to N1 or fresh value
         assert(repMaps.length == 2 && repMaps.forall(repMap => 
           checkMap(repMap(1), List((T0,T1))) &&
