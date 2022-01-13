@@ -61,6 +61,10 @@ $(DIR)/Unification.class: $(REMAPPERP)/Remapper.class
 
 $(DIR)/UnificationTest.class: $(DIR)/Unification.class $(DIR)/EffectOnUnification.class 
 
+$(DIR)/RemappingExtender.class: $(DIR)/RemapperP/Remapper.class $(DIR)/Unification.class
+
+$(DIR)/SingleRefEffectOnUnification.class: $(DIR)/RemappingExtender.class
+
 $(DIR)/SingleRefEffectOnUnificationTest2.class: $(DIR)/SingleRefEffectOnUnification.class
 
 $(DIR)/SingleRefEffectOnUnificationTest.class: $(DIR)/SingleRefEffectOnUnification.class $(DIR)/SingleRefEffectOnUnificationTest2.class
