@@ -58,6 +58,19 @@ object SingleRefEffectOnUnificationTest2{
             assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N4))))
           else 
             assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N7))))
+
+          val eMaps = testHooks.makeExtensions(unifs,oaBitMap,rdMap)
+          assert(eMaps.length == 1); val eMap = eMaps(0)
+          // Maps all other params to fresh params
+          assert(checkMap(eMap(1), List((T0,T1))))
+          if(rdMap(0)(N1) == N4)
+            assert(checkMap(eMap(0), List((N0,N0), (N1,N4), (N2,N5), (N3,N6))))
+          else if(rdMap(0)(N2) == N4) 
+            assert(checkMap(eMap(0), List((N0,N0), (N1,N5), (N2,N4), (N3,N6))))
+          else if(rdMap(0)(N3) == N4) 
+            assert(checkMap(eMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N4))))
+          else 
+            assert(checkMap(eMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N7))))
         }
       }
       else if(unifs == List((1,1))){ // unify the Nd_A's
@@ -79,7 +92,7 @@ object SingleRefEffectOnUnificationTest2{
           assert(repMaps.length == 1); val repMap = repMaps(0)
           assert(checkMap(repMap(1), List((T0,T1)))) // fresh value
           if(xx == N2){  // Common missing component with id N2
-            assert(linkagesC == List((0,0,2)) && linkagesB.isEmpty)
+            assert(linkagesC == List((0,0)) && linkagesB.isEmpty)
 /*
             // FIXME I'm not sure following is correct
             val extendedMaps = testHooks.extendForLinkages(rdMap, linkagesC)
@@ -88,6 +101,7 @@ object SingleRefEffectOnUnificationTest2{
             //println(Remapper.show(eMap))
             assert(checkMap(eMap(0), (N2,N2)::map1List))
             assert(emptyMap(eMap(1)))
+FIXME: test makeExtensions here
  */
             // Extension maps T0 -> T1 (above)
             assert(checkMap(repMap(0), (N2,N2)::map1List))
@@ -96,8 +110,13 @@ object SingleRefEffectOnUnificationTest2{
             assert(linkagesB.isEmpty && linkagesC.isEmpty)
             if(xx == N4) assert(checkMap(repMap(0), (N2,N4)::map1List))
             else assert(xx < 0 && checkMap(repMap(0), (N2,N5)::map1List))
+
+            val eMaps = testHooks.makeExtensions(unifs,oaBitMap,rdMap)
+            assert(eMaps.length == 1); val eMap = eMaps(0)
+            if(xx == N4) assert(checkMap(eMap(0), (N2,N4)::map1List))
+            else assert(xx < 0 && checkMap(eMap(0), (N2,N5)::map1List))
           }
-        }
+        } // end of for loop 
       }
       else{
         // Both components unified, which recreates the former transition
@@ -157,10 +176,11 @@ object SingleRefEffectOnUnificationTest2{
     assert(rdMaps.length == 2 &&
       rdMaps.forall(map2 => List(N2,-1).exists(n => isMap(map2,n))))
     for(rdMap <- rdMaps){
+      val rdMap1 = Remapper.cloneMap(rdMap) // clone since rdMap mutated
       val xx = rdMap(0)(N1) // gets overwritten
       val linkages = testHooks.findLinkages(unifs, rdMap)
       // linkage Nd_A -> Nd_B on N0 (whether N1 maps to N0 or not)
-      assert(linkages == List((1,1,0))) 
+      assert(linkages == List((1,1))) 
       assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
       val extendedMaps = testHooks.extendForLinkages(rdMap, oaBitMap, linkages)
       val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap)
@@ -181,6 +201,23 @@ object SingleRefEffectOnUnificationTest2{
         assert(repMaps.length == 2 && repMaps.forall(repMap => 
           checkMap(repMap(1), List((T0,T1))) &&
             List(N1,N3).exists(n => checkMap(repMap(0), (N1,n)::map1List))))
+      }
+
+      val eMaps = testHooks.makeExtensions(unifs,oaBitMap,rdMap1)
+      //println("****"+Remapper.show(rdMap1))
+      //for(eMap <- eMaps) println(Remapper.show(eMap))
+      if(xx == N2){
+        assert(eMaps.length == 1); val eMap = eMaps(0)
+        // Map T0 to fresh value
+        assert(checkMap(eMap(0), (N1,N2)::map1List) &&
+          checkMap(eMap(1), List((T0,T1))))
+      }
+      else{
+        assert(xx < 0)
+        assert(eMaps.length == 2 && eMaps.forall(eMap => 
+          checkMap(eMap(1), List((T0,T1))) &&
+            List(N1,N3).exists(n => checkMap(eMap(0), (N1,n)::map1List))))
+// Doesn't give N1 -> N1 version
       }
     } // end of for loop
 

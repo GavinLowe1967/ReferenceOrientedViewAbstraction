@@ -232,9 +232,9 @@ class SingleRefEffectOnUnification(
   }
 
 
-  /** Representation of a linkage.  A tuple (i, j, id) represents a linkage
-    * between cpts(i) and preCpts(j) on parameter id. */
-  private type Linkage = (Int,Int,Identity)
+  /** Representation of a linkage.  A tuple (i, j) represents a linkage
+    * between cpts(i) and preCpts(j). */
+  private type Linkage = (Int,Int)
 
   /** Find all the linkages for part (b) implied by rdMap.  All tuples (i, j,
     * id1) such that id is a parameter of cpts(i), id1 = rdMap(id) is a
@@ -246,7 +246,7 @@ class SingleRefEffectOnUnification(
       : ArrayBuffer[Linkage] = {
     // indices of unified cpts in cv, resp, pre
     val cvUnifs = unifs.map(_._1); val preUnifs = unifs.map(_._2)
-    val result = new ArrayBuffer[(Int, Int, Identity)]
+    val result = new ArrayBuffer[Linkage]
 
     // Iterate through rdMap
     for(t <- 0 until numTypes; id <- 0 until rdMap(t).length){
@@ -263,13 +263,13 @@ class SingleRefEffectOnUnification(
           // Find all i such that id is a reference of cpts(i), not unified
           for(i <- 0 until cpts.length)
             if(!cvUnifs.contains(i) && cpts(i).hasRef(t,id))
-              result += ((i, idJ, id1))
+              result += ((i, idJ))
         }
         if(refJs.nonEmpty)
           // Find i with identity id and not unified, if any
           for(i <- 0 until cpts.length)
             if(cpts(i).hasPID(t,id) && !cvUnifs.contains(i))
-              for(j <- refJs) result += ((i, j, id1))
+              for(j <- refJs) result += ((i, j))
       }
     }
     result
@@ -280,7 +280,7 @@ class SingleRefEffectOnUnification(
   /** Linkages for condition (c). */
   private def findLinkagesC(unifs: UnificationList, rdMap: RemappingMap)
       : ArrayBuffer[Linkage] = {
-    val result = new ArrayBuffer[(Int, Int, Identity)]
+    val result = new ArrayBuffer[Linkage]
     // Linkages for condition (c).  Iterate through the parameters of
     // cv.principal.
     val cvPrincParams = cv.principal.processIdentities
@@ -292,7 +292,7 @@ class SingleRefEffectOnUnification(
         if(id1 >= 0 && preCpts(0).processIdentities.contains((t,id1)) &&
             !cptIds.contains((t,id)) && !preCptIds.contains((t,id1))){
           // println(s"Missing $id -> $id1")
-          result += ((0, 0, id1))
+          result += ((0, 0))
         }
       }
     }
@@ -318,6 +318,7 @@ class SingleRefEffectOnUnification(
           !otherArgs(t).contains(id))
         otherArgs(t) ::= id
     }
+    //println("extendForLinkage: "+otherArgs.mkString("; "))
     extendMapOverComponent(rdMap, cpts(i), otherArgs, result)
   }
 
@@ -374,7 +375,7 @@ class SingleRefEffectOnUnification(
     // the previous round.
     var current = new ArrayBuffer[RemappingMap]; current += rdMap
     for(ix <- 0 until linkages.length){
-      val (i, j, _) = linkages(ix)
+      val (i, j) = linkages(ix)
       val res = new ArrayBuffer[RemappingMap]
       for(map <- current) extendForLinkage(map, resultRelevantParams, i, j, res)
       current = res
@@ -405,8 +406,7 @@ class SingleRefEffectOnUnification(
     for(map1 <- extendedMaps){
       val newLinkages = findLinkages(unifs, map1)
       // Are all linkages included in linkages?
-      if(newLinkages.forall{ case (i,j,_) => linkagesB.exists{ case (ii,jj,_) =>
-          ii == i && jj == j }}){
+      if(newLinkages.forall{ case (i,j) => linkagesB.contains((i,j)) }){
         // map remaining params to fresh and add to result
         mapUndefinedToFresh(map1)
         if(debugging) assert(Remapper.isInjective(map1))
@@ -430,7 +430,7 @@ class SingleRefEffectOnUnification(
   }
 
   /** Implementation of makeExtensions from the paper.  Add all such to
-    * extensions. */
+    * extensions.  Note: rdMap may be mutated. */
   private def makeExtensions(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, doneB: List[(Int,Int)], 
@@ -442,10 +442,13 @@ class SingleRefEffectOnUnification(
       val linkagesB = findLinkages(unifs, rdMap)
       // IMPROVE: pass doneB to linkagesB
       val newLinkages = 
-        linkagesB.filter{ case (i,j,_) => doneB.contains(i,j) }.distinct
-      if(newLinkages.isEmpty) mapUndefinedToFresh(rdMap)
+        linkagesB.filter( pair => !doneB.contains(pair) ).distinct
+      //println("makeExtensions: "+newLinkages)
+      if(newLinkages.isEmpty){ // map remaining params to fresh
+        mapUndefinedToFresh(rdMap); extensions += rdMap
+      }
       else{
-        val (i,j,id) = newLinkages.head
+        val (i,j) = newLinkages.head
         // FIXME: need to respect doneB below
         val extendedMaps = new ArrayBuffer[RemappingMap]
         extendForLinkage(rdMap, resultRelevantParams, i, j, extendedMaps)
@@ -564,5 +567,14 @@ class SingleRefEffectOnUnification(
     val getSecondaryInfo = outer.getSecondaryInfo _
 
     val extendMapOverComponent = outer.extendMapOverComponent _
+
+    def makeExtensions(unifs: UnificationList, resultRelevantParams: BitMap, 
+      rdMap: RemappingMap)
+        : ArrayBuffer[RemappingMap] = {
+      val result = new ArrayBuffer[RemappingMap]
+      outer.makeExtensions(unifs, resultRelevantParams, rdMap, List(), result)
+      result
+    }
+
   } // end of TestHooks
 }
