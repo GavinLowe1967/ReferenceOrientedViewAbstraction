@@ -63,6 +63,8 @@ $(DIR)/UnificationTest.class: $(DIR)/Unification.class $(DIR)/EffectOnUnificatio
 
 $(DIR)/RemappingExtender.class: $(DIR)/RemapperP/Remapper.class $(DIR)/Unification.class
 
+$(DIR)/RemappingExtenderTest.class: $(DIR)/RemappingExtender.class
+
 $(DIR)/SingleRefEffectOnUnification.class: $(DIR)/RemappingExtender.class
 
 $(DIR)/SingleRefEffectOnUnificationTest2.class: $(DIR)/SingleRefEffectOnUnification.class
@@ -123,7 +125,7 @@ $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 TESTS = $(DIR)/RemapperP/RemapperTest.class $(COMBINERP)/CombinerTest.class	\
 $(DIR)/SystemP/SystemTest.class $(DIR)/CheckerTest.class			\
 $(EXTENDERP)/ExtendabilityTest.class $(DIR)/UnificationTest.class		\
-$(DIR)/SingleRefEffectOnUnificationTest.class
+$(DIR)/SingleRefEffectOnUnificationTest.class $(DIR)/RemappingExtenderTest.class
 
 $(DIR)/VA.class:  $(DIR)/Checker.class $(TESTS)
 
