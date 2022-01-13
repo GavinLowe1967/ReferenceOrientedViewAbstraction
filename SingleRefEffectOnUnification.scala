@@ -110,7 +110,8 @@ class SingleRefEffectOnUnification(
         // Primary result-defining maps
         val rdMaps = extendToRDMap(map1,otherArgsBitMap)
         // Extend with extra linkages and fresh parameters
-        for(rdMap <- rdMaps) extendMapping(unifs, otherArgsBitMap, rdMap, None)
+        for(rdMap <- rdMaps) makePrimaryExtension(unifs, otherArgsBitMap, rdMap)
+          // extendMapping(unifs, otherArgsBitMap, rdMap, None)
       }
       // else println("Not sufficient unif "+unifs)
 
@@ -118,6 +119,7 @@ class SingleRefEffectOnUnification(
 // IMPROVE: inside "if"?  
       val secondaryInfo = getSecondaryInfo(map1)
       for((map2, i) <- secondaryInfo){
+        println("secondary")
         val sc = postCpts(i)
         val otherArgsBitMap = mkSecondaryOtherArgsMap(map2, sc)
         val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
@@ -125,7 +127,9 @@ class SingleRefEffectOnUnification(
         val rdMaps = new ArrayBuffer[RemappingMap]
         extendMapOverComponent(map2, cpts(0), otherArgs, rdMaps)
         // Then consider linkages
-        for(rdMap <- rdMaps) extendMapping(unifs, otherArgsBitMap, rdMap, Some(i))
+        for(rdMap <- rdMaps) 
+          makeSecondaryExtension(unifs, otherArgsBitMap, rdMap, i)
+          // extendMapping(unifs, otherArgsBitMap, rdMap, Some(i))
         // No: add to result2
 // FIXME: carry on here ..................................
       }
@@ -429,8 +433,10 @@ class SingleRefEffectOnUnification(
     }
   }
 
-  /** Implementation of makeExtensions from the paper.  Add all such to
-    * extensions.  Note: rdMap may be mutated. */
+  /** Implementation of makeExtensions from the paper.  Create all required
+    * extensions of result-defiling map rdMap.  Add all such to extensions.
+    * doneB gives the instances of condition (b) that we have dealt with so
+    * far.  Note: rdMap may be mutated. */
   private def makeExtensions(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, doneB: List[(Int,Int)], 
@@ -457,7 +463,6 @@ class SingleRefEffectOnUnification(
             (i,j)::doneB, extensions)
       }
     }
-
   }
 
   /** Extend map to map all undefined values to distinct fresh values. */
@@ -466,6 +471,40 @@ class SingleRefEffectOnUnification(
       var next = nextArg(t)
       for(i <- 0 until map(t).length)
         if(map(t)(i) < 0){ map(t)(i) = next; next += 1 }
+    }
+  }
+
+  /* Extend the result-defining map rdMap, based on unifications unifs, to
+   * produce all primary representative extensions.  For each such map, add an
+   * appropriate tuple to result. */
+  private def makePrimaryExtension(
+    unifs: UnificationList, resultRelevantParams: BitMap, rdMap: RemappingMap)
+  = {
+    val extensions = new ArrayBuffer[RemappingMap]
+    makeExtensions(unifs, resultRelevantParams, rdMap, List(), extensions)
+    for(map1 <- extensions){
+      if(debugging) assert(Remapper.isInjective(map1))
+      val newCpts = Remapper.applyRemapping(map1, cpts)
+      val reducedMapInfo: ReducedMap =
+        if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
+        else null
+      result += ((map1, newCpts, unifs, reducedMapInfo))
+    }
+  }
+
+  /* Extend the result-defining map rdMap, based on unifications unifs, to
+   * produce all secondary representative extensions corresponding to
+   * postCpts(ix).  For each such map, add an appropriate tuple to result2. */
+  private def makeSecondaryExtension(
+    unifs: UnificationList, resultRelevantParams: BitMap, 
+    rdMap: RemappingMap, ix: Int)
+  = {
+    val extensions = new ArrayBuffer[RemappingMap]
+    makeExtensions(unifs, resultRelevantParams, rdMap, List(), extensions)
+    for(map1 <- extensions){
+      if(debugging) assert(Remapper.isInjective(map1))
+      val newCpts = Remapper.applyRemapping(map1, cpts)
+      result2 += ((newCpts, unifs, ix))
     }
   }
 
@@ -549,7 +588,8 @@ class SingleRefEffectOnUnification(
       unifs: UnificationList, otherArgs: BitMap, rdMap: RemappingMap)
         : ArrayBuffer[RemappingMap] = {
       result.clear
-      outer.extendMapping(unifs, otherArgs, rdMap, None)
+      // outer.extendMapping(unifs, otherArgs, rdMap, None)
+      outer.makePrimaryExtension(unifs, otherArgs, rdMap)
       val res = result.map(_._1); result.clear; res
     }
 
