@@ -121,7 +121,8 @@ class SingleRefEffectOnUnification(
         val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
         // Secondary result-defining maps
         val rdMaps = new ArrayBuffer[RemappingMap]
-        remappingExtender.extendMapOverComponent(map2, cpts(0), otherArgs, rdMaps)
+        remappingExtender.extendMapOverComponent(
+          map2, cpts(0), otherArgs, rdMaps)
         // Then consider linkages
         for(rdMap <- rdMaps) 
           makeSecondaryExtension(unifs, otherArgsBitMap, rdMap, i)
@@ -237,7 +238,8 @@ class SingleRefEffectOnUnification(
     unifs: UnificationList, resultRelevantParams: BitMap, rdMap: RemappingMap)
   = {
     val extensions = new ArrayBuffer[RemappingMap]
-    remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, List(), extensions)
+    remappingExtender.makeExtensions(
+      unifs, resultRelevantParams, rdMap, List(), extensions)
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
       val newCpts = Remapper.applyRemapping(map1, cpts)
@@ -256,7 +258,8 @@ class SingleRefEffectOnUnification(
     rdMap: RemappingMap, ix: Int)
   = {
     val extensions = new ArrayBuffer[RemappingMap]
-    remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, List(), extensions)
+    remappingExtender.makeExtensions(
+      unifs, resultRelevantParams, rdMap, List(), extensions)
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
       val newCpts = Remapper.applyRemapping(map1, cpts)
@@ -359,13 +362,6 @@ class SingleRefEffectOnUnification(
 
     val extendMapOverComponent = outer.remappingExtender.extendMapOverComponent _
 
-    def makeExtensions(unifs: UnificationList, resultRelevantParams: BitMap, 
-      rdMap: RemappingMap)
-        : ArrayBuffer[RemappingMap] = {
-      val result = new ArrayBuffer[RemappingMap]
-      outer.remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, List(), result)
-      result
-    }
 
   } // end of TestHooks
 }

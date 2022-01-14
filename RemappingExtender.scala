@@ -212,5 +212,13 @@ class RemappingExtender(
     val findLinkages = outer.findLinkages _
 
     val findLinkagesC = outer.findLinkagesC _
+
+    def makeExtensions(unifs: UnificationList, resultRelevantParams: BitMap, 
+      rdMap: RemappingMap)
+        : ArrayBuffer[RemappingMap] = {
+      val result = new ArrayBuffer[RemappingMap]
+      outer.makeExtensions(unifs, resultRelevantParams, rdMap, List(), result)
+      result
+    }
   }
 }
