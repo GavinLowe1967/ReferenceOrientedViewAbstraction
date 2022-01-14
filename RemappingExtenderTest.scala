@@ -1,5 +1,6 @@
 package ViewAbstraction
 
+import RemapperP._
 
 object RemappingExtenderTest{
 
@@ -23,16 +24,17 @@ object RemappingExtenderTest{
     val remappingExtender = new RemappingExtender(pre, post, cv)
     val testHooks = remappingExtender.TestHooks
     val unifs: UnificationList = List()
+    val oaBitMap = Array(mkOABitMap(3,List(N1)), mkOABitMap(0,List()))
     val rdMap: RemappingMap = Array(Array(N0,-1,-1), Array())
+
     assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
     assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
-    val oaBitMap = Array(mkOABitMap(3,List(N1)), mkOABitMap(0,List()))
     val eMaps = testHooks.makeExtensions(unifs,oaBitMap,rdMap)
     assert(eMaps.length == 1); val eMap = eMaps(0)
+    // Must map N1,N2 to fresh values
     assert(checkMap(eMap(0), List((N0,N0),(N1,N3),(N2,N4))) &&
       emptyMap(eMap(1)))
-
   }
 
   /* Test based on (fixed(N0); Th(T0, N1, N2), Nd_A(N1, N3)) ->
@@ -76,6 +78,8 @@ object RemappingExtenderTest{
         val rdMap: RemappingMap = Array(Array(N0,N2,n,-1), Array())
         assert(testHooks.findLinkages(unifs, rdMap) == List( (0,0) ))
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
+
+// FIXME: test here
       }
     }
 
@@ -276,25 +280,22 @@ FIXME: test makeExtensions here
       assert(testHooks.findLinkages(unifs, rdMap) == List((1,1)))
 
       val eMaps = testHooks.makeExtensions(unifs,oaBitMap,rdMap)
-      val map1List = List((N0,N0))
-      //println("****"+Remapper.show(rdMap1))
-      //for(eMap <- eMaps) println(Remapper.show(eMap))
       if(n == N2){
         assert(eMaps.length == 1); val eMap = eMaps(0)
         // Map T0 to fresh value
-        assert(checkMap(eMap(0), (N1,N2)::map1List) &&
+        assert(checkMap(eMap(0), List((N0,N0), (N1,N2))) &&
           checkMap(eMap(1), List((T0,T1))))
       }
       else{
         assert(eMaps.length == 2 && eMaps.forall(eMap => 
           checkMap(eMap(1), List((T0,T1))) &&
-            List(N1,N3).exists(n => checkMap(eMap(0), (N1,n)::map1List))))
-// Doesn't give N1 -> N1 version
+            List(N1,N3).exists(n1 => checkMap(eMap(0), List((N0,N0),(N1,n1))))))
       }
       
     }
   }
 
+  /** Main function. */
   def apply() = {
     singleRef = true
     println("===RemappingExtenderTest===")

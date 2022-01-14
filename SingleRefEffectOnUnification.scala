@@ -237,9 +237,8 @@ class SingleRefEffectOnUnification(
   private def makePrimaryExtension(
     unifs: UnificationList, resultRelevantParams: BitMap, rdMap: RemappingMap)
   = {
-    val extensions = new ArrayBuffer[RemappingMap]
-    remappingExtender.makeExtensions(
-      unifs, resultRelevantParams, rdMap, List(), extensions)
+    val extensions = 
+      remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap)
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
       val newCpts = Remapper.applyRemapping(map1, cpts)
@@ -257,9 +256,8 @@ class SingleRefEffectOnUnification(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, ix: Int)
   = {
-    val extensions = new ArrayBuffer[RemappingMap]
-    remappingExtender.makeExtensions(
-      unifs, resultRelevantParams, rdMap, List(), extensions)
+    val extensions = 
+      remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap)
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
       val newCpts = Remapper.applyRemapping(map1, cpts)
@@ -341,10 +339,10 @@ class SingleRefEffectOnUnification(
       unifs: UnificationList, otherArgs: BitMap, rdMap: RemappingMap)
         : ArrayBuffer[RemappingMap] = {
       result.clear
-      // outer.extendMapping(unifs, otherArgs, rdMap, None)
       outer.makePrimaryExtension(unifs, otherArgs, rdMap)
       val res = result.map(_._1); result.clear; res
     }
+    // Same as remappingExtender.makeExtensions(unifs, otherArgs, rdMap)
 
     def extendSecondaryMapping(
       unifs: UnificationList, otherArgs: BitMap, 
@@ -352,7 +350,6 @@ class SingleRefEffectOnUnification(
         : ArrayBuffer[Array[State]] = {
       result2.clear
       outer.makeSecondaryExtension(unifs, otherArgs, rdMap, i)
-      // outer.extendMapping(unifs, otherArgs, rdMap, Some(i))
       val res = result2.map(_._1); result2.clear; res
     }
 
@@ -361,7 +358,5 @@ class SingleRefEffectOnUnification(
     val getSecondaryInfo = outer.getSecondaryInfo _
 
     val extendMapOverComponent = outer.remappingExtender.extendMapOverComponent _
-
-
   } // end of TestHooks
 }

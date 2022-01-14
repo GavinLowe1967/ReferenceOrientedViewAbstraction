@@ -170,11 +170,23 @@ class RemappingExtender(
     rec(0)
   }
 
+
+
+  /** Implementation of makeExtensions from the paper.  Create all required
+    * extensions of result-defiling map rdMap.  Note: rdMap may be mutated. */
+  def makeExtensions(
+    unifs: UnificationList, resultRelevantParams: BitMap, rdMap: RemappingMap)
+      : ArrayBuffer[RemappingMap] = {
+    val result = new ArrayBuffer[RemappingMap]
+    makeExtensions1(unifs, resultRelevantParams, rdMap, List(), result)
+    result
+  }
+
   /** Implementation of makeExtensions from the paper.  Create all required
     * extensions of result-defiling map rdMap.  Add all such to extensions.
     * doneB gives the instances of condition (b) that we have dealt with so
     * far.  Note: rdMap may be mutated. */
-  def makeExtensions(
+  def makeExtensions1(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, doneB: List[(Int,Int)], 
     extensions: ArrayBuffer[RemappingMap])
@@ -196,7 +208,7 @@ class RemappingExtender(
         val extendedMaps = new ArrayBuffer[RemappingMap]
         extendForLinkage(rdMap, resultRelevantParams, i, j, extendedMaps)
         for(eMap <- extendedMaps) 
-          makeExtensions(unifs, resultRelevantParams, eMap, 
+          makeExtensions1(unifs, resultRelevantParams, eMap, 
             (i,j)::doneB, extensions)
       }
     }
@@ -213,12 +225,6 @@ class RemappingExtender(
 
     val findLinkagesC = outer.findLinkagesC _
 
-    def makeExtensions(unifs: UnificationList, resultRelevantParams: BitMap, 
-      rdMap: RemappingMap)
-        : ArrayBuffer[RemappingMap] = {
-      val result = new ArrayBuffer[RemappingMap]
-      outer.makeExtensions(unifs, resultRelevantParams, rdMap, List(), result)
-      result
-    }
+    val makeExtensions = outer.makeExtensions _ 
   }
 }

@@ -56,19 +56,6 @@ object SingleRefEffectOnUnificationTest2{
             assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N4))))
           else 
             assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N7))))
-
-          // val eMaps = testHooks.makeExtensions(unifs,oaBitMap,rdMap)
-          // assert(eMaps.length == 1); val eMap = eMaps(0)
-          // // Maps all other params to fresh params
-          // assert(checkMap(eMap(1), List((T0,T1))))
-          // if(rdMap(0)(N1) == N4)
-          //   assert(checkMap(eMap(0), List((N0,N0), (N1,N4), (N2,N5), (N3,N6))))
-          // else if(rdMap(0)(N2) == N4) 
-          //   assert(checkMap(eMap(0), List((N0,N0), (N1,N5), (N2,N4), (N3,N6))))
-          // else if(rdMap(0)(N3) == N4) 
-          //   assert(checkMap(eMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N4))))
-          // else 
-          //   assert(checkMap(eMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N7))))
         }
       }
       else if(unifs == List((1,1))){ // unify the Nd_A's
@@ -105,11 +92,6 @@ FIXME: test makeExtensions here
           else{
             if(xx == N4) assert(checkMap(repMap(0), (N2,N4)::map1List))
             else assert(xx < 0 && checkMap(repMap(0), (N2,N5)::map1List))
-
-            // val eMaps = testHooks.makeExtensions(unifs,oaBitMap,rdMap)
-            // assert(eMaps.length == 1); val eMap = eMaps(0)
-            // if(xx == N4) assert(checkMap(eMap(0), (N2,N4)::map1List))
-            // else assert(xx < 0 && checkMap(eMap(0), (N2,N5)::map1List))
           }
         } // end of for loop 
       }
@@ -158,8 +140,6 @@ if(false){
       Array(setTopB(T0, N0), bNode(N0, N1)))
     val sreou = new SingleRefEffectOnUnification(pre, post, cv)
     val testHooks = sreou.TestHooks
-    val remappingExtender = new RemappingExtender(pre, post, cv)
-    val reTestHooks = remappingExtender.TestHooks
 
     val allUnifs = mkUnifs(pre, cv); assert(allUnifs.length == 1)
     //println(allUnifs.map(_._2).mkString("\n"))
@@ -178,11 +158,6 @@ if(false){
     for(rdMap <- rdMaps){
       val rdMap1 = Remapper.cloneMap(rdMap) // clone since rdMap mutated
       val xx = rdMap(0)(N1) // gets overwritten
-      //val linkages = reTestHooks.findLinkages(unifs, rdMap)
-      // linkage Nd_A -> Nd_B on N0 (whether N1 maps to N0 or not)
-      //assert(linkages == List((1,1))) 
-      assert(reTestHooks.findLinkagesC(unifs, rdMap).isEmpty)
-      //val extendedMaps = testHooks.extendForLinkages(rdMap, oaBitMap, linkages)
       val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap)
       if(xx == N2){
         // rdMap already total on params of Nd_B 
