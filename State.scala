@@ -44,6 +44,19 @@ class State(val family: Family, val cs: ControlState,
     pIds
   }
 
+  /** All parameters of each type.  */
+  // private var psByType: Array[List[Identity]] = null
+  // // Note: can't be set at the point of object creation.
+
+  // /** All parameters of each type.  */
+  // def paramsByType: Array[List[Identity]] = {
+  //   if(psByType == null){  // lazily create
+  //     psByType = Array.fill(numTypes)(List[Identity]())
+  //     for(i <- 0 until length) psByType(typeMap(i)) ::= ids(i)
+  //   }
+  //   psByType
+  // }
+
   /** Does this have a reference to (t,id) (other than its identity)? */
   def hasRef(t: Family, id: Identity) = 
     if(family == t && ids(0) == id) false
@@ -52,6 +65,13 @@ class State(val family: Family, val cs: ControlState,
       while(i < length && (typeMap(i) != t || ids(i) != id)) i += 1
       i < length
     }
+
+  /** Does this have a parameter (t,id)? */
+  def hasParam(t: Family, id: Identity): Boolean = {
+    var i = 0
+    while(i < length && (typeMap(i) != t || ids(i) != id)) i += 1
+    i < length
+  }
 
   /** Information about which references are used to create views.  It is set
     * the first time includeParam is called (it can't be done before

@@ -25,13 +25,11 @@ object SingleRefEffectOnUnificationTest2{
     val cv = new ComponentView(servers3(N0), 
       Array(getDatumSt(T0, N1, N2), aNode(N1, N3)))
     val allUnifs = mkUnifs(pre, cv); assert(allUnifs.length == 3)
-    // println(allUnifs.map(_._2).mkString("\n"))
-
     val sreou = new SingleRefEffectOnUnification(pre, post, cv)
     val testHooks = sreou.TestHooks
 
     for((map1,unifs) <- allUnifs){
-      if(unifs.isEmpty){
+      if(unifs.isEmpty){                                 // No unification
         val map1List = List((N0,N0))
         assert(checkMap(map1(0), map1List) && emptyMap(map1(1)))
         val (otherArgs, oaBitMap) = testHooks.mkOtherArgs(map1, unifs)
@@ -43,20 +41,6 @@ object SingleRefEffectOnUnificationTest2{
           emptyMap(map2(1)) &&
             (checkMap(map2(0), map1List) ||
               List(N1,N2,N3).exists(n => checkMap(map2(0), (n,N4)::map1List))))
-        for(rdMap <- rdMaps){
-          val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap)
-          assert(repMaps.length == 1); val repMap = repMaps(0)
-          // Maps all other params to fresh params
-          assert(checkMap(repMap(1), List((T0,T1))))
-          if(rdMap(0)(N1) == N4)
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N4), (N2,N5), (N3,N6))))
-          else if(rdMap(0)(N2) == N4) 
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N4), (N3,N6))))
-          else if(rdMap(0)(N3) == N4) 
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N4))))
-          else 
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N7))))
-        }
       }
       else if(unifs == List((1,1))){ // unify the Nd_A's
         val map1List = List((N0,N0), (N1,N1), (N3,N3))
@@ -68,32 +52,6 @@ object SingleRefEffectOnUnificationTest2{
         assert(rdMaps.length == 3 &&
           rdMaps.forall(map2 => emptyMap(map2(1)) &&
             List(N2,N4,-1).exists(n => checkMap(map2(0), (N2,n)::map1List))))
-// FIXME: following involves condition (c), not yet implemented
-        if(false) for(rdMap <- rdMaps){
-          val xx = rdMap(0)(N2) // Note: gets overwritten
-          // Note: at one point the cloning below was necessary
-          val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap/*.map(_.clone)*/)
-          assert(repMaps.length == 1); val repMap = repMaps(0)
-          assert(checkMap(repMap(1), List((T0,T1)))) // fresh value
-          if(xx == N2){  // Common missing component with id N2
-/*
-            // FIXME I'm not sure following is correct
-            val extendedMaps = testHooks.extendForLinkages(rdMap, linkagesC)
-            // rdMap is already defined on N1,N2; can't map T0 -> T0 
-            assert(extendedMaps.length == 1); val eMap = extendedMaps(0)
-            //println(Remapper.show(eMap))
-            assert(checkMap(eMap(0), (N2,N2)::map1List))
-            assert(emptyMap(eMap(1)))
-FIXME: test makeExtensions here
- */
-            // Extension maps T0 -> T1 (above)
-            assert(checkMap(repMap(0), (N2,N2)::map1List))
-          }
-          else{
-            if(xx == N4) assert(checkMap(repMap(0), (N2,N4)::map1List))
-            else assert(xx < 0 && checkMap(repMap(0), (N2,N5)::map1List))
-          }
-        } // end of for loop 
       }
       else{
         // Both components unified, which recreates the former transition
@@ -125,6 +83,7 @@ if(false){
     assert(result.length == expected.length)
     for(exp <- expected) 
       assert(result.exists(tuple => exp.sameElements(tuple._2)))
+  assert(result1.isEmpty)
 }
   }
 
@@ -149,52 +108,10 @@ if(false){
     // Just N2 from post.fixed
     assert(otherArgs(0) == List(N2) && otherArgs(1).isEmpty)
     val rdMaps = testHooks.extendToRDMap(map1,oaBitMap)
-    // is map2 N0->N0, N1->n ?
-    def isMap(map2: RemappingMap, n: Int) = 
-      emptyMap(map2(1)) && checkMap(map2(0), (N1,n)::map1List)
     // Map N1 to N2 or not
     assert(rdMaps.length == 2 &&
-      rdMaps.forall(map2 => List(N2,-1).exists(n => isMap(map2,n))))
-    for(rdMap <- rdMaps){
-      val rdMap1 = Remapper.cloneMap(rdMap) // clone since rdMap mutated
-      val xx = rdMap(0)(N1) // gets overwritten
-      val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap)
-      if(xx == N2){
-        // rdMap already total on params of Nd_B 
-        //assert(extendedMaps.length == 1 && isMap(extendedMaps(0), N2))
-        assert(repMaps.length == 1); val repMap = repMaps(0)
-        // Map T0 to fresh value
-        assert(checkMap(repMap(0), (N1,N2)::map1List) &&
-          checkMap(repMap(1), List((T0,T1))))
-      }
-      else{
-        assert(xx < 0)
-        // Can map N1 to N1 or not
-        //assert(extendedMaps.length == 2 &&
-        //  extendedMaps.forall(eMap => List(N1,-1).exists(n => isMap(eMap,n))))
-        // N1 maps to N1 or fresh value
-        assert(repMaps.length == 2 && repMaps.forall(repMap => 
-          checkMap(repMap(1), List((T0,T1))) &&
-            List(N1,N3).exists(n => checkMap(repMap(0), (N1,n)::map1List))))
-      }
-
-//       val eMaps = testHooks.makeExtensions(unifs,oaBitMap,rdMap1)
-//       //println("****"+Remapper.show(rdMap1))
-//       //for(eMap <- eMaps) println(Remapper.show(eMap))
-//       if(xx == N2){
-//         assert(eMaps.length == 1); val eMap = eMaps(0)
-//         // Map T0 to fresh value
-//         assert(checkMap(eMap(0), (N1,N2)::map1List) &&
-//           checkMap(eMap(1), List((T0,T1))))
-//       }
-//       else{
-//         assert(xx < 0)
-//         assert(eMaps.length == 2 && eMaps.forall(eMap => 
-//           checkMap(eMap(1), List((T0,T1))) &&
-//             List(N1,N3).exists(n => checkMap(eMap(0), (N1,n)::map1List))))
-// // Doesn't give N1 -> N1 version
-//       }
-    } // end of for loop
+      rdMaps.forall(map2 => emptyMap(map2(1)) && 
+        List(N2,-1).exists(n => checkMap(map2(0), (N1,n)::map1List))))
 
     // Secondary induced transitions
     assert(testHooks.getSecondaryInfo(map1).isEmpty)
@@ -209,6 +126,7 @@ if(false){
     assert(result.length == expected.length)
     for(exp <- expected) 
       assert(result.exists(tuple => exp.sameElements(tuple._2)))
+    assert(result1.isEmpty)
   }
 
 }

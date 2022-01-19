@@ -656,6 +656,13 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     }
   }
 
+  /** Bit map showing which parameters are in this, if singleRef. */
+  val paramsBitMap = newBitMap
+  if(singleRef) 
+    for(c <- components++servers.servers; (t,p) <- c.processIdentities;
+        if !isDistinguished(p))
+      paramsBitMap(t)(p) = true
+
   override def toString = 
     s"$servers || ${components.mkString("[", " || ", "]")}"
 

@@ -29,14 +29,8 @@ object SingleRefEffectOnUnificationTest{
       assert(checkMap(map1(0), List((N0,N0))) && emptyMap(map1(1)))
       val rdMaps = testHooks.extendToRDMap(map1,oaBitMap)
       // Can't map either N1 or N2 to N1, since all are ids
-      assert(rdMaps.length == 1)
-      for(rdMap <- rdMaps){
-        assert(checkMap(rdMap(0), List((N0,N0))) && emptyMap(rdMap(1)))
-        // val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap)
-        // assert(repMaps.length == 1); val repMap = repMaps(0)
-        // assert(checkMap(repMap(0), List((N0,N0),(N1,N3),(N2,N4))) && 
-        //   emptyMap(repMap(1)))
-      }
+      assert(rdMaps.length == 1); val rdMap = rdMaps(0)
+      assert(checkMap(rdMap(0), List((N0,N0))) && emptyMap(rdMap(1)))
       // No secondaries
       assert(testHooks.getSecondaryInfo(map1).isEmpty)
     } // end of for loop
@@ -66,7 +60,7 @@ object SingleRefEffectOnUnificationTest{
     val testHooks = sreou.TestHooks
 
     for((map1,unifs) <- allUnifs){
-      if(unifs.isEmpty){
+      if(unifs.isEmpty){                                   // no unification
         val (otherArgs, oaBitMap) = testHooks.mkOtherArgs(map1, unifs)
         // Just N4, from post.servers
         assert(otherArgs(0) == List(N4) && otherArgs(1).isEmpty)
@@ -79,20 +73,6 @@ object SingleRefEffectOnUnificationTest{
               List(N1,N2,N3).exists(n => 
                 checkMap(map2(0), List((N0,N0), (n,N4))))
           ) && emptyMap(map2(1))))
-        for(rdMap <- rdMaps){
-          val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap)
-          assert(repMaps.length == 1); val repMap = repMaps(0)
-          // Maps all other params to fresh params
-          assert(emptyMap(repMap(1)))
-          if(rdMap(0)(N1) == N4) 
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N4), (N2,N5), (N3,N6))))
-          else if(rdMap(0)(N2) == N4) 
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N4), (N3,N6))))
-          else if(rdMap(0)(N3) == N4) 
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N4))))
-          else 
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N7))))
-        } // end of inner for
 
         // Secondary info; link from the Nd_C
         val secondaryInfo = testHooks.getSecondaryInfo(map1)
@@ -100,28 +80,12 @@ object SingleRefEffectOnUnificationTest{
         assert(i == 1 && checkMap(map2(0), List((N0,N0), (N1,N2))) && 
           emptyMap(map2(1)))
         val sc = post.components(i)
-        val (otherArgs1, oaBitMap1) = testHooks.mkSecondaryOtherArgsMap(map2, sc) 
+        val (otherArgs1, oaBitMap1) = testHooks.mkSecondaryOtherArgsMap(map2, sc)
         // N4 from post.fixed; N1 from sc
         assert(otherArgs1(0).sorted == List(N1,N4) && otherArgs1(1).isEmpty)
-        val rdsMaps = new ArrayBuffer[RemappingMap]
-        testHooks.extendMapOverComponent(
-          map2, cv.components(0), otherArgs1, rdsMaps)
-        // Can't map N2 -> N1 as that would imply a unification
-        assert(rdsMaps.length == 2 && rdsMaps.forall(map2 => 
-          emptyMap(map2(1)) &&
-            List(N4,-1).exists(n => 
-              checkMap(map2(0), (N2,n)::List((N0,N0), (N1,N2))))))
-        for(rdsMap <- rdsMaps){
-          //val extendedMaps = testHooks.extendForLinkages(rdsMap, oaBitMap1, linkages)
-          // println(extendedMaps.map(Remapper.show).mkString("\n"))
-// IMPROVE: test here
-// IMPROVE: linkage using N2
-          // val repSts = 
-          //   testHooks.extendSecondaryMapping(unifs, oaBitMap1, rdsMap, i)
-        }
       } // end of no unifications case
-      else{
-        // unify the Nd_A's
+
+      else{                                            // unify the Nd_A's
         val map1List = List((N0,N0), (N1,N1), (N2,N3))
         assert(unifs == List((0,1)) && checkMap(map1(0), map1List) && 
           emptyMap(map1(1)) )
@@ -134,15 +98,8 @@ object SingleRefEffectOnUnificationTest{
           rdMaps.forall(map2 =>
             List(N2,N4,-1).exists(n => checkMap(map2(0), (N3,n)::map1List)) &&
               emptyMap(map2(1)) ))
-        for(rdMap <- rdMaps){
-          val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap)
-          assert(repMaps.length == 1); val repMap = repMaps(0)
-          // N3 should map to yy
-          val xx = rdMap(0)(N3); val yy = if(xx >= 0) xx else N5
-          assert(checkMap(repMap(0), (N3,yy)::map1List) && emptyMap(repMap(1)))
-          // No secondaries: prevented by unification
-          assert(testHooks.getSecondaryInfo(map1).isEmpty)
-        }
+        // No secondaries: prevented by unification
+        assert(testHooks.getSecondaryInfo(map1).isEmpty)
       } // end of unifying Nd_A's case
     } // end of for(... <- allUnifs)
 
@@ -162,6 +119,13 @@ object SingleRefEffectOnUnificationTest{
     assert(result.length == expected.length)
     for(exp <- expected) 
       assert(result.exists(tuple => exp.sameElements(tuple._2)))
+    // Expected from result1
+    val expected1 = List(
+      Array(aNode(N2,N4), bNode(N4,N5)), Array(aNode(N2,N5), bNode(N5,N6))
+    )
+    assert(result1.length == expected1.length)
+    for(exp <- expected1) 
+      assert(result1.exists(tuple => exp.sameElements(tuple._1)))
   }
 
 
@@ -194,20 +158,6 @@ object SingleRefEffectOnUnificationTest{
             checkMap(map2(0), map1List) ||
               List(N1,N2,N3).exists(n => checkMap(map2(0), (n,N5)::map1List))
           ) && emptyMap(map2(1)) ))
-        for(rdMap <- rdMaps){
-          val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap)
-          assert(repMaps.length == 1); val repMap = repMaps(0)
-          // Maps all other params to fresh params
-          assert(emptyMap(repMap(1)))
-          if(rdMap(0)(N1) == N5) 
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N5), (N2,N6), (N3,N7))))
-          else if(rdMap(0)(N2) == N5) 
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N6), (N2,N5), (N3,N7))))
-          else if(rdMap(0)(N3) == N5) 
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N6), (N2,N7), (N3,N5))))
-          else 
-            assert(checkMap(repMap(0), List((N0,N0), (N1,N6), (N2,N7), (N3,N8))))
-        }
       }
       else if(unifs == List((0,1))){ // unify the Nd_A's
         val map1List = List((N0,N0), (N1,N1), (N2,N3))
@@ -221,15 +171,6 @@ object SingleRefEffectOnUnificationTest{
         assert(rdMaps.length == 4 &&
           rdMaps.forall(map2 => emptyMap(map2(1)) && 
             List(N2,N4,N5,-1).exists(n => checkMap(map2(0), (N3,n)::map1List))))
-        for(rdMap <- rdMaps){
-          // Each representative map extends the corresponding result-defining
-          // map, maybe mapping undefined N3 to fresh N6
-          val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap)
-          assert(repMaps.length == 1); val repMap = repMaps(0)
-          // N3 should map to yy
-          val xx = rdMap(0)(N3); val yy = if(xx >= 0) xx else N6
-          assert(checkMap(repMap(0), (N3,yy)::map1List) && emptyMap(repMap(1)))
-        }
       }
       else{ // unify the Nd_B's
         val map1List = List((N0,N0), (N2,N2), (N3,N4))
@@ -243,14 +184,6 @@ object SingleRefEffectOnUnificationTest{
         assert(rdMaps.length == 2 && 
           rdMaps.forall(map2 => emptyMap(map2(1)) &&
             List(N5,-1).exists(n => checkMap(map2(0), (N1,n)::map1List))))
-        for(rdMap <- rdMaps){
-          val repMaps = testHooks.extendPrimaryMapping(unifs, oaBitMap, rdMap)
-          // println(repMaps.map(Remapper.show).mkString("\n"))
-          assert(repMaps.length == 1); val repMap = repMaps(0)
-          // N1 should map to yy
-          val xx = rdMap(0)(N1); val yy = if(xx >= 0) xx else N6
-          assert(checkMap(repMap(0), (N1,yy)::map1List) && emptyMap(repMap(1)))
-        }
       } // end of unifying Nd_B's case
       // No secondary transitions, since mapping N1 to N2 requires unifying
       // Nd_A(N1) with Nd_B(N_2)
@@ -262,7 +195,6 @@ object SingleRefEffectOnUnificationTest{
 
     // Check top-level result
     val (result,result1) = sreou()
-    // println(result.map(tuple => StateArray.show(tuple._2)).mkString("\n"))
     val expected = List(
       // With empty unifs
       Array(aNode(N5, N6), bNode(N6, N7)), Array(aNode(N6, N5), bNode(N5, N7)),
@@ -276,6 +208,7 @@ object SingleRefEffectOnUnificationTest{
     assert(result.length == expected.length)
     for(exp <- expected) 
       assert(result.exists(tuple => exp.sameElements(tuple._2)))
+    assert(result1.isEmpty)
   }
 
   /** Main function. */

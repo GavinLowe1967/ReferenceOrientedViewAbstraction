@@ -17,11 +17,14 @@ class SingleRefEffectOnUnification(
    * |--extendToRDMap     (produces primary result-defining maps)
    * |--makePrimaryExtension
    * |  |--RemappingExtender.makeExtensions
-   * |--makeSecondaryExtension
-   * |  |--RemappingExtender.makeExtensions
    * |--getSecondaryInfo
    * |--mkSecondaryOtherArgsMap
-   * |--extendMapOverComponent
+   * |--RemappingExtender.extendMapOverComponent
+   * |--makeSecondaryExtension
+   * |  |--RemappingExtender.makeExtensions
+   * 
+   * IMPROVE: maybe factor out mkOtherArgsMap, extendToRDMap,
+   * getSecondaryInfo, mkSecondaryOtherArgsMap.
    */
 
   /* A few object variables, extracted directly from pre, post and cv, used in
@@ -115,14 +118,13 @@ class SingleRefEffectOnUnification(
 // IMPROVE: inside "if"?  
       val secondaryInfo = getSecondaryInfo(map1)
       for((map2, i) <- secondaryInfo){
-        println("secondary")
+        // println("secondary")
         val sc = postCpts(i)
         val otherArgsBitMap = mkSecondaryOtherArgsMap(map2, sc)
         val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
         // Secondary result-defining maps
-        val rdMaps = new ArrayBuffer[RemappingMap]
-        remappingExtender.extendMapOverComponent(
-          map2, cpts(0), otherArgs, rdMaps)
+        val rdMaps =
+          remappingExtender.extendMapOverComponent(map2, cpts(0), otherArgs)
         // Then consider linkages
         for(rdMap <- rdMaps) 
           makeSecondaryExtension(unifs, otherArgsBitMap, rdMap, i)
@@ -330,28 +332,6 @@ class SingleRefEffectOnUnification(
     val extendToRDMap = outer.extendToRDMap _
 
     val isSufficientUnif = outer.isSufficientUnif _
-
-    /** Extend the result-defining map rdMap, based on unifications unifs, to
-      * produce all representative extensions, recursively mapping parameters
-      * based on linkages, and then mapping other parameters to fresh
-      * parameters. Return all resulting maps. */
-    def extendPrimaryMapping(
-      unifs: UnificationList, otherArgs: BitMap, rdMap: RemappingMap)
-        : ArrayBuffer[RemappingMap] = {
-      result.clear
-      outer.makePrimaryExtension(unifs, otherArgs, rdMap)
-      val res = result.map(_._1); result.clear; res
-    }
-    // Same as remappingExtender.makeExtensions(unifs, otherArgs, rdMap)
-
-    def extendSecondaryMapping(
-      unifs: UnificationList, otherArgs: BitMap, 
-      rdMap: RemappingMap, i: Int)
-        : ArrayBuffer[Array[State]] = {
-      result2.clear
-      outer.makeSecondaryExtension(unifs, otherArgs, rdMap, i)
-      val res = result2.map(_._1); result2.clear; res
-    }
 
     val acquiredRefs = outer.acquiredRefs 
 
