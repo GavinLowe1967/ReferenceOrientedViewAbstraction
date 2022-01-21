@@ -189,10 +189,10 @@ class RemappingExtender(
     rec(0)
   }
 
-  /** All extensions of rdMap, mapping undefined parameters to an arbitrary
-    * parameter of pre, or the next fresh parameter, but not to parameters of
-    * resultRelevantParams, and only consistently with doneB.  Add each to
-    * extensions. */
+  /** Implementation of allExtensions from the paper.  All extensions of rdMap,
+    * mapping undefined parameters to an arbitrary parameter of pre, or the
+    * next fresh parameter, but not to parameters of resultRelevantParams, and
+    * only consistently with doneB.  Add each to extensions. */
   private def allExtensions(
     resultRelevantParams: BitMap, rdMap: RemappingMap, 
     doneB: List[Linkage], extensions: ArrayBuffer[RemappingMap])
@@ -202,8 +202,8 @@ class RemappingExtender(
     // Build all extensions of rdMap, mapping each parameter to each element
     // of candidates(x), or not, injectively.
     val eMaps = extendMapToCandidates(rdMap, candidates)
-    // Then map remainders to fresh variables.
-    // ...
+    // Map remainder to fresh variables, and add to extensions.
+    for(eMap <- eMaps){ mapUndefinedToFresh(eMap); extensions += eMap }
   }
 
   /** Extend rdMap, mapping each parameter (t,p) to each element of
@@ -248,10 +248,6 @@ class RemappingExtender(
   private def getCandidatesMap(
     resultRelevantParams: BitMap, rdMap: RemappingMap, doneB: List[Linkage])
       : Array[Array[List[Identity]]] = {
-    // assert(allPreParams.length == 2 && resultRelevantParams.length == 2)
-    // for(t <- 0 until numTypes) println(s"$t: "+allPreParams(t))
-    // for(t <- 0 until numTypes) 
-    //   println(s"$t: "+resultRelevantParams(t).mkString(","))
     // All params of pre, except those in resultRelevantParams or range rdMap 
     val otherArgs: Array[List[Identity]] = Array.tabulate(numTypes)(t => 
       allPreParams(t).filter(p => 
@@ -262,7 +258,13 @@ class RemappingExtender(
     // of otherArgs.
     val candidates = Array.tabulate(numTypes)(t => 
       Array.tabulate(rdMap(t).length)(p => 
-        if(rdMap(t)(p) < 0) otherArgs(t) else List() ))
+        if(rdMap(t)(p) < 0) 
+          if(cptIds.contains((t,p))) 
+            otherArgs(t).filter(p1 => !preCptIds.contains((t,p1)))
+          else otherArgs(t)
+        else List() 
+      ))
+// FIXME: don't map id to id
     // For each (i,j) in doneB, for each param (t,x) of cv.cpts(i),
     // remove all parameters of preCts(j) from the list candidates(x). 
     for((i,j) <- doneB){
@@ -294,7 +296,8 @@ class RemappingExtender(
     extensions: ArrayBuffer[RemappingMap])
       : Unit = {
     val linkagesC = findLinkagesC(unifs, rdMap)
-    if(linkagesC.nonEmpty) ???
+    if(linkagesC.nonEmpty) 
+      allExtensions(resultRelevantParams, rdMap, doneB, extensions)
     else{
       val linkagesB = findLinkages(unifs, rdMap)
       // IMPROVE: pass doneB to linkagesB

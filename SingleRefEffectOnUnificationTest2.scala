@@ -69,6 +69,7 @@ object SingleRefEffectOnUnificationTest2{
 // FIXME
 if(false){
     val (result,result1) = sreou()
+    for(tuple <- result) println(StateArray.show(tuple._2)+"; "+tuple._3)
     val expected = List(
       // No unifs
       Array(getDatumSt(T1,N4,N5), aNode(N4,N6)),
