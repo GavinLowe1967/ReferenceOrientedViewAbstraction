@@ -166,6 +166,10 @@ package object ViewAbstraction{
     * EffectOn.processInducedInfo? */
   var showRedundancies = false
 
+  /** Should we use the new version of effectOn unification with singleRef, as
+    * in SingleRefEffectOnUnification.scala? */
+  var newEffectOn = false
+
   /** Switch to activate various assertions. */
   val debugging = true // false
 

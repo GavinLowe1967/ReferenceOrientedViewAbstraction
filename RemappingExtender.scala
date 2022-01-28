@@ -32,8 +32,17 @@ class RemappingExtender(
   post.updateNextArgMap(nextArg)
 
   /** Parameters of each component of pre. */
-  private val preParams: Array[List[ProcessIdentity]] = 
-    Array.tabulate(preCpts.length)(i => preCpts(i).processIdentities.toList)
+  //private val preParams: Array[List[ProcessIdentity]] = mkPreParams
+
+  // private def mkPreParams = {
+  //   val pp = new Array[List[ProcessIdentity]](preCpts.length)
+  //   var i = 0
+  //   while(i < preCpts.length){
+  //     pp(i) = preCpts(i).processIdentities.toList; i += 1
+  //   }
+  //   pp
+  //   // Array.tabulate(preCpts.length)(i => preCpts(i).processIdentities.toList)
+  // }
 
   /** All parameters of components of pre, indexed by type. */
   private val allPreParams: Array[List[Identity]] = 
@@ -41,12 +50,12 @@ class RemappingExtender(
 
   import Unification.UnificationList // = List[(Int,Int)]
 
-  /** Representation of a linkage.  A tuple (i, j) represents a linkage
-    * between cpts(i) and preCpts(j). */
+  /** Representation of a linkage.  A pair (i, j) represents a linkage between
+    * cpts(i) and preCpts(j). */
   private type Linkage = (Int,Int)
 
-  /** Find all the linkages for part (b) implied by rdMap.  All tuples (i, j,
-    * id1) such that id is a parameter of cpts(i), id1 = rdMap(id) is a
+  /** Find all the linkages for part (b) implied by rdMap.  All pairs (i, j)
+    * such that for some parameter id of cpts(i), id1 = rdMap(id) is a
     * parameter of preCpts(j), with one of those being the identity; and such
     * this doesn't represent a unification of components (with identities
     * id/id1). */

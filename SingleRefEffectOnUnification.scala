@@ -81,15 +81,19 @@ class SingleRefEffectOnUnification(
   /** Which secondary components can gain a reference to cv.principal?  All
     * pairs (i,p1) such that pre.components(i) changes state in the transition
     * (with (i>0), and p1 is a new parameter of post.components(i), of the
-    * same type as cv.principal.id, and not matching . */
-  private val acquiredRefs: List[(Int,Parameter)] = { 
+    * same type as cv.principal.id, and not matching and parameter of pre. */
+  private val acquiredRefs: List[(Int,Parameter)] = mkAcquiredRefs
+
+  private def mkAcquiredRefs = {
     var aR = List[(Int,Parameter)]()
     for(i <- 1 until preCpts.length; if preCpts(i) != postCpts(i)){
       val postParams = postCpts(i).processIdentities
       val preParams = preCpts(i).processIdentities
       for(j <- 1 until postParams.length){
         val p1 = postParams(j)
-        if(p1._1 == cvpf && !preParams.contains(p1)) aR ::= (i,p1)
+        if(p1._1 == cvpf && !isDistinguished(p1._2) &&
+            !preParams.contains(p1)) 
+          aR ::= (i,p1)
       }
     }
     aR
@@ -118,7 +122,7 @@ class SingleRefEffectOnUnification(
 // IMPROVE: inside "if"?  
       val secondaryInfo = getSecondaryInfo(map1)
       for((map2, i) <- secondaryInfo){
-        // println("secondary")
+        //println("secondary: "+Remapper.show(map2)+": "+i)
         val sc = postCpts(i)
         val otherArgsBitMap = mkSecondaryOtherArgsMap(map2, sc)
         val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
@@ -149,10 +153,10 @@ class SingleRefEffectOnUnification(
     }
 
     if(unifs.length == cpts.length && unifs.contains((0,0))) false
-    else true
+    // else true
 // IMPROVE:  below
-      // else if(changedServers) true 
-      // else changingUnif
+    else if(changedServers) true
+    else changingUnif
   }
 
   /** Create a BitMap containing all parameters: (1) in newServerIds (parameters
@@ -243,11 +247,17 @@ class SingleRefEffectOnUnification(
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap)
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
-      val newCpts = Remapper.applyRemapping(map1, cpts)
       val reducedMapInfo: ReducedMap =
         if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
         else null
-      result += ((map1, newCpts, unifs, reducedMapInfo))
+      // Check whether we've already considered an induced transition on cv
+      // with this map and postServers.  ?? Can we do this earlier?? 
+// IMPROVE
+      if(unifs.nonEmpty ||
+        !cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo)){
+        val newCpts = Remapper.applyRemapping(map1, cpts)
+        result += ((map1, newCpts, unifs, reducedMapInfo))
+      }
     }
   }
 
@@ -258,11 +268,13 @@ class SingleRefEffectOnUnification(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, ix: Int)
   = {
+    if(showTransitions) println("makeSecondaryExtension: "+Remapper.show(rdMap))
     val extensions = 
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap)
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
       val newCpts = Remapper.applyRemapping(map1, cpts)
+      if(showTransitions) println("newCpts = "+StateArray.show(newCpts)) 
       result2 += ((newCpts, unifs, ix))
     }
   }
@@ -276,6 +288,7 @@ class SingleRefEffectOnUnification(
       : ArrayBuffer[(RemappingMap, Int)] = {
     val result = new ArrayBuffer[(RemappingMap, Int)]
     for((i,(t,id)) <- acquiredRefs){
+      // println(s"getSecondaryInfo: ${(i,(t,id))}")
       assert(t == cvpf); val id1 = map1(t)(cvpid)
       // Check extending map1 with cvpid -> id is consistent: either (1) it's
       // already there; or (2) map1 is undefined on cvpid, id isn't in the

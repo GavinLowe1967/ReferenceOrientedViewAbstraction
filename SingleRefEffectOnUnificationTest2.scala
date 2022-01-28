@@ -66,10 +66,8 @@ object SingleRefEffectOnUnificationTest2{
     assert(testHooks.acquiredRefs.isEmpty) // wrong type
 
     // Check overall result
-// FIXME
-if(false){
     val (result,result1) = sreou()
-    for(tuple <- result) println(StateArray.show(tuple._2)+"; "+tuple._3)
+    // for(tuple <- result) println(StateArray.show(tuple._2)+"; "+tuple._3)
     val expected = List(
       // No unifs
       Array(getDatumSt(T1,N4,N5), aNode(N4,N6)),
@@ -84,8 +82,7 @@ if(false){
     assert(result.length == expected.length)
     for(exp <- expected) 
       assert(result.exists(tuple => exp.sameElements(tuple._2)))
-  assert(result1.isEmpty)
-}
+    assert(result1.isEmpty)
   }
 
 

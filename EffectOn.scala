@@ -68,7 +68,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         : (ArrayBuffer[
             (RemappingMap, Array[State], UnificationList, ReducedMap)],
            ArrayBuffer[(Array[State], UnificationList, Int)]) =
-      EffectOnUnification.combine(pre, post, cv)
+      if(singleRef && newEffectOn)
+        new SingleRefEffectOnUnification(pre,post,cv)()
+      else EffectOnUnification.combine(pre, post, cv)
 
     /* Function to process induced transition. */
     val processInducedInfo1 = 
@@ -138,6 +140,8 @@ if(false)
     if(debugging){
       StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     }
+    if(showTransitions && isPrimary) 
+      println("processInducedInfo: "+Remapper.show(map))
     // Record this induced transition if singleRef, if primary and no unifs
     @inline def recordInduced(): Boolean = {
       if(singleRef && isPrimary && unifs.isEmpty)
@@ -187,6 +191,7 @@ if(false)
     val missing: List[ComponentView] =
       crossRefs.map(new ComponentView(pre.servers, _)).filter(!views.contains(_))
     for(newComponents <- newComponentsList){
+      // println(StateArray.show(newComponents))
       val nv = Remapper.mkComponentView(post.servers, newComponents)
       Profiler.count("newViewCount") 
       if(!views.contains(nv)){

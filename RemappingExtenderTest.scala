@@ -9,6 +9,9 @@ object RemappingExtenderTest{
   import TestUtils._
   import Unification.UnificationList // = List[(Int,Int)]
 
+  private def showCandMap(candMap: Array[Array[List[Identity]]]): String = 
+    candMap.map(_.mkString(", ")).mkString("; ")
+
   private def mkOABitMap(size: Int, values: List[Int]) = {
     assert(values.forall(i => i >= 0 && i < size))
     Array.tabulate(size)(i => values.contains(i))
@@ -33,6 +36,7 @@ object RemappingExtenderTest{
     assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
     assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
+    // Following doesn't apply to actual linkage
     val candMap = testHooks.getCandidatesMap(oaBitMap, rdMap, List())
     // Can map N1 -> N2, N2 -> N2 (but not both) 
     assert(candMap(0)(N0).isEmpty && candMap(0)(N1) == List(N2) &&
@@ -103,6 +107,7 @@ object RemappingExtenderTest{
         assert(testHooks.findLinkages(unifs, rdMap) == List( (0,0) ))
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
+        // Following is hypothetical as there are no common missing components
         val candMap = testHooks.getCandidatesMap(oaBitMap1, rdMap, List((0,0)))
         // Can map undefined params to N3, only
         assert(candMap(0)(N0).isEmpty && candMap(0)(N1).isEmpty && 
@@ -133,7 +138,6 @@ object RemappingExtenderTest{
         assert(eMaps.length == 1); val eMap = eMaps(0); assert(eMap(1).isEmpty)
         if(n == N4) assert(eMap(0).sameElements(Array(N0,N2,N4,N5)))
         else assert(eMap(0).sameElements(Array(N0,N2,N5,N6)))
-
       }
     }
 
@@ -147,8 +151,9 @@ object RemappingExtenderTest{
         assert(testHooks.findLinkages(unifs1, rdMap).isEmpty)
         assert(testHooks.findLinkagesC(unifs1, rdMap).isEmpty)
 
+        // Following is hypothetical
         val candMap = testHooks.getCandidatesMap(oaBitMap, rdMap, List())
-        // All params are result-defiing or in range rdMap
+        // All params are result-defining or in range rdMap
         assert(candMap(0).forall(_.isEmpty) && candMap(1).isEmpty)
         val extMaps = testHooks.extendMapToCandidates(rdMap, candMap)
         assert(extMaps.length == 1); val em = extMaps(0)
@@ -192,8 +197,8 @@ object RemappingExtenderTest{
         assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
+        // Following is hypothetical
         val candMap = testHooks.getCandidatesMap(oaBitMap, rdMap, List())
-        //println(s"$n: "+candMap.map(_.mkString(", ")).mkString("; "))
         assert(candMap(0)(N0).isEmpty && candMap(0)(n).isEmpty && 
           candMap(1).isEmpty)
         // N1 and N2 can't be mapped to another id (N1 or N2); so just N3/N4
@@ -202,7 +207,6 @@ object RemappingExtenderTest{
         // N3 can map to anything except N0,N5
         if(N3 != n) assert(candMap(0)(N3).sorted == List(N1,N2,N3,N4))
         val extMaps = testHooks.extendMapToCandidates(rdMap, candMap)
-        //for(extMap <- extMaps) println(Remapper.show(extMap))
         if(n == N3) assert(extMaps.length == 7) // = 2(N1->N3)+2(N1->N4)+3(N1->_)
         else assert(extMaps.length == 13) // 4+4+5
         for(em <- extMaps)
@@ -214,7 +218,6 @@ object RemappingExtenderTest{
 
         // With link (0,2)
         val candMap1 = testHooks.getCandidatesMap(oaBitMap, rdMap, List((0,2)))
-        //println(s"$n: "+candMap1.map(_.mkString(", ")).mkString("; "))
         assert(candMap1(0)(N0).isEmpty && candMap1(0)(n).isEmpty && 
           candMap1(1).isEmpty)
         // Can't map N1/N2 to N1(id)/N2/N4; can map N1/N2 (except n) -> N3;
@@ -222,7 +225,6 @@ object RemappingExtenderTest{
         for(n1 <- List(N1,N2); if n1 != n) assert(candMap1(0)(n1) == List(N3))
         if(n != N3) assert(candMap1(0)(N3).sorted == List(N1,N2,N3,N4))
         val extMaps1 = testHooks.extendMapToCandidates(rdMap, candMap1)
-        //for(extMap <- extMaps1) println(Remapper.show(extMap))
         if(n != N3) assert(extMaps1.length == 9) // 4(N2->N3)+5(N2->-)
         else assert(extMaps1.length == 3) 
         for(em <- extMaps1)
@@ -255,6 +257,7 @@ object RemappingExtenderTest{
         val linkages = testHooks.findLinkages(unifs, rdMap).toList
         if(rdMap(0)(N3) == N2){  // linkage Nd_B -> Nd_B via N3 -> N2
           assert(linkages.sorted == List((1,2)))
+          // Following is hypothetical.
           val candMap = testHooks.getCandidatesMap(oaBitMap, rdMap, linkages)
           // rdMap is total, so all empty
           assert(candMap(0).forall(_.isEmpty) && candMap(1).isEmpty)
@@ -263,6 +266,7 @@ object RemappingExtenderTest{
           assert(em(0).sameElements(rdMap(0)) && em(1).isEmpty)
         }
         else assert(linkages.isEmpty)
+
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
         val map1List = List((N0,N0), (N1,N1), (N2,N3), (N3,if(n >= 0) n else N6))
@@ -345,35 +349,17 @@ object RemappingExtenderTest{
         else assert(linkagesC.isEmpty)
 
         val candMap = testHooks.getCandidatesMap(oaBitMap, rdMap, List())
-        //println(s"$n: "+candMap.map(_.mkString(", ")).mkString("; "))
-
+        // rdMap defined over all Node IDs; cannot map T0 -> T0
+        assert(candMap(0).forall(_.isEmpty) && candMap(1)(T0) == List())
         val extMaps = testHooks.extendMapToCandidates(rdMap, candMap)
-        //for(extMap <- extMaps) println(Remapper.show(extMap))
+        assert(extMaps.length == 1); val em = extMaps(0)
+        assert(em(0).sameElements(rdMap(0)) && em(1)(T0) == -1)
 
-        if(n != N2){
-          val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap)
-          assert(eMaps.length == 1); val eMap = eMaps(0)
-          // Map others to fresh
-          assert(checkMap(eMap(1), List((T0,T1))))
-          val map1List =
-            List((N0,N0), (N1,N1), (N2, if(n == N4) N4 else N5), (N3,N3))
-          assert(checkMap(eMap(0), map1List))
-        }
-        else{ // Missing common component
-          val candMap = testHooks.getCandidatesMap(oaBitMap, rdMap, List())
-          //println(s"$n: "+candMap.map(_.mkString(", ")).mkString("; "))
-          // rdMap defined over all Node IDs; cannot map T0 -> T0
-          assert(candMap(0).forall(_.isEmpty) && candMap(1)(T0) == List())
-          val extMaps = testHooks.extendMapToCandidates(rdMap, candMap)
-          //for(extMap <- extMaps) println(Remapper.show(extMap))
-          assert(extMaps.length == 1); val em = extMaps(0)
-          assert(em(0).sameElements(rdMap(0)) && em(1)(T0) == -1)
-          
-          val eMaps = remappingExtender.makeExtensions(unifs, oaBitMap, rdMap)
-          for(eMap <- eMaps)
-            assert(eMap(0).sameElements(rdMap(0)) && 
-              List(T0,T1).contains(eMap(1)(T0)))
-        }        
+        val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap)
+        assert(eMaps.length == 1); val eMap = eMaps(0)
+        assert(checkMap(eMap(1), List((T0,T1)))) // can't map T0 -> T0
+        val map1List = List((N0,N0), (N1,N1), (N2, if(n < 0) N5 else n), (N3,N3))
+        assert(checkMap(eMap(0), map1List))
       }
     }
   }
@@ -397,8 +383,9 @@ object RemappingExtenderTest{
     for(n <- List(N2,-1)){
       val rdMap : RemappingMap = Array(Array(N0,n), Array(-1))
       assert(testHooks.findLinkages(unifs, rdMap) == List((1,1)))
+      assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
+      // Following is hypothetical
       val candMap = testHooks.getCandidatesMap(oaBitMap, rdMap, List((1,1)))
-      //println(s"$n: "+candMap.map(_.mkString(", ")).mkString("; "))
       // Can't map N1 -> N1 because of linkage; cannot map T0 -> T0
       assert(candMap(0).forall(_.isEmpty) && candMap(1)(T0) == List())
       val extMaps = testHooks.extendMapToCandidates(rdMap, candMap)
