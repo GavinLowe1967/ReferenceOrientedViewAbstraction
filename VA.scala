@@ -170,6 +170,7 @@ object VA{
     try{
       if(testing){ 
         assert(fname.isEmpty)
+        singleRef = false // tests assume this
         system = new SystemP.System("CSP/test-file.csp")
         TestStates.report
         UnificationTest.test

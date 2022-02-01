@@ -173,7 +173,7 @@ if(false)
           showTransition(newComponents, nv)
           // println(s"$pre -${system.showEvent(e)}-> $post\n"+
           //   s"  with unifications $unifs induces $cv --> $nv\n"+
-          println(s"Previously "+v1.showCreationInfo)
+          println(s"Previously "+v1.showCreationInfo+"\n")
         }
       }
     }
@@ -236,7 +236,7 @@ if(false)
       // Try to work out why so many cases are redundant
       else{ // views already contains nv
         recordInduced()
-        // showRedundancy(views.get(nv), newComponents, nv)
+        showRedundancy(views.get(nv), newComponents, nv)
       }
     } // end of for loop
   }

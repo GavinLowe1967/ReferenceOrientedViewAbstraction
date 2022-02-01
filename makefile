@@ -112,7 +112,7 @@ $(DIR)/EffectOnStore.class: $(DIR)/MissingInfo.class
 
 $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 
-$(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(DIR)/EffectOnUnification.class
+$(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(DIR)/EffectOnUnification.class $(DIR)/SingleRefEffectOnUnification.class
 
 # # Checker and main program
 

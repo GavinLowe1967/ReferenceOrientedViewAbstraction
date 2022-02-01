@@ -57,14 +57,13 @@ class State(val family: Family, val cs: ControlState,
   //   psByType
   // }
 
-  /** Does this have a reference to (t,id) (other than its identity)? */
-  def hasRef(t: Family, id: Identity) = 
-    if(family == t && ids(0) == id) false
-    else{
-      var i = 1
-      while(i < length && (typeMap(i) != t || ids(i) != id)) i += 1
-      i < length
-    }
+  /** Does this have a reference to (t,id)?  Pre: this is not its identity. */
+  def hasRef(t: Family, id: Identity) = {
+    assert(!hasPID(t,id))
+    var i = 1
+    while(i < length && (typeMap(i) != t || ids(i) != id)) i += 1
+    i < length
+  }
 
   /** Does this have a parameter (t,id)? */
   def hasParam(t: Family, id: Identity): Boolean = {

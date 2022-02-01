@@ -45,8 +45,8 @@ class SingleRefEffectOnUnification(
   // ID of principal of cv
   private val (cvpf, cvpid) = cv.principal.componentProcessIdentity
   // IDs of components in pre, cv
-  private val preCptIds = preCpts.map(_.componentProcessIdentity)
-  private val cptIds = cpts.map(_.componentProcessIdentity)
+  private val preCptIds = pre.cptIds 
+  private val cptIds = cv.cptIds 
 
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
@@ -85,16 +85,19 @@ class SingleRefEffectOnUnification(
   private val acquiredRefs: List[(Int,Parameter)] = mkAcquiredRefs
 
   private def mkAcquiredRefs = {
-    var aR = List[(Int,Parameter)]()
-    for(i <- 1 until preCpts.length; if preCpts(i) != postCpts(i)){
-      val postParams = postCpts(i).processIdentities
-      val preParams = preCpts(i).processIdentities
-      for(j <- 1 until postParams.length){
-        val p1 = postParams(j)
-        if(p1._1 == cvpf && !isDistinguished(p1._2) &&
-            !preParams.contains(p1)) 
-          aR ::= (i,p1)
+    var aR = List[(Int,Parameter)](); var i = 1
+    while(i < preCpts.length){
+      val preCpt = preCpts(i); val postCpt = postCpts(i)
+      if(preCpt != postCpt){
+        var j = 1
+        while(j < postCpt.length){
+          val p1@(t,x) = postCpt.processIdentity(j) 
+          if(t == cvpf && !isDistinguished(x) && !preCpt.hasParam(t,x)) 
+            aR ::= (i,p1)
+          j += 1
+        }
       }
+      i += 1
     }
     aR
   }
@@ -105,8 +108,10 @@ class SingleRefEffectOnUnification(
   def apply(): (CombineResult1, CombineResult2) = {
     val map0 = servers.remappingMap(cv.getParamsBound)
     val allUnifs = Unification.allUnifs(map0, preCpts, cpts)
+    var k = 0
 
-    for((map1, unifs) <- allUnifs){
+    while(k < allUnifs.length){
+      val (map1,unifs) = allUnifs(k); k += 1
       if(isSufficientUnif(unifs)){
         // Result-relevant parameters: parameters to map params of cv to, in
         // order to create result-defining map.
@@ -114,33 +119,37 @@ class SingleRefEffectOnUnification(
         // Primary result-defining maps
         val rdMaps = extendToRDMap(map1,otherArgsBitMap)
         // Extend with extra linkages and fresh parameters
-        for(rdMap <- rdMaps) makePrimaryExtension(unifs, otherArgsBitMap, rdMap)
-      }
+        var i = 0
+        while(i < rdMaps.length){
+          val rdMap = rdMaps(i); i += 1
+          makePrimaryExtension(unifs, otherArgsBitMap, rdMap)
+        }
+      } // end of if 
       // else println("Not sufficient unif "+unifs)
 
-      //Secondary induced transitions
-// IMPROVE: inside "if"?  
-      val secondaryInfo = getSecondaryInfo(map1)
-      for((map2, i) <- secondaryInfo){
-        //println("secondary: "+Remapper.show(map2)+": "+i)
-        val sc = postCpts(i)
+      //Secondary induced transitions; improve: test if sufficient unifs?
+      val secondaryInfo = getSecondaryInfo(map1); var i = 0
+      while(i < secondaryInfo.length){
+        val (map2,ix) = secondaryInfo(i); i += 1
+        val sc = postCpts(ix)
         val otherArgsBitMap = mkSecondaryOtherArgsMap(map2, sc)
         val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
         // Secondary result-defining maps
         val rdMaps =
           remappingExtender.extendMapOverComponent(map2, cpts(0), otherArgs)
+        var j = 0
         // Then consider linkages
-        for(rdMap <- rdMaps) 
-          makeSecondaryExtension(unifs, otherArgsBitMap, rdMap, i)
-        // No: add to result2
-// FIXME: carry on here ..................................
+        while(j < rdMaps.length){
+          val rdMap = rdMaps(j); j += 1
+          makeSecondaryExtension(unifs, otherArgsBitMap, rdMap, ix)
+        }
       }
     }
     (result,result2)
   }
 
   /** Does unifs give sufficient unifications such that it might produce a new
-    * view?  ??? Primary or secondary ???  */
+    * view via a primary induced transition?  */
   @inline private def isSufficientUnif(unifs: UnificationList)
       : Boolean = {
     // Is there a unification with a component that changes state?
@@ -153,10 +162,12 @@ class SingleRefEffectOnUnification(
     }
 
     if(unifs.length == cpts.length && unifs.contains((0,0))) false
-    // else true
-// IMPROVE:  below
-    else if(changedServers) true
-    else changingUnif
+    else changedServers || changingUnif
+    //else if(changedServers) true 
+    // Following doesn't work because the previous case might have
+    // corresponded to a different set of linkages.
+    // unifs.nonEmpty || cv.addDoneInduced(postServers)
+    //else changingUnif
   }
 
   /** Create a BitMap containing all parameters: (1) in newServerIds (parameters
@@ -286,9 +297,9 @@ class SingleRefEffectOnUnification(
     * reference of a secondary component of post, postCpts(i). */ 
   private def getSecondaryInfo(map1: RemappingMap)
       : ArrayBuffer[(RemappingMap, Int)] = {
-    val result = new ArrayBuffer[(RemappingMap, Int)]
-    for((i,(t,id)) <- acquiredRefs){
-      // println(s"getSecondaryInfo: ${(i,(t,id))}")
+    val result = new ArrayBuffer[(RemappingMap, Int)]; var ar = acquiredRefs
+    while(ar.nonEmpty){
+      val (i,(t,id)) = ar.head; ar = ar.tail
       assert(t == cvpf); val id1 = map1(t)(cvpid)
       // Check extending map1 with cvpid -> id is consistent: either (1) it's
       // already there; or (2) map1 is undefined on cvpid, id isn't in the

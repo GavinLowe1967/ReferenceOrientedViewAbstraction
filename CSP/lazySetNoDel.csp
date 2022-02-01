@@ -13,6 +13,12 @@ BoolF = {false}
 BoolT = {true}
 DecoupInfoU = {0}
 
+-- VA omitInfo = omit prev from NodeR(me: NodeID, value: Data, next: NodeID, prev: NodeID, mark: BoolF, decoup: DecoupInfoU)
+
+-- VA omitInfo = omit prev, locker from LockedNodeR(me: NodeID, value: Data, next: NodeID, prev: NodeID, mark: BoolF, locker: ThreadID, decoup: DecoupInfoU)
+
+-- VA omitInfo = omit prev, locker from LockedNodeR(me: NodeID, value: Data, next: NodeID, prev: NodeID, mark: BoolT, locker: ThreadID, decoup: DecoupInfo)
+
 include "definitions.csp"
 
 -- A model of the Lazy Set example from "Automated Verification of
@@ -86,7 +92,7 @@ gt(B) = {C,Infty}
 gt(C) = {C,Infty}
 
 -- Identities of nodes
-datatype NodeIDType = Null | N1 | N2 | N3 | N4 -- | N5 | N6 -- | N7 | N8 | N9 | N10
+datatype NodeIDType = Null | N1 | N2 | N3 | N4 | N5 | N6 | N7 | N8 | N9 | N10 --| N11
 
 NodeID = diff(NodeIDType, {Null}) -- real nodes
 

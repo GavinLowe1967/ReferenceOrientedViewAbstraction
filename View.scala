@@ -88,6 +88,9 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   /** The principal component. */
   def principal = components(0)
 
+  /** Identities of components. */
+  val cptIds = components.map(_.componentProcessIdentity)
+
   /** Check all components referenced by principal are included, and no more. */
   // IMRPOVE: this is moderately expensive
   @noinline private def checkValid = if(debugging){ 
@@ -549,6 +552,9 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     }
   }
 
+  /** Identities of components. */
+  val cptIds = components.map(_.componentProcessIdentity)
+
   // ============= Debugging info
 
   /** In the case that this was created by extending one view with a component
@@ -652,7 +658,9 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     val typeMap = state.typeMap; val ids = state.ids
     val len = ids.length; var i = 0
     while(i < len){
-      val f = typeMap(i); nextArg(f) = nextArg(f) max (ids(i)+1); i += 1
+      val f = typeMap(i); val id = ids(i); i += 1
+      //nextArg(f) = nextArg(f) max (ids(i)+1);
+      if(id >= nextArg(f)) nextArg(f) = id+1
     }
   }
 
