@@ -27,6 +27,14 @@ class RemappingExtender(
 
   val preParamSizes = pre.getNextArgMap
 
+  /** Temporary test to help with debugging.  Might this be the instance causing
+    * problems? */
+  val highlight = false &&  
+    // servers.servers(1).cs == 99 &&
+    preCpts.length == 2 && cpts.length == 2 &&
+    preCpts(0).cs == 38 && preCpts(1).cs == 37 && 
+      cpts(0).cs == 39 && cpts(1).cs == 14
+
   /** A NextArgMap, containing values greater than anything in pre or post. */
   private val nextArg: NextArgMap = pre.getNextArgMap
   post.updateNextArgMap(nextArg)
@@ -135,31 +143,46 @@ class RemappingExtender(
   /** Given a result-defining map rdMap that creates a linkage between c1 =
     * cpts(i) and c2 = preCpts(j), find all extensions that maps each
     * parameter of c1 to a parameter of c2, or not; but avoiding mapping to
-    * elements of resultRelevantParams.  Add each to result. */
+    * elements of resultRelevantParams.  */
+// FIXME: but if this is a secondary reference, can map x -> y if x is not a
+// parameter of v.princ, for y in resultRelevantParams.
   private def extendForLinkage(
     rdMap: RemappingMap, resultRelevantParams: BitMap, 
-    i: Int, j: Int, result: ArrayBuffer[RemappingMap])
-  = {
+    i: Int, j: Int, isPrimary: Boolean)
+      : ArrayBuffer[RemappingMap] = {
+    if(highlight)
+      println(s"**extendForLinkage ${(i,j)} $isPrimary; rdMap = "+Remapper.show(rdMap)+
+        "\nresultRelevantParams = "+
+        resultRelevantParams.map(_.mkString(",")).mkString("; ") )
     val c2 = preCpts(j); val c2Params = c2.processIdentities
+    if(highlight) println(s"c2 = $c2")
     // Create otherArgMap containing all params of c2 not in range rdMap
     val otherArgs = Remapper.newOtherArgMap
+    /* Should parameter (t,id) be included in otherArgs? */
+    @inline def include(t: Type, id: Identity) = (
+      !isDistinguished(id) &&
+        (!resultRelevantParams(t)(id) || 
+          !isPrimary && !cpts(0).hasParam(t,id)) &&
+        !rdMap(t).contains(id)
+    )
     for(ix <- 0 until c2.length){
       val (t,id) = c2Params(ix)
-      if(!resultRelevantParams(t)(i) && !rdMap(t).contains(id) && 
-          !otherArgs(t).contains(id))
+      if(include(t,id) && /*!isDistinguished(id) && !resultRelevantParams(t)(id) && 
+          !rdMap(t).contains(id) && */ !otherArgs(t).contains(id))
         otherArgs(t) ::= id
     }
+    if(highlight) println("otherArgs = "+otherArgs.mkString("; "))
     //println("extendForLinkage: "+otherArgs.mkString("; "))
-    extendMapOverComponent1(rdMap, cpts(i), otherArgs, result)
+    extendMapOverComponent(rdMap, cpts(i), otherArgs)
   }
 
   /** Find all consistent extensions of map over the parameters of c, mapping
     * each parameter to an element of otherArgs, or not. */
   def extendMapOverComponent(map: RemappingMap, c: State, otherArgs: OtherArgMap)
       : ArrayBuffer[RemappingMap] = {
-    val result = new ArrayBuffer[RemappingMap]
-    extendMapOverComponent1(map, c, otherArgs, result)
-    result
+    val extendedMaps = new ArrayBuffer[RemappingMap]
+    extendMapOverComponent1(map, c, otherArgs, extendedMaps)
+    extendedMaps
   }
 
   /** Find all consistent extensions of map over the parameters of c, mapping
@@ -291,12 +314,14 @@ class RemappingExtender(
   }
 
   /** Implementation of makeExtensions from the paper.  Create all required
-    * extensions of result-defiling map rdMap.  Note: rdMap may be mutated. */
+    * extensions of result-defining map rdMap.  Note: rdMap may be mutated. */
   def makeExtensions(
-    unifs: UnificationList, resultRelevantParams: BitMap, rdMap: RemappingMap)
+    unifs: UnificationList, resultRelevantParams: BitMap, rdMap: RemappingMap, 
+    isPrimary: Boolean)
       : ArrayBuffer[RemappingMap] = {
-    val result = new ArrayBuffer[RemappingMap]
-    makeExtensions1(unifs, resultRelevantParams, rdMap, List(), result)
+    val result = new ArrayBuffer[RemappingMap] // IMPROVE: rename
+    makeExtensions1(
+      unifs, resultRelevantParams, rdMap, List(), isPrimary, result)
     result
   }
 
@@ -307,27 +332,33 @@ class RemappingExtender(
   def makeExtensions1(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, doneB: List[Linkage], 
-    extensions: ArrayBuffer[RemappingMap])
+    isPrimary: Boolean, extensions: ArrayBuffer[RemappingMap])
       : Unit = {
+    if(highlight) 
+      println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
+        s"; doneB = $doneB")
     val linkagesC = findLinkagesC(unifs, rdMap)
     if(linkagesC.nonEmpty) 
       allExtensions(resultRelevantParams, rdMap, doneB, extensions)
     else{
       // IMPROVE: we only need a single linkage
       val newLinkages = findLinkages(unifs, rdMap, doneB) // .distinct
+      if(highlight) println(s"newLinkages = $newLinkages")
       if(newLinkages.isEmpty){ // map remaining params to fresh
         mapUndefinedToFresh(rdMap); extensions += rdMap
       }
       else{
         val (i,j) = newLinkages.head
+        if(highlight) println("makeExtensions linkage "+(i,j))
         // FIXME: need to respect doneB below
-        val extendedMaps = new ArrayBuffer[RemappingMap]
-        extendForLinkage(rdMap, resultRelevantParams, i, j, extendedMaps)
+        val extendedMaps = 
+          extendForLinkage(rdMap, resultRelevantParams, i, j, isPrimary)
         var k = 0
         while(k < extendedMaps.length){
           val eMap = extendedMaps(k); k += 1
+          if(highlight) println("eMap = "+Remapper.show(eMap))
           makeExtensions1(unifs, resultRelevantParams, eMap, 
-            (i,j)::doneB, extensions)
+            (i,j)::doneB, isPrimary, extensions)
         }
       }
     }

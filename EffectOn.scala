@@ -54,9 +54,16 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView, 
     nextNewViews: MyHashSet[ComponentView])
   = {
-    if(showTransitions) println(s"EffectOn($pre, $post, $cv)")
     require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
     val postCpts = post.components; val preCpts = pre.components
+// IMPROVE
+    val highlight =
+      pre.servers.servers(1).cs == 100 && post.servers.servers(1).cs == 101 &&
+      preCpts.length == 2 && cv.components.length == 2 &&
+      preCpts(0).cs == 38 && preCpts(1).cs == 37 &&
+        cv.components(0).cs == 39 && cv.components(1).cs == 14
+    if(highlight) println("********")
+    if(showTransitions) println(s"EffectOn($pre, $post, $cv)")
 
     // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList)
     // is a set of triples (pi, pi(cv.cpts), unifs) where pi is a unification
@@ -88,6 +95,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     while(index < inducedInfo.length){
       val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
 if(false)
+      if(highlight) println(s"*** unifs = $unifs, map = "+Remapper.show(map))
       assert(!(index until inducedInfo.length).exists( i => 
         inducedInfo(i)._2.sameElements(cpts) && inducedInfo(i)._3 == unifs))
       Profiler.count("EffectOn step "+unifs.isEmpty)
@@ -109,11 +117,16 @@ if(false)
     while(index < secondaryInduced.length){
       val (cpts, unifs, k) = secondaryInduced(index); index += 1
       Profiler.count("SecondaryInduced")
+      if(highlight) println("***secondaryInduced: "+StateArray.show(cpts))
       val crossRefs: List[Array[State]] = 
         if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
         else List()
       val newPrinc = getNewPrinc(cpts(0), unifs) 
       val newComponentsList = List(Array(postCpts(k), newPrinc))
+
+      if(highlight) 
+        println("newComponentsList: "+
+          newComponentsList.map(StateArray.show).mkString("\n"))
       processInducedInfo1(
         null, cpts, unifs, null, false, crossRefs, newComponentsList)
     }
@@ -137,6 +150,10 @@ if(false)
       reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
       newComponentsList: List[Array[State]])
   : Unit = {
+    val highlight =
+      pre.servers.servers(1).cs == 99 &&
+      pre.components(0).cs == 59 && pre.components(1).cs == 37 &&
+      cv.components(0).cs == 10 && cv.components(1).cs == 14
     if(debugging){
       StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     }
@@ -191,8 +208,14 @@ if(false)
     val missing: List[ComponentView] =
       crossRefs.map(new ComponentView(pre.servers, _)).filter(!views.contains(_))
     for(newComponents <- newComponentsList){
-      // println(StateArray.show(newComponents))
       val nv = Remapper.mkComponentView(post.servers, newComponents)
+      if(highlight){
+        println("processInducedInfo: "+StateArray.show(newComponents))
+        println(s"nv = $nv")
+        println(views.contains(nv))
+        println("missing = "+missing)
+        println("missingCommons = "+missingCommons)
+      }
       Profiler.count("newViewCount") 
       if(!views.contains(nv)){
         if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){

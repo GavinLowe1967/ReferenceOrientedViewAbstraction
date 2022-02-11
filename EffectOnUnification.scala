@@ -39,6 +39,13 @@ class EffectOnUnification(
   private val cpts = cv.components
   if(debugging) StateArray.checkDistinct(cpts)
   private val (cvpf, cvpid) = cv.principal.componentProcessIdentity
+
+  // IMPROVE
+  val highlight =
+    pre.servers.servers(1).cs == 100 && post.servers.servers(1).cs == 101 &&
+      preCpts.length == 2 && cv.components.length == 2 &&
+      preCpts(0).cs == 38 && preCpts(1).cs == 37 &&
+      cv.components(0).cs == 39 && cv.components(1).cs == 14
  
   /** In the case of singleRef, secondary components of the transition that
     * might gain a reference to c2 = cv.principal (without unification): all
@@ -126,6 +133,7 @@ class EffectOnUnification(
     var ix = 0
     while(ix < allUs.length){
       val (map1, unifs) = allUs(ix); ix += 1
+      if(highlight) println(s"*** unifs = $unifs, map1 = "+Remapper.show(map1)) 
       // Does this create a cross reference from a secondary component to the
       // principal of cv (with singleRef)?
       val acquiredCrossRef = princRenames.contains(map1(cvpf)(cvpid))
@@ -134,6 +142,7 @@ class EffectOnUnification(
       // consider primary induced transitions.
       val sufficientUnif = 
         isSufficientUnif(changedServers, unifs, acquiredCrossRef)
+      println(s"sufficientUnif = $sufficientUnif")
       if(c2Refs.nonEmpty || sufficientUnif){
         val otherArgsBitMap = mkOtherArgsBitMap(newServerIds, unifs)
         if(singleRef) 
@@ -282,12 +291,14 @@ class EffectOnUnification(
     var i = 0
     while(i < crossRefs.length){
       val (map1, tuples) = crossRefs(i); i += 1
+      if(highlight) println(s"tuples = $tuples, map1 = "+Remapper.show(map1))
       // Profiler.count("tuples size "+tuples.length) -- mostly 0 or 1
       // Get other arg BitMap for this case. 
       val otherArgsBitMap = getOtherArgsBitMapForSingleRef(
         map1, otherArgsBitMap0, tuples)
       // Convert to OtherArgMap
       val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
+      if(highlight) println("otherArgs = "+otherArgs.mkString("; "))
       // Values that identities can be mapped to: values in otherArgs, but not
       // parameters in preCpts; update otherArgsBitMap to record.
       // StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)

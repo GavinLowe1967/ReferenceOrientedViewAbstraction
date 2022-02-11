@@ -8,6 +8,7 @@ import scala.collection.mutable.{ArrayBuffer}
 class SingleRefEffectOnUnification(
   pre: Concretization, post: Concretization, cv: ComponentView){
 
+
   /* Relationship of main functions.
    * apply
    * |--Unification.allUnifs
@@ -47,6 +48,17 @@ class SingleRefEffectOnUnification(
   // IDs of components in pre, cv
   private val preCptIds = pre.cptIds 
   private val cptIds = cv.cptIds 
+
+  /** Temporary test to help with debugging.  Might this be the instance causing
+    * problems? */
+  val highlight = false &&  
+    //servers.servers(1).cs == 99 &&
+    preCpts.length == 2 && cpts.length == 2 &&
+    preCpts(0).cs == 38 && preCpts(1).cs == 37 && 
+      cpts(0).cs == 39 && cpts(1).cs == 14
+
+  if(highlight) 
+    println(s"*** SingleEffectOnUnification: \n  $pre -> $post;\n  $cv")
 
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
@@ -131,6 +143,7 @@ class SingleRefEffectOnUnification(
       val secondaryInfo = getSecondaryInfo(map1); var i = 0
       while(i < secondaryInfo.length){
         val (map2,ix) = secondaryInfo(i); i += 1
+        if(highlight) println(Remapper.show(map2)+"; "+ix)
         val sc = postCpts(ix)
         val otherArgsBitMap = mkSecondaryOtherArgsMap(map2, sc)
         val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
@@ -141,6 +154,7 @@ class SingleRefEffectOnUnification(
         // Then consider linkages
         while(j < rdMaps.length){
           val rdMap = rdMaps(j); j += 1
+          if(highlight) println("rdMap = "+Remapper.show(rdMap))
           makeSecondaryExtension(unifs, otherArgsBitMap, rdMap, ix)
         }
       }
@@ -255,7 +269,7 @@ class SingleRefEffectOnUnification(
     unifs: UnificationList, resultRelevantParams: BitMap, rdMap: RemappingMap)
   = {
     val extensions = 
-      remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap)
+      remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, true)
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
       val reducedMapInfo: ReducedMap =
@@ -281,8 +295,10 @@ class SingleRefEffectOnUnification(
   = {
     if(showTransitions) println("makeSecondaryExtension: "+Remapper.show(rdMap))
     val extensions = 
-      remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap)
+      remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, false)
+// FIXME: this seems to give repeats
     for(map1 <- extensions){
+      if(highlight) println("map1 = "+Remapper.show(map1))
       if(debugging) assert(Remapper.isInjective(map1))
       val newCpts = Remapper.applyRemapping(map1, cpts)
       if(showTransitions) println("newCpts = "+StateArray.show(newCpts)) 
