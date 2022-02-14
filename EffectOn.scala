@@ -57,13 +57,13 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
     val postCpts = post.components; val preCpts = pre.components
 // IMPROVE
-    val highlight =
-      pre.servers.servers(1).cs == 100 && post.servers.servers(1).cs == 101 &&
+    val highlight = 
+      pre.servers.servers(1).cs == 100 && post.servers.servers(5).cs == 113 &&
       preCpts.length == 2 && cv.components.length == 2 &&
-      preCpts(0).cs == 38 && preCpts(1).cs == 37 &&
-        cv.components(0).cs == 39 && cv.components(1).cs == 14
+      preCpts(0).cs == 66 && preCpts(1).cs == 13 &&
+        preCpts.sameElements(cv.components)
     if(highlight) println("********")
-    if(showTransitions) println(s"EffectOn($pre, $post, $cv)")
+    if(showTransitions || highlight) println(s"EffectOn($pre, $post, $cv)")
 
     // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList)
     // is a set of triples (pi, pi(cv.cpts), unifs) where pi is a unification
@@ -87,16 +87,14 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
       if(us.isEmpty) cpt else postCpts(us.head._2)
     }
-    // for((_, _, _, reducedMapInfo) <- inducedInfo; if reducedMapInfo != null)
-    //   assert(!cv.containsDoneInducedPostServersRemaps(
-    //     post.servers, reducedMapInfo)) // IMPROVE
     // Process inducedInfo
     var index = 0
     while(index < inducedInfo.length){
       val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
 if(false)
       if(highlight) println(s"*** unifs = $unifs, map = "+Remapper.show(map))
-      assert(!(index until inducedInfo.length).exists( i => 
+// IMPROVE: following for debugging: this value doesn't appear again later.
+      if(false) assert(!(index until inducedInfo.length).exists( i => 
         inducedInfo(i)._2.sameElements(cpts) && inducedInfo(i)._3 == unifs))
       Profiler.count("EffectOn step "+unifs.isEmpty)
       // The components needed for condition (b).
@@ -150,14 +148,14 @@ if(false)
       reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
       newComponentsList: List[Array[State]])
   : Unit = {
-    val highlight =
+    val highlight = false && // IMPROVE
       pre.servers.servers(1).cs == 99 &&
       pre.components(0).cs == 59 && pre.components(1).cs == 37 &&
       cv.components(0).cs == 10 && cv.components(1).cs == 14
     if(debugging){
       StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     }
-    if(showTransitions && isPrimary) 
+    if(showTransitions && isPrimary || highlight) 
       println("processInducedInfo: "+Remapper.show(map))
     // Record this induced transition if singleRef, if primary and no unifs
     @inline def recordInduced(): Boolean = {
@@ -332,7 +330,7 @@ if(false)
   def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
   = {
     for(nv <- effectOnStore.complete(cv, views)){
-      if(verbose) println(s"Adding $nv")
+      if(showTransitions) println(s"Adding $nv from completeDelayed($cv)")
       tryAddView(nv, nextNewViews)
     }
   }
@@ -342,7 +340,7 @@ if(false)
   def tryAddView(nv: ComponentView, nextNewViews: MyHashSet[ComponentView]) = {
     // require(mi.done); val nv = mi.newView
     if(nextNewViews.add(nv)){
-      if(verbose){
+      if(showTransitions){
         val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
         println(s"Adding via completeDelayed $cv -> $nv\n"+
           s"$pre --> $post\n"+

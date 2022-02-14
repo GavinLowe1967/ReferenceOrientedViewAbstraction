@@ -208,10 +208,10 @@ class State(val family: Family, val cs: ControlState,
         case None => s"($t, x_${ids(j)})"
       }
     }
-    s"$cs[$family]"+paramsString.mkString("(", ",", ")")
+    s"$cs"+paramsString.mkString("(", ",", ")") // [$family]
   }  
 
-  def toString00 = s"$cs[$family]"+ids.mkString("(", ",", ")")
+  def toString00 = s"$cs"+ids.mkString("(", ",", ")") // [$family]
 
   /** Ordering on ServerStates values.  Return a value x s.t.: x < 0 if this <
     * that; x == 0 when this == that; x > 0 when this > that. */

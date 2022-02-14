@@ -142,7 +142,7 @@ class EffectOnUnification(
       // consider primary induced transitions.
       val sufficientUnif = 
         isSufficientUnif(changedServers, unifs, acquiredCrossRef)
-      println(s"sufficientUnif = $sufficientUnif")
+      if(highlight) println(s"sufficientUnif = $sufficientUnif")
       if(c2Refs.nonEmpty || sufficientUnif){
         val otherArgsBitMap = mkOtherArgsBitMap(newServerIds, unifs)
         if(singleRef) 
@@ -514,25 +514,42 @@ object EffectOnUnification{
     * of preCpts(i1).  Precisely one of j1 and j2 equals 0. */
   type MatchingTuple = ((Int,Int), (Int, Int))
 
+// IMPROVE: I think we only use i1.
+
+// IMPROVE: I think there's some redundancy in what follows.  Maybe restrict
+// to i1 components, and remove duplicates.  cf old assertion in
+// EffectOn.apply line 100.
+
   /** All ways of extending map (over cpts) so that an identity in cpts matches
     * a non-identity parameter in preCpts, or a non-identity parameter in
     * preCpts matches an identity in cpts; but no identity should map to an
     * identity.
     * @return the resulting map, together with a list of tuples
     * ((i1,j1), (i2,j2)) indicating that parameter j2 of cpts(i2) is mapped to
-    * match paramter j1 of preCpts(i1); precisely one of j1 and j2 will be 0. */
+    * match parameter j1 of preCpts(i1); precisely one of j1 and j2 will be
+    * 0. */
   private def remapToCreateCrossRefs(
     preCpts: Array[State], cpts: Array[State], map: RemappingMap)
       : ArrayBuffer[(RemappingMap, List[MatchingTuple])] = {
+    // IMPROVE
+    val highlight = false && preCpts.length == 2 && cpts.length == 2 &&
+      preCpts(0).cs == 38 && preCpts(1).cs == 37 &&
+        cpts(0).cs == 39 && cpts(1).cs == 14
+
     // Bit maps (indexed by component number, param number) showing which
     // parameters of cpts can be mapped and which components of preCpts can be
     // mapped onto: all identities; and non-identities those that are not
     // distinguished, do not match any identity in cpts, resp preCpts, and are
     // the first instance in cpts, resp preCpts.
+// FIXME: why just the first?  (No longer the case)
     val domBitMap = getDomBitMap(cpts); val rangeBitMap = getRangeBitMap(preCpts)
     val result = new ArrayBuffer[(RemappingMap, List[MatchingTuple])]
     // Bitmap showing the range of map
     val inRangeBitMap = Remapper.rangeBitMap(map)
+    if(highlight){
+      println("domBitMap = "+domBitMap.map(_.mkString(", ")).mkString("; "))
+      println("rangeBitMap = "+rangeBitMap.map(_.mkString(", ")).mkString("; "))
+    }
 
     // Next component of preCpts(i1) to try mapping on to.  The minimum j in
     // [j1 .. preCpts(i1).length) s.t. rangeBitMap(i1)(j); or
@@ -582,18 +599,33 @@ object EffectOnUnification{
         val id1 = preCpts(i1).ids(j1); val id2 = cpts(i2).ids(j2)
         val t = preCpts(i1).typeMap(j1)
         assert(!isDistinguished(id1) && !isDistinguished(id2))
+// Old version
         if(t == cpts(i2).typeMap(j2) && map(t)(id2) < 0 && 
           !inRangeBitMap(t)(id1) ){
-          map(t)(id2) = id1; inRangeBitMap(t)(id1) = true // temporary update (*)
+          val alreadyMatched = false // IMPROVE
+// New version
+//        val alreadyMatched = t == cpts(i2).typeMap(j2) && map(t)(id2) == id1
+//        if(t == cpts(i2).typeMap(j2) &&
+//            (map(t)(id2) < 0 && !inRangeBitMap(t)(id1) || alreadyMatched) ){
+          if(!alreadyMatched){
+            map(t)(id2) = id1; inRangeBitMap(t)(id1) = true // temporary update (*)
+          }
           val newTuples = ((i1,j1),(i2,j2))::tuples
           // Advance
           if(j1 == 0) rec(newTuples, i1, j1, i2, advanceInCpts(i2, j2+1))
           else rec(newTuples, i1, j1, i2+1, 0)
-          map(t)(id2) = -1; inRangeBitMap(t)(id1) = false  // backtrack (*)
+          if(!alreadyMatched){
+            map(t)(id2) = -1; inRangeBitMap(t)(id1) = false  // backtrack (*)
+          }
         }
-        // Also just advance (whether or not we did the if)
-        if(j1 == 0) rec(tuples, i1, j1, i2, advanceInCpts(i2, j2+1))
-        else rec(tuples, i1, j1, i2+1, 0)
+        // Also just advance (whether or not we did the if).  If already
+        // matched, add tuple here.
+        val newTuples = 
+          if(t == cpts(i2).typeMap(j2) && map(t)(id2) == id1)
+            ((i1,j1),(i2,j2))::tuples
+          else tuples
+        if(j1 == 0) rec(newTuples, i1, j1, i2, advanceInCpts(i2, j2+1))
+        else rec(newTuples, i1, j1, i2+1, 0)
       }
     } // end of rec
 
@@ -606,19 +638,20 @@ object EffectOnUnification{
     * parameters of preCpts can be mapped onto within remapToCreateCrossRefs:
     * all identities; and non-identities those that are not distinguished, do
     * not match any identity in preCpts, and are the first instance in
-    * preCpts. */
+    * preCpts.  ***NO*** */
+// FIXME: remove last clause of comment
   @inline private def getRangeBitMap(preCpts: Array[State]): BitMap = {
     val preIds = Array.tabulate(preCpts.length)(
       i => preCpts(i).componentProcessIdentity)
     val rangeBitMap = new Array[Array[Boolean]](preCpts.length)
-    var i = 0; var seen = newBitMap // ids seen so far
+    var i = 0; //var seen = newBitMap // ids seen so far
     while(i < preCpts.length){
       val cpt = preCpts(i); rangeBitMap(i) = new Array[Boolean](cpt.length)
-      rangeBitMap(i)(0) = true; var j = 0
+      rangeBitMap(i)(0) = true; var j = 0 // IMPROVE: j = 1?
       while(j < cpt.length){
         val (t,p) = cpt.processIdentity(j)
-        if(!isDistinguished(p) && !seen(t)(p) && !preIds.contains((t,p))){
-          rangeBitMap(i)(j) = true; seen(t)(p) = true
+        if(!isDistinguished(p) && /* !seen(t)(p) && */ !preIds.contains((t,p))){
+          rangeBitMap(i)(j) = true; //seen(t)(p) = true
         }
         j += 1
       } // end of inner while
@@ -629,18 +662,19 @@ object EffectOnUnification{
 
   /** Similar bit map for cpts, showing which params can be mapped: all
     * identities; and all non-identities that are not distinguished, do not
-    * match any identity in cpts, and are the first instance in cpts. */
+    * match any identity in cpts, and are the first instance in cpts. ***NO*** */
+// FIXME: remove last clause of comment
   @inline private def getDomBitMap(cpts: Array[State]): BitMap = {
     val ids = Array.tabulate(cpts.length)(i => cpts(i).componentProcessIdentity)
     val domBitMap = new Array[Array[Boolean]](cpts.length)
-    val seen = newBitMap; var i = 0
+    /* val seen = newBitMap;*/ var i = 0
     while(i < cpts.length){
       val cpt = cpts(i); domBitMap(i) = new Array[Boolean](cpt.length)
       domBitMap(i)(0) = true; var j = 0
       while(j < cpt.length){
         val (t,p) = cpt.processIdentity(j)
-        if(!isDistinguished(p) && !seen(t)(p) && !ids.contains((t,p))){
-          domBitMap(i)(j) = true; seen(t)(p) = true
+        if(!isDistinguished(p) && /* !seen(t)(p) && */ !ids.contains((t,p))){
+          domBitMap(i)(j) = true; //  seen(t)(p) = true
         }
         j += 1
       } // end of inner while

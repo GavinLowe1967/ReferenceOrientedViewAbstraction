@@ -240,4 +240,11 @@ package object ViewAbstraction{
 
   /** Number of machine threads. */
   var numThreads = Runtime.getRuntime.availableProcessors 
+
+  /** Code for debugging.  Is v the particular view that we're trying to
+    * detect the source of? */
+  def findTarget(v: ComponentView) = 
+    v.components(0).cs == 14 && v.components(1).cs == 67 &&
+      v.components(0).ids.sameElements(Array(2,0,-1,3)) &&
+      v.servers.servers(1).cs == 100 && v.servers.servers(5).cs == 113
 }

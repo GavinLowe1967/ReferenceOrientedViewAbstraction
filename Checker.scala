@@ -439,7 +439,7 @@ class Checker(system: SystemP.System){
           val v = Remapper.remapComponentView(v0)
           if(addView(v)){
             v.setCreationInfo(pre, e, post)
-            if(verbose) 
+            if(showTransitions) 
               println(s"$pre -${system.showEvent(e)}->\n  $post gives $v")
           }
         }
@@ -452,7 +452,20 @@ class Checker(system: SystemP.System){
       // Store new views, transition templates
       for((pre, post, id, e, inc) <- newTransitionTemplates.iterator)
         transitionTemplates.add(pre, post, id, e, inc)
-      for(v <- nextNewViews.iterator) addView(v)
+      for(v <- nextNewViews.iterator){
+        addView(v)
+        // if(showTransitions){
+        //   println(s"adding $v from nextNewViews")
+        //   if(findTarget(v)){
+        //     println("***")
+        //     val (pre, cpts, cv, post, newComponents) = v.getCreationIngredients
+        //     println(s"Adding  $cv -> $v\n"+
+        //       s"$pre --> $post\n"+
+        //       s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+        //       s"  --> ${View.show(post.servers, newComponents)} == $v")
+        //   }
+        // }
+      }
       ply += 1; newViews = newViewsAB.toArray; 
       if(showEachPly)
         println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
