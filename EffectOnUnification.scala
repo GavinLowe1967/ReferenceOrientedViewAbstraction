@@ -41,11 +41,11 @@ class EffectOnUnification(
   private val (cvpf, cvpid) = cv.principal.componentProcessIdentity
 
   // IMPROVE
-  val highlight =
-    pre.servers.servers(1).cs == 100 && post.servers.servers(1).cs == 101 &&
+  val highlight = 
+    pre.servers.servers(1).cs == 100 && post.servers.servers(5).cs == 113 &&
       preCpts.length == 2 && cv.components.length == 2 &&
-      preCpts(0).cs == 38 && preCpts(1).cs == 37 &&
-      cv.components(0).cs == 39 && cv.components(1).cs == 14
+      preCpts(0).cs == 66 && preCpts(1).cs == 13 && preCpts(1).ids(2) == 3 &&
+      preCpts.sameElements(cv.components)
  
   /** In the case of singleRef, secondary components of the transition that
     * might gain a reference to c2 = cv.principal (without unification): all
@@ -142,7 +142,8 @@ class EffectOnUnification(
       // consider primary induced transitions.
       val sufficientUnif = 
         isSufficientUnif(changedServers, unifs, acquiredCrossRef)
-      if(highlight) println(s"sufficientUnif = $sufficientUnif")
+      if(highlight) 
+        println(s"sufficientUnif = $sufficientUnif; c2Refs = $c2Refs")
       if(c2Refs.nonEmpty || sufficientUnif){
         val otherArgsBitMap = mkOtherArgsBitMap(newServerIds, unifs)
         if(singleRef) 
@@ -288,6 +289,8 @@ class EffectOnUnification(
     // 0).
     val crossRefs = 
       EffectOnUnification.remapToCreateCrossRefs(preCpts, cpts, map0)
+    if(highlight) 
+      println("extendUnifSingleRef; crossRefs length = "+crossRefs.length)
     var i = 0
     while(i < crossRefs.length){
       val (map1, tuples) = crossRefs(i); i += 1
@@ -405,6 +408,7 @@ if(false){
     /* Build remappings for secondary induced transitions corresponding to
      * component k acquiring a reference to cv.principal in parameter id. */
     @inline def mkSecondaryRemaps(k: Int, id: Int) = {
+      if(highlight) println(s"mkSecondaryRemaps($k, $id)")
       // clone otherArgs0, otherArgsBitMap, removing (cvpf,id)
       val otherArgs = new Array[List[Identity]](numTypes); var f = 0
       while(f < numTypes){
@@ -430,15 +434,19 @@ if(false){
           id1 <- 0 until map1(f).length)
         assert(map1(f)(id1) != id, 
           Remapper.show(map1)+"\n"+otherArgs.mkString(";"))
+      if(highlight) println(Remapper.show(otherArgs))
       Unification.combine1(
         map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, tempRes)
       for((_, newSts, us, _) <- tempRes){ // IMPROVE
+        if(highlight) println(s"adding (${StateArray.show(newSts)}, $us, $k)")
         assert(us eq unifs); StateArray.checkDistinct(newSts)
         result2 += ((newSts, us, k))
       }
     } // end of mkSecondaryRemaps
 
     for((k,p) <- c2Refs){
+      if(highlight)
+        println(s"k = $k, p = $p, map1(cvpf)(cvpid) = "+map1(cvpf)(cvpid))
       // Can we map (cvpf,cvpid) to p?
       if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
       else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p)){
@@ -472,14 +480,17 @@ if(false){
     * postCpts, and id is a new included non-distinguished parameter of c1 of
     * family cvpf in the post state, other than an identity in
     * preCpts/postCpts. */
+// FIXME: comment; about to include identities
   @inline private def getCrossReferences(): List[(Int,Identity)] = {
     require(singleRef)
-    // ids is the identities of family cvpf in pre.
+    // ids is the identities of components of pre from family.
+/*
     var ids = List[Identity](); var i = 0
     while(i < preCpts.length){
       val c = preCpts(i); i += 1; if(c.family == cvpf) ids ::= c.ids(0)
     }
-    var result = List[(Int,Identity)](); i = 1
+ */
+    var result = List[(Int,Identity)](); var i = 1
     while(i < preCpts.length){
       if(preCpts(i) != postCpts(i)){
         val c1 = postCpts(i); val c1Params = c1.ids; var j = 1
@@ -487,7 +498,7 @@ if(false){
           if(c1.includeParam(j) && c1.typeMap(j) == cvpf){
             val p = c1Params(j)
             // Check: non-distiguished, not an id in preCpts, new param in c1
-            if(!isDistinguished(p) && !contains(ids,p) && 
+            if(!isDistinguished(p) && // !contains(ids,p) && 
                 !preCpts(i).hasIncludedParam(cvpf,p))
 // IMPROVE: think about above; should it be hasParam? 
               result ::= (i, p)

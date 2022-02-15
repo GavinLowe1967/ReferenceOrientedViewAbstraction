@@ -60,7 +60,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     val highlight = 
       pre.servers.servers(1).cs == 100 && post.servers.servers(5).cs == 113 &&
       preCpts.length == 2 && cv.components.length == 2 &&
-      preCpts(0).cs == 66 && preCpts(1).cs == 13 &&
+      preCpts(0).cs == 66 && preCpts(1).cs == 13 && preCpts(1).ids(2) == 3 &&
         preCpts.sameElements(cv.components)
     if(highlight) println("********")
     if(showTransitions || highlight) println(s"EffectOn($pre, $post, $cv)")
@@ -78,6 +78,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       if(singleRef && newEffectOn)
         new SingleRefEffectOnUnification(pre,post,cv)()
       else EffectOnUnification.combine(pre, post, cv)
+    if(highlight) println("secondaryInduced length: "+secondaryInduced.length)
 
     /* Function to process induced transition. */
     val processInducedInfo1 = 
