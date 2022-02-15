@@ -46,6 +46,15 @@ class EffectOnUnification(
       preCpts.length == 2 && cv.components.length == 2 &&
       preCpts(0).cs == 66 && preCpts(1).cs == 13 && preCpts(1).ids(2) == 3 &&
       preCpts.sameElements(cv.components)
+
+  /** Identities of components of pre that match the family of cv.principal. */
+  private val preMatchingIds = {
+    var ids = List[Identity](); var i = 0
+    while(i < preCpts.length){
+      val c = preCpts(i); i += 1; if(c.family == cvpf) ids ::= c.ids(0)
+    }
+    ids
+  }
  
   /** In the case of singleRef, secondary components of the transition that
     * might gain a reference to c2 = cv.principal (without unification): all
@@ -54,6 +63,7 @@ class EffectOnUnification(
     * reference c2, distinct from any component identity in pre, post. We will
     * subsequently form secondary induced transitions with c1 as the principal
     * component, referencing c2 (renamed). */
+// FIXME: comment: allow identities
   private val c2Refs: List[(Int,Identity)] =
     if(singleRef) getCrossReferences() else List[(Int,Identity)]()
 // IMPROVE: consider omitted references here
@@ -449,7 +459,8 @@ if(false){
         println(s"k = $k, p = $p, map1(cvpf)(cvpid) = "+map1(cvpf)(cvpid))
       // Can we map (cvpf,cvpid) to p?
       if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
-      else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p)){
+      else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p) && 
+          !contains(preMatchingIds, p)){
         // Consider mapping cvpid to p (and backtrack)
         map1(cvpf)(cvpid) = p; // assert(!otherArgs0(cvpf).contains(p))
         mkSecondaryRemaps(k, p); map1(cvpf)(cvpid) = -1
