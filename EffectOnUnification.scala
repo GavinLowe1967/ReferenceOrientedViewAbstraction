@@ -42,10 +42,19 @@ class EffectOnUnification(
 
   // IMPROVE
   val highlight = 
-    pre.servers.servers(1).cs == 100 && post.servers.servers(5).cs == 113 &&
-      preCpts.length == 2 && cv.components.length == 2 &&
-      preCpts(0).cs == 66 && preCpts(1).cs == 13 && preCpts(1).ids(2) == 3 &&
-      preCpts.sameElements(cv.components)
+    preCpts.length == 2 && preCpts(0).cs == 15 && preCpts(1).cs == 7 &&
+      cpts(0).cs == 8 && cpts(0).ids(0) == 1
+    // pre.servers.servers(1).cs == 100 && post.servers.servers(5).cs == 113 &&
+    //   preCpts.length == 2 && cv.components.length == 2 &&
+    //   preCpts(0).cs == 66 && preCpts(1).cs == 13 && preCpts(1).ids(2) == 3 &&
+    //   preCpts.sameElements(cv.components)
+
+  /** Identities of components of pre. */
+  val preIds = 
+    Array.tabulate(preCpts.length)(i => preCpts(i).componentProcessIdentity)
+
+  /** Identities of components of cv. */
+  val cvIds = Array.tabulate(cpts.length)(i => cpts(i).componentProcessIdentity)
 
   /** Identities of components of pre that match the family of cv.principal. */
   private val preMatchingIds = {
@@ -55,15 +64,45 @@ class EffectOnUnification(
     }
     ids
   }
- 
+
+  /** For each parameter x of states, the list of positions (component number,
+    * parameter number) where x appears.  size gives the number of parameters
+    * of each type. */
+  def mkPositionMap(size: Array[Int], states: Array[State])
+      : Array[Array[List[(Int,Int)]]] = {
+    val pMap = Array.tabulate(numTypes)( t => 
+      Array.fill(size(t))(List[(Int,Int)]()) )
+    for(i <- 0 until states.length){
+      val pids = states(i).processIdentities
+      for(j <- 0 until pids.length){
+        val (t,x) = pids(j)
+        if(!isDistinguished(x)) pMap(t)(x) ::= (i,j)
+      }
+    }
+    pMap
+  }
+
+  /** For each parameter x of preCpts, the list of positions (component number,
+    * parameter number) where x appears.  IMPROVE: maybe this should be stored
+    * in pre.  */
+  val prePositionMap: Array[Array[List[(Int,Int)]]] = 
+    mkPositionMap(pre.getParamsBound, preCpts)
+  // IMPROVE
+  //for(t <- 0 until numTypes; pairs <- prePositionMap(t))
+  // assert(pairs.forall(_._1 < preCpts.length))
+
+  /** For each parameter x of cv, the list of positions (component number,
+    * parameter number) where x appears.  IMPROVE: maybe this should be stored
+    * in cv.  */
+  val cvPositionMap: Array[Array[List[(Int,Int)]]] = 
+    mkPositionMap(cv.getParamsBound, cpts)
+
   /** In the case of singleRef, secondary components of the transition that
     * might gain a reference to c2 = cv.principal (without unification): all
     * pairs (i,id) (i >= 1) such that the i'th component c1 of pre changes
     * state, and id is a parameter of c1 in the post state that might
-    * reference c2, distinct from any component identity in pre, post. We will
-    * subsequently form secondary induced transitions with c1 as the principal
-    * component, referencing c2 (renamed). */
-// FIXME: comment: allow identities
+    * reference c2. We will subsequently form secondary induced transitions
+    * with c1 as the principal component, referencing c2 (renamed). */
   private val c2Refs: List[(Int,Identity)] =
     if(singleRef) getCrossReferences() else List[(Int,Identity)]()
 // IMPROVE: consider omitted references here
@@ -143,7 +182,7 @@ class EffectOnUnification(
     var ix = 0
     while(ix < allUs.length){
       val (map1, unifs) = allUs(ix); ix += 1
-      if(highlight) println(s"*** unifs = $unifs, map1 = "+Remapper.show(map1)) 
+      if(highlight) println(s"*unifs = $unifs, map1 = "+Remapper.show(map1)) 
       // Does this create a cross reference from a secondary component to the
       // principal of cv (with singleRef)?
       val acquiredCrossRef = princRenames.contains(map1(cvpf)(cvpid))
@@ -298,7 +337,9 @@ class EffectOnUnification(
     // to match paramter j1 of preCpts(i1) (precisely one of j1 and j2 will be
     // 0).
     val crossRefs = 
-      EffectOnUnification.remapToCreateCrossRefs(preCpts, cpts, map0)
+      if(false)
+        EffectOnUnification.remapToCreateCrossRefs(preCpts, cpts, map0)
+      else newRemapToCreateCrossRefs(map0)
     if(highlight) 
       println("extendUnifSingleRef; crossRefs length = "+crossRefs.length)
     var i = 0
@@ -314,7 +355,6 @@ class EffectOnUnification(
       if(highlight) println("otherArgs = "+otherArgs.mkString("; "))
       // Values that identities can be mapped to: values in otherArgs, but not
       // parameters in preCpts; update otherArgsBitMap to record.
-      // StateArray.removeIdsFromBitMap(postCpts, otherArgsBitMap)
       StateArray.removeParamsFromBitMap(preCpts, otherArgsBitMap)
       // Create primary induced transitions.
       if(sufficientUnif){
@@ -347,10 +387,10 @@ if(false){
         Remapper.show(mapX)+"; "+StateArray.show(newCpts2)+"; "+unifs2 }
       .mkString("\n  "))
 } 
+            if(highlight) println("Adding "+StateArray.show(newCpts))
             result += ((map11, newCpts, unifs, reducedMapInfo))
           }
         }
-        // combine1(map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, result)
       } // end of if(sufficientUnif)
       makeSecondaryInducedTransitions(map1, otherArgs, otherArgsBitMap, unifs)
     } // end of outer for loop.
@@ -366,30 +406,21 @@ if(false){
       : BitMap = {
     // Clone, to avoid interference between different iterations.
     val otherArgsBitMap = otherArgsBitMap0.map(_.clone)
-    // if(false){
-    //   // Indices of components of preCpts that are mapped onto.
-    //   val rangeIndices = tuples.map{ case ((i1,_),_) => i1 }.distinct
-    //   for(i1 <- rangeIndices)
-    //     preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap)
-    // }
-    // else{
     // Indices of components of preCpts for which we have added the parameters
-    val doneIndices = new Array[Boolean](preCpts.length) // List[Int](); 
+    val doneIndices = new Array[Boolean](preCpts.length) 
     var tups = tuples
     while(tups.nonEmpty){
       val i1 = tups.head._1._1; tups = tups.tail
-      // if(!contains(doneIndices,i1)){
+      //assert(i1 < preCpts.length, s"pre = $pre\n cv = $cv\ntuples = $tuples")
       if(!doneIndices(i1)){
-        doneIndices(i1) = true // doneIndices ::= i1
+        doneIndices(i1) = true 
         preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap, 1)
       }
-      //Profiler.count("getOtherArgsBitMapForSingleRef"+doneIndices.length)
     }
     // }
     // Remove identities of components in preCpts
     var i = 0
     while(i < preCpts.length){
-      // val c = preCpts(i); i += 1
       val (t,id) = preCpts(i).componentProcessIdentity; i += 1
       otherArgsBitMap(t)(id) = false
     }
@@ -411,6 +442,7 @@ if(false){
     map1: RemappingMap, otherArgs0: OtherArgMap, otherArgsBitMap0: BitMap,  
     unifs: UnificationList)
   = {
+    if(highlight) println("makeSecondaryInducedTransitions")
     // IMPROVE
     for(f <- 0 until numTypes; id <- otherArgs0(f); 
         id1 <- 0 until map1(f).length)
@@ -444,7 +476,7 @@ if(false){
           id1 <- 0 until map1(f).length)
         assert(map1(f)(id1) != id, 
           Remapper.show(map1)+"\n"+otherArgs.mkString(";"))
-      if(highlight) println(Remapper.show(otherArgs))
+      // if(highlight) println(Remapper.show(otherArgs))
       Unification.combine1(
         map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, tempRes)
       for((_, newSts, us, _) <- tempRes){ // IMPROVE
@@ -455,8 +487,8 @@ if(false){
     } // end of mkSecondaryRemaps
 
     for((k,p) <- c2Refs){
-      if(highlight)
-        println(s"k = $k, p = $p, map1(cvpf)(cvpid) = "+map1(cvpf)(cvpid))
+      //if(highlight)
+      //  println(s"k = $k, p = $p, map1(cvpf)(cvpid) = "+map1(cvpf)(cvpid))
       // Can we map (cvpf,cvpid) to p?
       if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
       else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p) && 
@@ -489,18 +521,9 @@ if(false){
     * type cvpf (the type of cv.principal.family).  All pairs (i,id) (with i
     * >= 1) such that the i'th component c1 changes state between preCpts and
     * postCpts, and id is a new included non-distinguished parameter of c1 of
-    * family cvpf in the post state, other than an identity in
-    * preCpts/postCpts. */
-// FIXME: comment; about to include identities
+    * family cvpf in the post state. */
   @inline private def getCrossReferences(): List[(Int,Identity)] = {
     require(singleRef)
-    // ids is the identities of components of pre from family.
-/*
-    var ids = List[Identity](); var i = 0
-    while(i < preCpts.length){
-      val c = preCpts(i); i += 1; if(c.family == cvpf) ids ::= c.ids(0)
-    }
- */
     var result = List[(Int,Identity)](); var i = 1
     while(i < preCpts.length){
       if(preCpts(i) != postCpts(i)){
@@ -509,8 +532,7 @@ if(false){
           if(c1.includeParam(j) && c1.typeMap(j) == cvpf){
             val p = c1Params(j)
             // Check: non-distiguished, not an id in preCpts, new param in c1
-            if(!isDistinguished(p) && // !contains(ids,p) && 
-                !preCpts(i).hasIncludedParam(cvpf,p))
+            if(!isDistinguished(p) && !preCpts(i).hasIncludedParam(cvpf,p))
 // IMPROVE: think about above; should it be hasParam? 
               result ::= (i, p)
           }
@@ -522,6 +544,58 @@ if(false){
     if(false) println(s"getCrossReferences: $result")
     result
   }
+
+  /** All ways of extending map (over cpts) so that an identity in cpts matches
+    * a non-identity parameter in preCpts, or a non-identity parameter in
+    * preCpts matches an identity in cpts; but no identity should map to an
+    * identity.
+    * @return the resulting map, together with a list of tuples
+    * ((i1,j1), (i2,j2)) indicating that parameter j2 of cpts(i2) is mapped to
+    * match parameter j1 of preCpts(i1); precisely one of j1 and j2 will be
+    * 0. */
+  def newRemapToCreateCrossRefs(map: RemappingMap)
+      : ArrayBuffer[(RemappingMap, List[MatchingTuple])] = {
+    val result = new ArrayBuffer[(RemappingMap, List[MatchingTuple])]
+    // Bitmap showing the range of map
+    val inRangeBitMap = Remapper.rangeBitMap(map)
+
+    /* Perform renamings starting with parameter (t,x) mapping to (t,y).  
+     * Consider cases in lexicographic order of (t,x,y).  All updates to map
+     * and inRangeBitMap are backtracked. */
+    def rec(tuples: List[MatchingTuple], t: Type, x: EventInt, y: EventInt)
+        : Unit =
+      if(t == numTypes) // finished this branch
+        result += ((Remapper.cloneMap(map), tuples))
+      else if(x == map(t).size) rec(tuples, t+1, 0, 0) // move to next type
+      else if(y == prePositionMap(t).size)  
+        rec(tuples, t, x+1, 0) // Move to next param of cv
+    else{
+      // try to map (t,x) -> (t,y)
+      if(map(t)(x) < 0 && !inRangeBitMap(t)(y) && 
+        // Precisely one of (t,x), (t,y) is an identity
+        (cvIds.contains((t,x)) ^ preIds.contains((t,y)))){
+        map(t)(x) = y; inRangeBitMap(t)(y) = true // temporary update
+        val newTuples = 
+          crossProduct(prePositionMap(t)(y), cvPositionMap(t)(x)) ++ tuples
+        rec(newTuples, t, x, y+1)
+        map(t)(x) = -1; inRangeBitMap(t)(y) = false  // backtrack (*)
+      }
+      // Also just advance (whether or not we did the if).  If already have
+      // (t,x) -> (t,y), add relevant tuples here.
+      val newTuples = 
+        if(map(t)(x) == y) 
+          crossProduct(prePositionMap(t)(y), cvPositionMap(t)(x)) ++ tuples
+        else tuples
+      rec(newTuples, t, x, y+1)
+    }
+
+    rec(List[MatchingTuple](), 0, 0, 0)
+    result
+  }
+
+  /** Cross product of ps1 and ps2. */
+  def crossProduct(ps1: List[(Int,Int)], ps2 : List[(Int,Int)]) = 
+    for(p1 <- ps1; p2 <- ps2) yield (p1,p2)
 
 }
 
@@ -553,25 +627,20 @@ object EffectOnUnification{
   private def remapToCreateCrossRefs(
     preCpts: Array[State], cpts: Array[State], map: RemappingMap)
       : ArrayBuffer[(RemappingMap, List[MatchingTuple])] = {
-    // IMPROVE
-    val highlight = false && preCpts.length == 2 && cpts.length == 2 &&
-      preCpts(0).cs == 38 && preCpts(1).cs == 37 &&
-        cpts(0).cs == 39 && cpts(1).cs == 14
+    val highlight = false // IMPROVE
 
     // Bit maps (indexed by component number, param number) showing which
     // parameters of cpts can be mapped and which components of preCpts can be
     // mapped onto: all identities; and non-identities those that are not
-    // distinguished, do not match any identity in cpts, resp preCpts, and are
-    // the first instance in cpts, resp preCpts.
-// FIXME: why just the first?  (No longer the case)
+    // distinguished, and do not match any identity in cpts, resp preCpts.
     val domBitMap = getDomBitMap(cpts); val rangeBitMap = getRangeBitMap(preCpts)
     val result = new ArrayBuffer[(RemappingMap, List[MatchingTuple])]
     // Bitmap showing the range of map
     val inRangeBitMap = Remapper.rangeBitMap(map)
-    if(highlight){
-      println("domBitMap = "+domBitMap.map(_.mkString(", ")).mkString("; "))
-      println("rangeBitMap = "+rangeBitMap.map(_.mkString(", ")).mkString("; "))
-    }
+    // if(highlight){
+    //   println("domBitMap = "+domBitMap.map(_.mkString(", ")).mkString("; "))
+    //   println("rangeBitMap = "+rangeBitMap.map(_.mkString(", ")).mkString("; "))
+    // }
 
     // Next component of preCpts(i1) to try mapping on to.  The minimum j in
     // [j1 .. preCpts(i1).length) s.t. rangeBitMap(i1)(j); or
@@ -621,24 +690,14 @@ object EffectOnUnification{
         val id1 = preCpts(i1).ids(j1); val id2 = cpts(i2).ids(j2)
         val t = preCpts(i1).typeMap(j1)
         assert(!isDistinguished(id1) && !isDistinguished(id2))
-// Old version
         if(t == cpts(i2).typeMap(j2) && map(t)(id2) < 0 && 
           !inRangeBitMap(t)(id1) ){
-          val alreadyMatched = false // IMPROVE
-// New version
-//        val alreadyMatched = t == cpts(i2).typeMap(j2) && map(t)(id2) == id1
-//        if(t == cpts(i2).typeMap(j2) &&
-//            (map(t)(id2) < 0 && !inRangeBitMap(t)(id1) || alreadyMatched) ){
-          if(!alreadyMatched){
-            map(t)(id2) = id1; inRangeBitMap(t)(id1) = true // temporary update (*)
-          }
+          map(t)(id2) = id1; inRangeBitMap(t)(id1) = true // temporary update (*)
           val newTuples = ((i1,j1),(i2,j2))::tuples
           // Advance
           if(j1 == 0) rec(newTuples, i1, j1, i2, advanceInCpts(i2, j2+1))
           else rec(newTuples, i1, j1, i2+1, 0)
-          if(!alreadyMatched){
-            map(t)(id2) = -1; inRangeBitMap(t)(id1) = false  // backtrack (*)
-          }
+          map(t)(id2) = -1; inRangeBitMap(t)(id1) = false  // backtrack (*)
         }
         // Also just advance (whether or not we did the if).  If already
         // matched, add tuple here.
@@ -658,22 +717,19 @@ object EffectOnUnification{
 
   /** Bit map (indexed by component number, param number) showing which
     * parameters of preCpts can be mapped onto within remapToCreateCrossRefs:
-    * all identities; and non-identities those that are not distinguished, do
-    * not match any identity in preCpts, and are the first instance in
-    * preCpts.  ***NO*** */
-// FIXME: remove last clause of comment
+    * all identities; and non-identities those that are not distinguished, and
+    * do not match any identity in preCpts. */
   @inline private def getRangeBitMap(preCpts: Array[State]): BitMap = {
     val preIds = Array.tabulate(preCpts.length)(
       i => preCpts(i).componentProcessIdentity)
-    val rangeBitMap = new Array[Array[Boolean]](preCpts.length)
-    var i = 0; //var seen = newBitMap // ids seen so far
+    val rangeBitMap = new Array[Array[Boolean]](preCpts.length); var i = 0
     while(i < preCpts.length){
       val cpt = preCpts(i); rangeBitMap(i) = new Array[Boolean](cpt.length)
       rangeBitMap(i)(0) = true; var j = 0 // IMPROVE: j = 1?
       while(j < cpt.length){
         val (t,p) = cpt.processIdentity(j)
-        if(!isDistinguished(p) && /* !seen(t)(p) && */ !preIds.contains((t,p))){
-          rangeBitMap(i)(j) = true; //seen(t)(p) = true
+        if(!isDistinguished(p) && !preIds.contains((t,p))){
+          rangeBitMap(i)(j) = true; assert(j != 0)
         }
         j += 1
       } // end of inner while
@@ -682,22 +738,26 @@ object EffectOnUnification{
     rangeBitMap
   }
 
+  /** Map (indexed by component number, param number) showing which parameters
+    * of preCpts can be mapped onto within remapToCreateCrossRefs: a value
+    * of 0 represents that it cannot be mapped onto; a value of 1 represents
+    * that it can be mapped, but that this is not the first instance of the
+    * parameter, so it can be mapped onto only if the earlier instance was
+    * mapped onto; */
+  //@inline def getRangeMap(preCpts: Array[State]): Array[Array[Int]] = ???
+
   /** Similar bit map for cpts, showing which params can be mapped: all
-    * identities; and all non-identities that are not distinguished, do not
-    * match any identity in cpts, and are the first instance in cpts. ***NO*** */
-// FIXME: remove last clause of comment
+    * identities; and all non-identities that are not distinguished, and do
+    * not match any identity in cpts. */
   @inline private def getDomBitMap(cpts: Array[State]): BitMap = {
     val ids = Array.tabulate(cpts.length)(i => cpts(i).componentProcessIdentity)
-    val domBitMap = new Array[Array[Boolean]](cpts.length)
-    /* val seen = newBitMap;*/ var i = 0
+    val domBitMap = new Array[Array[Boolean]](cpts.length); var i = 0
     while(i < cpts.length){
       val cpt = cpts(i); domBitMap(i) = new Array[Boolean](cpt.length)
       domBitMap(i)(0) = true; var j = 0
       while(j < cpt.length){
         val (t,p) = cpt.processIdentity(j)
-        if(!isDistinguished(p) && /* !seen(t)(p) && */ !ids.contains((t,p))){
-          domBitMap(i)(j) = true; //  seen(t)(p) = true
-        }
+        if(!isDistinguished(p) && !ids.contains((t,p))) domBitMap(i)(j) = true
         j += 1
       } // end of inner while
       i += 1

@@ -57,12 +57,12 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
     val postCpts = post.components; val preCpts = pre.components
 // IMPROVE
-    val highlight = 
-      pre.servers.servers(1).cs == 100 && post.servers.servers(5).cs == 113 &&
-      preCpts.length == 2 && cv.components.length == 2 &&
-      preCpts(0).cs == 66 && preCpts(1).cs == 13 && preCpts(1).ids(2) == 3 &&
-        preCpts.sameElements(cv.components)
-    if(highlight) println("********")
+    val highlight = false
+      // pre.servers.servers(1).cs == 100 && post.servers.servers(5).cs == 113 &&
+      // preCpts.length == 2 && cv.components.length == 2 &&
+      // preCpts(0).cs == 66 && preCpts(1).cs == 13 && preCpts(1).ids(2) == 3 &&
+      //   preCpts.sameElements(cv.components)
+    // if(highlight) println("********")
     if(showTransitions || highlight) println(s"EffectOn($pre, $post, $cv)")
 
     // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList)
@@ -78,7 +78,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       if(singleRef && newEffectOn)
         new SingleRefEffectOnUnification(pre,post,cv)()
       else EffectOnUnification.combine(pre, post, cv)
-    if(highlight) println("secondaryInduced length: "+secondaryInduced.length)
+    //if(highlight) println("secondaryInduced length: "+secondaryInduced.length)
 
     /* Function to process induced transition. */
     val processInducedInfo1 = 
@@ -92,11 +92,16 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     var index = 0
     while(index < inducedInfo.length){
       val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
-if(false)
-      if(highlight) println(s"*** unifs = $unifs, map = "+Remapper.show(map))
-// IMPROVE: following for debugging: this value doesn't appear again later.
-      if(false) assert(!(index until inducedInfo.length).exists( i => 
-        inducedInfo(i)._2.sameElements(cpts) && inducedInfo(i)._3 == unifs))
+      // if(highlight) println(s"*** unifs = $unifs, map = "+Remapper.show(map))
+// FIXME: following doesn't currently hold; why not?
+      // check this value doesn't appear again later.
+      if(true) for(i <- index until inducedInfo.length){
+        val (map1,cpts1,unifs1,reducedMapInfo1) = inducedInfo(i)
+        assert(! cpts1.sameElements(cpts) || unifs1 != unifs, 
+          s"pre = $pre\npost = $post\ncv = $cv\n"+
+          "map = "+Remapper.show(map)+"\nmap1 = "+Remapper.show(map1)+
+            "\ncpts = "+StateArray.show(cpts)+s"\nunifs = $unifs" )
+      }
       Profiler.count("EffectOn step "+unifs.isEmpty)
       // The components needed for condition (b).
       val crossRefs: List[Array[State]] = 
@@ -116,16 +121,15 @@ if(false)
     while(index < secondaryInduced.length){
       val (cpts, unifs, k) = secondaryInduced(index); index += 1
       Profiler.count("SecondaryInduced")
-      if(highlight) println("***secondaryInduced: "+StateArray.show(cpts))
+      // if(highlight) println("***secondaryInduced: "+StateArray.show(cpts))
       val crossRefs: List[Array[State]] = 
         if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
         else List()
       val newPrinc = getNewPrinc(cpts(0), unifs) 
       val newComponentsList = List(Array(postCpts(k), newPrinc))
 
-      if(highlight) 
-        println("newComponentsList: "+
-          newComponentsList.map(StateArray.show).mkString("\n"))
+      // if(highlight) println("newComponentsList: "+
+      //   newComponentsList.map(StateArray.show).mkString("\n"))
       processInducedInfo1(
         null, cpts, unifs, null, false, crossRefs, newComponentsList)
     }
@@ -149,10 +153,10 @@ if(false)
       reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
       newComponentsList: List[Array[State]])
   : Unit = {
-    val highlight = false && // IMPROVE
-      pre.servers.servers(1).cs == 99 &&
-      pre.components(0).cs == 59 && pre.components(1).cs == 37 &&
-      cv.components(0).cs == 10 && cv.components(1).cs == 14
+    val highlight = false//  && // IMPROVE
+      // pre.servers.servers(1).cs == 99 &&
+      // pre.components(0).cs == 59 && pre.components(1).cs == 37 &&
+      // cv.components(0).cs == 10 && cv.components(1).cs == 14
     if(debugging){
       StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     }
@@ -208,13 +212,11 @@ if(false)
       crossRefs.map(new ComponentView(pre.servers, _)).filter(!views.contains(_))
     for(newComponents <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newComponents)
-      if(highlight){
-        println("processInducedInfo: "+StateArray.show(newComponents))
-        println(s"nv = $nv")
-        println(views.contains(nv))
-        println("missing = "+missing)
-        println("missingCommons = "+missingCommons)
-      }
+      // if(highlight){
+      //   println("processInducedInfo: "+StateArray.show(newComponents))
+      //   println(s"nv = $nv"); println(views.contains(nv))
+      //   println("missing = "+missing+"\nmissingCommons = "+missingCommons)
+      // }
       Profiler.count("newViewCount") 
       if(!views.contains(nv)){
         if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){

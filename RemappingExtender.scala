@@ -29,11 +29,10 @@ class RemappingExtender(
 
   /** Temporary test to help with debugging.  Might this be the instance causing
     * problems? */
-  val highlight = false &&  
-    // servers.servers(1).cs == 99 &&
-    preCpts.length == 2 && cpts.length == 2 &&
-    preCpts(0).cs == 38 && preCpts(1).cs == 37 && 
-      cpts(0).cs == 39 && cpts(1).cs == 14
+  val highlight = false // IMPROVE
+    // preCpts.length == 2 && cpts.length == 2 &&
+    // preCpts(0).cs == 38 && preCpts(1).cs == 37 && 
+    //   cpts(0).cs == 39 && cpts(1).cs == 14
 
   /** A NextArgMap, containing values greater than anything in pre or post. */
   private val nextArg: NextArgMap = pre.getNextArgMap
@@ -150,12 +149,12 @@ class RemappingExtender(
     rdMap: RemappingMap, resultRelevantParams: BitMap, 
     i: Int, j: Int, isPrimary: Boolean)
       : ArrayBuffer[RemappingMap] = {
-    if(highlight)
-      println(s"**extendForLinkage ${(i,j)} $isPrimary; rdMap = "+Remapper.show(rdMap)+
-        "\nresultRelevantParams = "+
-        resultRelevantParams.map(_.mkString(",")).mkString("; ") )
+    // if(highlight)
+    //   println(s"**extendForLinkage ${(i,j)} $isPrimary; rdMap = "+
+    //     Remapper.show(rdMap)+"\nresultRelevantParams = "+
+    //     resultRelevantParams.map(_.mkString(",")).mkString("; ") )
     val c2 = preCpts(j); val c2Params = c2.processIdentities
-    if(highlight) println(s"c2 = $c2")
+    // if(highlight) println(s"c2 = $c2")
     // Create otherArgMap containing all params of c2 not in range rdMap
     val otherArgs = Remapper.newOtherArgMap
     /* Should parameter (t,id) be included in otherArgs? */
@@ -171,7 +170,7 @@ class RemappingExtender(
           !rdMap(t).contains(id) && */ !otherArgs(t).contains(id))
         otherArgs(t) ::= id
     }
-    if(highlight) println("otherArgs = "+otherArgs.mkString("; "))
+    // if(highlight) println("otherArgs = "+otherArgs.mkString("; "))
     //println("extendForLinkage: "+otherArgs.mkString("; "))
     extendMapOverComponent(rdMap, cpts(i), otherArgs)
   }
@@ -334,29 +333,28 @@ class RemappingExtender(
     rdMap: RemappingMap, doneB: List[Linkage], 
     isPrimary: Boolean, extensions: ArrayBuffer[RemappingMap])
       : Unit = {
-    if(highlight) 
-      println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
-        s"; doneB = $doneB")
+    // if(highlight)println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
+    //     s"; doneB = $doneB")
     val linkagesC = findLinkagesC(unifs, rdMap)
     if(linkagesC.nonEmpty) 
       allExtensions(resultRelevantParams, rdMap, doneB, extensions)
     else{
       // IMPROVE: we only need a single linkage
       val newLinkages = findLinkages(unifs, rdMap, doneB) // .distinct
-      if(highlight) println(s"newLinkages = $newLinkages")
+      // if(highlight) println(s"newLinkages = $newLinkages")
       if(newLinkages.isEmpty){ // map remaining params to fresh
         mapUndefinedToFresh(rdMap); extensions += rdMap
       }
       else{
         val (i,j) = newLinkages.head
-        if(highlight) println("makeExtensions linkage "+(i,j))
+        // if(highlight) println("makeExtensions linkage "+(i,j))
         // FIXME: need to respect doneB below
         val extendedMaps = 
           extendForLinkage(rdMap, resultRelevantParams, i, j, isPrimary)
         var k = 0
         while(k < extendedMaps.length){
           val eMap = extendedMaps(k); k += 1
-          if(highlight) println("eMap = "+Remapper.show(eMap))
+          // if(highlight) println("eMap = "+Remapper.show(eMap))
           makeExtensions1(unifs, resultRelevantParams, eMap, 
             (i,j)::doneB, isPrimary, extensions)
         }

@@ -163,13 +163,8 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
 
   /** A bound on the values of each type. */
   def getParamsBound: Array[Int] = {
-    if(paramsBound == null){
-      paramsBound = servers.paramsBound.clone
-      for(cpt <- components){
-        val pb = cpt.getParamsBound
-        for(t <- 0 until numTypes) paramsBound(t) = paramsBound(t) max pb(t)
-      }      
-    }
+    if(paramsBound == null)
+      paramsBound = View.getParamsBound(servers, components)
     paramsBound
   }
 
@@ -398,6 +393,18 @@ object View{
 
   def show(servers: ServerStates, states: Array[State]) =
     servers.toString+" || "+StateArray.show(states)
+
+  /** A bound on the values of each type in servers and cpts. */
+  @inline def getParamsBound(servers: ServerStates, cpts: Array[State])
+      : Array[Int] = {
+    val pb = servers.paramsBound.clone
+    for(cpt <- cpts){
+      val pb1 = cpt.getParamsBound
+      for(t <- 0 until numTypes) pb(t) = pb(t) max pb1(t)
+    }
+    pb
+  }
+
 }
 
 // ==================================================================
@@ -554,6 +561,9 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   /** Identities of components. */
   val cptIds = components.map(_.componentProcessIdentity)
+
+  /** A bound on the values of each type.  IMPROVE: maybe store this. */
+  def getParamsBound: Array[Int] = View.getParamsBound(servers, components)
 
   // ============= Debugging info
 
