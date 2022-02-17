@@ -64,6 +64,18 @@ object Remapper{
     ok
     }
 
+  /** Are map1 and map2 equivalent? */
+  def equivalent(map1: RemappingMap, map2: RemappingMap): Boolean = {
+    var t = 0; var same = true
+    while(t < numTypes && same){
+      // compare map1(t) and map2(t)
+      var i = 0; val len = map1(t).size
+      while(i < len && map1(t)(i) == map2(t)(i)) i += 1
+      same = (i == len); t += 1
+    }
+    same
+  }
+
   /** Produce a new RemappingMap, extending map0 so (f,id) maps to id1.
     * Note: the resulting map shares some entries with map0, so neither should 
     * be mutated.  Pre: this does not make the map non-injective. */

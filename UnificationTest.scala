@@ -312,6 +312,7 @@ object UnificationTest
     singleRef = false
   }
 
+/* Code no longer used.
   /** Test of reampToCreateCrossRefs. */
   private def remapToCreateCrossRefsTest = {
     println("==remapToCreateCrossRefsTest==")
@@ -379,11 +380,12 @@ object UnificationTest
 
     test1; test2; test3
   }
-
+ */
 
   /** Main test function. */
   def test = {
     println("===UnificationTest===")
-    unifyTest; allUnifsTest; combineTest; remapToJoinTest; remapToCreateCrossRefsTest
+    unifyTest; allUnifsTest; combineTest; remapToJoinTest
+    // remapToCreateCrossRefsTest
   }
 }

@@ -51,13 +51,14 @@ class SingleRefEffectOnUnification(
 
   /** Temporary test to help with debugging.  Might this be the instance causing
     * problems? */
-  val highlight = false // && 
-    // preCpts.length == 2 && cpts.length == 2 &&
-    // preCpts(0).cs == 38 && preCpts(1).cs == 37 && 
-    //   cpts(0).cs == 39 && cpts(1).cs == 14
+  val highlight = false && // IMPROVE
+    servers.servers(1).cs == 34 && 
+    preCpts.length == 2 && cpts.length == 2 &&
+      preCpts(0).cs == 23 && preCpts(1).cs == 15 && 
+      cpts(0).cs == 24 && cpts(1).cs == 11 && cpts(0).ids(2) == 2
 
-  // if(highlight) 
-  //   println(s"*** SingleEffectOnUnification: \n  $pre -> $post;\n  $cv")
+  //if(highlight) 
+  //  println(s"*** SingleEffectOnUnification: \n  $pre -> $post;\n  $cv")
 
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
@@ -123,6 +124,7 @@ class SingleRefEffectOnUnification(
 
     while(k < allUnifs.length){
       val (map1,unifs) = allUnifs(k); k += 1
+      //if(highlight) println("map1 = "+Remapper.show(map1)+s"; unifs = $unifs") 
       if(isSufficientUnif(unifs)){
         // Result-relevant parameters: parameters to map params of cv to, in
         // order to create result-defining map.
@@ -267,9 +269,11 @@ class SingleRefEffectOnUnification(
   private def makePrimaryExtension(
     unifs: UnificationList, resultRelevantParams: BitMap, rdMap: RemappingMap)
   = {
+    //if(highlight) println("*** makePrimaryExtension "+Remapper.show(rdMap))
     val extensions = 
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, true)
     for(map1 <- extensions){
+      //if(highlight) println("map1 = "+Remapper.show(map1))
       if(debugging) assert(Remapper.isInjective(map1))
       val reducedMapInfo: ReducedMap =
         if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
@@ -280,6 +284,7 @@ class SingleRefEffectOnUnification(
       if(unifs.nonEmpty ||
         !cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo)){
         val newCpts = Remapper.applyRemapping(map1, cpts)
+        //if(highlight) println(s"Adding "+StateArray.show(newCpts))
         result += ((map1, newCpts, unifs, reducedMapInfo))
       }
     }

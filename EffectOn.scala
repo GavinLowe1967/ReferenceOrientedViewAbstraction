@@ -92,15 +92,17 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     var index = 0
     while(index < inducedInfo.length){
       val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
-      // if(highlight) println(s"*** unifs = $unifs, map = "+Remapper.show(map))
-// FIXME: following doesn't currently hold; why not?
-      // check this value doesn't appear again later.
+// IMPROVE: understand why there are repetitions; it might be RemappingExtender.allExtensions.
+      // Test if this value appears again later.
       if(true) for(i <- index until inducedInfo.length){
         val (map1,cpts1,unifs1,reducedMapInfo1) = inducedInfo(i)
-        assert(! cpts1.sameElements(cpts) || unifs1 != unifs, 
-          s"pre = $pre\npost = $post\ncv = $cv\n"+
-          "map = "+Remapper.show(map)+"\nmap1 = "+Remapper.show(map1)+
-            "\ncpts = "+StateArray.show(cpts)+s"\nunifs = $unifs" )
+        if(cpts1.sameElements(cpts) && unifs1 == unifs){
+          if(newEffectOn) Profiler.count("Induced repetition")
+          else assert(false,
+            s"pre = $pre\npost = $post\ncv = $cv\n"+
+              "map = "+Remapper.show(map)+"\nmap1 = "+Remapper.show(map1)+
+              "\ncpts = "+StateArray.show(cpts)+s"\nunifs = $unifs" )
+        }
       }
       Profiler.count("EffectOn step "+unifs.isEmpty)
       // The components needed for condition (b).

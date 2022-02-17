@@ -29,10 +29,11 @@ class RemappingExtender(
 
   /** Temporary test to help with debugging.  Might this be the instance causing
     * problems? */
-  val highlight = false // IMPROVE
-    // preCpts.length == 2 && cpts.length == 2 &&
-    // preCpts(0).cs == 38 && preCpts(1).cs == 37 && 
-    //   cpts(0).cs == 39 && cpts(1).cs == 14
+  val highlight = false && // IMPROVE
+    pre.servers.servers(1).cs == 34 && 
+    preCpts.length == 2 && cpts.length == 2 &&
+      preCpts(0).cs == 23 && preCpts(1).cs == 15 && 
+      cpts(0).cs == 24 && cpts(1).cs == 11 && cpts(0).ids(2) == 2
 
   /** A NextArgMap, containing values greater than anything in pre or post. */
   private val nextArg: NextArgMap = pre.getNextArgMap
@@ -112,9 +113,9 @@ class RemappingExtender(
     val result = new ArrayBuffer[Parameter]
     // Linkages for condition (c).  Iterate through the parameters of
     // cv.principal.
-    val cvPrincParams = cv.principal.processIdentities
-    for(i <- 1 until cvPrincParams.length){
-      val (t,id) = cvPrincParams(i)
+    val cvPrincParams = cv.principal.processIdentities; var i = 1
+    while(i <  cvPrincParams.length){
+      val (t,id) = cvPrincParams(i); i += 1
       if(!isDistinguished(id) && !cptIds.contains((t,id))){
         val id1 = rdMap(t)(id)
         // Are id and id1 missing parameters for cv, pre, respectively?
@@ -334,7 +335,7 @@ class RemappingExtender(
     isPrimary: Boolean, extensions: ArrayBuffer[RemappingMap])
       : Unit = {
     // if(highlight)println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
-    //     s"; doneB = $doneB")
+    //   s"; doneB = $doneB")
     val linkagesC = findLinkagesC(unifs, rdMap)
     if(linkagesC.nonEmpty) 
       allExtensions(resultRelevantParams, rdMap, doneB, extensions)
@@ -343,7 +344,11 @@ class RemappingExtender(
       val newLinkages = findLinkages(unifs, rdMap, doneB) // .distinct
       // if(highlight) println(s"newLinkages = $newLinkages")
       if(newLinkages.isEmpty){ // map remaining params to fresh
-        mapUndefinedToFresh(rdMap); extensions += rdMap
+        mapUndefinedToFresh(rdMap)
+        // Add to extensions if not there already
+        if(extensions.forall(m => !Remapper.equivalent(m, rdMap)))
+          extensions += rdMap
+        // if(highlight) println("added "+Remapper.show(rdMap))
       }
       else{
         val (i,j) = newLinkages.head
@@ -351,6 +356,8 @@ class RemappingExtender(
         // FIXME: need to respect doneB below
         val extendedMaps = 
           extendForLinkage(rdMap, resultRelevantParams, i, j, isPrimary)
+        // if(highlight) 
+        //   println("extendedMaps: "+extendedMaps.map(Remapper.show(_)))
         var k = 0
         while(k < extendedMaps.length){
           val eMap = extendedMaps(k); k += 1
@@ -361,6 +368,13 @@ class RemappingExtender(
       }
     }
   }
+  /* Note, we remove repetitions above.  For example, with TrieberStack.csp 
+   * pre = [32(N0) || 34()] || [23(T0,N0,N1) || 15(N1,N2)]
+   * cv = [32(N0) || 34()] || [24(T0,N1,N2) || 11(N1,N2)]
+   * and N2 -> N1, we get linkages (0,0) and (1,0), from both components of
+   * cv.  Each might or might not add the mapping N1 -> N2, so there are two
+   * ways to get this mapping.  It's not clear whether this is worthwhile.
+   * There might still be repetitions arising within allExtensions.  */
 
   // ========= Hooks for testing
 
