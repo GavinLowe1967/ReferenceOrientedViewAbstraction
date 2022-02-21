@@ -12,8 +12,10 @@ object VA{
   var checker: Checker = null
 
   /** Run a check.  Called by ScalaInstrumentation. */
-  def check(fname: String, bound: Int, singleRefX: Boolean) : Unit = {
-    singleRef = singleRefX
+  def check(fname: String, bound: Int, 
+    singleRefX: Boolean, newEffectOnX: Boolean)
+      : Unit = {
+    singleRef = singleRefX; newEffectOn = newEffectOnX
     system = new SystemP.System(fname); println("Created system")
     // Create and run the checker
     checker = new Checker(system); checker(bound = bound)
@@ -111,12 +113,12 @@ object VA{
     if(StateArray.CrossRefFlag) List(
       ("CSP/lockBasedStack.csp", 294), ("CSP/lockBasedQueue.csp", 553),
       ("CSP/TreiberStack.csp", 1072), // 1075 if clause (3) in MissingCommon omitted
-      ("CSP/lockFreeQueue.csp", 2210), ("CSP/TreiberStackOmitCreator.csp", 889)
+      ("CSP/lockFreeQueue.csp", 2210)// , ("CSP/TreiberStackOmitCreator.csp", 889)
     )
   else List(
     ("CSP/lockBasedStack.csp", 306), ("CSP/lockBasedQueue.csp", 570),
     ("CSP/TreiberStack.csp", 1072), // 1075 if clause (3) in MissingCommon omitted
-    ("CSP/lockFreeQueue.csp", 2210), ("CSP/TreiberStackOmitCreator.csp", 889)
+    ("CSP/lockFreeQueue.csp", 2210) //, ("CSP/TreiberStackOmitCreator.csp", 889)
   )
 
 

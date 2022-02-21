@@ -1,6 +1,6 @@
 
 /* Run with
- * java --illegal-access=deny -cp .:/home/gavin/bin/scala-2.13.1/lib/scala-library.jar:/home/gavin/Scala/Util:/home/gavin/bin/FDRSym/fdr/lib/fdr.jar -javaagent:"/home/gavin/Scala/Util/ox/gavin/profiling/InstrumentationAgent.jar" Instrumentation
+ * java --illegal-access=deny -cp .:/home/gavin/bin/scala-2.13.1/lib/scala-library.jar:/home/gavin/Scala/Util:/home/gavin/bin/FDRSym/fdr/lib/fdr.jar -javaagent:"/home/gavin/Scala/Util/ox/gavin/profiling/InstrumentationAgent.jar" -Xmx320g Instrumentation
  */
 
 
@@ -21,7 +21,7 @@ public class Instrumentation {
  *
  * 2. Run with something like 
  * 
- * java -cp .:/users/gavinl/bin/scala/scala-2.12.6/lib/scala-library.jar:/users/gavinl/bin/FDR4/fdr/lib/fdr.jar:/users/gavinl/Scala/Util -javaagent:"/users/gavinl/Scala/Util/ox/gavin/profiling/InstrumentationAgent.jar" -Xmx24g Instrumentation
+ * java -cp .:/users/gavinl/bin/scala/scala-2.12.6/lib/scala-library.jar:/users/gavinl/bin/FDR4/fdr/lib/fdr.jar:/users/gavinl/Scala/Util -javaagent:"/users/gavinl/Scala/Util/ox/gavin/profiling/InstrumentationAgent.jar" -Xmx24g Instrumentation CSP/lockBasedStack.csp
  *
  * where the classpath includes the location of the standard scala library,
  * the FDR jar file, and the gavin.ox.profiling package; and the -javaagent

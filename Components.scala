@@ -228,6 +228,7 @@ class Components(
   // -------------------------------------------------------
 
   /** Representation of the transitions from a state. */ 
+// IMPROVE: these objects use a lot of memory. 
   class ComponentTransitions{
     /* Transitions are represented by parallel arrays of events (terminated with
      * Sentinel) and lists of next-states. */

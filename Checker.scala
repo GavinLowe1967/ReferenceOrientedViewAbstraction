@@ -499,6 +499,7 @@ class Checker(system: SystemP.System){
   def memoryProfile = {
     println("Memory profile"); println
 
+    println("# states = "+MyStateMap.stateCount)
     traverse("MyStateMap", MyStateMap, maxPrint = 0); println
 
     traverse("ServerStates", ServerStates, maxPrint = 0); println
@@ -513,7 +514,10 @@ class Checker(system: SystemP.System){
 
     traverse("extendability", extendability, maxPrint = 0); println
 
-    traverse("system", system, maxPrint = 1); println
+    if(true){
+      traverse("system.components", system.components, maxPrint = 2); println
+      traverse("system", system, maxPrint = 1); println }
+    else println("Omitting system\n") 
 
     traverse("effectOn", effectOn, maxPrint = 5, maxPrintArray = 8); println
 

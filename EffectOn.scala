@@ -57,7 +57,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
     val postCpts = post.components; val preCpts = pre.components
 // IMPROVE
-    val highlight = false
+    val highlight = false // preCpts(0).cs == 6 && postCpts(0).cs == 7
       // pre.servers.servers(1).cs == 100 && post.servers.servers(5).cs == 113 &&
       // preCpts.length == 2 && cv.components.length == 2 &&
       // preCpts(0).cs == 66 && preCpts(1).cs == 13 && preCpts(1).ids(2) == 3 &&

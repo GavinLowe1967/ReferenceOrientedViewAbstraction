@@ -70,7 +70,8 @@ class System(fname: String) {
   println(s"Active families: $activeFamilies; passive families: $passiveFamilies")
 
   /** Model of the replicated components. */
-  private val components = new Components(
+  // Non-private for memory profiling
+  /*private*/ val components = new Components(
     fdrSession, transMapBuilder, fdrTypeIds,
     familyNames, file.componentAlphabets.toArray, 
     file.componentRenames.toArray, actives)
@@ -388,6 +389,28 @@ class System(fname: String) {
     // IMPROVE: the transitions probably aren't in the best form
     val conc0 = Concretization(cv)
     val activePrincipal = isActive(cv) // is the principal active
+
+    // With singleRef, is the process corresponding to the first non-null
+    // reference included (if any)?  If not, we can omit certain transitions
+    // that would be found for the view with that components.  I think this
+    // isn't sound.
+/*
+    var firstRefIncluded = true
+    if(singleRef){
+      // Find first non-null reference from cv.principal
+      var i = 1
+      while(i < pParams.length && isDistinguished(pParams(i)._2)) i += 1
+      if(i < pParams.length){
+        // Find if there is a component with identity pParams(i)
+        // Following assertion fails if we have omitted components. 
+        assert(cv.components.length == 2, cv)
+        if(cv.components(1).componentProcessIdentity != pParams(i)){
+          firstRefIncluded = false; // println(s"Excluding $cv")
+        }
+      }
+    }
+ */
+         
 
     // Case 1: events of the principal component with no synchronisation
     if(activePrincipal) 
