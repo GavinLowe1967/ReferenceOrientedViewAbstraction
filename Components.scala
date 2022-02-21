@@ -229,70 +229,68 @@ class Components(
 
   /** Representation of the transitions from a state. */ 
 // IMPROVE: these objects use a lot of memory. 
-  class ComponentTransitions{
+  class ComponentTransitions(
+    val eventsServer: Array[EventInt], val nextsServer: Array[Array[State]],
+    val eventsSolo: Array[EventInt], val nextsSolo: Array[Array[State]]
+  ){
     /* Transitions are represented by parallel arrays of events (terminated with
      * Sentinel) and lists of next-states. */
 
     // Those transitions synchronising with no other component, and
     // synchronising with the server.
-    val eventsServer = new ArrayBuffer[EventInt]
-    val nextsServer = new ArrayBuffer[List[State]]
+    //var eventsServer: Array[EventInt] = _ //  = new ArrayBuffer[EventInt]
+    //var nextsServer: Array[Array[State]] = _ // = new ArrayBuffer[List[State]]
 
     // Those transitions synchronising with no other component, nor with the
     // server.
-    val eventsSolo = new ArrayBuffer[EventInt]
-    val nextsSolo = new ArrayBuffer[List[State]]
+    //var eventsSolo: Array[EventInt] = _ // = new ArrayBuffer[EventInt]
+    //var nextsSolo: Array[Array[State]] = _ // = new ArrayBuffer[List[State]]
 
     /** Transitions synchronising with one other component:
       * transComponent(f)(i) represents transitions synchronised with
       * the component with process identity (f,i); except null is used
       * to repsesent no transitions (for compactness). */
-    val transComponent = Array.tabulate(numFamilies)(f =>
-      Array.fill[Trans](idSizes(f))(
-        (new ArrayBuffer[EventInt], new ArrayBuffer[List[State]])
-      ) )
+    var transComponent: Array[Array[(Array[EventInt], Array[Array[State]])]] = _
+    //  = Array.tabulate(numFamilies)(f =>
+      // Array.fill[Trans](idSizes(f))(
+      //   (new ArrayBuffer[EventInt], new ArrayBuffer[List[State]])
+      // ) )
 
     /** Transitions synchronising with server and one other component:
       * representation is as for transComponent. */
-    val transServerComponent = Array.tabulate(numFamilies)(f =>
-      Array.fill[Trans](idSizes(f))(
-        (new ArrayBuffer[EventInt], new ArrayBuffer[List[State]])
-      ) )
+    var transServerComponent: 
+        Array[Array[(Array[EventInt], Array[Array[State]])]] = _
+    // = Array.tabulate(numFamilies)(f =>
+    //   Array.fill[Trans](idSizes(f))(
+    //     (new ArrayBuffer[EventInt], new ArrayBuffer[List[State]])
+    //   ) )
 
     /** Add sentinels, and replace empty sets of transitions in transComponent by
       * null. */
-    def finish = {
-      // Add sentinels
-      eventsServer += Sentinel; eventsSolo += Sentinel
-      for(f <- 0 until numFamilies; i <- 0 until idSizes(f)){
-        val es = transComponent(f)(i)._1
-        if(es.nonEmpty) es += Sentinel else transComponent(f)(i) = null
-        val es1 = transServerComponent(f)(i)._1
-        es1 += Sentinel
-        // if(es1.nonEmpty) es1 += Sentinel else transServerComponent(f)(i) = null
-      }
-    }
+    // def finish = {
+    //   // Add sentinels
+    //   // eventsServer += Sentinel; // eventsSolo += Sentinel
+    //   for(f <- 0 until numFamilies; i <- 0 until idSizes(f)){
+    //     // val es = transComponent(f)(i)._1
+    //     // if(es.nonEmpty) es += Sentinel else transComponent(f)(i) = null
+    //     // val es1 = transServerComponent(f)(i)._1
+    //     // es1 += Sentinel
+    //     // if(es1.nonEmpty) es1 += Sentinel else transServerComponent(f)(i) = null
+    //   }
+    // } 
     // IMPROVE: use Arrays instead of ArrayBuffers?  Compress more?
 
     /** The next states possible after event e synchronising with component
       * (f,i). */
-    def nexts(e: EventInt, f: Family, id: Identity): List[State] = {
+    def nexts(e: EventInt, f: Family, id: Identity): Array[State] = {
       val ens = transComponent(f)(id)
-      if(ens != null){
-        val (es, ns) = ens; binSearch(e, es, ns)
-      }
-      else{
-        // assert(transServerComponent(f) != null, f)
-        // assert(transServerComponent(f)(id) != null, 
-        //   s"e = ${showEvent(e)}, f = $f, id = $id")
-        val (es, ns) = transServerComponent(f)(id); binSearch(e, es, ns)
-      }
+      if(ens != null){ val (es, ns) = ens; binSearch(e, es, ns) }
+      else{ val (es, ns) = transServerComponent(f)(id); binSearch(e, es, ns) }
     }
 
-    /** Find the next-states in ns corresponding to e. */ 
     @inline private def binSearch(
-      e: EventInt, es: ArrayBuffer[EventInt], ns: ArrayBuffer[List[State]])
-        : List[State] = {
+      e: EventInt, es: Array[EventInt], ns: Array[Array[State]])
+        : Array[State] = {
       var i = 0; var j = es.length-1; assert(es(j) == Sentinel)
       // Binary search for e.  Inv es[0..i) < e <= es[j..)
       while(i < j){
@@ -300,7 +298,7 @@ class Components(
         if(es(m) < e) i = m+1 else j = m
       }
       // es[0..i) < e <= es[i..m)
-      if(es(i) == e) ns(i) else List()
+      if(es(i) == e) ns(i) else Array() // List()
     }
 
   } // end of class ComponentTransitions
@@ -317,10 +315,23 @@ class Components(
     * ComponentTransitions, and storing these. */
   def categoriseTrans(serverAlphaBitMap: Array[Boolean]) = {
     for((st, (events0, nexts0)) <- transMap.iterator){
-      val trans1 = new ComponentTransitions
+      // Build up transitions in following
+      val eventsSolo = new ArrayBuffer[EventInt]
+      val nextsSolo = new ArrayBuffer[Array[State]]
+      val eventsServer = new ArrayBuffer[EventInt]
+      val nextsServer = new ArrayBuffer[Array[State]]
+      val transComponent = Array.tabulate(numFamilies)(f =>
+        Array.fill(idSizes(f))(
+          (new ArrayBuffer[EventInt], new ArrayBuffer[Array[State]])
+        ) )
+      val transServerComponent = Array.tabulate(numFamilies)(f =>
+        Array.fill(idSizes(f))(
+          (new ArrayBuffer[EventInt], new ArrayBuffer[Array[State]])
+        ) )
+
       var i = 0; var n = events0.length
       if(n > 0 && events0(0) == Tau){ 
-        trans1.eventsSolo += Tau; trans1.nextsSolo += nexts0(0); i = 1
+        eventsSolo += Tau; nextsSolo += nexts0(0).toArray; i = 1
       }
       val me: Parameter = st.componentProcessIdentity 
       //println(s"categoriseTrans($me)")
@@ -336,23 +347,56 @@ class Components(
         // IMPROVE: translate "me" into human-friendly form
         if(cpts.length == 1){
           if(serverAlphaBitMap(e)){
-            trans1.eventsServer += e; trans1.nextsServer += nexts
+            eventsServer += e; nextsServer += nexts.toArray
           }
-          else{ trans1.eventsSolo += e; trans1.nextsSolo += nexts }
+          else{ eventsSolo += e; nextsSolo += nexts.toArray }
         }
         else{ // sync with one other component
           assert(cpts.length == 2)
           val head = cpts.head
           // the other component synchronising on e
           val (f,i) = if(head == me) cpts.tail.head else head
+          // if(serverAlphaBitMap(e)){
+          //   val (es,nextss) = transServerComponent(f)(i)
+          //   es += e; nextss += nexts.toArray
+          // }
+          // else{
+          //   val (es,nextss) = transComponent(f)(i)
+          //   es += e; nextss += nexts.toArray
+          // }
           val (es,nextss) =
-            if(serverAlphaBitMap(e)) trans1.transServerComponent(f)(i)
-            else trans1.transComponent(f)(i)
-          es += e; nextss += nexts
+            if(serverAlphaBitMap(e)) transServerComponent(f)(i)
+            else transComponent(f)(i)
+          es += e; nextss += nexts.toArray
         }
         i += 1
       }
-      trans1.finish
+      // Add sentinels and copy into trans1
+      eventsServer += Sentinel; //trans1.eventsServer = eventsServer.toArray
+      //trans1.nextsServer = nextsServer.toArray
+      eventsSolo += Sentinel;// trans1.eventsSolo = eventsSolo.toArray
+      val trans1 = new ComponentTransitions(
+        eventsServer.toArray, nextsServer.toArray, 
+        eventsSolo.toArray, nextsSolo.toArray)
+      //trans1.nextsSolo = nextsSolo.toArray
+      val transComponent1, transServerComponent1 = 
+        Array.tabulate(numFamilies)(f => 
+          new Array[(Array[EventInt], Array[Array[State]])](idSizes(f)))
+      for(f <- 0 until numFamilies; i <- 0 until idSizes(f)){
+        val (es,nexts) = transComponent(f)(i)
+        if(es.nonEmpty){ 
+          es += Sentinel; transComponent1(f)(i) = (es.toArray, nexts.toArray)
+        }
+        else transComponent1(f)(i) = null
+
+        val (es1,nexts1) = transServerComponent(f)(i)
+        es1 += Sentinel; 
+        transServerComponent1(f)(i) = (es1.toArray, nexts1.toArray)
+      }
+      trans1.transComponent = transComponent1
+      trans1.transServerComponent = transServerComponent1
+
+      //trans1.finish
       transComponentStore += st -> trans1
     } // end of for
     transMap = null // for GC
@@ -371,26 +415,6 @@ class Components(
       new ComponentView(servers, StateArray.referencedStates(princ, fInits)))
   }
 
-  //   val iv = Views.alpha(aShapes, inits.flatten, true)
-  //   // println("aShapes = "+aShapes.map(_.mkString("<", ",", ">")))
-  //   // Check that for each family f, there are enough identities to produce an
-  //   // initial view with all components in the same control state.
-  //   for(f <- 0 until numFamilies){
-  //     val maxf = aShapes.map(_(f)).max // max cpts of f in any shape
-  //     // println(s"$f max number = $maxf")
-  //     // Test if v satisfies the condition
-  //     def ok(v: Views.View) = {
-  //       val vf = v.filter(_.family == f)
-  //       vf.length == maxf && vf.map(_.cs).distinct.length == 1
-  //     }
-  //     if(!iv.exists(ok)){
-  //       println("Not enough identities of family "+familyTypeNames(f)+
-  //                 " to produce initial view with all components in default state.");
-  //       sys.exit
-  //     }
-  //   } 
-  //   iv
-  // }
 
   /** Get the transitions of the component in state st. */
   def getTransComponent(st: State): ComponentTransitions =

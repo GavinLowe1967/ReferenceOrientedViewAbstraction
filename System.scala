@@ -466,7 +466,7 @@ class System(fname: String) {
       // If isOmitted, we suppress these transitions: we'll find them from a
       // different view including (f,id)
       if(theseTrans != null && !isOmitted){ 
-        val (oEs, oNs): (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = 
+        val (oEs, oNs): (Array[EventInt], Array[Array[State]]) = 
           theseTrans
         // Find id of relevant component; find compatible states of that
         // component.
@@ -518,7 +518,7 @@ class System(fname: String) {
     if(activePrincipal) for(of <- passiveFamilies; oi <- 0 until idSizes(of)){
       // Synchronisations between principal, other component (of,oi) and
       // server, from principal's state, and then from server's state.
-      val theseCptTrans: (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) =
+      val theseCptTrans: (Array[EventInt], Array[Array[State]]) =
         cptTrans2(of)(oi)
       val theseServerTrans
           : (ArrayBuffer[EventInt], ArrayBuffer[List[List[State]]]) =
@@ -556,7 +556,7 @@ class System(fname: String) {
                 val otherState = cv.components(otherIndex)
                 // Synchronisations between otherState and the principal
                 val otherNexts
-                    : (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) =
+                    : (Array[EventInt], Array[Array[State]]) =
                   components.getTransComponent(otherState).
                     transServerComponent(pf)(pi)
                 if(otherNexts != null){
@@ -638,7 +638,7 @@ class System(fname: String) {
   }
 
   /** Next states of st after performing e, synchronising with pid. */
-  def nextsAfter(st: State, e: EventInt, pid: ProcessIdentity): List[State] = 
+  def nextsAfter(st: State, e: EventInt, pid: ProcessIdentity): Array[State] = 
     components.getTransComponent(st).nexts(e, pid._1, pid._2)
 
   // private val consistentStatesCache = 
@@ -656,8 +656,8 @@ class System(fname: String) {
     * post-states of that component optionally after oe.  */
   def consistentStates(pre: Concretization, pid: ProcessIdentity, 
     e: EventInt, cv: ComponentView)
-      : ArrayBuffer[(State, List[State])] = {
-    val buffer = new ArrayBuffer[(State, List[State])]()
+      : ArrayBuffer[(State, Array[State])] = {
+    val buffer = new ArrayBuffer[(State, Array[State])]()
     val (f,id) = pid; val servers = pre.servers; require(cv.servers == servers)
     val preCpts = pre.components; val cpts = cv.components
     val serverRefs = servers.idsBitMap(f)(id) // id < servers.numParams(f) // do servers reference pid?
@@ -692,7 +692,7 @@ class System(fname: String) {
           val nexts = (
             if(e >= 0) 
               components.getTransComponent(renamedState).nexts(e, fp, idp)
-            else List(renamedState)
+            else Array(renamedState) // List(renamedState)
           )
           if(nexts.nonEmpty && !buffer.contains((renamedState, nexts))){
             if(checkCompatible(map, renamedState, cpts, i, preCpts, otherArgs))

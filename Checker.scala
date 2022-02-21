@@ -297,7 +297,7 @@ class Checker(system: SystemP.System){
     * generated.*/
   @inline private def extendTransitionTemplateBy(
     pre: Concretization, post: Concretization, e: EventInt, 
-    outsideSt: State, outsidePosts: List[State], cv: ComponentView) 
+    outsideSt: State, outsidePosts: Array[State], cv: ComponentView) 
   = {
     if(false && verbose) 
       println(s"extendTransitionTemplateBy($pre, $post, ${system.showEvent(e)},"+
@@ -310,7 +310,7 @@ class Checker(system: SystemP.System){
       val extendedPre = pre.extend(outsideSt)
       // Set debugging info
       extendedPre.setSecondaryView(cv, referencingViews) 
-      var op = outsidePosts
+      var op = outsidePosts.toList // IMPROVE
       while(op.nonEmpty){
         // Profiler.count("instantiateTT3")
         val postSt = op.head; op = op.tail
