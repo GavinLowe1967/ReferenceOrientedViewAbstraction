@@ -310,18 +310,16 @@ class Checker(system: SystemP.System){
       val extendedPre = pre.extend(outsideSt)
       // Set debugging info
       extendedPre.setSecondaryView(cv, referencingViews) 
-      var op = outsidePosts.toList // IMPROVE
-      while(op.nonEmpty){
+      // var op = outsidePosts.toList // IMPROVE;
+      var i = 0 
+      while(i < outsidePosts.size){
+        //while(op.nonEmpty){
         // Profiler.count("instantiateTT3")
-        val postSt = op.head; op = op.tail
+        // val postSt = op.head; op = op.tail
+        val postSt = outsidePosts(i); i += 1
         val extendedPost = post.extend(postSt)
-        // if(verbose && !transitions.contains((extendedPre, e, extendedPost)) &&
-        //   !newTransitions.contains((extendedPre, e, extendedPost)))
-        // println(s"Extended transition from template $extendedPre\n   -"+
-        //   system.showEvent(e)+s"-> $extendedPost")
         if(e == system.Error) throw new FoundErrorException
         // Store this transition, and calculate effect on other views.
-        // extendedPost.setPly(ply)
         addTransition(extendedPre, e, extendedPost)
       }
     }
@@ -515,7 +513,7 @@ class Checker(system: SystemP.System){
     traverse("extendability", extendability, maxPrint = 0); println
 
     if(true){
-      traverse("system.components", system.components, maxPrint = 2); println
+      //traverse("system.components", system.components, maxPrint = 2); println
       traverse("system", system, maxPrint = 1); println }
     else println("Omitting system\n") 
 

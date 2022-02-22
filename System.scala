@@ -70,8 +70,7 @@ class System(fname: String) {
   println(s"Active families: $activeFamilies; passive families: $passiveFamilies")
 
   /** Model of the replicated components. */
-  // Non-private for memory profiling
-  /*private*/ val components = new Components(
+  private val components = new Components(
     fdrSession, transMapBuilder, fdrTypeIds,
     familyNames, file.componentAlphabets.toArray, 
     file.componentRenames.toArray, actives)
