@@ -42,7 +42,7 @@ class MissingCommon(
   /** When any element of missingCandidates is satisfied, then this obligation
     * will be discharged.  Each MissingCandidates within the list is sorted
     * (wrt ComponentView.compare). */
-  private var missingCandidates = List[MissingCandidates]()
+  private[this] var missingCandidates = List[MissingCandidates]()
   /* We maintain the invariant that, if this is the first non-done MissingCommon
    * in a MissingInfo, then the first element of each list is either missing
    * from the current view set, or in the set of new views being considered on
@@ -58,7 +58,7 @@ class MissingCommon(
   // Log for debugging
 
   import MissingCommon.{MCEvent,AddMC,UpdateMC,SetDoneMC}
-  private var theLog = List[MCEvent]() 
+  //private var theLog = List[MCEvent]() 
 
   /** Logging for debugging.  Currently turned off. */
   def log(e: MCEvent) = {} // theLog ::= e
@@ -155,6 +155,7 @@ class MissingCommon(
     * sorted.  */
   private def add(mCand: MissingCandidates): Boolean = {
     assert(!done)
+    assert(mCand.forall(_.servers == servers)) // IMPROVE
     require(isSorted(mCand), mCand) // IMPROVE: quite expensive
     // Traverse missingCandidates.  Add to newMC any that is not a proper
     // superset of mCand.
@@ -191,7 +192,7 @@ class MissingCommon(
     s"MissingCommon($servers, ${StateArray.show(cpts1)},\n"+
       s"  ${StateArray.show(cpts2)}, $pid)\n"+
       s"  missingCandidates = \n    "+missingCandidates.mkString("\n    ")+
-      s"\ndone = $done; theLog = \n"+theLog.reverse.mkString("\n")
+      s"\ndone = $done; " // "theLog = \n"+theLog.reverse.mkString("\n")
 
   /* Note: we avoid creating duplicates of MissingCommon objects, so we can use
    * object equality. */

@@ -365,4 +365,14 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   def report = effectOnStore.report
 
+  /** Perform a memory profile of this. */
+  def memoryProfile = {
+    import ox.gavin.profiling.MemoryProfiler.traverse
+    effectOnStore.report; println
+    effectOnStore.memoryProfile
+    traverse("effectOn", this, maxPrint = 1)
+
+
+  }
+
 }

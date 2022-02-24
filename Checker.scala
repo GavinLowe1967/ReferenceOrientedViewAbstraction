@@ -514,10 +514,11 @@ class Checker(system: SystemP.System){
 
     if(true){
       //traverse("system.components", system.components, maxPrint = 2); println
-      traverse("system", system, maxPrint = 1); println }
+      traverse("system", system, maxPrint = 0); println }
     else println("Omitting system\n") 
 
-    traverse("effectOn", effectOn, maxPrint = 5, maxPrintArray = 8); println
+    //traverse("effectOn", effectOn, maxPrint = 5, maxPrintArray = 8); println
+    effectOn.memoryProfile; println
 
     traverse("checker", this, maxPrint = 0); println
   }

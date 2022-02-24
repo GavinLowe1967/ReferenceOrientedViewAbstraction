@@ -31,6 +31,8 @@ trait EffectOnStore{
   // def size: (Int, Int)
 
   def report: Unit
+
+  def memoryProfile: Unit
 }
 
 // =======================================================
@@ -295,8 +297,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     println("  MissingInfos missingViews size = "+printLong(cStoreMVSize))
     println("  MissingInfos missingCommon size = "+printLong(cStoreMCSize))
 
-    println("mcNotDoneStore: size = "+
-      mcNotDoneStore.size)
+    println("mcNotDoneStore: size = "+mcNotDoneStore.size)
     val (mcmStoreEls, mcmStoreMVSize, mcmStoreMCSize) = 
       count(mcNotDoneStore.valuesIterator)
     println("  # MissingInfos = "+printLong(mcmStoreEls))
@@ -309,6 +310,30 @@ class SimpleEffectOnStore extends EffectOnStore{
     println("  MissingInfos missingViews size = "+printLong(storeMVSize))
     println("  MissingInfos missingCommon size = "+printLong(storeMCSize))
 
+  }
+
+  /** Perform a memory profile of this. */
+  def memoryProfile = {
+    import ox.gavin.profiling.MemoryProfiler.traverse
+    // profile Max MissingCommons
+    println("mcNotDoneStore: size = "+mcNotDoneStore.size)
+    var iter = mcNotDoneStore.valuesIterator; var count = 0; val Max = 5
+    while(iter.hasNext && count < Max){
+      val mis: MissingInfoSet = iter.next; val miIter = mis.iterator
+      //println(mis.size)
+      while(miIter.hasNext && count < Max){
+        val mi: MissingInfo = miIter.next;
+        for(mc <- mi.missingCommon; if mc != null){
+          traverse("missingCommon", mc, maxPrint = 1); println; count += 1
+        }
+        traverse("missingInfo", mi, maxPrint = 1); println
+      }
+    }
+
+    traverse("mcNotDoneStore", mcNotDoneStore, maxPrint = 1); println
+    traverse("mcDoneStore", mcDoneStore, maxPrint = 1); println
+    traverse("candidateForMCStore", candidateForMCStore, maxPrint = 1); println
+    traverse("effectOnStore", this, maxPrint = 1); println
   }
 
 }
