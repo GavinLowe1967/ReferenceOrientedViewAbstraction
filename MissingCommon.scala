@@ -26,8 +26,6 @@ class MissingCommon(
 
   private val princ1 = cpts1(0)
 
-  // def key = (servers, princ1)
-
   require(princ1.processIdentities.contains(pid) && 
     cpts2(0).processIdentities.contains(pid))
 
@@ -39,10 +37,20 @@ class MissingCommon(
     * ComponentView.compare).  */
   import MissingCommon.MissingCandidates // List[ComponentView]
 
+  /** Each value cands of type MissingCandidates represents that if all
+    * (servers,cpts) is added to the ViewSet for each cpts in cands, then this
+    * obligation will be discharged.  Each corresponds to a particular
+    * component state c for which condition (1) is satisfied; cands contains
+    * those components corresponding to conditions (2) and (3).  The list is
+    * sorted (wrt ComponentView.compare).  */
+// CHECK COMMENT
+
+    import MissingCommon.MissingComponents // = List[Array[State]]
+
   /** When any element of missingCandidates is satisfied, then this obligation
     * will be discharged.  Each MissingCandidates within the list is sorted
     * (wrt ComponentView.compare). */
-  private[this] var missingCandidates = List[MissingCandidates]()
+  private[this] var missingCandidates = List[MissingComponents]()
   /* We maintain the invariant that, if this is the first non-done MissingCommon
    * in a MissingInfo, then the first element of each list is either missing
    * from the current view set, or in the set of new views being considered on
@@ -72,20 +80,24 @@ class MissingCommon(
   /** The heads of the missing candidates.  The corresponding MissingInfo should
     * be registered against these in
     * EffectOnStore.mcMissingCandidatesStore. */
-  def missingHeads = missingCandidates.map(_.head)
+  def missingHeads: List[Array[State]] =  missingCandidates.map(_.head)
+    // missingCandidates.map(_.head.components)
 
   import MissingCommon.ViewBuffer // ArrayBuffer[ComponentView]
 
   /** Remove the maximum prefix of mc consisting of elements of views.  If any
     * is empty, record that this is done; otherwise add the next view to
     * toRegister. */
-  @inline private def removeViews(mc: MissingCandidates, views: ViewSet,
+  @inline private def removeViews(mc: MissingComponents, views: ViewSet,
     toRegister: ViewBuffer)
-      : MissingCandidates = {
+      : MissingComponents = {
     var mc1 = mc
-    while(mc1.nonEmpty && views.contains(mc1.head)) mc1 = mc1.tail
+// IMPROVE
+    while(mc1.nonEmpty && views.contains(new ComponentView(servers, mc1.head)))
+      mc1 = mc1.tail
     if(mc1.isEmpty) setDone    // This is now satisfied
-    else toRegister += mc1.head
+// IMPROVE
+    else toRegister += new ComponentView(servers, mc1.head)
     log(UpdateMC(mc, mc1))
     mc1
   }
@@ -154,19 +166,21 @@ class MissingCommon(
     * superset of mCand.  Return true if successful.  Pre: mCand is
     * sorted.  */
   private def add(mCand: MissingCandidates): Boolean = {
+// IMPROVE
+    val mCpts = mCand.map(_.components) 
     assert(!done)
     assert(mCand.forall(_.servers == servers)) // IMPROVE
     require(isSorted(mCand), mCand) // IMPROVE: quite expensive
     // Traverse missingCandidates.  Add to newMC any that is not a proper
     // superset of mCand.
-    var newMC = List[MissingCandidates]()
+    var newMC = List[MissingComponents]()
     var found = false // true if missingCandidates includes a subset of mCand
     for(mCand1 <- missingCandidates){
-      val cmp = MissingCommon.compare(mCand1, mCand)
+      val cmp = MissingCommon.compare(mCand1, mCpts)
       if(cmp != Sup) newMC::= mCand1 // mCand1 can't be replaced by mCand
       found ||= cmp == Sub || cmp == Eq // mCand can't be replaced by mCand1
     }
-    if(!found){ newMC ::= mCand; log(AddMC(mCand)) } 
+    if(!found){ newMC ::= mCpts; log(AddMC(mCand)) } 
     assert(newMC.nonEmpty)
     missingCandidates = newMC
     !found
@@ -183,7 +197,7 @@ class MissingCommon(
     if(done) assert(missingCandidates.isEmpty, 
       s"missingCandidates = \n"+missingCandidates.mkString("\n"))
     else for(mcs <- missingCandidates){
-      val v = mcs.head
+      val v = new ComponentView(servers, mcs.head)
       assert(!views.contains(v), s"\n$this\n  still contains $v")
     }
   }
@@ -385,7 +399,12 @@ object MissingCommon{
       // re-register the MissingInfo object, because of sharing.  The
       // following might be a bit pessimistic.  IMPROVE: store the relevant
       // values from one instance to reuse in the next.
-      for(cv <- mc.missingHeads) if(!views.contains(cv)) vb += cv
+      //for(cv <- mc.missingHeads) if(!views.contains(cv)) vb += cv
+      for(cpts <- mc.missingHeads){
+// IMPROVE
+        val cv = new ComponentView(mc.servers, cpts)
+        if(!views.contains(cv)) vb += cv
+      }
       false
     }
   }
@@ -438,17 +457,22 @@ object MissingCommon{
     * ComponentView.compare).  */
   type MissingCandidates = List[ComponentView]
 
+  
+
+  type MissingComponents = List[Array[State]]
+
+
   /** Compare mc1 and mc2.  Return Eq is equal, Sub if mc1 is proper subset, Sup
     * if mc1 is a proper superset, and Inc if they are incomparable.  Pre:
     * both are sorted.  */
   @inline private 
-  def compare(mc1: MissingCandidates, mc2: MissingCandidates): Int = {
+  def compare(mc1: MissingComponents, mc2: MissingComponents): Int = {
     var c1 = mc1; var c2 = mc2; var sub = true; var sup = true
     // Inv sub is true if elements of mc1 seen so far are all in mc2; sup is
     // true if elements of mc2 seen so far are all in mc1.  Still need to
     // compare c1 and c2.
     while(c1.nonEmpty && c2.nonEmpty && (sub || sup)){
-      val comp = c1.head.compare(c2.head)
+      val comp = StateArray.compare(c1.head, c2.head) //c1.head.compare(c2.head)
       if(comp < 0){ sub = false; c1 = c1.tail } // c1.head not in mc2
       else if(comp == 0){ c1 = c1.tail; c2 = c2.tail }
       else{ sup = false; c2 = c2.tail } // c2.head is not in mc1
@@ -460,7 +484,7 @@ object MissingCommon{
   // Events for log 
   trait MCEvent
   case class AddMC(mc: MissingCandidates) extends MCEvent 
-  case class UpdateMC(mc: MissingCandidates, mc1: MissingCandidates)
+  case class UpdateMC(mc: MissingComponents, mc1: MissingComponents)
       extends MCEvent
   case object SetDoneMC extends MCEvent
 }

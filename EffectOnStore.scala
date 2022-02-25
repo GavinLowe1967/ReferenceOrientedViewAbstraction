@@ -122,9 +122,13 @@ class SimpleEffectOnStore extends EffectOnStore{
       addToStore(mcDoneStore, missingInfo.missingHead, missingInfo)
     }
     else{
+      val mc0 = mcArray(0)
       // Add entries to mcMissingCandidates against the first MissingCommon.
       // Note: mcArray may be in a different order from missingCommon.
-      for(cv <- mcArray(0).missingHeads){ 
+      //for(cv <- mc0.missingHeads){ 
+      for(cpts <- mc0.missingHeads){ 
+// IMPROVE
+        val cv = new ComponentView(mc0.servers, cpts)
         missingInfo.log(McNotDoneStore(cv))
         addToStore(mcNotDoneStore, cv, missingInfo)
       }
