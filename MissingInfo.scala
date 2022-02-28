@@ -360,7 +360,7 @@ object MissingInfo{
   // Entries in the log of a MissingInfo.  Used for debugging
   trait LogEntry
   case class McDoneStore(cv: ComponentView) extends LogEntry
-  case class McNotDoneStore(cv: ComponentView) extends LogEntry
+  case class McNotDoneStore(cv: ReducedComponentView) extends LogEntry
   case class CandidateForMC(servers: ServerStates, princ: State) extends LogEntry
   case object MarkNewViewFound extends LogEntry
   case class AdvanceMC(remaining: Int) extends LogEntry

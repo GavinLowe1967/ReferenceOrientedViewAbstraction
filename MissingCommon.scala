@@ -3,6 +3,7 @@ package ViewAbstraction
 import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
 import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap}
+import MissingCommon.Cpts
 
 /** The representation of the obligation to find a component state c with
   * identity pid such that (1) servers || cpts1(0) || c is in the ViewSet; (2)
@@ -11,7 +12,7 @@ import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap}
   * ViewSet (modulo renaming).  This corresponds to condition (c) in the
   * definition of induced transitions with restricted views. */
 class MissingCommon(
-    val servers: ServerStates, val cpts1: Array[State], val cpts2: Array[State],
+    val servers: ServerStates, val cpts1: Cpts, val cpts2: Cpts,
     val pid: ProcessIdentity){
   /* Overview of main functions.
    * 
@@ -72,7 +73,7 @@ class MissingCommon(
     * EffectOnStore.mcMissingCandidatesStore. */
   def missingHeads: List[Array[State]] =  missingCandidates.map(_.head)
 
-  import MissingCommon.ViewBuffer // ArrayBuffer[ComponentView]
+  import MissingCommon.ViewBuffer // ArrayBuffer[Array[State]]
 
   /** Remove the maximum prefix of mc consisting of elements of views.  If any
     * is empty, record that this is done; otherwise add the next view to
@@ -84,7 +85,7 @@ class MissingCommon(
     while(mc1.nonEmpty && views.contains(servers, mc1.head))  mc1 = mc1.tail
     if(mc1.isEmpty) setDone    // This is now satisfied
 // IMPROVE
-    else toRegister += new ComponentView(servers, mc1.head)
+    else toRegister += mc1.head // new ComponentView(servers, mc1.head)
     log(UpdateMC(mc, mc1))
     mc1
   }
@@ -93,10 +94,10 @@ class MissingCommon(
     * the front of each.  If any is now empty, then mark this as satisfied.
     * Return views against which this should now be registered, or null if
     * done. */
-  def updateMissingViews(views: ViewSet): ArrayBuffer[ComponentView] = {
+  def updateMissingViews(views: ViewSet): ViewBuffer = {
     if(done){ assert(missingCandidates.isEmpty);  null } 
     else{
-      val toRegister = new ArrayBuffer[ComponentView]
+      val toRegister = new ViewBuffer // ArrayBuffer[Cpts]
       assert(missingCandidates.nonEmpty)
       val newMC = missingCandidates.map(mc => removeViews(mc, views, toRegister))
       if(done){ assert(missingCandidates.isEmpty);  null }
@@ -270,9 +271,12 @@ object MissingCommon{
    * makeMissingCommon.
    */
 
+  /** The states of some components. */
+  type Cpts = Array[State]
+
   /** A buffer for storing Views, against which a MissingInfo should be
     * registered in the EffectOnStore. */
-  type ViewBuffer = ArrayBuffer[ComponentView]
+  type ViewBuffer = ArrayBuffer/*[ComponentView]*/[Cpts]
 
   /** All the MissingCommon we have created.  */
   private var allMCs = 
@@ -282,8 +286,7 @@ object MissingCommon{
     * retrieving a previous such object, or creating a new one.  The
     * MissingCommon is paired with a Boolean that indicates if it is new. */
   @inline private def getOrInit(
-    servers: ServerStates, cpts1: Array[State], cpts2: Array[State],
-    pid: ProcessIdentity)
+    servers: ServerStates, cpts1: Cpts, cpts2: Cpts, pid: ProcessIdentity)
       : (MissingCommon, Boolean) = { 
     val key = (servers, cpts1.toList++cpts2.toList, pid)
     allMCs.get(key) match{
@@ -370,7 +373,7 @@ object MissingCommon{
             // might be shared between MissingInfos.
             mc.add(missing)
 // IMPROVE
-            vb += new ComponentView(mc.servers, missing.head)
+            vb += missing.head // new ComponentView(mc.servers, missing.head)
           }
         }
       } // end of while loop
@@ -383,7 +386,7 @@ object MissingCommon{
       // values from one instance to reuse in the next.
       for(cpts <- mc.missingHeads){
         if(!views.contains(mc.servers, cpts))
-          vb +=  new ComponentView(mc.servers, cpts)
+          vb += cpts //   new ComponentView(mc.servers, cpts)
 // IMPROVE
       }
       false

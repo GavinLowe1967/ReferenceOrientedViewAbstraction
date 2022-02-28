@@ -74,12 +74,49 @@ abstract class View{
 
 // =======================================================
 
+/** A minimal ComponentView.  Used where it's useful to use less memory. */
+class ReducedComponentView(
+  val servers: ServerStates, val components: Array[State])
+    extends View{
+
+  override def equals(that: Any) = {
+    if(that != null){
+      val cv = that.asInstanceOf[ReducedComponentView]
+      servers == cv.servers && sameCpts(cv.components)
+    }
+    else false
+  }
+
+  @inline private def sameCpts(cpts: Array[State]) = {
+    val len = components.length
+    if(cpts.length == len){
+      var i = 0
+      while(i < len && components(i) == cpts(i)) i += 1
+      i == len
+    }
+    else false
+  }
+
+  /** Create hash code. */
+  @inline private def mkHashCode = {
+    var h = servers.hashCode*71 
+    var i = 0; var n = components.length
+    while(i < n){ h = h*71+components(i).hashCode; i += 1 }    
+    h 
+  }
+
+  override val hashCode = mkHashCode
+}
+
+// =======================================================
+
+
 /** A component-centric view.
   * @param servers the states of the servers
   * @param components the components, with the principal component state first.
   */
-class ComponentView(val servers: ServerStates, val components: Array[State])
-    extends View{
+class ComponentView(servers: ServerStates, components: Array[State])
+    extends ReducedComponentView(servers, components){
 
   def this(servers: ServerStates, principal: State, others: Array[State]){
     this(servers, principal +: others)
@@ -347,34 +384,6 @@ class ComponentView(val servers: ServerStates, val components: Array[State])
   def toString0 = 
     servers.toString0+" || "+
       components.map(_.toString0).mkString("[", " || ", "]")
-
-  override def equals(that: Any) = {
-    if(that != null){
-      val cv = that.asInstanceOf[ComponentView]
-      servers == cv.servers && sameCpts(cv.components)
-    }
-    else false
-  }
-
-  @inline private def sameCpts(cpts: Array[State]) = {
-    val len = components.length
-    if(cpts.length == len){
-      var i = 0
-      while(i < len && components(i) == cpts(i)) i += 1
-      i == len
-    }
-    else false
-  }
-
-  /** Create hash code. */
-  @inline private def mkHashCode = {
-    var h = servers.hashCode*71 
-    var i = 0; var n = components.length
-    while(i < n){ h = h*71+components(i).hashCode; i += 1 }    
-    h 
-  }
-
-  override val hashCode = mkHashCode
 
   /** Ordering on ComponentViews.  Return a value x s.t.: x < 0 if this < that;
     * x == 0 when this == that; x > 0 when this > that. */
