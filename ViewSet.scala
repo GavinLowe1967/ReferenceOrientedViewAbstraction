@@ -8,7 +8,10 @@ trait ViewSet{
   def add(sv: ComponentView) : Boolean
 
   /** Does this contain sv? */
-  def contains(sv: ComponentView): Boolean
+  def contains(sv: ComponentView): Boolean 
+
+  /** Does this contain a view corresponding to servers and cpts? */
+  def contains(servers: ServerStates, cpts: Array[State]): Boolean
 
   /** Get the view in this corresponding to v.  Pre: there is one. */
   def get(v: ComponentView): ComponentView 
@@ -46,7 +49,7 @@ object ViewSet{
   def apply(): ViewSet = new ServerPrincipalBasedViewSet(16)
   // new ServerBasedViewSet(16) // new CanonicalViewSet
 
-  def apply(sizeEstimate: Int): ViewSet = new ServerBasedViewSet(sizeEstimate)
+  //def apply(sizeEstimate: Int): ViewSet = new ServerBasedViewSet(sizeEstimate)
     // new CanonicalViewSet(sizeEstimate)
 }
 
@@ -187,6 +190,7 @@ class BasicHashMap[K: scala.reflect.ClassTag, D: scala.reflect.ClassTag]
 
 import scala.collection.mutable.Set
 
+/*
 /** An implementation of a ViewSet where views are stored by server. */
 class ServerBasedViewSet(initSize: Int = 16) extends ViewSet{
   /** The BasicHashMap we use. */
@@ -250,6 +254,7 @@ class ServerBasedViewSet(initSize: Int = 16) extends ViewSet{
 
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 }
+ */
 
 // =======================================================
 
@@ -272,6 +277,13 @@ class PrincipalBasedViewSet(initSize: Int = 4){
   def contains(sv: ComponentView): Boolean = {
     val set = underlying.get(sv.principal)
     set != null && set.contains(sv)
+  }
+
+  /** Does this contain a view corresponding to cpts? */
+  def contains(cpts: Array[State]): Boolean = {
+    // IMPROVE: using find is inefficient
+    val set = underlying.get(cpts(0))
+    set != null && set.find(_.components.sameElements(cpts)).nonEmpty
   }
 
   /** Get the view in this corresponding to v.  Pre: there is one. */
@@ -365,6 +377,12 @@ class ServerPrincipalBasedViewSet(initSize: Int = 16) extends ViewSet {
   def contains(sv: ComponentView): Boolean = {
     val set = underlying.get(sv.servers)
     set != null && set.contains(sv)
+  }
+
+  /** Does this contain a view corresponding to servers and cpts? */
+  def contains(servers: ServerStates, cpts: Array[State]): Boolean = {
+    val set = underlying.get(servers)
+    set != null && set.contains(cpts)
   }
 
   /** Get the view in this corresponding to v.  Pre: there is one. */

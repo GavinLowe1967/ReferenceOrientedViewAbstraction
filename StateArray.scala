@@ -329,7 +329,7 @@ object StateArray{
   }
 
   /** Comparison function. */
-  def compare(cpts1: Array[State], cpts2: Array[State]) = {
+  @inline def compare(cpts1: Array[State], cpts2: Array[State]): Int = {
     val len = cpts1.length; val lenComp = len - cpts2.length
     if(lenComp != 0) lenComp
     else{
@@ -338,4 +338,8 @@ object StateArray{
       if(i == len) 0 else cpts1(i).compare(cpts2(i))
     }
   }
+
+  /** Is cpts1 < cpts2 according to compare? */
+  def lessThan(cpts1: Array[State], cpts2: Array[State]): Boolean = 
+    compare(cpts1, cpts2) < 0
 }

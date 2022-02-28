@@ -29,27 +29,17 @@ class MissingCommon(
   require(princ1.processIdentities.contains(pid) && 
     cpts2(0).processIdentities.contains(pid))
 
-  /** Each value cands of type MissingCandidates represents that if all the
-    * elements of cands are added to the ViewSet, then this obligation will be
-    * discharged.  Each corresponds to a particular component state c for
-    * which condition (1) is satisfied; cands contains those views
-    * corresponding to conditions (2) and (3).  The list is sorted (wrt
-    * ComponentView.compare).  */
-  import MissingCommon.MissingCandidates // List[ComponentView]
-
-  /** Each value cands of type MissingCandidates represents that if all
+  /** Each value cands of type MissingComponents represents that if
     * (servers,cpts) is added to the ViewSet for each cpts in cands, then this
     * obligation will be discharged.  Each corresponds to a particular
     * component state c for which condition (1) is satisfied; cands contains
     * those components corresponding to conditions (2) and (3).  The list is
-    * sorted (wrt ComponentView.compare).  */
-// CHECK COMMENT
-
-    import MissingCommon.MissingComponents // = List[Array[State]]
+    * sorted (wrt StateArray.lessThan).  */
+  import MissingCommon.MissingComponents // = List[Array[State]]
 
   /** When any element of missingCandidates is satisfied, then this obligation
-    * will be discharged.  Each MissingCandidates within the list is sorted
-    * (wrt ComponentView.compare). */
+    * will be discharged.  Each MissingComponents within the list is sorted
+    * (wrt StateArray.lessThan). */
   private[this] var missingCandidates = List[MissingComponents]()
   /* We maintain the invariant that, if this is the first non-done MissingCommon
    * in a MissingInfo, then the first element of each list is either missing
@@ -81,27 +71,23 @@ class MissingCommon(
     * be registered against these in
     * EffectOnStore.mcMissingCandidatesStore. */
   def missingHeads: List[Array[State]] =  missingCandidates.map(_.head)
-    // missingCandidates.map(_.head.components)
 
   import MissingCommon.ViewBuffer // ArrayBuffer[ComponentView]
 
   /** Remove the maximum prefix of mc consisting of elements of views.  If any
     * is empty, record that this is done; otherwise add the next view to
     * toRegister. */
-  @inline private def removeViews(mc: MissingComponents, views: ViewSet,
-    toRegister: ViewBuffer)
+  @inline private 
+  def removeViews(mc: MissingComponents, views: ViewSet, toRegister: ViewBuffer)
       : MissingComponents = {
     var mc1 = mc
-// IMPROVE
-    while(mc1.nonEmpty && views.contains(new ComponentView(servers, mc1.head)))
-      mc1 = mc1.tail
+    while(mc1.nonEmpty && views.contains(servers, mc1.head))  mc1 = mc1.tail
     if(mc1.isEmpty) setDone    // This is now satisfied
 // IMPROVE
     else toRegister += new ComponentView(servers, mc1.head)
     log(UpdateMC(mc, mc1))
     mc1
   }
-
 
   /** Update missingCandidates based on views.  Remove elements of views from
     * the front of each.  If any is now empty, then mark this as satisfied.
@@ -143,7 +129,6 @@ class MissingCommon(
   /** States for which MissingCommon.updateMissingCandidates has been executed
     * on this. */
   private val doneMissingCandidates = new HashSet[State]
-    // new HashMap[State,List[State]]
 
   /** Called by MissingCommon.updateMissingCandidates when updating this with
     * st.  Return true if this is the first such instance for st. */
@@ -151,45 +136,42 @@ class MissingCommon(
 
   /** States for which the loop of MissingCommon.updateMissingCandidates has
     * been executed, i.e. states instantiating c there. */
-  private val doneMissingCandidatesRenamed: HashSet[State] = null
-  // new HashSet[State]  IMPROVE: not used at present
+  // private val doneMissingCandidatesRenamed: HashSet[State] = null
+  //  IMPROVE: not used at present
 
   /** Called by MissingCommon.updateMissingCandidates when updating this with
     * st.  Return true if this is the first such instance for st instantiating
-    * c. */
-  private def isNewUMCRenamedState(st: State): Boolean = 
-    doneMissingCandidatesRenamed.add(st)
+    * c.  Not currently used. */
+  private def isNewUMCRenamedState(st: State): Boolean = ???
+  // doneMissingCandidatesRenamed.add(st)
 
   import MissingCommon.{Eq,Sub,Sup,Inc}
 
   /** Add mCand to missingCandidates if no subset is there already; remove any
     * superset of mCand.  Return true if successful.  Pre: mCand is
     * sorted.  */
-  private def add(mCand: MissingCandidates): Boolean = {
-// IMPROVE
-    val mCpts = mCand.map(_.components) 
+  private def add(mCpts: MissingComponents): Boolean = {
     assert(!done)
-    assert(mCand.forall(_.servers == servers)) // IMPROVE
-    require(isSorted(mCand), mCand) // IMPROVE: quite expensive
+    require(isSorted(mCpts), mCpts.map(StateArray.show)) // IMPROVE: quite expensive
     // Traverse missingCandidates.  Add to newMC any that is not a proper
-    // superset of mCand.
+    // superset of mCpts.
     var newMC = List[MissingComponents]()
-    var found = false // true if missingCandidates includes a subset of mCand
-    for(mCand1 <- missingCandidates){
-      val cmp = MissingCommon.compare(mCand1, mCpts)
-      if(cmp != Sup) newMC::= mCand1 // mCand1 can't be replaced by mCand
-      found ||= cmp == Sub || cmp == Eq // mCand can't be replaced by mCand1
+    var found = false // true if missingCandidates includes a subset of mCpts
+    for(mCpts1 <- missingCandidates){
+      val cmp = MissingCommon.compare(mCpts1, mCpts)
+      if(cmp != Sup) newMC::= mCpts1 // mCpts1 can't be replaced by mCpts
+      found ||= cmp == Sub || cmp == Eq // mCpts can't be replaced by mCpts1
     }
-    if(!found){ newMC ::= mCpts; log(AddMC(mCand)) } 
+    if(!found){ newMC ::= mCpts; log(AddMC(mCpts)) } 
     assert(newMC.nonEmpty)
     missingCandidates = newMC
     !found
   }
 
   /** Is mCand sorted, without repetitions. */
-  private def isSorted(mCand: MissingCandidates): Boolean = 
-    mCand.length < 2 || 
-      mCand.head.compare(mCand.tail.head) < 0 && isSorted(mCand.tail)
+  private def isSorted(mCpts: MissingComponents): Boolean = 
+    mCpts.length < 2 || 
+      StateArray.compare(mCpts.head, mCpts.tail.head) < 0 && isSorted(mCpts.tail)
 
   /** Sanity check that no head element of missingCandidates is in views. */
   def sanityCheck(views: ViewSet) = {
@@ -223,9 +205,7 @@ class MissingCommon(
       mc.cpts2.sameElements(cpts2) && mc.pid == pid
     case null => false
   }
- */
 
-/*
   /** Hash code, based on the same principle as equality. */
   override val hashCode = {
     @inline def f(x:Int, y: Int) = x*97+y
@@ -356,7 +336,7 @@ object MissingCommon{
     else if(mc.done) null else mc 
   }
 
-  /** Update mc.missingCandidates to include lists of missing views
+  /** Update mc.missingCandidates to include lists of missing components
     * corresponding to instantiating c with a renaming of cpt1.  Add to vb the
     * views that mc needs to be registered against in the EffectOnStore,
     * namely mc.missingHeads.
@@ -388,7 +368,9 @@ object MissingCommon{
             // Note we have to register the corresponding MissingInfo against
             // missing.head, whether or not the add succeeded, because this
             // might be shared between MissingInfos.
-            mc.add(missing); vb += missing.head
+            mc.add(missing)
+// IMPROVE
+            vb += new ComponentView(mc.servers, missing.head)
           }
         }
       } // end of while loop
@@ -399,31 +381,32 @@ object MissingCommon{
       // re-register the MissingInfo object, because of sharing.  The
       // following might be a bit pessimistic.  IMPROVE: store the relevant
       // values from one instance to reuse in the next.
-      //for(cv <- mc.missingHeads) if(!views.contains(cv)) vb += cv
       for(cpts <- mc.missingHeads){
+        if(!views.contains(mc.servers, cpts))
+          vb +=  new ComponentView(mc.servers, cpts)
 // IMPROVE
-        val cv = new ComponentView(mc.servers, cpts)
-        if(!views.contains(cv)) vb += cv
       }
       false
     }
   }
 
-  /** Find the missing Views that are necessary to complete mc for a particular
-    * candidate state c.  Return a list containing each of the following that
-    * is not currently in views: (1) mc.servers || mc.cpts2(0) || c; and (2)
-    * if c has a reference to a secondary component c2 of mc.cpts1 or
-    * mc.cpts2, then mc.servers || c || c2 (renamed).  The list is sorted (wrt
-    * ComponentView.compare).  */
+  /** Find the missing components that (with servers) are necessary to complete
+    * mc for a particular candidate state c.  Return a list containing each of
+    * the following that is not currently in views: (1) mc.cpts2(0) || c; and
+    * (2) if c has a reference to a secondary component c2 of mc.cpts1 or
+    * mc.cpts2, then c || c2 (renamed).  The list is sorted (wrt
+    * StateArray.lessThan).  */
   @inline private 
   def getMissingCandidates(mc: MissingCommon, c: State, views: ViewSet)
-      : List[ComponentView] = {
-    var missing = List[ComponentView]() // missing necessary views
+      : MissingComponents = {
+    var missing = List[Array[State]]() // missing necessary views
     val servers = mc.servers; val cpts1 = mc.cpts1; val cpts2 = mc.cpts2
-    // Add servers || cptsx, if not in views
+    // Add cptsx, if servers || cptsx is not in views
     @inline def maybeAdd(cptsx: Array[State]) = { 
-      val cvx = Remapper.mkComponentView(servers, cptsx)
-      if(!views.contains(cvx) && !missing.contains(cvx)) missing ::= cvx
+      val renamedCpts = Remapper.remapComponents(servers, cptsx)
+      if(!views.contains(servers, renamedCpts) && 
+          !missing.exists(_.sameElements(renamedCpts)))
+        missing ::= renamedCpts
       // IMPROVE: insert so as to maintain sorted order. 
     }
 
@@ -442,25 +425,21 @@ object MissingCommon{
       }
       j += 1
     }
-    missing.sortWith(ComponentView.compare _)
+    // missing.sortWith(ComponentView.compare _)
+    missing.sortWith(StateArray.lessThan)
   }
 
   // Possible returns from compare
   private val Eq = 0; private val Sub = 1; 
   private val Sup = 2; private val Inc = 4
 
-  /** Each value cands of type MissingCandidates represents that if all the
-    * elements of cands are added to the ViewSet, then this obligation will be
-    * discharged.  Each corresponds to a particular component state c for
-    * which condition (1) is satisfied; cands contains those views
-    * corresponding to conditions (2) and (3).  The list is sorted (wrt
-    * ComponentView.compare).  */
-  type MissingCandidates = List[ComponentView]
-
-  
-
+  /** Each value cands of type MissingComponents represents that if
+    * (servers,cpts) is added to the ViewSet for each cpts in cands, then this
+    * obligation will be discharged.  Each corresponds to a particular
+    * component state c for which condition (1) is satisfied; cands contains
+    * those components corresponding to conditions (2) and (3).  The list is
+    * sorted (wrt StateArray.lessThan).  */
   type MissingComponents = List[Array[State]]
-
 
   /** Compare mc1 and mc2.  Return Eq is equal, Sub if mc1 is proper subset, Sup
     * if mc1 is a proper superset, and Inc if they are incomparable.  Pre:
@@ -483,7 +462,7 @@ object MissingCommon{
 
   // Events for log 
   trait MCEvent
-  case class AddMC(mc: MissingCandidates) extends MCEvent 
+  case class AddMC(mc: MissingComponents) extends MCEvent 
   case class UpdateMC(mc: MissingComponents, mc1: MissingComponents)
       extends MCEvent
   case object SetDoneMC extends MCEvent
