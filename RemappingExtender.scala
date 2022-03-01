@@ -65,43 +65,51 @@ class RemappingExtender(
     val result = new ArrayBuffer[Linkage]
 
     // Iterate through rdMap
-    for(t <- 0 until numTypes; id <- 0 until rdMap(t).length){
-      val id1 = rdMap(t)(id)
-      if(id1 >= 0){
-        // Set idJ to j such that id1 is the identity of preCpts(j), or -1 if
-        // no such; set refJs to all j such that id1 is a reference of
-        // preCpts(j); and in each case preCpts(j) is not a unified component.
-        var idJ = -1; var refJs = List[Int](); var j = 0
-        while(j < preCpts.length){
-          if(!preUnifs(j)){
-            if(preCpts(j).hasPID(t,id1)){ assert(idJ < 0); idJ = j }
-            else if(preCpts(j).hasRef(t,id1)) refJs ::= j
+    var t = 0
+    while(t < numTypes){
+    // for(t <- 0 until numTypes; id <- 0 until rdMap(t).length){
+      var id = 0; val len = rdMap(t).length
+      while(id < len){
+      // for(id <- 0 until rdMap(t).length){
+        val id1 = rdMap(t)(id)
+        if(id1 >= 0){
+          // Set idJ to j such that id1 is the identity of preCpts(j), or -1 if
+          // no such; set refJs to all j such that id1 is a reference of
+          // preCpts(j); and in each case preCpts(j) is not a unified component.
+          var idJ = -1; var refJs = List[Int](); var j = 0
+          while(j < preCpts.length){
+            if(!preUnifs(j)){
+              if(preCpts(j).hasPID(t,id1)){ assert(idJ < 0); idJ = j }
+              else if(preCpts(j).hasRef(t,id1)) refJs ::= j
+            }
+            j += 1
           }
-          j += 1
-        }
-        if(idJ >= 0){  
-          // Find all i such that id is a reference of cpts(i), not unified
-          var i = 0
-          while(i < cpts.length){
-            if(!cvUnifs(i) && cpts(i).hasRef(t,id) && !contains(doneB,(i,idJ)))
-              result += ((i, idJ))
-            i += 1
+          if(idJ >= 0){
+            // Find all i such that id is a reference of cpts(i), not unified
+            var i = 0
+            while(i < cpts.length){
+              if(!cvUnifs(i) && cpts(i).hasRef(t,id) && !contains(doneB,(i,idJ)))
+                result += ((i, idJ))
+              i += 1
+            }
           }
-        }
-        if(refJs.nonEmpty){
-          // Find i with identity id, if any; note: at most one such
-          var i = 0
-          while(i < cpts.length && !cpts(i).hasPID(t,id)) i += 1
-          // If not unified, we have a linkage i->j for j in refJs
-          if(i < cpts.length && !cvUnifs(i)){
-            while(refJs.nonEmpty){
-              val j = refJs.head; refJs = refJs.tail
-              if(!contains(doneB,(i,j))) result += ((i, j))
+          if(refJs.nonEmpty){
+            // Find i with identity id, if any; note: at most one such
+            var i = 0
+            while(i < cpts.length && !cpts(i).hasPID(t,id)) i += 1
+            // If not unified, we have a linkage i->j for j in refJs
+            if(i < cpts.length && !cvUnifs(i)){
+              while(refJs.nonEmpty){
+                val j = refJs.head; refJs = refJs.tail
+                if(!contains(doneB,(i,j))) result += ((i, j))
+              }
             }
           }
         }
-      }
-    }
+        id += 1
+      } // end of inner while
+      t += 1
+    } // end of while
     result
     // IMPROVE: use bitmaps for parameters?
   }

@@ -216,17 +216,10 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * post.servers and with no unification.  The set of post.servers for all
     * such transitions. */
   private val doneInducedPostServers = new BasicHashSet[ServerStates]
-  // private val doneInducedPostServers = 
-  //   new BasicHashSet[(ServerStates, UnificationList)]
 
   /** Record that we are considering an induced transition with this, with no
     * unification, and whose post-state has postServers.  Return true if this
     * is the first such. */
-  // def addDoneInduced(postServers: ServerStates, unifs: UnificationList)
-  //     : Boolean = {
-  //   assert(!singleRef)
-  //   doneInducedPostServers.add((postServers, unifs))
-  // }
   def addDoneInduced(postServers: ServerStates): Boolean = 
     doneInducedPostServers.add(postServers)
   
@@ -635,32 +628,6 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     }
   }
 
-  /** Create maps suitable for remapping: (1) a RemappingMap that is the
-    * identity on servers; (2) the identities of components that are not
-    * shared with the servers, indexed by types; (3) a NextArgMap giving the
-    * next fresh values not used in servers or components. 
-    * 
-    * Example:
-    * [21[-1](T0) || 22[-1](Null) || 23[-1]()] || [12[1](T0,N0) || 7[0](N0,N1)]
-    * gives [-1,-1,-1,-1,-1,-1,-1,-1]; [0,-1,-1,-1]; [List(1, 0);List()]; [2, 1]
-    * 
-    * Note: these are cloned on each call. 
-    */
-/*
-  def getCombiningMaps: (RemappingMap, OtherArgMap, NextArgMap) = {
-    if(otherArgs == null) initMaps()
-    val map1 = new Array[Array[Int]](numTypes); var t = 0
-    while(t < numTypes){ map1(t) = map(t).clone; t += 1 }
-    (map1, otherArgs.clone, nextArg.clone)
-  }
-
-  /** As getCombiningMaps, except client code must not change the maps
-    * returned. */
-  def getCombiningMapsImmutable: (RemappingMap, OtherArgMap, NextArgMap) = {
-    if(otherArgs == null) initMaps()
-    (map, otherArgs, nextArg)
-  }
- */
 
   /** Get a (fresh) NextArgMap. */
   def getNextArgMap: NextArgMap = {
@@ -684,14 +651,6 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   @inline private def updateNextArgMapFrom(state: State, nextArg: NextArgMap) = {
     val paramsBound = state.getParamsBound; var f = 0
     while(f < numTypes){ nextArg(f) = nextArg(f) max paramsBound(f); f += 1 }
-
-    // val typeMap = state.typeMap; val ids = state.ids
-    // val len = ids.length; var i = 0
-    // while(i < len){
-    //   val f = typeMap(i); val id = ids(i); i += 1
-    //   //nextArg(f) = nextArg(f) max (ids(i)+1);
-    //   if(id >= nextArg(f)) nextArg(f) = id+1
-    // }
   }
 
   /** Bit map showing which parameters are in this, if singleRef. */

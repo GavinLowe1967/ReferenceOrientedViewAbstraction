@@ -25,10 +25,10 @@ class State(val family: Family, val cs: ControlState,
   }
 
   /** Does this have a process identity matching (f,id)? */
-  def hasPID(f: Family, id: Identity) = f == family && id == ids(0)
+  @inline def hasPID(f: Family, id: Identity) = f == family && id == ids(0)
 
   /** Does this have a process identity matching pid? */
-  def hasPID(pid: ProcessIdentity) = pid._1 == family && pid._2 == ids(0)
+  @inline def hasPID(pid: ProcessIdentity) = pid._1 == family && pid._2 == ids(0)
 
   /** The types of parameters. */
   @inline def typeMap: Array[Type] = State.stateTypeMap(cs)
@@ -44,32 +44,35 @@ class State(val family: Family, val cs: ControlState,
     pIds
   }
 
-  /** All parameters of each type.  */
-  // private var psByType: Array[List[Identity]] = null
-  // // Note: can't be set at the point of object creation.
+  /** Bitmap giving the parameters of this. */
+  private var paramsBitMap: BitMap = null
 
-  // /** All parameters of each type.  */
-  // def paramsByType: Array[List[Identity]] = {
-  //   if(psByType == null){  // lazily create
-  //     psByType = Array.fill(numTypes)(List[Identity]())
-  //     for(i <- 0 until length) psByType(typeMap(i)) ::= ids(i)
-  //   }
-  //   psByType
-  // }
+  /** Initialise paramsBitMap.  Needs typeMap to be initialised. */
+  @inline private def initParamsBitMap = 
+    if(paramsBitMap == null){
+      paramsBitMap = newBitMap; var i = 0
+      while(i < length){
+        val id = ids(i)
+        if(!isDistinguished(id)) paramsBitMap(typeMap(i))(id) = true
+        i += 1
+      }
+    }
 
   /** Does this have a reference to (t,id)?  Pre: this is not its identity. */
-  def hasRef(t: Family, id: Identity) = {
-    assert(!hasPID(t,id))
-    var i = 1
-    while(i < length && (typeMap(i) != t || ids(i) != id)) i += 1
-    i < length
+  @inline def hasRef(t: Family, id: Identity) = {
+    initParamsBitMap; // assert(t >= 0 && t < numTypes, t)
+    assert(!hasPID(t,id)); paramsBitMap(t)(id)
+    // var i = 1
+    // while(i < length && (typeMap(i) != t || ids(i) != id)) i += 1
+    // i < length
   }
 
   /** Does this have a parameter (t,id)? */
-  def hasParam(t: Family, id: Identity): Boolean = {
-    var i = 0
-    while(i < length && (typeMap(i) != t || ids(i) != id)) i += 1
-    i < length
+  @inline def hasParam(t: Family, id: Identity): Boolean = {
+    initParamsBitMap; paramsBitMap(t)(id)
+    // var i = 0
+    // while(i < length && (typeMap(i) != t || ids(i) != id)) i += 1
+    // i < length
   }
 
   /** Information about which references are used to create views.  It is set
