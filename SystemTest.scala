@@ -16,9 +16,10 @@ object SystemTest{
       val cv1 = new ComponentView(servers1, pushSt(T0,N0), Array(aNode(N0,N1)))
       val buff = system.consistentStates(conc, (0,N2), -1, cv1)
       // node of cv1 gets renamed to aNode(N2,N0|N1|N3)
+      // println(buff.mkString("\n"))
       assert(buff.length == 3 && buff.forall{case(n,nexts) =>
         (n == aNode(N2,N0) || n == aNode(N2,N1) || n == aNode(N2,N3)) &&
-        nexts == List(n)
+        nexts.sameElements(Array(n)) // == List(n)
       })
     }
     def test2 = {
@@ -38,9 +39,11 @@ object SystemTest{
       val cv1 = new ComponentView(servers1, aNode(N0,N1), Array(aNode(N1,N2)))
       val buff = system.consistentStates(conc, (0,N2), -1, cv1)
       // Either node of cv1 can be renamed to aNode(N2,N0|N1|N3)
+      // println(buff.map{ case (n,nexts) => 
+      //   n.toString+", "+nexts.mkString("(",",",")") }.mkString("\n"))
       assert(buff.length == 3 && buff.forall{case(n,nexts) =>
         (n == aNode(N2,N0) || n == aNode(N2,N1) || n == aNode(N2,N3)) &&
-        nexts == List(n)
+        nexts.sameElements(Array(n)) // == List(n)
       })
     }
     def test4 = {
@@ -71,7 +74,7 @@ object SystemTest{
       assert(buff3.length == 4 && buff3.forall{case(n,nexts) =>
         (n == aNode(N2,N3) || 
           n == bNode(N2,N0) || n == bNode(N2,N1) || n == bNode(N2,N3)) &&
-        nexts == List(n)
+        nexts.sameElements(Array(n)) // == List(n)
       })
       // println(buff3.mkString("\n"))
     }
@@ -84,12 +87,12 @@ object SystemTest{
       // N0 can be renamed to N2
       val buff1 = system.consistentStates(conc, (0,N2), -1, cv1)
       assert(buff1.length == 1 && buff1.forall{case(n,nexts) =>
-        n == aNode(N2,Null) && nexts == List(n)
+        n == aNode(N2,Null) && nexts.toList == List(n)
       })
       // N0 can be renamed to N1
       val buff2 = system.consistentStates(conc, (0,N1), -1, cv1)
       assert(buff2.length == 1 && buff2.forall{case(n,nexts) =>
-        n == aNode(N1,Null) && nexts == List(n)
+        n == aNode(N1,Null) && nexts.toList == List(n)
       })
       // N0 can't be renamed to N0 (fails to match)
       val buff3 = system.consistentStates(conc, (0,N0), -1, cv1)
@@ -103,12 +106,12 @@ object SystemTest{
       // N1 can be renamed to N2
       val buff1 = system.consistentStates(conc, (0,N2), -1, cv1)
       assert(buff1.length == 1 && buff1.forall{case(n,nexts) =>
-        n == aNode(N2,Null) && nexts == List(n)
+        n == aNode(N2,Null) && nexts.toList == List(n)
       })
       // N1 can be renamed to N1
       val buff2 = system.consistentStates(conc, (0,N1), -1, cv1)
       assert(buff2.length == 1 && buff2.forall{case(n,nexts) =>
-        n == aNode(N1,Null) && nexts == List(n)
+        n == aNode(N1,Null) && nexts.toList == List(n)
       })
       // N1 can't be renamed to N0
       val buff3 = system.consistentStates(conc, (0,N0), -1, cv1)
@@ -122,7 +125,7 @@ object SystemTest{
       // N1 can be renamed to N2
       val buff1 = system.consistentStates(conc, (0,N2), -1, cv1)
       assert(buff1.length == 1 && buff1.forall{case(n,nexts) =>
-        n == aNode(N2,Null) && nexts == List(n)
+        n == aNode(N2,Null) && nexts.toList == List(n)
       })
       // N1 cannot be renamed to N0 because of the servers
       val buff2 = system.consistentStates(conc, (0,N0), -1, cv1)
@@ -137,7 +140,10 @@ object SystemTest{
       val e = system.fdrSession.eventToInt("initNode.T0.N2.A.N0")
       val buff = system.consistentStates(conc, (0,N2), e, cv1)
       // println("buff = "+buff.mkString("\n")+"XXX")
-      assert(buff.length == 1 && buff(0) == (initNode(N2), List(aNode(N2,N0))))
+      println(buff.map{ case (n,nexts) => 
+        n.toString+", "+nexts.mkString("(",",",")") }.mkString("\n"))
+      assert(buff.length == 1 && buff(0)._1 == initNode(N2) && 
+        buff(0)._2.toList == List(aNode(N2,N0)))
     }
 
     test1; test2; test3; test4; test5; test6; test7; test8; test9

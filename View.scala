@@ -126,7 +126,11 @@ class ComponentView(servers: ServerStates, components: Array[State])
   def principal = components(0)
 
   /** Identities of components. */
+// IMPROVE: replace by cptIdsBitMap
   val cptIds = components.map(_.componentProcessIdentity)
+
+  /** Identities of components as a bit map. */
+  val cptIdsBitMap = StateArray.makeIdsBitMap(components)
 
   /** Check all components referenced by principal are included, and no more. */
   // IMRPOVE: this is moderately expensive
@@ -569,7 +573,11 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   }
 
   /** Identities of components. */
+// IMPROVE: replace by cptIdsBitMap
   val cptIds = components.map(_.componentProcessIdentity)
+
+  /** Identities of components as a bit map. */
+  val cptIdsBitMap = StateArray.makeIdsBitMap(components)
 
   /** A bound on the values of each type.  IMPROVE: maybe store this. */
   def getParamsBound: Array[Int] = View.getParamsBound(servers, components)
@@ -674,13 +682,16 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   /** Update nextArg so entries are greater than identities in state. */
   @inline private def updateNextArgMapFrom(state: State, nextArg: NextArgMap) = {
-    val typeMap = state.typeMap; val ids = state.ids
-    val len = ids.length; var i = 0
-    while(i < len){
-      val f = typeMap(i); val id = ids(i); i += 1
-      //nextArg(f) = nextArg(f) max (ids(i)+1);
-      if(id >= nextArg(f)) nextArg(f) = id+1
-    }
+    val paramsBound = state.getParamsBound; var f = 0
+    while(f < numTypes){ nextArg(f) = nextArg(f) max paramsBound(f); f += 1 }
+
+    // val typeMap = state.typeMap; val ids = state.ids
+    // val len = ids.length; var i = 0
+    // while(i < len){
+    //   val f = typeMap(i); val id = ids(i); i += 1
+    //   //nextArg(f) = nextArg(f) max (ids(i)+1);
+    //   if(id >= nextArg(f)) nextArg(f) = id+1
+    // }
   }
 
   /** Bit map showing which parameters are in this, if singleRef. */

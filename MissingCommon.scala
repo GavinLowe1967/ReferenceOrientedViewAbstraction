@@ -3,7 +3,7 @@ package ViewAbstraction
 import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
 import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap}
-import MissingCommon.Cpts
+import MissingCommon.Cpts // = Array[State]
 
 /** The representation of the obligation to find a component state c with
   * identity pid such that (1) servers || cpts1(0) || c is in the ViewSet; (2)
@@ -71,9 +71,9 @@ class MissingCommon(
   /** The heads of the missing candidates.  The corresponding MissingInfo should
     * be registered against these in
     * EffectOnStore.mcMissingCandidatesStore. */
-  def missingHeads: List[Array[State]] =  missingCandidates.map(_.head)
+  def missingHeads: List[Cpts] =  missingCandidates.map(_.head)
 
-  import MissingCommon.ViewBuffer // ArrayBuffer[Array[State]]
+  import MissingCommon.ViewBuffer // = ArrayBuffer[Array[State]]
 
   /** Remove the maximum prefix of mc consisting of elements of views.  If any
     * is empty, record that this is done; otherwise add the next view to
@@ -84,8 +84,7 @@ class MissingCommon(
     var mc1 = mc
     while(mc1.nonEmpty && views.contains(servers, mc1.head))  mc1 = mc1.tail
     if(mc1.isEmpty) setDone    // This is now satisfied
-// IMPROVE
-    else toRegister += mc1.head // new ComponentView(servers, mc1.head)
+    else toRegister += mc1.head
     log(UpdateMC(mc, mc1))
     mc1
   }
@@ -97,7 +96,7 @@ class MissingCommon(
   def updateMissingViews(views: ViewSet): ViewBuffer = {
     if(done){ assert(missingCandidates.isEmpty);  null } 
     else{
-      val toRegister = new ViewBuffer // ArrayBuffer[Cpts]
+      val toRegister = new ViewBuffer
       assert(missingCandidates.nonEmpty)
       val newMC = missingCandidates.map(mc => removeViews(mc, views, toRegister))
       if(done){ assert(missingCandidates.isEmpty);  null }
@@ -276,7 +275,7 @@ object MissingCommon{
 
   /** A buffer for storing Views, against which a MissingInfo should be
     * registered in the EffectOnStore. */
-  type ViewBuffer = ArrayBuffer/*[ComponentView]*/[Cpts]
+  type ViewBuffer = ArrayBuffer[Cpts]
 
   /** All the MissingCommon we have created.  */
   private var allMCs = 
@@ -313,7 +312,7 @@ object MissingCommon{
     * (renamed).
     */
   def makeMissingCommon(
-    servers: ServerStates, cpts1: Array[State], cpts2: Array[State], 
+    servers: ServerStates, cpts1: Cpts, cpts2: Cpts, 
     pid: ProcessIdentity, views: ViewSet)
       : MissingCommon = {
     Profiler.count("makeMissingCommon")
@@ -371,9 +370,7 @@ object MissingCommon{
             // Note we have to register the corresponding MissingInfo against
             // missing.head, whether or not the add succeeded, because this
             // might be shared between MissingInfos.
-            mc.add(missing)
-// IMPROVE
-            vb += missing.head // new ComponentView(mc.servers, missing.head)
+            mc.add(missing); vb += missing.head 
           }
         }
       } // end of while loop
@@ -385,9 +382,7 @@ object MissingCommon{
       // following might be a bit pessimistic.  IMPROVE: store the relevant
       // values from one instance to reuse in the next.
       for(cpts <- mc.missingHeads){
-        if(!views.contains(mc.servers, cpts))
-          vb += cpts //   new ComponentView(mc.servers, cpts)
-// IMPROVE
+        if(!views.contains(mc.servers, cpts)) vb += cpts 
       }
       false
     }
@@ -428,7 +423,6 @@ object MissingCommon{
       }
       j += 1
     }
-    // missing.sortWith(ComponentView.compare _)
     missing.sortWith(StateArray.lessThan)
   }
 

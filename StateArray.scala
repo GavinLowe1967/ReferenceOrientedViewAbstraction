@@ -287,6 +287,18 @@ object StateArray{
   //   result
   // }
 
+  /** Make a bitmap representing the identities in cpts. */
+  def makeIdsBitMap(cpts: Array[State]): BitMap = {
+    val bitMap = newBitMap
+    var i = 0
+    while(i < cpts.length){
+      val (f,id) = cpts(i).componentProcessIdentity
+      bitMap(f)(id) = true; i += 1
+    }
+    bitMap
+  }
+
+
   /** Remove identities of components in cpts from bitMap. */
   def removeIdsFromBitMap(cpts: Array[State], bitMap: BitMap) = {
     var i = 0

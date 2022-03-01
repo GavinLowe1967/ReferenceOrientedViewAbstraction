@@ -106,7 +106,6 @@ class SimpleEffectOnStore extends EffectOnStore{
       missingInfo.setNotAdded; missingInfo.log(NotStored(storeName(theStore)))
     } // mis += missingInfo
   }
-// IMPROVE
 
   /** Add MissingInfo(nv, missing, missingCommon) to the stores. */
   def add(missing: List[ComponentView], missingCommon: List[MissingCommon], 
@@ -120,17 +119,15 @@ class SimpleEffectOnStore extends EffectOnStore{
       assert(missing.nonEmpty)
       missingInfo.log(McDoneStore(missingInfo.missingHead))
       missingInfo.transferred = true
-      // IMPROVE: use a ReducedComponentView here
+// IMPROVE: use a ReducedComponentView here
       addToStore(mcDoneStore, missingInfo.missingHead, missingInfo)
     }
     else{
       val mc0 = mcArray(0)
       // Add entries to mcMissingCandidates against the first MissingCommon.
       // Note: mcArray may be in a different order from missingCommon.
-      //for(cv <- mc0.missingHeads){ 
       for(cpts <- mc0.missingHeads){ 
-// IMPROVE
-        val cv = new ComponentView(mc0.servers, cpts)
+        val cv = new ReducedComponentView(mc0.servers, cpts)
         missingInfo.log(McNotDoneStore(cv))
         addToStore(mcNotDoneStore, cv, missingInfo)
       }
@@ -194,18 +191,16 @@ class SimpleEffectOnStore extends EffectOnStore{
             else if(mi.mcDone) mcDone(mi)
             else{
               // Register mi against each view in vb, and retain
-              //for(cv1 <- vb){
               for(cpts <- vb){
-                //assert(cv1.servers == cv.servers)
-                val rcv = new ReducedComponentView(cv.servers, /*cv1.components*/cpts)
-                // assert(!views.contains(cv1)) // IMPROVE
-                mi.log(McNotDoneStore(rcv/*cv1*/))
-                addToStore(mcNotDoneStore, rcv /* cv1*/, mi)
+                val rcv = new ReducedComponentView(cv.servers, cpts)
+                // assert(!views.contains(cv1)) 
+                mi.log(McNotDoneStore(rcv))
+                addToStore(mcNotDoneStore, rcv, mi)
               }
               mi.log(CandidateForMC(cv.servers, cv.principal))
               if(!newMis.add(mi)){ 
                 mi.setNotAdded; mi.log(NotStored("candidateForMCStore"))
-              } // newMis += mi
+              } 
             }
           }
         } // end of for loop
@@ -226,11 +221,10 @@ class SimpleEffectOnStore extends EffectOnStore{
             val ab = mi.updateMissingViewsOfMissingCommon(views) 
             if(mi.done) maybeAdd(mi.newView) 
             else if(mi.mcDone) mcDone(mi) 
-            else for(cpts/*cv1*/ <- ab){
-              //assert(cv1.servers == cv.servers)
-              val rcv = new ReducedComponentView(cv.servers, cpts/*cv1.components*/)
-              mi.log(McNotDoneStore(rcv/*cv1*/))
-              addToStore(mcNotDoneStore, rcv/*cv1*/, mi)
+            else for(cpts <- ab){
+              val rcv = new ReducedComponentView(cv.servers, cpts)
+              mi.log(McNotDoneStore(rcv))
+              addToStore(mcNotDoneStore, rcv, mi)
             }
           }
         } // end of for loop

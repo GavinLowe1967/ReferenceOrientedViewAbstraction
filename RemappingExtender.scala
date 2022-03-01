@@ -22,8 +22,8 @@ class RemappingExtender(
   private val cpts = cv.components
 
   // IDs of components in pre, cv
-  private val preCptIds = pre.cptIds 
-  private val cptIds = cv.cptIds 
+  private val preCptIds = pre.cptIdsBitMap 
+  private val cptIds = cv.cptIdsBitMap 
 
   val preParamSizes = pre.getNextArgMap
 
@@ -116,11 +116,11 @@ class RemappingExtender(
     val cvPrincParams = cv.principal.processIdentities; var i = 1
     while(i <  cvPrincParams.length){
       val (t,id) = cvPrincParams(i); i += 1
-      if(!isDistinguished(id) && !cptIds.contains((t,id))){
+      if(!isDistinguished(id) && !cptIds(t)(id)/*.contains((t,id))*/){
         val id1 = rdMap(t)(id)
         // Are id and id1 missing parameters for cv, pre, respectively?
         if(id1 >= 0 && preCpts(0).processIdentities.contains((t,id1)) &&
-            !preCptIds.contains((t,id1))){
+            !preCptIds(t)(id1) /*.contains((t,id1))*/){
           // println(s"Missing $id -> $id1")
           result += ((t,id))
         }
@@ -200,14 +200,14 @@ class RemappingExtender(
       else{
         val (t,id0) = cParams(ix)
         if(!isDistinguished(id0) && map(t)(id0) < 0){
-          val isId = cptIds.contains((t,id0)) // Is this an identity?
+          val isId = cptIds(t)(id0) // .contains((t,id0)) // Is this an identity?
           // map (t,id0) to each element of otherArgs(t)
           var toDoIds = otherArgs(t); var doneIds = List[Identity]()
           // Inv: reverse(doneIds) ++ toDoIds = otherArgs(t)
           while(toDoIds.nonEmpty){
             val id1 = toDoIds.head; toDoIds = toDoIds.tail
             // Don't map an identity to an identity
-            if(!(isId && preCptIds.contains((t,id1)))){
+            if(!(isId && preCptIds(t)(id1)/*.contains((t,id1))*/)){
               otherArgs(t) = append1(doneIds, toDoIds) // temporary update (*)
               map(t)(id0) = id1  // temporary update (+)
               rec(ix+1)
@@ -296,8 +296,8 @@ class RemappingExtender(
     val candidates = Array.tabulate(numTypes)(t => 
       Array.tabulate(rdMap(t).length)(p => 
         if(rdMap(t)(p) < 0) 
-          if(cptIds.contains((t,p))) 
-            otherArgs(t).filter(p1 => !preCptIds.contains((t,p1)))
+          if(cptIds(t)(p) /*.contains((t,p))*/) 
+            otherArgs(t).filter(p1 => !preCptIds(t)(p1) /*contains((t,p1))*/)
           else otherArgs(t)
         else List() 
       ))

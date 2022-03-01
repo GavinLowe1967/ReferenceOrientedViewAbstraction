@@ -693,7 +693,9 @@ class System(fname: String) {
               components.getTransComponent(renamedState).nexts(e, fp, idp)
             else Array(renamedState) // List(renamedState)
           )
-          if(nexts.nonEmpty && !buffer.contains((renamedState, nexts))){
+          @inline def isNew = !buffer.exists{case (st1,nxts1) => 
+            st1 == renamedState && nxts1.sameElements(nexts)}
+          if(nexts.nonEmpty && isNew /*!buffer.contains((renamedState, nexts))*/){
             if(checkCompatible(map, renamedState, cpts, i, preCpts, otherArgs))
               buffer += ((renamedState, nexts))
           }
