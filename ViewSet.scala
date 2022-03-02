@@ -258,6 +258,118 @@ class ServerBasedViewSet(initSize: Int = 16) extends ViewSet{
 
 // =======================================================
 
+/** A set of views, all of which have the same servers and principal. */
+class ComponentsSet(initSize: Int = 4){
+  checkPow2(initSize)
+
+  /* The set is implemented as a hash set. */ 
+
+  /** The hash of the servers associated with this set.  Set by the first
+    * add. */
+  private var hashBase = -1
+
+  /** The number of keys. */
+  private var count = 0
+
+ /** The number of slots in the hash table. */
+  private var n = initSize
+
+  /** A bitmask to produce a value in [0..n). */
+  private var mask = n-1
+
+  /** The threshold ratio at which resizing happens. */
+  private val ThresholdRatio = 0.7
+
+  /** The threshold at which the next resizing will happen. */
+  private var threshold = initSize * ThresholdRatio
+
+  /** The views themselves. */
+  private var views = new Array[ComponentView](initSize)
+
+  /** Find the index in views corresponding to v. */
+  @inline private def find(v: ComponentView): Int = 
+    find1(v.hashCode, v.components)
+
+  /** Find the index in views corresponding to cpts. */
+  @inline private def find(cpts: Array[State]): Int = 
+    find1(StateArray.mkHash(hashBase, cpts), cpts)
+    // Note: the above is a little inefficient: all elements in this set have
+    // the same cpts(0).
+
+  /** Find the index in views corresponding to cpts, with corresponding hash h:
+    * either where a view with cpts appears, or the first space after
+    * h&mask. */
+  @inline private def find1(h: Int, cpts: Array[State]): Int = {
+    var i = h & mask
+    while(views(i) != null && !views(i).components.sameElements(cpts))
+      i = (i+1) & mask
+    // IMPROVE: it's enough to compare the components from index 1
+    i
+  }
+
+  /** Add v to this. */
+  def add(v: ComponentView) : Boolean = {
+    if(count == 0) hashBase = v.servers.hashCode
+    val i = find(v.components)
+    if(views(i) == null){ 
+      if(count >= threshold){ resize(); add(v) }
+      else{ views(i) = v; count += 1; true }
+    }
+    else false
+  }
+
+  /** Resize the hash table. */
+  def resize() = {
+    val oldViews = views; val oldN = n
+    n += n; threshold = n * ThresholdRatio; mask = n-1
+    views = new Array[ComponentView](n); var i = 0
+    while(i < oldN){
+      val v = oldViews(i)
+      if(v != null){ val j = find(v); views(j) = v }
+      i += 1
+    }
+  }
+
+  /** Does this contain a view with components `cpts`? */
+  def contains(cpts: Array[State]): Boolean = {
+    require(count > 0); val i = find(cpts); views(i) != null
+  }
+
+  /** Get the view in this corresponding to v. */
+  def get(v: ComponentView): ComponentView = {
+    require(count > 0); val i = find(v); assert(views(i) == v); views(i)
+  }
+
+  def iterator : Iterator[ComponentView] = new Iterator[ComponentView]{
+    /** The index of the next value to return. */
+    private var ix = 0
+
+    /** Advance to the next value. */
+    private def advance = while(ix < n && views(ix) == null) ix += 1
+
+    advance
+
+    def hasNext = ix < n
+
+    def next = { val d = views(ix); ix += 1; advance; d }
+  } // end of iterator
+
+
+  /** The size of this set. */
+  def size: Int = count
+
+  /** An arbitrary member of this set. */
+  def head: ComponentView = {
+    require(count > 0)
+    var i = 0
+    while(i < n && views(i) != null) i += 1
+    assert(i < n); views(i)
+  }
+}
+
+
+// =======================================================
+
 /** An implementation of a set of Views, all with the same ServerStates.  This
   * allows efficient iteration over the views corresponding to a particular
   * principal.  Used in ServerPrincipalBasedViewSet. */

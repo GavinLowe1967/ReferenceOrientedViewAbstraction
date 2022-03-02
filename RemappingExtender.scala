@@ -2,6 +2,7 @@ package ViewAbstraction
 
 import RemapperP.Remapper
 import scala.collection.mutable.{ArrayBuffer}
+import ox.gavin.profiling.Profiler
 
 /** Class that extends a result-defining map to a full mapping. */
 class RemappingExtender(
@@ -248,7 +249,13 @@ class RemappingExtender(
     // of candidates(x), or not, injectively.
     val eMaps = extendMapToCandidates(rdMap, candidates)
     // Map remainder to fresh variables, and add to extensions.
-    for(eMap <- eMaps){ mapUndefinedToFresh(eMap); extensions += eMap }
+    var i = 0
+    while(i < eMaps.length){
+      val eMap = eMaps(i); i += 1
+    //for(eMap <- eMaps){ 
+      mapUndefinedToFresh(eMap); extensions += eMap 
+      Profiler.count("allExtensions - add")
+    }
   }
 
   /** Extend rdMap, mapping each parameter (t,p) to each element of
@@ -337,7 +344,7 @@ class RemappingExtender(
     * extensions of result-defiling map rdMap.  Add all such to extensions.
     * doneB gives the instances of condition (b) that we have dealt with so
     * far.  Note: rdMap may be mutated. */
-  def makeExtensions1(
+  private def makeExtensions1(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, doneB: List[Linkage], 
     isPrimary: Boolean, extensions: ArrayBuffer[RemappingMap])

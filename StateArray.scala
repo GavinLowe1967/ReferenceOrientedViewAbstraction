@@ -334,10 +334,17 @@ object StateArray{
     missing
   }
 
-  @inline def mkHash(cpts: Array[State]) = {
-    var h = cpts(0).hashCode; var i = 1; var n = cpts.length
+  /** Hash of cpts.  Used for hashcode of MissingCommon values. */
+  // @inline def mkHash(cpts: Array[State]) = {
+  //   var h = cpts(0).hashCode; var i = 1; var n = cpts.length
+  //   while(i < n){ h = h*71+cpts(i).hashCode; i += 1 }    
+  //   h
+  // }
+
+  @inline def mkHash(start: Int = 0, cpts: Array[State]) = {
+    var h = start; var i = 0; var n = cpts.length
     while(i < n){ h = h*71+cpts(i).hashCode; i += 1 }    
-    h
+    h 
   }
 
   /** Comparison function. */

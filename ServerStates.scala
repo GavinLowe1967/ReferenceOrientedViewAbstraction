@@ -88,6 +88,8 @@ class ServerStates(val servers: List[State]){
 
   def nextArgMap = { assert(normalised); paramsBound.clone }
 
+  def nextArgMap1 = paramsBound.clone
+
   /** Is this representable using the values defined in the script? */
   val representableInScript = servers.forall(_.representableInScript)
 

@@ -99,10 +99,11 @@ class ReducedComponentView(
 
   /** Create hash code. */
   @inline private def mkHashCode = {
-    var h = servers.hashCode*71 
-    var i = 0; var n = components.length
-    while(i < n){ h = h*71+components(i).hashCode; i += 1 }    
-    h 
+    StateArray.mkHash(servers.hashCode, components)
+    // var h = servers.hashCode
+    // var i = 0; var n = components.length
+    // while(i < n){ h = h*71+components(i).hashCode; i += 1 }    
+    // h 
   }
 
   override val hashCode = mkHashCode
@@ -609,7 +610,8 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   private var nextArg: NextArgMap = null 
   private var otherArgs: OtherArgMap = null
 
-  /** Initialise the above maps. */
+  /** Initialise the above maps.  Pre: this is normalised; this won't always
+    * hold if this is the post of a transition. */
   @inline private def initMaps() = {
     nextArg = servers.nextArgMap  // The next fresh parameters
     // Parameters used in components but not the servers
@@ -628,6 +630,20 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     }
   }
 
+  /** Initialise nextArg.  This does not assume servers are normalised. */
+  @inline private def initNextArgMap = {
+    nextArg = servers.nextArgMap1; var cix = 0
+    // Iterate through params of components
+    while(cix < components.length){
+      val c = components(cix); val ids = c.ids; val typeMap = c.typeMap
+      var i = 0
+      while(i < ids.length){
+        val f = typeMap(i); nextArg(f) = nextArg(f) max ids(i); i += 1
+      }
+      cix += 1
+    }
+  }
+
 
   /** Get a (fresh) NextArgMap. */
   def getNextArgMap: NextArgMap = {
@@ -635,8 +651,14 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     nextArg.clone
   }
 
-  /** Update nextArg, so entries are greater than all identities in this. */
-  def updateNextArgMap(nextArg: NextArgMap) = {
+  /** Update nextArgMap, so entries are greater than all identities in this. */
+  def updateNextArgMap(nextArgMap: NextArgMap) = {
+    if(nextArg == null) initNextArgMap
+    var f = 0
+    while(f < numTypes){
+      nextArgMap(f) = nextArgMap(f) max nextArg(f); f += 1
+    }
+    /*
     var states = servers.servers
     while(states.nonEmpty){
       updateNextArgMapFrom(states.head, nextArg); states = states.tail
@@ -645,6 +667,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     while(i < components.length){
       updateNextArgMapFrom(components(i), nextArg); i += 1
     }
+     */
   }
 
   /** Update nextArg so entries are greater than identities in state. */
