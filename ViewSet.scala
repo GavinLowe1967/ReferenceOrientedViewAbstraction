@@ -310,7 +310,7 @@ class ComponentsSet(initSize: Int = 4){
   /** Add v to this. */
   def add(v: ComponentView) : Boolean = {
     if(count == 0) hashBase = v.servers.hashCode
-    val i = find(v.components)
+    val i = find(v)
     if(views(i) == null){ 
       if(count >= threshold){ resize(); add(v) }
       else{ views(i) = v; count += 1; true }
@@ -376,8 +376,8 @@ class ComponentsSet(initSize: Int = 4){
 class PrincipalBasedViewSet(initSize: Int = 4){
   /** The underlying BasicHashMap, representing a mapping from principal states
     * to sets of Views. */
-  private val underlying = new BasicHashMap[State, Set[ComponentView]](
-    initSize, Set[ComponentView]())
+  private val underlying = new BasicHashMap[State, ComponentsSet](
+    initSize, new ComponentsSet)
 
   /** Add sv to this. */
   def add(sv: ComponentView) : Boolean = {
@@ -388,22 +388,24 @@ class PrincipalBasedViewSet(initSize: Int = 4){
   /** Does this contain sv? */
   def contains(sv: ComponentView): Boolean = {
     val set = underlying.get(sv.principal)
-    set != null && set.contains(sv)
+    set != null && set.contains(sv.components)
   }
 
   /** Does this contain a view corresponding to cpts? */
   def contains(cpts: Array[State]): Boolean = {
     // IMPROVE: using find is inefficient
     val set = underlying.get(cpts(0))
-    set != null && set.find(_.components.sameElements(cpts)).nonEmpty
+    set != null && set.contains(cpts) 
+    //set.find(_.components.sameElements(cpts)).nonEmpty
   }
 
   /** Get the view in this corresponding to v.  Pre: there is one. */
   def get(v: ComponentView): ComponentView = {
-    underlying.get(v.principal).find(_ == v) match{
-      case Some(v1) => v1
-      case None => println(s"No element corresponding to $v"); assert(false); v
-    }
+    underlying.get(v.principal).get(v)
+    // find(_ == v) match{
+    //   case Some(v1) => v1
+    //   case None => println(s"No element corresponding to $v"); assert(false); v
+    // }
   }
 
   /** Iterator over the set.  */
@@ -434,7 +436,7 @@ class PrincipalBasedViewSet(initSize: Int = 4){
     * Pre: this includes such a representative. */
   def getRepresentative(sv: ComponentView): ComponentView = {
     // IMPROVE: using find is inefficient
-    underlying.get(sv.principal).find(_ == sv).get
+    underlying.get(sv.principal).get(sv) // find(_ == sv).get
   }
 
   /** An iterator giving a summary for each principal. */
@@ -453,8 +455,8 @@ class PrincipalBasedViewSet(initSize: Int = 4){
     val st1 = 
       sets.map(set => set.head.toString0+": "+set.size).sorted.mkString("\n")
     // List the largest set
-    val max: Set[ComponentView] = sets.maxBy(_.size)
-    val st2 = max.toArray.map(_.toString0).sorted.mkString("\n\t")
+    val max: ComponentsSet = sets.maxBy(_.size)
+    val st2 = max.iterator.toArray.map(_.toString0).sorted.mkString("\n\t")
     st1+"\n\n"+st2
   }
 
