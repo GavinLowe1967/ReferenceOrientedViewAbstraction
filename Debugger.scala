@@ -132,7 +132,7 @@ class Debugger(
       // println(s"$pre -${system.showEvent(e)}-> $post ]= $v")
       befores += pre; events += e; afters += post
 // IMPROVE: is the "head" below what we want?
-      v = sysAbsViews.getRepresentative(pre.toComponentView.head); abss += v
+      v = sysAbsViews.get/*Representative*/(pre.toComponentView.head); abss += v
       // assert(v.ply <= pre.ply)
       // if(v.ply > pre.ply) 
       //   println("Unexpected ply in v: $v $v.ply$; $pre $pre.ply$")

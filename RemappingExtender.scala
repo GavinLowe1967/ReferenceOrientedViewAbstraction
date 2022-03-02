@@ -58,20 +58,22 @@ class RemappingExtender(
 // IMPROVE: we only need one
   private def findLinkages(
     unifs: UnificationList, rdMap: RemappingMap, doneB: List[Linkage])
-      : ArrayBuffer[Linkage] = {
+      : Linkage = {
     // Bitmaps giving indices of unified cpts in cv, resp, pre
     val cvUnifs = new Array[Boolean](cpts.length)
     val preUnifs = new Array[Boolean](preCpts.length)
-    for((i,j) <- unifs){ cvUnifs(i) = true; preUnifs(j) = true }
-    val result = new ArrayBuffer[Linkage]
+    var us = unifs
+    while(us.nonEmpty){
+      val (i,j) = us.head; us = us.tail; cvUnifs(i) = true; preUnifs(j) = true
+    }
+    // for((i,j) <- unifs){ cvUnifs(i) = true; preUnifs(j) = true }
+    var result: Linkage = null //  = new ArrayBuffer[Linkage]
 
     // Iterate through rdMap
     var t = 0
-    while(t < numTypes){
-    // for(t <- 0 until numTypes; id <- 0 until rdMap(t).length){
+    while(t < numTypes && result == null){
       var id = 0; val len = rdMap(t).length
-      while(id < len){
-      // for(id <- 0 until rdMap(t).length){
+      while(id < len && result == null){
         val id1 = rdMap(t)(id)
         if(id1 >= 0){
           // Set idJ to j such that id1 is the identity of preCpts(j), or -1 if
@@ -88,21 +90,21 @@ class RemappingExtender(
           if(idJ >= 0){
             // Find all i such that id is a reference of cpts(i), not unified
             var i = 0
-            while(i < cpts.length){
+            while(i < cpts.length && result == null){
               if(!cvUnifs(i) && cpts(i).hasRef(t,id) && !contains(doneB,(i,idJ)))
-                result += ((i, idJ))
+                result = (i,idJ) // += ((i, idJ))
               i += 1
             }
           }
-          if(refJs.nonEmpty){
+          if(refJs.nonEmpty && result == null){
             // Find i with identity id, if any; note: at most one such
             var i = 0
             while(i < cpts.length && !cpts(i).hasPID(t,id)) i += 1
             // If not unified, we have a linkage i->j for j in refJs
             if(i < cpts.length && !cvUnifs(i)){
-              while(refJs.nonEmpty){
+              while(refJs.nonEmpty && result == null){
                 val j = refJs.head; refJs = refJs.tail
-                if(!contains(doneB,(i,j))) result += ((i, j))
+                if(!contains(doneB,(i,j))) result = (i,j) // += ((i, j))
               }
             }
           }
@@ -358,7 +360,7 @@ class RemappingExtender(
       // IMPROVE: we only need a single linkage
       val newLinkages = findLinkages(unifs, rdMap, doneB) // .distinct
       // if(highlight) println(s"newLinkages = $newLinkages")
-      if(newLinkages.isEmpty){ // map remaining params to fresh
+      if(newLinkages == null){ // map remaining params to fresh
         mapUndefinedToFresh(rdMap)
         // Add to extensions if not there already
         if(extensions.forall(m => !Remapper.equivalent(m, rdMap)))
@@ -366,7 +368,7 @@ class RemappingExtender(
         // if(highlight) println("added "+Remapper.show(rdMap))
       }
       else{
-        val (i,j) = newLinkages.head
+        val (i,j) = newLinkages // .head
         // if(highlight) println("makeExtensions linkage "+(i,j))
         // FIXME: need to respect doneB below
         val extendedMaps = 

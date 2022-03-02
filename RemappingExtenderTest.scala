@@ -33,7 +33,7 @@ object RemappingExtenderTest{
     val oaBitMap = Array(mkOABitMap(3,List(N1)), mkOABitMap(1,List()))
     val rdMap: RemappingMap = Array(Array(N0,-1,-1), Array())
 
-    assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
+    assert(testHooks.findLinkages(unifs, rdMap) == null)
     assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
     // Following doesn't apply to actual linkage
@@ -76,7 +76,7 @@ object RemappingExtenderTest{
       for(n <- List(-1,N1,N2,N3)){
         val rdMap: RemappingMap = Array(Array(N0,-1,-1,-1), Array())
         if(n >= 0) rdMap(0)(n) = N4
-        assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
+        assert(testHooks.findLinkages(unifs, rdMap) == null)
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
         val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap,true)
@@ -104,7 +104,7 @@ object RemappingExtenderTest{
         val n = rdMap(0)(N2)
         assert(emptyMap(rdMap(1)) && (n == N4 || n < 0) &&
           checkMap(rdMap(0), List((N0,N0), (N1,N2), (N2,n))))
-        assert(testHooks.findLinkages(unifs, rdMap) == List( (0,0) ))
+        assert(testHooks.findLinkages(unifs, rdMap) == (0,0)) // List( (0,0) ))
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
         // Following is hypothetical as there are no common missing components
@@ -148,7 +148,7 @@ object RemappingExtenderTest{
       // N0 -> N0, N1 -> N1, N2 -> N3, N3 -> N2, N4 or -1
       for(n <- List(N2,N4,-1)){
         val rdMap: RemappingMap = Array(Array(N0,N1,N3,n), Array())
-        assert(testHooks.findLinkages(unifs1, rdMap).isEmpty)
+        assert(testHooks.findLinkages(unifs1, rdMap) == null)
         assert(testHooks.findLinkagesC(unifs1, rdMap).isEmpty)
 
         // Following is hypothetical
@@ -189,12 +189,12 @@ object RemappingExtenderTest{
 
       // N0 -> N0 and N1/N2/N3/nothing -> N5
       val rdMap: RemappingMap = Array(Array(N0,-1,-1,-1), Array())
-      assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
+      assert(testHooks.findLinkages(unifs, rdMap) == null)
       assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
       for(n <- List(N1,N2,N3)){
         val rdMap: RemappingMap = Array(Array(N0,-1,-1,-1), Array())
         rdMap(0)(n) = N5
-        assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
+        assert(testHooks.findLinkages(unifs, rdMap) == null)
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
         // Following is hypothetical
@@ -254,18 +254,18 @@ object RemappingExtenderTest{
       // N0 -> N0, N1 -> N1, N2 -> N3, N3 -> N2/N4/N5/-1
       for(n <- List(N2,N4,N5,-1)){
         val rdMap: RemappingMap = Array(Array(N0,N1,N3,n), Array())
-        val linkages = testHooks.findLinkages(unifs, rdMap).toList
+        val linkages = testHooks.findLinkages(unifs, rdMap) // .toList
         if(rdMap(0)(N3) == N2){  // linkage Nd_B -> Nd_B via N3 -> N2
-          assert(linkages.sorted == List((1,2)))
+          assert(linkages == (1,2)) // .sorted == List((1,2)))
           // Following is hypothetical.
-          val candMap = testHooks.getCandidatesMap(oaBitMap, rdMap, linkages)
+          val candMap = testHooks.getCandidatesMap(oaBitMap, rdMap, List(linkages))
           // rdMap is total, so all empty
           assert(candMap(0).forall(_.isEmpty) && candMap(1).isEmpty)
           val extMaps = testHooks.extendMapToCandidates(rdMap, candMap)
           assert(extMaps.length == 1); val em = extMaps(0)
           assert(em(0).sameElements(rdMap(0)) && em(1).isEmpty)
         }
-        else assert(linkages.isEmpty)
+        else assert(linkages == null)
 
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
@@ -282,7 +282,7 @@ object RemappingExtenderTest{
       // N0 -> N0, N1 -> N5/-, N2 -> N2, N3 -> N4
       for(n <- List(N5,-1)){
         val rdMap: RemappingMap = Array(Array(N0,n,N2,N4), Array())
-        assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
+        assert(testHooks.findLinkages(unifs, rdMap) == null)
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
         val map1List = List((N0,N0), (N1,if(n >= 0) n else N6), (N2,N2), (N3,N4))
@@ -313,12 +313,12 @@ object RemappingExtenderTest{
       val oaBitMap = Array(mkOABitMap(5,List(N4)), mkOABitMap(1,List()))
       // N0 -> N0, N1/N2/N3/- -> N4
       val rdMap : RemappingMap = Array(Array(N0,-1,-1,-1), Array(-1))
-      assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
+      assert(testHooks.findLinkages(unifs, rdMap) == null)
       assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
       for(n <- List(N1,N2,N3)){
         val rdMap : RemappingMap = Array(Array(N0,-1,-1,-1), Array(-1))
         rdMap(0)(n) = N4
-        assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
+        assert(testHooks.findLinkages(unifs, rdMap) == null)
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
         val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap,true)
@@ -342,7 +342,7 @@ object RemappingExtenderTest{
       // N0 -> N0, N1 -> N1, N2 -> N2/N4/-, N3 -> N3
       for(n <- List(N2,N4,-1)){
         val rdMap : RemappingMap = Array(Array(N0,N1,n,N3), Array(-1))
-        assert(testHooks.findLinkages(unifs, rdMap).isEmpty)
+        assert(testHooks.findLinkages(unifs, rdMap) == null)
         val linkagesC = testHooks.findLinkagesC(unifs, rdMap)
         if(n == N2)  // Common missing component with id N2
           assert(linkagesC == List((0,N2)))
@@ -382,7 +382,7 @@ object RemappingExtenderTest{
     // N0 -> N0, N1 -> N2/-1
     for(n <- List(N2,-1)){
       val rdMap : RemappingMap = Array(Array(N0,n), Array(-1))
-      assert(testHooks.findLinkages(unifs, rdMap) == List((1,1)))
+      assert(testHooks.findLinkages(unifs, rdMap) == (1,1)) //  List((1,1)))
       assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
       // Following is hypothetical
       val candMap = testHooks.getCandidatesMap(oaBitMap, rdMap, List((1,1)))
