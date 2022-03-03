@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
   * @param aShapes the shapes of abstractions.
   * @param cShapes the shapes of concretizations. */
 class Checker(system: SystemP.System){
+  setSystem(system) // set system in package, for showEvent
 
   /** Exception thrown to indicate that an error transition has been found.
     * This is caught within process. */
@@ -33,15 +34,15 @@ class Checker(system: SystemP.System){
   * functions. */
   private var effectOn: EffectOn = _
 
-  private def showTransition(
-    pre: Concretization, e: EventInt, post: Concretization) =
-    s"$pre -${system.showEvent(e)}-> $post"
+  // private def showTransition(
+  //   pre: Concretization, e: EventInt, post: Concretization) =
+  //   s"$pre -${system.showEvent(e)}-> $post"
 
   val Million = 1000000
 
   private var done = new AtomicBoolean(false); protected var ply = 1
 
-  import TransitionSet.Transition // (Concretization, EventInt, Concretization)
+  //import TransitionSet.Transition // (Concretization, EventInt, Concretization)
 
   /* A Transition is a tuple (pre, e, post): (Concretization, EventInt,
    * Concretization), representing the transition pre -e-> post.  The pre
@@ -93,7 +94,7 @@ class Checker(system: SystemP.System){
     addTransitionCount += 1
     // assert(pre.ply < Int.MaxValue)
     // assert(post.ply < Int.MaxValue)
-    val newTrans = ((pre, e, post))
+    val newTrans = new Transition(pre, e, post)
     if(!transitions.contains(newTrans)){
       if(newTransitions.add(newTrans)) effectOnOthers(pre, e, post)
       // Note: the views of post get added to sysAbsViews within apply.
@@ -371,10 +372,10 @@ class Checker(system: SystemP.System){
     // effectOfPreviousTransitionsCount += 1
     val iter = transitions.iterator(cv.servers)
     while(iter.hasNext){
-      val (pre, e, post) = iter.next
+      val t = iter.next
       // println(s"considering transition $pre -> $post")
       // effectOnViaTransCount += 1
-      effectOn(pre, e, post, cv, nextNewViews)
+      effectOn(t.pre, t.e, t.post, cv, nextNewViews)
     }
   }
 
@@ -430,22 +431,22 @@ class Checker(system: SystemP.System){
         } 
         else false
       } // end of addView
-      for((pre,e,post) <- newTransitions.iterator){
-        assert(transitions.add(pre, e, post))
+      for(t <- newTransitions.iterator){
+        assert(transitions.add(t))
         // val v = Remapper.remapComponentView(post.toComponentView)
-        for(v0 <- post.toComponentView){
+        for(v0 <- t.post.toComponentView){
           val v = Remapper.remapComponentView(v0)
           if(addView(v)){
-            v.setCreationInfo(pre, e, post)
+            v.setCreationInfo(t.pre, t.e, t.post) // IMPROVE
             if(showTransitions) 
-              println(s"$pre -${system.showEvent(e)}->\n  $post gives $v")
+              println(s"${t.toString}\ngives $v")
           }
         }
       }
       if(verbose) // print newTransitions
         println(
-          (for((pre,e,post) <- newTransitions.iterator.toArray)
-          yield s"$pre -${system.showEvent(e)}->\n  $post"
+          (for(t <- newTransitions.iterator.toArray)
+          yield t.toString // s"$pre -${system.showEvent(e)}->\n  $post"
           ).sorted.mkString("\n") )
       // Store new views, transition templates
       for((pre, post, id, e, inc) <- newTransitionTemplates.iterator)

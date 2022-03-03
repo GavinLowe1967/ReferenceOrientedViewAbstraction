@@ -5,15 +5,16 @@ import scala.collection.mutable.HashSet
 object TransitionSet{
   /** The representation of a transition.  (pre, e, post) represents the
     * transition pre -e-> post. */
-  type Transition = (Concretization, EventInt, Concretization)
+  // type Transition = (Concretization, EventInt, Concretization)
 }
 
-import TransitionSet.Transition
+//import TransitionSet.Transition
 
 /** A set recording the transitions seen so far. */
 trait TransitionSet{
   /** Add the transition pre -e-> post. */
-  def add(pre: Concretization, e: EventInt, post: Concretization): Boolean
+  def add(t: Transition): Boolean
+  // def add(pre: Concretization, e: EventInt, post: Concretization): Boolean
 
   // /** An iterator over the transitions. */
   // def iterator: Iterator[Transition]
@@ -30,6 +31,7 @@ trait TransitionSet{
 
 // ==================================================================
 
+/*
 /** A very simple (prototype) implementation of TransitionSet. */
 class SimpleTransitionSet extends TransitionSet{
 
@@ -45,13 +47,13 @@ class SimpleTransitionSet extends TransitionSet{
 
   /** An iterator over the transitions. */
   def iterator(servers: ServerStates): Iterator[Transition] = 
-     set.iterator.filter{ case (pre,_,_) => pre.servers == servers }
+     set.iterator.filter{ _.servers == servers } // case (pre,_,_) => pre.servers == servers }
 
   def size = set.size
 
   def contains(trans: Transition) = set.contains(trans)
 }
- 
+ */ 
 
 // =====================================================================
 
@@ -96,13 +98,14 @@ class ServerBasedTransitionSet(initSize: Int = 16) extends TransitionSet{
   }
 
   /** Add the tuple (pre, post, id, e, include) to the set. */
-  def add(pre: Concretization, e: EventInt, post: Concretization): Boolean = {
-    val servers = pre.servers; val i = find(servers)
+  // def add(pre: Concretization, e: EventInt, post: Concretization): Boolean = {
+  def add(t: Transition): Boolean = {
+    val servers = t.pre.servers; val i = find(servers)
     if(keys(i) == null){
-      if(count >= threshold){ resize(); return add(pre,e,post) }
+      if(count >= threshold){ resize(); return add(t) }
       keys(i) = servers; transitions(i) = Set[Transition](); count += 1
     }
-    if(transitions(i).add((pre, e, post))){ theSize += 1; true }
+    if(transitions(i).add(t)){ theSize += 1; true }
     else false
   }
 
@@ -136,7 +139,7 @@ class ServerBasedTransitionSet(initSize: Int = 16) extends TransitionSet{
   def size = theSize
 
   def contains(trans: Transition) = {
-    val servers = trans._1.servers; val i = find(servers)
+    val servers = trans.pre.servers; val i = find(servers)
     keys(i) != null && transitions(i).contains(trans)
   }
 }
