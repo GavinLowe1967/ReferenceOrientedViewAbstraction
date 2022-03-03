@@ -298,6 +298,32 @@ object StateArray{
     bitMap
   }
 
+  /** For each (t,i), the index of the component in cpts that has (t,i) as its
+    * identity, or -1 if there is no such. */
+  def makeIdsIndexMap(cpts: Array[State]): Array[Array[Int]] = {
+    val indexMap = Array.tabulate(numTypes)(t => Array.fill(typeSizes(t))(-1))
+    for(ix <- 0 until cpts.length){
+      val (t,id) = cpts(ix).componentProcessIdentity
+      indexMap(t)(id) = ix
+    }
+    indexMap
+  }
+
+  /** For each (t,i), the indices of the components c in cpts such that (t,i) is
+    * a reference of c but not its identity. */
+  def makeRefsIndexMap(cpts: Array[State]): Array[Array[List[Int]]] = {
+    val indexMap = Array.tabulate(numTypes)(t => 
+      Array.fill(typeSizes(t))(List[Int]()))
+    for(ix <- 0 until cpts.length){
+      val c = cpts(ix); val (idt,id) = c.componentProcessIdentity
+      for(j <- 1 until c.length){
+        val (t,x) = c.processIdentity(j)
+        if(!isDistinguished(x) && (t != idt || x != id)) indexMap(t)(x) ::= ix
+      }
+    }
+    indexMap
+  }
+
 
   /** Remove identities of components in cpts from bitMap. */
   def removeIdsFromBitMap(cpts: Array[State], bitMap: BitMap) = {

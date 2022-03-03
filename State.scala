@@ -60,11 +60,8 @@ class State(val family: Family, val cs: ControlState,
 
   /** Does this have a reference to (t,id)?  Pre: this is not its identity. */
   @inline def hasRef(t: Family, id: Identity) = {
-    initParamsBitMap; // assert(t >= 0 && t < numTypes, t)
+    initParamsBitMap // make sure initialised
     assert(!hasPID(t,id)); paramsBitMap(t)(id)
-    // var i = 1
-    // while(i < length && (typeMap(i) != t || ids(i) != id)) i += 1
-    // i < length
   }
 
   /** Does this have a parameter (t,id)? */

@@ -27,6 +27,8 @@ class ServerStates(val servers: List[State]){
     * paramsBound(t), and the bound is tight. */
   val paramsBound = new Array[Int](numTypes) 
 
+  // def getParamsBound = paramsBound.clone
+
   /** Initialise serverIdsBitMap, normalised, numParams, paramsBound. */
   private def mkParamsInfo() = {
     // Traverse parameters, updating information

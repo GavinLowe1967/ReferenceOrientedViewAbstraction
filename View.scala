@@ -111,7 +111,6 @@ class ReducedComponentView(
 
 // =======================================================
 
-
 /** A component-centric view.
   * @param servers the states of the servers
   * @param components the components, with the principal component state first.
@@ -132,6 +131,10 @@ class ComponentView(servers: ServerStates, components: Array[State])
 
   /** Identities of components as a bit map. */
   val cptIdsBitMap = StateArray.makeIdsBitMap(components)
+
+  /** For each parameter (t,i), the index of the component that has (t,i) as its
+    * identity, or -1 if there is no such. */ 
+  val idsIndexMap: Array[Array[Int]] = StateArray.makeIdsIndexMap(components)
 
   /** Check all components referenced by principal are included, and no more. */
   // IMRPOVE: this is moderately expensive
@@ -397,7 +400,6 @@ class ComponentView(servers: ServerStates, components: Array[State])
 
 /** Companion object. */
 object View{
-
   def show(servers: ServerStates, states: Array[State]) =
     servers.toString+" || "+StateArray.show(states)
 
@@ -411,7 +413,6 @@ object View{
     }
     pb
   }
-
 }
 
 // ==================================================================
@@ -572,6 +573,16 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   /** Identities of components as a bit map. */
   val cptIdsBitMap = StateArray.makeIdsBitMap(components)
+// IMPROVE: do we need above given idsIndexMap?
+
+  /** For each parameter (t,i), the index of the component that has (t,i) as its
+    * identity, or -1 if there is no such. */ 
+  val idsIndexMap: Array[Array[Int]] = StateArray.makeIdsIndexMap(components)
+
+  /** For each (t,i), the indices of the components c such that (t,i) is a
+    * reference of c but not its identity. */
+  val refsIndexMap: Array[Array[List[Int]]] =
+    StateArray.makeRefsIndexMap(components)
 
   /** A bound on the values of each type.  IMPROVE: maybe store this. */
   def getParamsBound: Array[Int] = View.getParamsBound(servers, components)
@@ -644,7 +655,6 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     }
   }
 
-
   /** Get a (fresh) NextArgMap. */
   def getNextArgMap: NextArgMap = {
     if(otherArgs == null) initMaps()
@@ -658,16 +668,6 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     while(f < numTypes){
       nextArgMap(f) = nextArgMap(f) max nextArg(f); f += 1
     }
-    /*
-    var states = servers.servers
-    while(states.nonEmpty){
-      updateNextArgMapFrom(states.head, nextArg); states = states.tail
-    }
-    var i = 0
-    while(i < components.length){
-      updateNextArgMapFrom(components(i), nextArg); i += 1
-    }
-     */
   }
 
   /** Update nextArg so entries are greater than identities in state. */
@@ -677,11 +677,15 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   }
 
   /** Bit map showing which parameters are in this, if singleRef. */
-  val paramsBitMap = newBitMap
-  if(singleRef) 
-    for(c <- components++servers.servers; (t,p) <- c.processIdentities;
-        if !isDistinguished(p))
-      paramsBitMap(t)(p) = true
+  val paramsBitMap: BitMap = 
+    if(singleRef){
+      val pbm = newBitMap
+      for(c <- components++servers.servers; (t,p) <- c.processIdentities;
+          if !isDistinguished(p))
+        pbm(t)(p) = true
+      pbm
+    }
+    else null 
 
   override def toString = 
     s"$servers || ${components.mkString("[", " || ", "]")}"
@@ -709,13 +713,11 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     for(st <- components) h = h*73 + st.hashCode
     h
   }
-}
+} // end of class Concretization
 
 // =======================================================
 
 object Concretization{
   /** Make a concretization from cv. */
   def apply(cv: ComponentView) = new Concretization(cv.servers, cv.components)
-
-
 }
