@@ -47,13 +47,12 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   import ComponentView.ReducedMap 
 
-  /** The effect of the transition pre -e-> post on cv.  Create extra views
-    * caused by the way the transition changes cv, and add them to
-    * nextNewViews. */
+  /** The effect of the transition t on cv.  Create extra views caused by the
+    * way the transition changes cv, and add them to nextNewViews. */
   def apply(
-    pre: Concretization, e: EventInt, post: Concretization, cv: ComponentView, 
-    nextNewViews: MyHashSet[ComponentView])
+    t: Transition, cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
   = {
+    val pre = t.pre; val e = t.e; val post = t.post
     require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
     val postCpts = post.components; val preCpts = pre.components
 // IMPROVE
@@ -76,7 +75,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
             (RemappingMap, Array[State], UnificationList, ReducedMap)],
            ArrayBuffer[(Array[State], UnificationList, Int)]) =
       if(singleRef && newEffectOn)
-        new SingleRefEffectOnUnification(pre,post,cv)()
+        new SingleRefEffectOnUnification(t,cv)()
       else EffectOnUnification.combine(pre, post, cv)
     //if(highlight) println("secondaryInduced length: "+secondaryInduced.length)
 
@@ -159,9 +158,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       // pre.servers.servers(1).cs == 99 &&
       // pre.components(0).cs == 59 && pre.components(1).cs == 37 &&
       // cv.components(0).cs == 10 && cv.components(1).cs == 14
-    if(debugging){
-      StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
-    }
+    // if(false && debugging){
+    //   StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
+    // }
     if(showTransitions && isPrimary || highlight) 
       println("processInducedInfo: "+Remapper.show(map))
     // Record this induced transition if singleRef, if primary and no unifs

@@ -7,7 +7,7 @@ import scala.collection.mutable.ArrayBuffer
 object SingleRefEffectOnUnificationTest{
   import TestStates._
   import TestUtils._
-  import SingleRefEffectOnUnificationTest2.{mkUnifs,test4,test5}
+  import SingleRefEffectOnUnificationTest2.{mkUnifs,test4,test5,mkTrans}
 
   /** Test based on (servers(N0); Th(T0,N1), Nd_A(N1,N2)) -> 
     *     (servers(N1); Th'(T0,N1), Nd_A(N1,N2)
@@ -19,7 +19,7 @@ object SingleRefEffectOnUnificationTest{
       Array(pushSt(T0,N1), aNode(N1,N2)))
     val cv = new ComponentView(servers3(N0), Array(bNode(N1,N2), cNode(N2,Null)))
     val allUnifs = mkUnifs(pre, cv); assert(allUnifs.length == 1)
-    val sreou = new SingleRefEffectOnUnification(pre, post, cv)
+    val sreou = new SingleRefEffectOnUnification(mkTrans(pre, post), cv)
     val testHooks = sreou.TestHooks
 
     for((map1,unifs) <- allUnifs){
@@ -56,7 +56,7 @@ object SingleRefEffectOnUnificationTest{
       Array(getDatumSt(T0, N1, N2), cNode(N1, N2)))
     val cv = new ComponentView(servers3(N0), Array(aNode(N1, N2), bNode(N2, N3)))
     val allUnifs = mkUnifs(pre, cv); assert(allUnifs.length == 2)
-    val sreou = new SingleRefEffectOnUnification(pre, post, cv)
+    val sreou = new SingleRefEffectOnUnification(mkTrans(pre, post), cv)
     val testHooks = sreou.TestHooks
 
     for((map1,unifs) <- allUnifs){
@@ -141,7 +141,7 @@ object SingleRefEffectOnUnificationTest{
       Array(getDatumSt(T0, N1, N2), cNode(N1, N2), bNode(N2,N4)))
     val cv = new ComponentView(servers3(N0), Array(aNode(N1, N2), bNode(N2, N3)))
     val allUnifs = mkUnifs(pre, cv); assert(allUnifs.length == 3)
-    val sreou = new SingleRefEffectOnUnification(pre, post, cv)
+    val sreou = new SingleRefEffectOnUnification(mkTrans(pre, post), cv)
     val testHooks = sreou.TestHooks
 
     for((map1,unifs) <- allUnifs){

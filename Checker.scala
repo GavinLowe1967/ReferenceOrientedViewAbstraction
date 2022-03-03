@@ -34,10 +34,6 @@ class Checker(system: SystemP.System){
   * functions. */
   private var effectOn: EffectOn = _
 
-  // private def showTransition(
-  //   pre: Concretization, e: EventInt, post: Concretization) =
-  //   s"$pre -${system.showEvent(e)}-> $post"
-
   val Million = 1000000
 
   private var done = new AtomicBoolean(false); protected var ply = 1
@@ -78,13 +74,6 @@ class Checker(system: SystemP.System){
   private var newTransitionTemplates: MyHashSet[TransitionTemplate] = null
 
   var addTransitionCount = 0L
-  // var effectOfPreviousTransitionsCount = 0
-  // var effectOnOthersCount = 0
-  // var newViewCount = 0L
-  // var addedViewCount = 0L
-  // var effectOnRepetition = 0
-  // var instantiateTransitionTemplateCount = 0L
-  // Counts on transition templates
 
   /** Store the ExtendedTransition pre -> post, and calculate its effect on
     * previously found views. */
@@ -96,7 +85,7 @@ class Checker(system: SystemP.System){
     // assert(post.ply < Int.MaxValue)
     val newTrans = new Transition(pre, e, post)
     if(!transitions.contains(newTrans)){
-      if(newTransitions.add(newTrans)) effectOnOthers(pre, e, post)
+      if(newTransitions.add(newTrans)) effectOnOthers(newTrans)
       // Note: the views of post get added to sysAbsViews within apply.
     }
   }
@@ -109,13 +98,10 @@ class Checker(system: SystemP.System){
     */
   private def process(v: View): Boolean = { 
     if(verbose) println(s"\n**** Processing $v")
-    // assert(v.ply < Int.MaxValue)
     v match{
       case cv: ComponentView =>
         if(debugging) StateArray.checkDistinct(cv.components)
         for((pre, e, post, outsidePid) <- system.transitions(cv)){
-          // assert(pre.ply < Int.MaxValue)
-          // assert(post.ply == Int.MaxValue); post.ply = ply
           if(showTransitions)
             println(s"$pre -${system.showEvent(e)}-> $post ["+
               (if(outsidePid != null) State.showProcessId(outsidePid) else "")+
@@ -303,20 +289,14 @@ class Checker(system: SystemP.System){
     if(false && verbose) 
       println(s"extendTransitionTemplateBy($pre, $post, ${system.showEvent(e)},"+
         s" $outsideSt)")
-    // Profiler.count("instantiateTT1")
     val referencingViews = extendability.isExtendable(pre, outsideSt)
     if(false) println(s"referencingViews = $referencingViews")
     if(referencingViews != null){
-      // Profiler.count("instantiateTT2")
       val extendedPre = pre.extend(outsideSt)
       // Set debugging info
       extendedPre.setSecondaryView(cv, referencingViews) 
-      // var op = outsidePosts.toList // IMPROVE;
       var i = 0 
       while(i < outsidePosts.size){
-        //while(op.nonEmpty){
-        // Profiler.count("instantiateTT3")
-        // val postSt = op.head; op = op.tail
         val postSt = outsidePosts(i); i += 1
         val extendedPost = post.extend(postSt)
         if(e == system.Error) throw new FoundErrorException
@@ -351,32 +331,20 @@ class Checker(system: SystemP.System){
 
   // ========= Effect of transitions on other views
 
-  /** Effect on other views of a transition pre -> post.  For every view v1 in
-    * sysAbsViews, if it is consistent with pre (i.e. unifiable), and contains
-    * at least one process that changes state, then update as per this
-    * transition. */
-  private 
-  def effectOnOthers(pre: Concretization, e: EventInt, post: Concretization) = 
-  if(pre != post){
-    if(false) println(s"effectOnOthers $pre -${system.showEvent(e)}-> $post")
-    // effectOnOthersCount += 1
-    val iter = sysAbsViews.iterator(pre.servers)
-    while(iter.hasNext){
-      val cv = iter.next
-      effectOn(pre, e, post, cv, nextNewViews)
-    }
+  /** Effect on other views of a transition t.  For every view v1 in
+    * sysAbsViews, if it is consistent with t.pre (i.e. unifiable), and
+    * contains at least one process that changes state, then update as per
+    * this transition. */
+  private def effectOnOthers(t: Transition) = if(t.pre != t.post){
+    if(false) println(s"effectOnOthers $t")
+    val iter = sysAbsViews.iterator(t.pre.servers)
+    while(iter.hasNext){ val cv = iter.next; effectOn(t, cv, nextNewViews) }
   }
 
   /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
-    // effectOfPreviousTransitionsCount += 1
     val iter = transitions.iterator(cv.servers)
-    while(iter.hasNext){
-      val t = iter.next
-      // println(s"considering transition $pre -> $post")
-      // effectOnViaTransCount += 1
-      effectOn(t.pre, t.e, t.post, cv, nextNewViews)
-    }
+    while(iter.hasNext){ val t = iter.next; effectOn(t, cv, nextNewViews) }
   }
 
   // ========= Main function
@@ -388,7 +356,6 @@ class Checker(system: SystemP.System){
     // Get the initial views
     val (sav, initViews) = system.initViews; sysAbsViews = sav
     println("initViews = "+initViews.mkString("; "))
-    // for(v <- initViews) assert(v.ply == 0)
     var newViews: Array[View] = initViews
     extendability = new Extendability(sysAbsViews)
     effectOn = new EffectOn(sysAbsViews, system)
@@ -433,21 +400,17 @@ class Checker(system: SystemP.System){
       } // end of addView
       for(t <- newTransitions.iterator){
         assert(transitions.add(t))
-        // val v = Remapper.remapComponentView(post.toComponentView)
         for(v0 <- t.post.toComponentView){
           val v = Remapper.remapComponentView(v0)
           if(addView(v)){
-            v.setCreationInfo(t.pre, t.e, t.post) // IMPROVE
-            if(showTransitions) 
-              println(s"${t.toString}\ngives $v")
+            v.setCreationInfo(t.pre, t.e, t.post) 
+            if(showTransitions) println(s"${t.toString}\ngives $v")
           }
         }
       }
       if(verbose) // print newTransitions
         println(
-          (for(t <- newTransitions.iterator.toArray)
-          yield t.toString // s"$pre -${system.showEvent(e)}->\n  $post"
-          ).sorted.mkString("\n") )
+          newTransitions.iterator.toArray.map(_.toString).sorted.mkString("\n") )
       // Store new views, transition templates
       for((pre, post, id, e, inc) <- newTransitionTemplates.iterator)
         transitionTemplates.add(pre, post, id, e, inc)
@@ -485,14 +448,7 @@ class Checker(system: SystemP.System){
     // println(s"effectOnStore size = "+effectOnStore.size)
   }
 
-  //import java.lang.reflect.Modifier
-  // import ox.gavin.profiling._
   import ox.gavin.profiling.MemoryProfiler.traverse  
-
-  // def printObjectSize(obj: Object) = {
-  //   println("Object type: " + obj.getClass() +
-  //             ", size: " + InstrumentationAgent.getObjectSize(obj) + " bytes")
-  // }
 
   /** Perform a memory profile of this. */
   def memoryProfile = {
@@ -514,7 +470,6 @@ class Checker(system: SystemP.System){
     traverse("extendability", extendability, maxPrint = 0); println
 
     if(true){
-      //traverse("system.components", system.components, maxPrint = 2); println
       traverse("system", system, maxPrint = 0); println }
     else println("Omitting system\n") 
 

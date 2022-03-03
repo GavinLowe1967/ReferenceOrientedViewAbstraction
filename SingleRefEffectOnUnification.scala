@@ -5,9 +5,7 @@ import scala.collection.mutable.{ArrayBuffer}
 
 // FIXME: there's a lot of repeated code between here and EffectOnUnification
 
-class SingleRefEffectOnUnification(
-  pre: Concretization, post: Concretization, cv: ComponentView){
-
+class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
 
   /* Relationship of main functions.
    * apply
@@ -30,19 +28,15 @@ class SingleRefEffectOnUnification(
 
   /* A few object variables, extracted directly from pre, post and cv, used in
    * several functions. */
+  private val pre = t.pre; private val post = t.post
   private val servers = pre.servers
   require(servers == cv.servers && servers.isNormalised)
   private val postServers = post.servers
-  private val changedServers = servers != postServers
-
-  // All params in post.servers but not in pre.servers, as a bitmap.
-  private val newServerIds: Array[Array[Boolean]] = 
-    ServerStates.newParamsBitMap(servers, post.servers)
 
   private val preCpts = pre.components; private val postCpts = post.components
   require(preCpts.length == postCpts.length)
   private val cpts = cv.components
-  if(debugging) StateArray.checkDistinct(cpts)
+  // if(debugging) StateArray.checkDistinct(cpts)
   // ID of principal of cv
   private val (cvpf, cvpid) = cv.principal.componentProcessIdentity
   // IDs of components in pre, cv
@@ -51,11 +45,11 @@ class SingleRefEffectOnUnification(
 
   /** Temporary test to help with debugging.  Might this be the instance causing
     * problems? */
-  val highlight = false && // IMPROVE
-    servers.servers(1).cs == 34 && 
-    preCpts.length == 2 && cpts.length == 2 &&
-      preCpts(0).cs == 23 && preCpts(1).cs == 15 && 
-      cpts(0).cs == 24 && cpts(1).cs == 11 && cpts(0).ids(2) == 2
+  // val highlight = false && // IMPROVE
+  //   servers.servers(1).cs == 34 && 
+  //   preCpts.length == 2 && cpts.length == 2 &&
+  //     preCpts(0).cs == 23 && preCpts(1).cs == 15 && 
+  //     cpts(0).cs == 24 && cpts(1).cs == 11 && cpts(0).ids(2) == 2
 
   //if(highlight) 
   //  println(s"*** SingleEffectOnUnification: \n  $pre -> $post;\n  $cv")
@@ -177,7 +171,7 @@ class SingleRefEffectOnUnification(
     }
 
     if(unifs.length == cpts.length && unifs.contains((0,0))) false
-    else changedServers || changingUnif
+    else t.changedServers || changingUnif
     //else if(changedServers) true 
     // Following doesn't work because the previous case might have
     // corresponded to a different set of linkages.
@@ -194,7 +188,7 @@ class SingleRefEffectOnUnification(
   def mkOtherArgsMap(map1: RemappingMap, unifs: UnificationList)
       : BitMap = {
     // (1) parameters in newServerIds
-    val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
+    val otherArgsBitMap = t.newServerIds.map(_.clone); var us = unifs
     while(us.nonEmpty){
       val (j, i) = us.head; us = us.tail
       // (2) Add parameters of postCpts(i), which is unified with a component
@@ -341,7 +335,7 @@ class SingleRefEffectOnUnification(
   @inline private def mkSecondaryOtherArgsMap(map1: RemappingMap, sc: State)
   : BitMap = {
     // (1) parameters in newServerIds
-    val otherArgsBitMap = newServerIds.map(_.clone)
+    val otherArgsBitMap = t.newServerIds.map(_.clone)
     // (2) parameters of sc
     sc.addIdsToBitMap(otherArgsBitMap, servers.idsBitMap) 
     // Remove parameters of range map1

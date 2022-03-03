@@ -9,6 +9,9 @@ object SingleRefEffectOnUnificationTest2{
   import TestStates._
   import TestUtils._
 
+  def mkTrans(pre: Concretization, post: Concretization) = 
+    new Transition(pre,-1,post)
+
   def mkUnifs(pre: Concretization, cv: ComponentView) = 
     Unification.allUnifs(
       pre.servers.remappingMap(cv.getParamsBound), pre.components, cv.components)
@@ -25,7 +28,7 @@ object SingleRefEffectOnUnificationTest2{
     val cv = new ComponentView(servers3(N0), 
       Array(getDatumSt(T0, N1, N2), aNode(N1, N3)))
     val allUnifs = mkUnifs(pre, cv); assert(allUnifs.length == 3)
-    val sreou = new SingleRefEffectOnUnification(pre, post, cv)
+    val sreou = new SingleRefEffectOnUnification(mkTrans(pre,post), cv)
     val testHooks = sreou.TestHooks
 
     for((map1,unifs) <- allUnifs){
@@ -95,7 +98,7 @@ object SingleRefEffectOnUnificationTest2{
     val post = new Concretization(servers3(N2), Array(unlock(T0), aNode(N1, N0)))
     val cv = new ComponentView(servers3(N0), 
       Array(setTopB(T0, N0), bNode(N0, N1)))
-    val sreou = new SingleRefEffectOnUnification(pre, post, cv)
+    val sreou = new SingleRefEffectOnUnification(mkTrans(pre, post), cv)
     val testHooks = sreou.TestHooks
 
     val allUnifs = mkUnifs(pre, cv); assert(allUnifs.length == 1)

@@ -2,26 +2,14 @@ package ViewAbstraction
 
 import scala.collection.mutable.HashSet
 
-object TransitionSet{
-  /** The representation of a transition.  (pre, e, post) represents the
-    * transition pre -e-> post. */
-  // type Transition = (Concretization, EventInt, Concretization)
-}
-
-//import TransitionSet.Transition
 
 /** A set recording the transitions seen so far. */
 trait TransitionSet{
-  /** Add the transition pre -e-> post. */
+  /** Add the transition t. */
   def add(t: Transition): Boolean
-  // def add(pre: Concretization, e: EventInt, post: Concretization): Boolean
-
-  // /** An iterator over the transitions. */
-  // def iterator: Iterator[Transition]
 
   /** An iterator over the transitions. */
-  def iterator(servers: ServerStates): Iterator[Transition]//  = 
-     // iterator.filter{ case (pre,_,_) => pre.servers == servers }
+  def iterator(servers: ServerStates): Iterator[Transition]
 
   def size: Long
 
@@ -97,8 +85,7 @@ class ServerBasedTransitionSet(initSize: Int = 16) extends TransitionSet{
     i
   }
 
-  /** Add the tuple (pre, post, id, e, include) to the set. */
-  // def add(pre: Concretization, e: EventInt, post: Concretization): Boolean = {
+  /** Add the transition t to the set. */
   def add(t: Transition): Boolean = {
     val servers = t.pre.servers; val i = find(servers)
     if(keys(i) == null){
@@ -125,9 +112,6 @@ class ServerBasedTransitionSet(initSize: Int = 16) extends TransitionSet{
       i += 1
     }
   }
-
-  // /** An iterator over the transitions. */
-  // def iterator: Iterator[Transition] = ???
 
   /** An iterator giving just extended transitions where the pre-state matches
     * servers. */
