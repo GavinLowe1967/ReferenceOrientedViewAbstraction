@@ -1,4 +1,5 @@
 package ViewAbstraction
+import ox.gavin.profiling.Profiler
 
 /** The states of the servers within a SystemView. */
 class ServerStates(val servers: List[State]){
@@ -135,6 +136,7 @@ object ServerStates{
   def newParamsBitMap(pre: ServerStates, post: ServerStates)
       : Array[Array[Boolean]] = {
     require(pre.isNormalised)
+    //Profiler.count("ServerStates.newParamsBitMap:newBitMap")
     val newIds = newBitMap; var sts: List[State] = post.servers
     while(sts.nonEmpty){
       val pids = sts.head.processIdentities; sts = sts.tail; var i = 0

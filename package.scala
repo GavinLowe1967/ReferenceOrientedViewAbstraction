@@ -1,4 +1,5 @@
 import scala.collection.mutable.Map
+import ox.gavin.profiling.Profiler
 
 /** The package object defines various types, so as to make them globally
   * visible. */
@@ -67,6 +68,7 @@ package object ViewAbstraction{
 
 // FIXME: the size of each row is a hack, and may be insufficient 
   @inline def newBitMap: BitMap = {
+    //Profiler.count("newBitMap")
     val newIds = new BitMap(numTypes); var f = 0
     while(f < numTypes){ newIds(f) = new Array[Boolean](typeSizes(f)+1); f += 1 }
     newIds

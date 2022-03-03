@@ -77,16 +77,6 @@ class RemappingExtender(
           // The index in preCpts of the component with identity (t,id1),
           // or -1 if no such.
           val idJ = pre.idsIndexMap(t)(id1)
-          // val idJ = if(idJ0 < 0 || preUnifs(idJ0)) -1 else idJ0
-          // var refJs = List[Int](); var j = 0
-          // while(j < preCpts.length){
-          //   if(!preUnifs(j)){
-          //     if(preCpts(j).hasPID(t,id1)){ } // { assert(idJ < 0); idJ = j }
-          //     else if(preCpts(j).hasRef(t,id1)) refJs ::= j
-          //   }
-          //   j += 1
-          // }
-          //assert(refJs == refJs1)
           if(idJ >= 0 && !preUnifs(idJ)){
             // Find all i such that id is a reference of cpts(i), not unified
             var i = 0
@@ -96,29 +86,28 @@ class RemappingExtender(
               i += 1
             }
           }
-          // Set refJs to all j such that id1 is a reference of preCpts(j) and
-          // preCpts(j) is not a unified component.
-          var refJs = pre.refsIndexMap(t)(id1) // .filter(j => !preUnifs(j))
-          if(refJs.nonEmpty && result == null){
-            // Find i with identity id, if any; note: at most one such
-            val i = cv.idsIndexMap(t)(id)
-            //var i = 0
-            // while(i < cpts.length && !cpts(i).hasPID(t,id)) i += 1
-            // If not unified, we have a linkage i->j for j in refJs
-            if(i >= 0 /*< cpts.length*/ && !cvUnifs(i)){
-              while(refJs.nonEmpty && result == null){
-                val j = refJs.head; refJs = refJs.tail
-                if(!preUnifs(j) && !contains(doneB,(i,j))) result = (i,j)
+          if(result == null){
+            // All indices of components of pre that have (t,id1) as a
+            // reference.
+            var refJs = pre.refsIndexMap(t)(id1) 
+            if(refJs.nonEmpty){
+              // Index of component in cv with identity (t,id), or -1 if no such.
+              val i = cv.idsIndexMap(t)(id)
+              // If not unified, we have a linkage i->j for j in refJs
+              if(i >= 0 && !cvUnifs(i)){
+                while(refJs.nonEmpty && result == null){
+                  val j = refJs.head; refJs = refJs.tail
+                  if(!preUnifs(j) && !contains(doneB,(i,j))) result = (i,j)
+                }
               }
             }
-          }
+          } // end of if(result == null)
         }
         id += 1
       } // end of inner while
       t += 1
     } // end of while
     result
-    // IMPROVE: use bitmaps for parameters?
   }
 
   /** Linkages for condition (c).  All missing references of cv.principal that

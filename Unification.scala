@@ -265,6 +265,7 @@ object Unification{
     // println(s"otherArgs = "+otherArgs.mkString(", "))
     val result = new ArrayBuffer[RemappingMap] // CombineResult
     // the bitmap is empty: c's id should not be remapped, by precondition.
+    // Profiler.count("Unification:newBitMap")
     getCombiningMaps(map0, otherArgs, newBitMap, nextArgMap, Array(c), result)
     result.map{ case map => Remapper.applyRemappingToState(map, c) }
   }
