@@ -43,8 +43,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   // post.updateNextArgMap(nextArg)
 
   /** All parameters of components of pre, indexed by type. */
-  private val allPreParams: Array[List[Identity]] = 
-    Remapper.makeOtherArgMap(pre.paramsBitMap)
+  //private val allPreParams: Array[List[Identity]] = 
+  //  Remapper.makeOtherArgMap(pre.paramsBitMap)
 
   import Unification.UnificationList // = List[(Int,Int)]
 
@@ -301,7 +301,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       : Array[Array[List[Identity]]] = {
     // All params of pre, except those in resultRelevantParams or range rdMap 
     val otherArgs: Array[List[Identity]] = Array.tabulate(numTypes)(t => 
-      allPreParams(t).filter(p => 
+      pre.getAllParams(t).filter(p => 
         !resultRelevantParams(t)(p) && !rdMap(t).contains(p)))
     // println(s"otherArgs = "+otherArgs.mkString("; "))
     // List of parameters that each parameter x of cv could be mapped to;

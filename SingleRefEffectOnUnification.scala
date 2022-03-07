@@ -129,7 +129,13 @@ class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
         var i = 0
         while(i < rdMaps.length){
           val rdMap = rdMaps(i); i += 1
-          makePrimaryExtension(unifs, otherArgsBitMap, rdMap)
+          // Does this duplicate a previous transition: no unifications and
+          // same result-defining map?
+          val duplicated = unifs.isEmpty && {
+            val reducedMapInfo = Remapper.rangeRestrictTo(rdMap, postServers)
+            cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo)
+          }
+          if(!duplicated) makePrimaryExtension(unifs, otherArgsBitMap, rdMap)
         }
       } // end of if 
       // else println("Not sufficient unif "+unifs)
@@ -269,18 +275,20 @@ class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
     for(map1 <- extensions){
       //if(highlight) println("map1 = "+Remapper.show(map1))
       if(debugging) assert(Remapper.isInjective(map1))
+      // assert(Remapper.rangeRestrictTo(map1, postServers).sameElements(
+      //   Remapper.rangeRestrictTo(rdMap, postServers)))
       val reducedMapInfo: ReducedMap =
         if(unifs.isEmpty) Remapper.rangeRestrictTo(map1, postServers)
         else null
       // Check whether we've already considered an induced transition on cv
       // with this map and postServers.  ?? Can we do this earlier?? 
-// IMPROVE
-      if(unifs.nonEmpty ||
-        !cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo)){
-        val newCpts = Remapper.applyRemapping(map1, cpts)
-        //if(highlight) println(s"Adding "+StateArray.show(newCpts))
-        result += ((map1, newCpts, unifs, reducedMapInfo))
-      }
+      // IMPROVE
+      // if(unifs.nonEmpty ||
+      //   !cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo)){
+      val newCpts = Remapper.applyRemapping(map1, cpts)
+      //if(highlight) println(s"Adding "+StateArray.show(newCpts))
+      result += ((map1, newCpts, unifs, reducedMapInfo))
+      // }
     }
   }
 

@@ -219,7 +219,8 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * induced transitions from this view, with pre.servers = this.servers !=
     * post.servers and with no unification.  The set of post.servers for all
     * such transitions. */
-  private val doneInducedPostServers = new BasicHashSet[ServerStates]
+  private val doneInducedPostServers: BasicHashSet[ServerStates] = 
+    if(singleRef) null else new BasicHashSet[ServerStates]
 
   /** Record that we are considering an induced transition with this, with no
     * unification, and whose post-state has postServers.  Return true if this
@@ -686,6 +687,24 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       pbm
     }
     else null 
+
+  /** All parameters of components, indexed by type.  Initialised by first call
+    * of getAllParams. */
+  private var allParams: Array[List[Identity]] = null
+
+  /** All parameters of components, indexed by type. */
+  def getAllParams: Array[List[Identity]] = {
+    assert(singleRef && newEffectOn)
+    if(allParams == null){
+      allParams = Array.fill(numTypes)(List[Identity]()); var f = 0
+      while(f < numFamilies){
+        var i = 0; val len = paramsBitMap(f).size
+        while(i < len){ if(paramsBitMap(f)(i)) allParams(f) ::= i; i += 1 }
+        f += 1
+      }
+    }
+    allParams
+  }
 
   override def toString = 
     s"$servers || ${components.mkString("[", " || ", "]")}"
