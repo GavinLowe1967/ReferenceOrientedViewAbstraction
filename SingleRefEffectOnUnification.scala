@@ -73,7 +73,7 @@ class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
   private val result2 = new CombineResult2
 
   /** The object responsible for extending result-defining mappings. */
-  val remappingExtender = new RemappingExtender(pre, post, cv)
+  val remappingExtender = new RemappingExtender(t,cv)
 
   /** Bit map indicating which components have changed state. */
   private val changedStateBitMap = { 
@@ -188,7 +188,7 @@ class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
   def mkOtherArgsMap(map1: RemappingMap, unifs: UnificationList)
       : BitMap = {
     // (1) parameters in newServerIds
-    val otherArgsBitMap = t.newServerIds.map(_.clone); var us = unifs
+    val otherArgsBitMap = t.getNewServerIds; var us = unifs
     while(us.nonEmpty){
       val (j, i) = us.head; us = us.tail
       // (2) Add parameters of postCpts(i), which is unified with a component
@@ -335,7 +335,7 @@ class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
   @inline private def mkSecondaryOtherArgsMap(map1: RemappingMap, sc: State)
   : BitMap = {
     // (1) parameters in newServerIds
-    val otherArgsBitMap = t.newServerIds.map(_.clone)
+    val otherArgsBitMap = t.getNewServerIds // .map(_.clone)
     // (2) parameters of sc
     sc.addIdsToBitMap(otherArgsBitMap, servers.idsBitMap) 
     // Remove parameters of range map1

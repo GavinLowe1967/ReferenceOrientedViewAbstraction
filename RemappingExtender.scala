@@ -5,8 +5,8 @@ import scala.collection.mutable.{ArrayBuffer}
 import ox.gavin.profiling.Profiler
 
 /** Class that extends a result-defining map to a full mapping. */
-class RemappingExtender(
-  pre: Concretization, post: Concretization, cv: ComponentView){
+class RemappingExtender(trans: Transition, cv: ComponentView){
+//  pre: Concretization, post: Concretization, cv: ComponentView){
 
   /* Relationship of main functions.
    * makeExtensions
@@ -19,6 +19,7 @@ class RemappingExtender(
 
   /* A few object variables, extracted directly from pre and cv, used in
    * several functions. */
+  private val pre = trans.pre; val post = trans.post
   private val preCpts = pre.components;
   private val cpts = cv.components
 
@@ -26,7 +27,7 @@ class RemappingExtender(
   private val preCptIds = pre.cptIdsBitMap 
   private val cptIds = cv.cptIdsBitMap 
 
-  val preParamSizes = pre.getNextArgMap
+  private val preParamSizes = pre.getNextArgMap
 
   /** Temporary test to help with debugging.  Might this be the instance causing
     * problems? */
@@ -37,8 +38,9 @@ class RemappingExtender(
       cpts(0).cs == 24 && cpts(1).cs == 11 && cpts(0).ids(2) == 2
 
   /** A NextArgMap, containing values greater than anything in pre or post. */
-  private val nextArg: NextArgMap = pre.getNextArgMap
-  post.updateNextArgMap(nextArg)
+  private val nextArg: NextArgMap = trans.getNextArgMap
+  // pre.getNextArgMap
+  // post.updateNextArgMap(nextArg)
 
   /** All parameters of components of pre, indexed by type. */
   private val allPreParams: Array[List[Identity]] = 
@@ -55,6 +57,8 @@ class RemappingExtender(
     * parameter id of cpts(i), id1 = rdMap(id) is a parameter of preCpts(j),
     * with one of those being the identity; and such this doesn't represent a
     * unification of components (with identities id/id1). */
+// IMPROVE: represent doneB by a bitmap.  And store which (t,id1) pairs have
+// already been considered for this unifs, rdMap (?)
   private def findLinkage(
     unifs: UnificationList, rdMap: RemappingMap, doneB: List[Linkage])
       : Linkage = {

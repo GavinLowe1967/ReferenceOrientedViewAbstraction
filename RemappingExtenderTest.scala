@@ -17,6 +17,9 @@ object RemappingExtenderTest{
     Array.tabulate(size)(i => values.contains(i))
   }
 
+  private def mkTrans(pre: Concretization, post: Concretization) =
+    new Transition(pre, -1, post)
+
   /** Test based on (servers(N0); Th(T0,N1), Nd_A(N1,N2)) -> 
     *     (servers(N1); Th'(T0,N1), Nd_A(N1,N2)
     * acting on (servers(N0), Nd_B(N1,N2), Nd_C(N2,Null)).  */
@@ -27,7 +30,7 @@ object RemappingExtenderTest{
     val post = new Concretization(servers3(N1), 
       Array(pushSt(T0,N1), aNode(N1,N2)))
     val cv = new ComponentView(servers3(N0), Array(bNode(N1,N2), cNode(N2,Null)))
-    val remappingExtender = new RemappingExtender(pre, post, cv)
+    val remappingExtender = new RemappingExtender(mkTrans(pre, post), cv)
     val testHooks = remappingExtender.TestHooks
     val unifs: UnificationList = List()
     val oaBitMap = Array(mkOABitMap(3,List(N1)), mkOABitMap(1,List()))
@@ -66,7 +69,7 @@ object RemappingExtenderTest{
     val post = new Concretization(servers3(N4),
       Array(getDatumSt(T0, N1, N2), cNode(N1, N2)))
     val cv = new ComponentView(servers3(N0), Array(aNode(N1, N2), bNode(N2, N3)))
-    val remappingExtender = new RemappingExtender(pre, post, cv)
+    val remappingExtender = new RemappingExtender(mkTrans(pre, post), cv)
     val testHooks = remappingExtender.TestHooks
 
     { // No unification
@@ -180,7 +183,7 @@ object RemappingExtenderTest{
     val post = new Concretization(servers3(N5),
       Array(getDatumSt(T0, N1, N2), cNode(N1, N2), bNode(N2,N4)))
     val cv = new ComponentView(servers3(N0), Array(aNode(N1, N2), bNode(N2, N3)))
-    val remappingExtender = new RemappingExtender(pre, post, cv)
+    val remappingExtender = new RemappingExtender(mkTrans(pre, post), cv)
     val testHooks = remappingExtender.TestHooks
 
     {    // No unification
@@ -305,7 +308,7 @@ object RemappingExtenderTest{
       Array(getDatumSt(T0, N1, N2), bNode(N1, N2)))
     val cv = new ComponentView(servers3(N0), 
       Array(getDatumSt(T0, N1, N2), aNode(N1, N3)))
-    val remappingExtender = new RemappingExtender(pre, post, cv)
+    val remappingExtender = new RemappingExtender(mkTrans(pre, post), cv)
     val testHooks = remappingExtender.TestHooks
 
     {                                                  // No unifications
@@ -374,7 +377,7 @@ object RemappingExtenderTest{
     val post = new Concretization(servers3(N2), Array(unlock(T0), aNode(N1, N0)))
     val cv = new ComponentView(servers3(N0), 
       Array(setTopB(T0, N0), bNode(N0, N1)))
-    val remappingExtender = new RemappingExtender(pre, post, cv)
+    val remappingExtender = new RemappingExtender(mkTrans(pre, post), cv)
     val testHooks = remappingExtender.TestHooks
 
     val unifs: UnificationList = List()
