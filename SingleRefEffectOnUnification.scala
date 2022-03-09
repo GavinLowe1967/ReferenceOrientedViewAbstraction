@@ -5,7 +5,7 @@ import scala.collection.mutable.{ArrayBuffer}
 
 // FIXME: there's a lot of repeated code between here and EffectOnUnification
 
-class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
+class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
 
   /* Relationship of main functions.
    * apply
@@ -28,7 +28,7 @@ class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
 
   /* A few object variables, extracted directly from pre, post and cv, used in
    * several functions. */
-  private val pre = t.pre; private val post = t.post
+  private val pre = trans.pre; private val post = trans.post
   private val servers = pre.servers
   require(servers == cv.servers && servers.isNormalised)
   private val postServers = post.servers
@@ -73,28 +73,32 @@ class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
   private val result2 = new CombineResult2
 
   /** The object responsible for extending result-defining mappings. */
-  val remappingExtender = new RemappingExtender(t,cv)
+  val remappingExtender = new RemappingExtender(trans,cv)
 
   /** Bit map indicating which components have changed state. */
-  private val changedStateBitMap = { 
-    val changedStateBitMap = new Array[Boolean](preCpts.length); var i = 0
-    while(i < preCpts.length){
-      changedStateBitMap(i) = preCpts(i) != postCpts(i); i += 1
-    }
-    changedStateBitMap
-  }
+  private val changedStateBitMap = trans.changedStateBitMap
+  // { 
+  //   val changedStateBitMap = new Array[Boolean](preCpts.length); var i = 0
+  //   while(i < preCpts.length){
+  //     changedStateBitMap(i) = preCpts(i) != postCpts(i); i += 1
+  //   }
+  //   changedStateBitMap
+  // }
 
   /** Which secondary components can gain a reference to cv.principal?  All
     * pairs (i,p1) such that pre.components(i) changes state in the transition
     * (with (i>0), and p1 is a new parameter of post.components(i), of the
     * same type as cv.principal.id, and not matching and parameter of pre. */
-  private val acquiredRefs: List[(Int,Parameter)] = mkAcquiredRefs
+  private val acquiredRefs: List[(Int,Parameter)] = trans.acquiredRefs(cvpf)
 
+// IMPROVE: calculate in t the values for each type
+/*
   private def mkAcquiredRefs = {
     var aR = List[(Int,Parameter)](); var i = 1
     while(i < preCpts.length){
-      val preCpt = preCpts(i); val postCpt = postCpts(i)
-      if(preCpt != postCpt){
+      if(changedStateBitMap(i)){
+        val preCpt = preCpts(i); val postCpt = postCpts(i)
+      //if(preCpt != postCpt){
         var j = 1
         while(j < postCpt.length){
           val p1@(t,x) = postCpt.processIdentity(j) 
@@ -107,6 +111,7 @@ class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
     }
     aR
   }
+ */
 
   // =======================================================
 
@@ -177,7 +182,7 @@ class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
     }
 
     if(unifs.length == cpts.length && unifs.contains((0,0))) false
-    else t.changedServers || changingUnif
+    else trans.changedServers || changingUnif
     //else if(changedServers) true 
     // Following doesn't work because the previous case might have
     // corresponded to a different set of linkages.
@@ -194,7 +199,7 @@ class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
   def mkOtherArgsMap(map1: RemappingMap, unifs: UnificationList)
       : BitMap = {
     // (1) parameters in newServerIds
-    val otherArgsBitMap = t.getNewServerIds; var us = unifs
+    val otherArgsBitMap = trans.getNewServerIds; var us = unifs
     while(us.nonEmpty){
       val (j, i) = us.head; us = us.tail
       // (2) Add parameters of postCpts(i), which is unified with a component
@@ -343,7 +348,7 @@ class SingleRefEffectOnUnification(t: Transition, cv: ComponentView){
   @inline private def mkSecondaryOtherArgsMap(map1: RemappingMap, sc: State)
   : BitMap = {
     // (1) parameters in newServerIds
-    val otherArgsBitMap = t.getNewServerIds // .map(_.clone)
+    val otherArgsBitMap = trans.getNewServerIds // .map(_.clone)
     // (2) parameters of sc
     sc.addIdsToBitMap(otherArgsBitMap, servers.idsBitMap) 
     // Remove parameters of range map1

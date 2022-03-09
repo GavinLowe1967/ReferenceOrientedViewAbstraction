@@ -47,6 +47,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   import ComponentView.ReducedMap 
 
+  type InducedInfos = 
+    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
+
   /** The effect of the transition t on cv.  Create extra views caused by the
     * way the transition changes cv, and add them to nextNewViews. */
   def apply(
@@ -55,45 +58,40 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     val pre = t.pre; val e = t.e; val post = t.post
     require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
     val postCpts = post.components; val preCpts = pre.components
-// IMPROVE
-    val highlight = false // preCpts(0).cs == 6 && postCpts(0).cs == 7
-      // pre.servers.servers(1).cs == 100 && post.servers.servers(5).cs == 113 &&
-      // preCpts.length == 2 && cv.components.length == 2 &&
-      // preCpts(0).cs == 66 && preCpts(1).cs == 13 && preCpts(1).ids(2) == 3 &&
-      //   preCpts.sameElements(cv.components)
-    // if(highlight) println("********")
+    val highlight = false 
     if(showTransitions || highlight) println(s"EffectOn($pre, $post, $cv)")
 
-    // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList)
-    // is a set of triples (pi, pi(cv.cpts), unifs) where pi is a unification
-    // function corresponding to unifs. secondaryInducedArray:
-    // Buffer[(Array[State], UnificationList, Int) is similar for secondary
-    // induced transitions, where the final component is the index of
-    // preCpts/postCpts that gains a reference to cv.principal.
+    // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList,
+    // ReducedMap)] is a set of tuples (pi, pi(cv.cpts), unifs, reducedMap)
+    // where pi is a unification function corresponding to
+    // unifs. secondaryInducedArray: Buffer[(Array[State], UnificationList,
+    // Int) is similar for secondary induced transitions, where the final
+    // component is the index of preCpts/postCpts that gains a reference to
+    // cv.principal.
     val (inducedInfo, secondaryInduced)
-        : (ArrayBuffer[
-            (RemappingMap, Array[State], UnificationList, ReducedMap)],
-           ArrayBuffer[(Array[State], UnificationList, Int)]) =
+        : (InducedInfos, ArrayBuffer[(Array[State], UnificationList, Int)]) =
       if(singleRef && newEffectOn)
         new SingleRefEffectOnUnification(t,cv)()
       else EffectOnUnification.combine(pre, post, cv)
-    //if(highlight) println("secondaryInduced length: "+secondaryInduced.length)
 
     /* Function to process induced transition. */
-    val processInducedInfo1 = 
-      processInducedInfo(pre, e, post, cv, nextNewViews) _
+    // val processInducedInfo1 = 
+    //   processInducedInfo(pre, e, post, cv, nextNewViews) _
     /* What does cpt get mapped to given unifications unifs? */
-    @inline def getNewPrinc(cpt: State, unifs: UnificationList): State = {
+    @noinline def getNewPrinc(cpt: State, unifs: UnificationList): State = {
       var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
       if(us.isEmpty) cpt else postCpts(us.head._2)
     }
     // Process inducedInfo
     var index = 0
     while(index < inducedInfo.length){
+//@noinline def primaryIter = {
       val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
-// IMPROVE: understand why there are repetitions; it might be RemappingExtender.allExtensions.
+// IMPROVE: understand why there are repetitions; it might be
+// RemappingExtender.allExtensions.  For lazySet bound 44, it's 8,905
       // Test if this value appears again later.
-      if(true) for(i <- index until inducedInfo.length){
+/*
+      if(false) for(i <- index until inducedInfo.length){
         val (map1,cpts1,unifs1,reducedMapInfo1) = inducedInfo(i)
         if(cpts1.sameElements(cpts) && unifs1 == unifs){
           if(newEffectOn) Profiler.count("Induced repetition")
@@ -103,7 +101,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
               "\ncpts = "+StateArray.show(cpts)+s"\nunifs = $unifs" )
         }
       }
-      Profiler.count("EffectOn step "+unifs.isEmpty)
+ */
+      //Profiler.count("EffectOn step "+unifs.isEmpty)
       // The components needed for condition (b).
       val crossRefs: List[Array[State]] = 
         if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
@@ -113,26 +112,30 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         val newPrinc = getNewPrinc(cpts(0), unifs)
         var newComponentsList =
           StateArray.makePostComponents(newPrinc, postCpts, cpts)
-        processInducedInfo1(
+        processInducedInfo(pre, e, post, cv, nextNewViews, //)(
+          //processInducedInfo1(
           map, cpts, unifs, reducedMapInfo, true, crossRefs, newComponentsList)
       }
+//}
+//      primaryIter
     } // end of while loop
+
     // Process secondaryInduced
     index = 0
     while(index < secondaryInduced.length){
+//@noinline def secondaryIter = {
       val (cpts, unifs, k) = secondaryInduced(index); index += 1
-      Profiler.count("SecondaryInduced")
-      // if(highlight) println("***secondaryInduced: "+StateArray.show(cpts))
+      //Profiler.count("SecondaryInduced")
       val crossRefs: List[Array[State]] = 
         if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
         else List()
       val newPrinc = getNewPrinc(cpts(0), unifs) 
       val newComponentsList = List(Array(postCpts(k), newPrinc))
-
-      // if(highlight) println("newComponentsList: "+
-      //   newComponentsList.map(StateArray.show).mkString("\n"))
-      processInducedInfo1(
+      processInducedInfo(pre, e, post, cv, nextNewViews, //)(
+        //processInducedInfo1(
         null, cpts, unifs, null, false, crossRefs, newComponentsList)
+//}
+//      secondaryIter
     }
   }
 
@@ -149,8 +152,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   @inline private 
   def processInducedInfo(
     pre: Concretization,  e: EventInt, post: Concretization,
-    cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
-    (map: RemappingMap, cpts: Array[State], unifs: UnificationList, 
+    cv: ComponentView, nextNewViews: MyHashSet[ComponentView], //)
+    map: RemappingMap, cpts: Array[State], unifs: UnificationList, 
       reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
       newComponentsList: List[Array[State]])
   : Unit = {

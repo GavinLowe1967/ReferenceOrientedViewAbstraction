@@ -40,8 +40,8 @@ object VA{
   def getProfiler: SamplingProfiler = {
     def filter(frame: StackTraceElement) : Boolean =
       SamplingProfiler.defaultFilter(frame) && 
-        !frame.getClassName.contains("jdk.internal") // &&
-        // !frame.getClassName.contains("uk.ac.ox.cs.fdr")
+        !frame.getClassName.contains("jdk.internal") ||
+        frame.getClassName.contains("Profiler") && frame.getMethodName == "count"
     val printer =
       if(profilingBoth){
         data: ArrayBuffer[SamplingProfiler.StackTrace] => {
