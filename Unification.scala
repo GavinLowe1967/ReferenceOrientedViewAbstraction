@@ -122,7 +122,7 @@ object Unification{
   }
 
   // A representation of map |> post.servers
-  import ComponentView.ReducedMap 
+  import ServersReducedMap.ReducedMap 
 
   /** Result returned from combine1.  Each entry is of the form (map, cpts,
     * unifs, null) where: map is a remapping map; cpts is map applied to

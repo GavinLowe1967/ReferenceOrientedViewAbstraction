@@ -233,10 +233,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
     doneInducedPostServers.contains(postServers)
 
   // A representation of map |> post.servers
-  import ComponentView.ReducedMap // = Array[Long] 
-
-  // Abstractly, ReducedMap plus ServerStates
-  import ComponentView.ServersReducedMap 
+  import ServersReducedMap.ReducedMap // = Array[Long]
 
   /** If singleRef, pairs (post.servers, Remapper.rangeRestrictTo(map,
     * post.servers)) for which we have produced a primary induced transition
@@ -252,7 +249,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
   @inline def addDoneInducedPostServersRemaps(
     servers: ServerStates, map: ReducedMap)
       : Boolean = {
-    val key = ComponentView.mkServersReducedMap(servers, map)
+    val key = /*ComponentView.mk*/ ServersReducedMap(servers, map)
     doneInducedPostServersRemaps.add(key)
   }
 
@@ -263,7 +260,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
   def containsDoneInducedPostServersRemaps(
     servers: ServerStates, map: ReducedMap)
       : Boolean = {
-    val key = ComponentView.mkServersReducedMap(servers, map)
+    val key = /*ComponentView.mk*/ ServersReducedMap(servers, map)
     doneInducedPostServersRemaps.contains(key) 
   }
 
@@ -328,7 +325,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
   def containsConditionBInduced(
     servers: ServerStates, map: ReducedMap, crossRefs: CrossRefInfo)
       : Boolean = {
-    val key = ComponentView.mkServersReducedMap(servers, map)
+    val key = /* ComponentView.mk */ ServersReducedMap(servers, map)
     conditionBInducedMap.get(key) match{
       case Some(crl) =>
         var crossRefsList = crl; var done = false
@@ -349,7 +346,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
   def addConditionBInduced(
     servers: ServerStates, map: ReducedMap, crossRefs: CrossRefInfo)
       : Boolean = {
-    val key = ComponentView.mkServersReducedMap(servers, map)
+    val key = /* ComponentView.mk*/ ServersReducedMap(servers, map)
     conditionBInducedMap.get(key) match{
       case Some(crl) => 
         // Profiler.count(s"addConditionBInduced:"+crl.length)
@@ -421,69 +418,6 @@ object View{
 object ComponentView{
   /** Is v1 < v2. */
   def compare(v1: ComponentView, v2: ComponentView): Boolean = v1.compare(v2) < 0
-
-  /** Type representing the range restriction of a RemappingMap.  The
-    * representation is described in Remapper.scala. */
-  type ReducedMap = Array[Long]  
-
-  /** A class of objects used to key the doneInducedPostServersRemaps mapping in
-    * each ComponentView. */
-  abstract class ServersReducedMap{
-    /** Combine h and l: used in creating hashCodes. */
-    @inline protected def combine(h: Int, l: Long) =
-      h ^ l.toInt ^ (l >> 32).toInt
-  }
-
-  /** A ServersReducedMap corresponding to an empty map. */
-  class ServersReducedMap0(val servers: ServerStates)
-  extends ServersReducedMap{
-    override def equals(that: Any) = that match{
-      case srm: ServersReducedMap0 => srm.servers == servers
-      case _: ServersReducedMap => false
-    }
-
-    override def hashCode = servers.hashCode
-  }
-
-  /** A ServersReducedMap whose map is a single Long. */
-  class ServersReducedMap1(val servers: ServerStates, val map: Long)
-  extends ServersReducedMap{
-    override def equals(that: Any) = that match{
-      case srm: ServersReducedMap1 => srm.servers == servers && srm.map == map
-      case _: ServersReducedMap => false
-    }
-
-    override def hashCode = combine(servers.hashCode, map)
-  }
-
-  /** A ServersReducedMap whose map contains at least two Longs. */
-  class ServersReducedMapN(val servers: ServerStates, val map: ReducedMap)
-  extends ServersReducedMap{
-    override def equals(that: Any) = that match{
-      case srm: ServersReducedMapN => 
-        srm.servers == servers && srm.map.sameElements(map)
-      case _: ServersReducedMap => false
-    }
-
-    override val hashCode = mkHash
-
-    /** Make the hash function. */ 
-    private def mkHash = {
-      // effectively foldl combine servers.hashCode map
-      var h = servers.hashCode; var i = 0
-      while(i < map.length){ h = combine(h, map(i)); i += 1 }
-      h
-    }
-  }
-
-  // IMPROVE: it might be worth having a special case for N=2
-
-  def mkServersReducedMap(servers: ServerStates, map: ReducedMap)
-  : ServersReducedMap =
-    if(map.isEmpty) new ServersReducedMap0(servers)
-    else if(map.length == 1) new ServersReducedMap1(servers, map(0))
-    else new ServersReducedMapN(servers, map)
-
 }
 
 // =======================================================
@@ -694,7 +628,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   /** All parameters of components, indexed by type. */
   def getAllParams: Array[List[Identity]] = {
-    assert(singleRef && newEffectOn)
+    // assert(singleRef && newEffectOn) -- or also from test
     if(allParams == null){
       allParams = Array.fill(numTypes)(List[Identity]()); var f = 0
       while(f < numFamilies){

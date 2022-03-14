@@ -47,7 +47,9 @@ $(DIR)/FDRTransitionMap.class: $(DIR)/State.class $(DIR)/CSPFileParser.class	\
 
 # Views, etc.
 
-$(DIR)/View.class: $(DIR)/ServerStates.class $(DIR)/StateArray.class $(DIR)/MyHashSet.class
+$(DIR)/ServersReducedMap.class: $(DIR)/ServerStates.class
+
+$(DIR)/View.class:  $(DIR)/StateArray.class $(DIR)/MyHashSet.class $(DIR)/ServersReducedMap.class
 
 $(DIR)/TestStates.class: $(DIR)/MyStateMap.class
 

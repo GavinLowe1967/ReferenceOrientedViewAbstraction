@@ -114,7 +114,7 @@ object Remapper{
     bitmap
   }
 
-  import ComponentView.ReducedMap // = Array[Long]
+  import ServersReducedMap.ReducedMap // = Array[Long]
 
   /** The range restriction of map to the parameters of servers, i.e. 
     * 

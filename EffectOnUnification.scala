@@ -111,7 +111,7 @@ class EffectOnUnification(
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
 
   // A representation of map |> post.servers
-  import ComponentView.ReducedMap 
+  import ServersReducedMap.ReducedMap 
 
   type CombineResult1 = 
     ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
