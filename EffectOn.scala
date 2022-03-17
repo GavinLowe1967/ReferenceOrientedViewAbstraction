@@ -53,11 +53,11 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   /** The effect of the transition t on cv.  Create extra views caused by the
     * way the transition changes cv, and add them to nextNewViews. */
   def apply(
-    t: Transition, cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
+    trans: Transition, cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
   = {
-    val pre = t.pre; val e = t.e; val post = t.post
+    val pre = trans.pre; val post = trans.post
     require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
-    val postCpts = post.components; val preCpts = pre.components
+    val postCpts = post.components; // val preCpts = pre.components
 
     // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList,
     // ReducedMap)] is a set of tuples (pi, pi(cv.cpts), unifs, reducedMap)
@@ -69,7 +69,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     val (inducedInfo, secondaryInduced)
         : (InducedInfos, ArrayBuffer[(Array[State], UnificationList, Int)]) =
       if(singleRef && newEffectOn)
-        new SingleRefEffectOnUnification(t,cv)()
+        new SingleRefEffectOnUnification(trans,cv)()
       else EffectOnUnification.combine(pre, post, cv)
 
     /* What does cpt get mapped to given unifications unifs? */
@@ -82,9 +82,10 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 @noinline def primaryIter = {
     while(index < inducedInfo.length){
       val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
-      assert((reducedMapInfo != null) == unifs.isEmpty, 
-        s"unifs = $unifs; reducedMapInfo = "+
-          (if(reducedMapInfo == null) "null" else reducedMapInfo.mkString(", ")))
+      // Following no longer true
+      // if(singleRef) assert((reducedMapInfo != null) == unifs.isEmpty, 
+      //   s"unifs = $unifs; reducedMapInfo = "+
+      //     (if(reducedMapInfo == null) "null" else reducedMapInfo.mkString(", ")))
 // IMPROVE: understand why there are repetitions; it might be
 // RemappingExtender.allExtensions.  For lazySet bound 44, it's 8,905
       // Test if this value appears again later.
@@ -98,17 +99,17 @@ class EffectOn(views: ViewSet, system: SystemP.System){
               "\ncpts = "+StateArray.show(cpts)+s"\nunifs = $unifs" )
         }
       }  */
-      //Profiler.count("EffectOn step "+unifs.isEmpty)
+      Profiler.count("EffectOn step "+unifs.isEmpty)
       // The components needed for condition (b).
       val crossRefs: List[Array[State]] = 
         if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
         else List()
-      if(unifs.nonEmpty || // reducedMapInfo == null ||
+      if(unifs.nonEmpty ||  reducedMapInfo == null ||
          !cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)){
         val newPrinc = getNewPrinc(cpts(0), unifs)
         var newComponentsList =
           StateArray.makePostComponents(newPrinc, postCpts, cpts)
-        processInducedInfo(pre, e, post, cv, nextNewViews, 
+        processInducedInfo(trans, cv, nextNewViews, 
           map, cpts, unifs, reducedMapInfo, true, crossRefs, newComponentsList)
       }
     } // end of while loop
@@ -120,13 +121,13 @@ primaryIter
 @noinline def secondaryIter = {
     while(index < secondaryInduced.length){
       val (cpts, unifs, k) = secondaryInduced(index); index += 1
-      //Profiler.count("SecondaryInduced")
+      Profiler.count("SecondaryInduced")
       val crossRefs: List[Array[State]] = 
         if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
         else List()
       val newPrinc = getNewPrinc(cpts(0), unifs) 
       val newComponentsList = List(Array(postCpts(k), newPrinc))
-      processInducedInfo(pre, e, post, cv, nextNewViews,
+      processInducedInfo(trans, cv, nextNewViews,
         null, cpts, unifs, null, false, crossRefs, newComponentsList)
     }
 }
@@ -145,27 +146,67 @@ secondaryIter
     * @param reducedMap a representation of map |> post.servers. */
   @inline private 
   def processInducedInfo(
-    pre: Concretization,  e: EventInt, post: Concretization,
+    trans: Transition, // pre: Concretization,  e: EventInt, post: Concretization,
     cv: ComponentView, nextNewViews: MyHashSet[ComponentView], 
     map: RemappingMap, cpts: Array[State], unifs: UnificationList, 
     reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
     newComponentsList: List[Array[State]])
       : Unit = {
+    val pre = trans.pre; val e = trans.e; val post = trans.post
     val highlight = false
     // StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     if(showTransitions && isPrimary || highlight) 
       println("processInducedInfo: "+Remapper.show(map))
-    // Record this induced transition if singleRef, if primary and no unifs
-    @inline def recordInduced(): Boolean = {
-      if(singleRef && isPrimary && unifs.isEmpty)
-        cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
-      else true
+
+    /* Get the post-states of unified components that change state, or null if
+     * none. */
+// IMPROVE: this duplicates work in SingleRefEffectOnUnification.scala
+/*
+    def getPostUnified: List[State] = {
+      val len = cv.components.length
+      val postUnified = new Array[State](len); var found = false
+      for(j <- 0 until len){
+        // Indices of cpts of pre unified with cpts(j)
+        val is = unifs.filter(_._1 == j)
+        if(is.nonEmpty){
+          assert(is.length == 1); val i = is.head._2
+          if(trans.changedStateBitMap(i)){
+            postUnified(j) = post.components(i); found = true
+          }
+        }
+      }
+      if(found) postUnified.toList else null
     }
-    // Show the transition
+ */
+
+    /* Record this induced transition if singleRef and primary, and (1) if
+     * newEffectOn, no acquired references, (2) otherwise no unifs. */
+    @inline def recordInduced() = {
+      if(singleRef && isPrimary){
+        if(newEffectOn){
+          // IMPROVE structure
+// IMPROVE: repeats work from SingleRefEffectOnUnification: doesPrincipalAcquireRef and getPostUnified
+          if(true){
+            if(!trans.doesPrincipalAcquireRef(unifs)){
+              val postUnified = trans.getPostUnified(unifs, cv.components.length)
+              cv.addDoneInducedPostServersRemaps(
+                post.servers, reducedMap, postUnified)
+            }
+          }
+          else if(unifs.isEmpty) // old version
+            cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
+          // else true
+        }
+        else if(unifs.isEmpty)
+          cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
+      }
+      //else true
+    }
+
+    /* Show the transition. */
     @inline def showTransition(newComponents: Array[State], nv: ComponentView)
     = println(
-        s"$pre -${system.showEvent(e)}->\n  $post\n"+
-          s"  with unifications $unifs, isPrimary == $isPrimary\n  induces $cv\n"+
+        s"$trans\n  with unifications $unifs, isPrimary == $isPrimary\n  induces $cv\n"+
           (if(!cv.components.sameElements(cpts))
             s"  == ${View.show(pre.servers, cpts)}\n"
           else "")+
@@ -175,7 +216,8 @@ secondaryIter
             s"  ==  $nv"
           else "")
     )
-    // Show information about a redundancy
+
+    /* Show information about a redundancy. */
     @inline def showRedundancy(
       v1: => ComponentView, newComponents: Array[State], nv: ComponentView)
     = {
@@ -205,24 +247,17 @@ secondaryIter
       crossRefs.map(new ComponentView(pre.servers, _)).filter(!views.contains(_))
     for(newComponents <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newComponents)
-      // if(highlight){
-      //   println("processInducedInfo: "+StateArray.show(newComponents))
-      //   println(s"nv = $nv"); println(views.contains(nv))
-      //   println("missing = "+missing+"\nmissingCommons = "+missingCommons)
-      // }
       Profiler.count("newViewCount") 
       if(!views.contains(nv)){
         if(missing.isEmpty && missingCommons.isEmpty && nextNewViews.add(nv)){
           Profiler.count("addedViewCount")
           if(showTransitions) showTransition(newComponents, nv)
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents)
-          val ok = recordInduced() 
+          recordInduced() 
+// IMPROVE: remove following?
           if(false && singleRef && isPrimary && unifs.isEmpty){
             val ok = cv.addDoneInduced(post.servers); assert(ok)
           }
-          //if(!ok) println(s"not ok  $cv $pre $post\n"+reducedMap.mkString(", "))
-          // assert(ok) I think this can fail if there are two similar cases
-          //in this batch
           if(!nv.representableInScript){
             println("Not enough identities in script to combine transition\n"+
               s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)

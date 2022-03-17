@@ -1,5 +1,6 @@
 package ViewAbstraction
 
+import ox.gavin.profiling.Profiler
 import RemapperP.Remapper
 import scala.collection.mutable.{ArrayBuffer}
 
@@ -77,12 +78,14 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
 
   /** The main function. */
   def apply(): (CombineResult1, CombineResult2) = {
+    // val map0 = cv.getRemappingMap // 
     val map0 = servers.remappingMap(cv.getParamsBound)
     val allUnifs = Unification.allUnifs(map0, preCpts, cpts)
     var k = 0
 
     while(k < allUnifs.length){
       val (map1,unifs) = allUnifs(k); k += 1
+// IMPROVE: if we've previously successfully done this cv, post.servers and there are no changing unifications, then skip.
       if(isSufficientUnif(unifs)){
         // Result-relevant parameters: parameters to map params of cv to, in
         // order to create result-defining map.
@@ -93,11 +96,25 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
         var i = 0
         while(i < rdMaps.length){
           val rdMap = rdMaps(i); i += 1
-          val reducedMapInfo = if(unifs.isEmpty)  Remapper.rangeRestrictTo(rdMap, postServers) else null
+          // post-states of unified components
+          val postUnified = trans.getPostUnified(unifs, cpts.length)
+          val reducedMapInfo = Remapper.reduceMap(rdMap)
+          //  val reducedMap1 = Remapper.rangeRestrictTo(rdMap, postServers)
+          // if(unifs.isEmpty) Remapper.rangeRestrictTo(rdMap, postServers)
+          // else null
           // Does this duplicate a previous transition: no unifications and
-          // same result-defining map?
-          val duplicated = unifs.isEmpty && 
-            cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo)
+          // same result-defining map?  It's not clear that this helps.
+          val duplicated = 
+            if(false) // old version IMPROVE
+              unifs.isEmpty &&
+                cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo)
+            else
+              !trans.doesPrincipalAcquireRef(unifs) && {
+                val done = cv.containsDoneInducedPostServersRemaps(
+                  postServers, reducedMapInfo, postUnified)
+                // Profiler.count("containsDoneInducedPSR"+done+unifs.isEmpty);
+                // lazySet bound 44: TT: 2.3B; TF: 40M; FT:9.9M; FF: 2.9M
+                done }
           if(!duplicated) 
             makePrimaryExtension(unifs, otherArgsBitMap, rdMap, reducedMapInfo)
         }
@@ -123,6 +140,25 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     }
     (result,result2)
   }
+
+/*
+  /** Get the post-states of unified components that change state, or null if
+    * none. */
+  def getPostUnified(unifs: UnificationList): List[State] = {
+    val postUnified = new Array[State](cpts.length); var found = false
+    for(j <- 0 until cpts.length){
+      // Indices of cpts of pre unified with cpts(j)
+      val is = unifs.filter(_._1 == j)
+      if(is.nonEmpty){
+        assert(is.length == 1); val i = is.head._2
+        if(trans.changedStateBitMap(i)){ 
+          postUnified(j) = postCpts(i); found = true 
+        }
+      }
+    }
+    if(found) postUnified.toList else null
+  }
+ */
 
   /** Does unifs give sufficient unifications such that it might produce a new
     * view via a primary induced transition?  */

@@ -116,14 +116,54 @@ object Remapper{
 
   import ServersReducedMap.ReducedMap // = Array[Long]
 
+  /** Convert map into a ReducedMap.  Each pair x -> y (y >= 0) of type t is
+    * represented by summarise(t,x,y) (16 bits); these are in lexicographic
+    * order of (t,x), concatenated into an Array[Long]. */
+  def reduceMap(map: RemappingMap): ReducedMap = {
+    // Calculate number of x values overall to consider
+    var t = 0; var len = 0
+    while(t < numTypes){ len += map(t).length; t += 1 }
+
+    // We combine together the summary of four maplets into bits, and then put
+    // them into results0.  At each point, we have included k maplets in bits,
+    // and the remainder in results0[0..i)
+    var bits = 0L; var k = 0
+    val result0 = new Array[Long](((len-1) >> 2) + 1) // size = ceiling(len/4)
+    t = 0; var i = 0 // result in result0[0..i)
+    while(t < numTypes){
+      var x = 0; val thisLen = map(t).length 
+      //assert(thisLen < (1 << 7))
+      while(x < thisLen){
+        val y = map(t)(x)
+        if(y >= 0){
+          val summary = summarise(t,x,y); 
+          //assert(0 < summary && summary < 65536)
+          bits = (bits << 16) + summary; k += 1
+          if(k == 4){ result0(i) = summary; i += 1; bits = 0; k = 0 }
+        }
+        x += 1
+      }
+      t += 1
+    }
+
+    //Profiler.count("rangeRestrictTo"+(4*i+k))
+    // Normally 1 to 4, but sometimes more or less
+    if(k > 0){ result0(i) = bits; i += 1 }
+    // Copy into new array
+    val result = new Array[Long](i); var j = 0
+    while(j < i){ result(j) = result0(j); j += 1 }
+
+    result
+  }
+
   /** The range restriction of map to the parameters of servers, i.e. 
     * 
     * { x -> y | (x -> y) in map, y is a parameter of servers }.
     * 
     * The precise form of the result isn't important, other than equality
     * corresponding to equality of the above expression; but each pair x -> y
-    * of type t is represented by summarise(t,x,y); these are in lexicographic
-    * order of (t,x).  Also returns a hashCode for that result.  */
+    * of type t is represented by summarise(t,x,y) (16 bits); these are in
+    * lexicographic order of (t,x), concatenated into an Array[Long].  */
   def rangeRestrictTo(map: RemappingMap, servers: ServerStates)
       : ReducedMap = {
     val sIds = servers.idsBitMap

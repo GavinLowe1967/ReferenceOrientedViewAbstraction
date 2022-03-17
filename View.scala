@@ -213,14 +213,31 @@ class ComponentView(servers: ServerStates, components: Array[State])
     paramsBound
   }
 
+  /** A template used in getRemappingMap. */
+  //private var remappingMapTemplate: RemappingMap = null
+
+  /** Get a RemappingMap sufficient for remapping this, representing the
+    * identity on the parameters of servers. */
+  // This seems slower that ServerStates.RemappingMap
+  // def getRemappingMap = {
+  //   if(remappingMapTemplate == null) 
+  //     remappingMapTemplate = servers.remappingMap(getParamsBound)
+  //   val result = new Array[Array[Identity]](numTypes); var t = 0
+  //   while(t < numTypes){ 
+  //     result(t) = remappingMapTemplate(t).clone; t += 1
+  //   }
+  //   result
+  // }
+
+
   type UnificationList = List[(Int,Int)]
 
   /** Information about transitions pre -> post for which we have considered
     * induced transitions from this view, with pre.servers = this.servers !=
     * post.servers and with no unification.  The set of post.servers for all
     * such transitions. */
-  private val doneInducedPostServers: BasicHashSet[ServerStates] = 
-    if(singleRef) null else new BasicHashSet[ServerStates]
+  private val doneInducedPostServers: OpenHashSet[ServerStates] = 
+    if(singleRef) null else new OpenHashSet[ServerStates]
 
   /** Record that we are considering an induced transition with this, with no
     * unification, and whose post-state has postServers.  Return true if this
@@ -243,24 +260,22 @@ class ComponentView(servers: ServerStates, components: Array[State])
     else null
 
   /** Record that this has been used to create an induced transition, with
-    * post.servers = servers, and such that pair._1 is the range restriction
-    * of the remapping map to the parameters of servers.  pair._2 is a
-    * hashCode for pair._1.  */
+    * post.servers = servers, result-defining map corresponding to map, and
+    * unified components with post-states corresponding to postUnified?  */
   @inline def addDoneInducedPostServersRemaps(
-    servers: ServerStates, map: ReducedMap)
+    servers: ServerStates, map: ReducedMap, postUnified: List[State] = null)
       : Boolean = {
-    val key = /*ComponentView.mk*/ ServersReducedMap(servers, map)
+    val key = ServersReducedMap(servers, map, postUnified)
     doneInducedPostServersRemaps.add(key)
   }
 
   /** Has this been used to create an induced transition, with post.servers =
-    * servers, and such that pair._1 is the range restriction of the remapping
-    * map to the parameters of servers.  pair._2 is a hashCode for
-    * pair._1.  */
+    * servers, result-defining map corresponding to map, and unified
+    * components with post-states corresponding to postUnified?  */
   def containsDoneInducedPostServersRemaps(
-    servers: ServerStates, map: ReducedMap)
+    servers: ServerStates, map: ReducedMap, postUnified: List[State] = null)
       : Boolean = {
-    val key = /*ComponentView.mk*/ ServersReducedMap(servers, map)
+    val key = ServersReducedMap(servers, map, postUnified)
     doneInducedPostServersRemaps.contains(key) 
   }
 
@@ -325,7 +340,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
   def containsConditionBInduced(
     servers: ServerStates, map: ReducedMap, crossRefs: CrossRefInfo)
       : Boolean = {
-    val key = /* ComponentView.mk */ ServersReducedMap(servers, map)
+    val key = ServersReducedMap(servers, map)
     conditionBInducedMap.get(key) match{
       case Some(crl) =>
         var crossRefsList = crl; var done = false
@@ -346,7 +361,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
   def addConditionBInduced(
     servers: ServerStates, map: ReducedMap, crossRefs: CrossRefInfo)
       : Boolean = {
-    val key = /* ComponentView.mk*/ ServersReducedMap(servers, map)
+    val key = ServersReducedMap(servers, map)
     conditionBInducedMap.get(key) match{
       case Some(crl) => 
         // Profiler.count(s"addConditionBInduced:"+crl.length)

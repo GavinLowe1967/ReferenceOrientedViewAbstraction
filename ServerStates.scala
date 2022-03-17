@@ -81,9 +81,9 @@ class ServerStates(val servers: List[State]){
     while(t < numTypes){
       result(t) = new Array[Identity](size(t))
       var i = 0
-      while(i < size(t)){
-        result(t)(i) = (if(i < paramsBound(t)) i else -1); i += 1
-      }
+      while(i < paramsBound(t)){ result(t)(i) = i; i += 1 }
+      while(i < size(t)){ result(t)(i) = -1; i += 1 }
+      //  result(t)(i) = (if(i < paramsBound(t)) i else -1); i += 1
       t += 1
     }
     result
