@@ -141,7 +141,7 @@ class OpenHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
   private var mask = n-1
 
   /** The threshold ratio at which resizing happens. */
-  private val ThresholdRatio = 0.5
+  private val ThresholdRatio = 0.4 // 0.5
 
   /** The threshold at which the next resizing will happen. */
   private var threshold = initSize * ThresholdRatio

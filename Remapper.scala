@@ -35,7 +35,13 @@ object Remapper{
   /** Produce a (deep) clone of map. */
   @inline def cloneMap(map: RemappingMap): RemappingMap = {
     val map1 = new Array[Array[Int]](numTypes); var t = 0
-    while(t < numTypes){ map1(t) = map(t).clone; t += 1 }
+    while(t < numTypes){ 
+      map1(t) = map(t).clone; 
+      // val size = map(t).size
+      // map1(t) = new Array[Int](size); var i = 0
+      // while(i < size){ map1(t)(i) = map(t)(i); i += 1 }
+      t += 1 
+    }
     map1
   }
 

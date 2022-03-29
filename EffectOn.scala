@@ -52,87 +52,84 @@ class EffectOn(views: ViewSet, system: SystemP.System){
 
   /** The effect of the transition t on cv.  Create extra views caused by the
     * way the transition changes cv, and add them to nextNewViews. */
-  def apply(
-    trans: Transition, cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
-  = {
-    val pre = trans.pre; val post = trans.post
-    require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
-    val postCpts = post.components; // val preCpts = pre.components
+  def apply(trans: Transition, cv: ComponentView, 
+    nextNewViews: MyHashSet[ComponentView])
+  : Unit = 
+    // Early bail-out if servers don't change, no chance of unification with
+    // components that change state, and no chance of secondary induced
+    // transitions.  This captures over 50% of cases with lazySetNoDel.csp
+    if(trans.mightGiveSufficientUnifs(cv.components)){
+      val pre = trans.pre; val post = trans.post
+      require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
+      val postCpts = post.components; // val preCpts = pre.components
+      // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList,
+      // ReducedMap)] is a set of tuples (pi, pi(cv.cpts), unifs, reducedMap)
+      // where pi is a unification function corresponding to
+      // unifs. secondaryInducedArray: Buffer[(Array[State], UnificationList,
+      // Int) is similar for secondary induced transitions, where the final
+      // component is the index of preCpts/postCpts that gains a reference to
+      // cv.principal.
+      val (inducedInfo, secondaryInduced)
+          : (InducedInfos, ArrayBuffer[(Array[State], UnificationList, Int)]) =
+        if(singleRef && newEffectOn)
+          new SingleRefEffectOnUnification(trans,cv)()
+        else EffectOnUnification.combine(pre, post, cv)
 
-    // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList,
-    // ReducedMap)] is a set of tuples (pi, pi(cv.cpts), unifs, reducedMap)
-    // where pi is a unification function corresponding to
-    // unifs. secondaryInducedArray: Buffer[(Array[State], UnificationList,
-    // Int) is similar for secondary induced transitions, where the final
-    // component is the index of preCpts/postCpts that gains a reference to
-    // cv.principal.
-    val (inducedInfo, secondaryInduced)
-        : (InducedInfos, ArrayBuffer[(Array[State], UnificationList, Int)]) =
-      if(singleRef && newEffectOn)
-        new SingleRefEffectOnUnification(trans,cv)()
-      else EffectOnUnification.combine(pre, post, cv)
-
-    /* What does cpt get mapped to given unifications unifs? */
-    @noinline def getNewPrinc(cpt: State, unifs: UnificationList): State = {
-      var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
-      if(us.isEmpty) cpt else postCpts(us.head._2)
-    }
-    // Process inducedInfo
-    var index = 0
-@noinline def primaryIter = {
-    while(index < inducedInfo.length){
-      val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
-      // Following no longer true
-      // if(singleRef) assert((reducedMapInfo != null) == unifs.isEmpty, 
-      //   s"unifs = $unifs; reducedMapInfo = "+
-      //     (if(reducedMapInfo == null) "null" else reducedMapInfo.mkString(", ")))
-// IMPROVE: understand why there are repetitions; it might be
-// RemappingExtender.allExtensions.  For lazySet bound 44, it's 8,905
-      // Test if this value appears again later.
-/*    if(false) for(i <- index until inducedInfo.length){
-        val (map1,cpts1,unifs1,reducedMapInfo1) = inducedInfo(i)
-        if(cpts1.sameElements(cpts) && unifs1 == unifs){
-          if(newEffectOn) Profiler.count("Induced repetition")
-          else assert(false,
-            s"pre = $pre\npost = $post\ncv = $cv\n"+
-              "map = "+Remapper.show(map)+"\nmap1 = "+Remapper.show(map1)+
-              "\ncpts = "+StateArray.show(cpts)+s"\nunifs = $unifs" )
-        }
-      }  */
-      Profiler.count("EffectOn step "+unifs.isEmpty)
-      // The components needed for condition (b).
-      val crossRefs: List[Array[State]] = 
-        if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
-        else List()
-      if(unifs.nonEmpty ||  reducedMapInfo == null ||
-         !cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)){
-        val newPrinc = getNewPrinc(cpts(0), unifs)
-        var newComponentsList =
-          StateArray.makePostComponents(newPrinc, postCpts, cpts)
-        processInducedInfo(trans, cv, nextNewViews, 
-          map, cpts, unifs, reducedMapInfo, true, crossRefs, newComponentsList)
+      /* What does cpt get mapped to given unifications unifs? */
+      @noinline def getNewPrinc(cpt: State, unifs: UnificationList): State = {
+        var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
+        if(us.isEmpty) cpt else postCpts(us.head._2)
       }
-    } // end of while loop
-}
-primaryIter
+      // Process inducedInfo
+      var index = 0
+      while(index < inducedInfo.length){
+        val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
+        // Following no longer true
+        // if(singleRef) assert((reducedMapInfo != null) == unifs.isEmpty,
+        //   s"unifs = $unifs; reducedMapInfo = "+
+        //     (if(reducedMapInfo == null) "null" else reducedMapInfo.mkString(", ")))
+        // IMPROVE: understand why there are repetitions; it might be
+        // RemappingExtender.allExtensions.  For lazySet bound 44, it's 8,905
+        // Test if this value appears again later.
+        /*    if(false) for(i <- index until inducedInfo.length){
+         val (map1,cpts1,unifs1,reducedMapInfo1) = inducedInfo(i)
+         if(cpts1.sameElements(cpts) && unifs1 == unifs){
+         if(newEffectOn) Profiler.count("Induced repetition")
+         else assert(false,
+         s"pre = $pre\npost = $post\ncv = $cv\n"+
+         "map = "+Remapper.show(map)+"\nmap1 = "+Remapper.show(map1)+
+         "\ncpts = "+StateArray.show(cpts)+s"\nunifs = $unifs" )
+         }
+         }  */
+        Profiler.count("EffectOn step "+unifs.isEmpty)
+        // The components needed for condition (b).
+        val crossRefs: List[Array[State]] =
+          if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
+          else List()
+        if(unifs.nonEmpty ||  reducedMapInfo == null ||
+          !cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)){
+          val newPrinc = getNewPrinc(cpts(0), unifs)
+          var newComponentsList =
+            StateArray.makePostComponents(newPrinc, postCpts, cpts)
+          processInducedInfo(trans, cv, nextNewViews,
+            map, cpts, unifs, reducedMapInfo, true, crossRefs, newComponentsList)
+        }
+      } // end of while loop
 
     // Process secondaryInduced
-    index = 0
-@noinline def secondaryIter = {
-    while(index < secondaryInduced.length){
-      val (cpts, unifs, k) = secondaryInduced(index); index += 1
-      Profiler.count("SecondaryInduced")
-      val crossRefs: List[Array[State]] = 
-        if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
-        else List()
-      val newPrinc = getNewPrinc(cpts(0), unifs) 
-      val newComponentsList = List(Array(postCpts(k), newPrinc))
-      processInducedInfo(trans, cv, nextNewViews,
-        null, cpts, unifs, null, false, crossRefs, newComponentsList)
+      index = 0
+      while(index < secondaryInduced.length){
+        val (cpts, unifs, k) = secondaryInduced(index); index += 1
+        Profiler.count("SecondaryInduced")
+        val crossRefs: List[Array[State]] =
+          if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
+          else List()
+        val newPrinc = getNewPrinc(cpts(0), unifs)
+        val newComponentsList = List(Array(postCpts(k), newPrinc))
+        processInducedInfo(trans, cv, nextNewViews,
+          null, cpts, unifs, null, false, crossRefs, newComponentsList)
+      }
     }
-}
-secondaryIter
-  }
 
   /** Create induced transition producing views with post.servers and each
     * element of newComponentsList.  The transition is induced by pre -e->
@@ -158,49 +155,24 @@ secondaryIter
     if(showTransitions && isPrimary || highlight) 
       println("processInducedInfo: "+Remapper.show(map))
 
-    /* Get the post-states of unified components that change state, or null if
-     * none. */
-// IMPROVE: this duplicates work in SingleRefEffectOnUnification.scala
-/*
-    def getPostUnified: List[State] = {
-      val len = cv.components.length
-      val postUnified = new Array[State](len); var found = false
-      for(j <- 0 until len){
-        // Indices of cpts of pre unified with cpts(j)
-        val is = unifs.filter(_._1 == j)
-        if(is.nonEmpty){
-          assert(is.length == 1); val i = is.head._2
-          if(trans.changedStateBitMap(i)){
-            postUnified(j) = post.components(i); found = true
-          }
-        }
-      }
-      if(found) postUnified.toList else null
-    }
- */
-
     /* Record this induced transition if singleRef and primary, and (1) if
      * newEffectOn, no acquired references, (2) otherwise no unifs. */
     @inline def recordInduced() = {
       if(singleRef && isPrimary){
         if(newEffectOn){
-          // IMPROVE structure
-// IMPROVE: repeats work from SingleRefEffectOnUnification: doesPrincipalAcquireRef and getPostUnified
-          if(true){
-            if(!trans.doesPrincipalAcquireRef(unifs)){
-              val postUnified = trans.getPostUnified(unifs, cv.components.length)
-              cv.addDoneInducedPostServersRemaps(
-                post.servers, reducedMap, postUnified)
-            }
+// IMPROVE: repeats work from SingleRefEffectOnUnification:
+// doesPrincipalAcquireRef and getPostUnified
+          if(DetectRepeatRDMapWithUnification){
+            if(!trans.doesPrincipalAcquireRef(unifs))
+              cv.addDoneInducedPostServersRemaps(post.servers, reducedMap, 
+                trans.getPostUnified(unifs, cv.components.length) )
           }
           else if(unifs.isEmpty) // old version
             cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
-          // else true
-        }
+        } // end of if(newEffectOn)
         else if(unifs.isEmpty)
           cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
       }
-      //else true
     }
 
     /* Show the transition. */

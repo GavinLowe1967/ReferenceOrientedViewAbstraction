@@ -8,6 +8,7 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
   * calculating transitions induced by pre -> post upon cv. */
 class EffectOnUnification(
   pre: Concretization, post: Concretization, cv: ComponentView){
+  require(!newEffectOn)
 
   import Unification.CombineResult 
     // = ArrayBuffer[(RemappingMap, Array[State], UnificationList)]
@@ -171,7 +172,7 @@ class EffectOnUnification(
     val princRenames = c2Refs.map(_._2) // normally empty; sometimes singleton
     require(singleRef || princRenames.isEmpty)
     val changedServers = servers != post.servers
-    val map0 = servers.remappingMap(cv.getParamsBound)
+    val map0 = servers.remappingMap1(cv.getParamsBound)
     // All params in post.servers but not in pre.servers, as a bitmap.
     val newServerIds: Array[Array[Boolean]] = 
       ServerStates.newParamsBitMap(servers, post.servers)

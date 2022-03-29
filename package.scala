@@ -181,6 +181,11 @@ package object ViewAbstraction{
   /** Are we supporting debugging? */ 
   var debuggable = true
 
+  /** With singleRef and newEffectOn, in SingleRefEffectOnUnification, do we
+    * detect a repeat of a result-defining map with the same post.servers,
+    * *and* allowing unifications? */
+  val DetectRepeatRDMapWithUnification = true
+
   // IMPROVE: move
   /** The number of indexing types in the current system. */
   var numTypes = -1

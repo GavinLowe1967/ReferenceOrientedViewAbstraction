@@ -50,7 +50,8 @@ object Unification{
   }
 
   /** The result of a unification, giving the indices of components that have
-    * been unified. */ 
+    * been unified.  A pair (j,i) indicates that cv.components(j) has been
+    * unified with pre.components(i).  */ 
   type UnificationList = List[(Int,Int)]
 
   /** The result type of allUnifs. */ 

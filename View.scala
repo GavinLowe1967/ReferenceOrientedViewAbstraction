@@ -234,17 +234,19 @@ class ComponentView(servers: ServerStates, components: Array[State])
 
   /** Information about transitions pre -> post for which we have considered
     * induced transitions from this view, with pre.servers = this.servers !=
-    * post.servers and with no unification.  The set of post.servers for all
-    * such transitions. */
+    * post.servers.  The set of post.servers for such transitions.
+    * 
+    * If not singleRef, we record all such, but only when there is no
+    * unification.  */
   private val doneInducedPostServers: OpenHashSet[ServerStates] = 
     if(singleRef) null else new OpenHashSet[ServerStates]
 
   /** Record that we are considering an induced transition with this, with no
     * unification, and whose post-state has postServers.  Return true if this
     * is the first such. */
-  def addDoneInduced(postServers: ServerStates): Boolean = 
+  def addDoneInduced(postServers: ServerStates): Boolean =
     doneInducedPostServers.add(postServers)
-  
+
   /** (With singleRef.) Have we previously stored postServers against this?  */
   def containsDoneInduced(postServers: ServerStates): Boolean = 
     doneInducedPostServers.contains(postServers)

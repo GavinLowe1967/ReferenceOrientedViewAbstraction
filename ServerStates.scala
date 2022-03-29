@@ -74,12 +74,20 @@ class ServerStates(val servers: List[State]){
   }
 
   /** A (fresh) RemappingMap, of size `size(t)` for each t, representing the
-    * identity on the parameters of this .*/
-  def remappingMap(size: Array[Int]): RemappingMap = {
+    * identity on the parameters of this. 
+    * 
+    * Note: client code should use at most one such map at a time.  It is
+    * called from SingleRefEffectOnUnification.apply and
+    * EffectOnUnification.apply. */
+  def remappingMap1(size: Array[Int]): RemappingMap = {
+    //Profiler.count("ServerStates.remappingMap1")
     require(normalised)
-    val result = new Array[Array[Identity]](numTypes); var t = 0
+    // Note: we aim to do no new memory allocation here.
+    val result = ServerStates.remappingMapStore; var t = 0
+    // val result = new Array[Array[Identity]](numTypes); var t = 0
     while(t < numTypes){
-      result(t) = new Array[Identity](size(t))
+      result(t) = ServerStates.getRemappingMapRow(t, size(t)) 
+      // new Array[Identity](size(t))
       var i = 0
       while(i < paramsBound(t)){ result(t)(i) = i; i += 1 }
       while(i < size(t)){ result(t)(i) = -1; i += 1 }
@@ -147,6 +155,30 @@ object ServerStates{
     }
     newIds
   }
+
+  /** A store for rows of RemappingMaps, used in remappingMap1(size).
+    * remappingMapStore(t)(size) holds an array that can be used for row t of
+    * size size of a RemappingMap.  These are initialised on demand.
+    * 
+    * Note: each should be used in only one way at a time.  In a concurrent
+    * implementation, these would need to be thread-local. */
+  private[this] val remappingMapRowStore = 
+    Array.tabulate(numTypes)(t => new Array[Array[Int]](2*typeSizes(t)))
+
+  /** Get a rows of a RemappingMap, for type t and size size. 
+    * 
+    * Note: each result should be used in only one way at a time.  */
+  private def getRemappingMapRow(t: Int, size: Int) = {
+    if(remappingMapRowStore(t)(size) == null)
+      remappingMapRowStore(t)(size) = new Array[Identity](size)
+    remappingMapRowStore(t)(size)
+  }
+
+  /** A RemappingMap, used in remappingMap1(size).
+    * 
+    * Note: this should be used in only one way at a time.  In a concurrent
+    * implementation, these would need to be thread-local. */
+  private val remappingMapStore = new Array[Array[Identity]](numTypes)
 
 }
 
