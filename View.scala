@@ -79,6 +79,12 @@ class ReducedComponentView(
   val servers: ServerStates, val components: Array[State])
     extends View{
 
+  /** The principal component. */
+  def principal = components(0)
+
+  /** The complete ComponentView corresponding to this. */
+  def asComponentView = new ComponentView(servers, components)
+
   override def equals(that: Any) = {
     if(that != null){
       val cv = that.asInstanceOf[ReducedComponentView]
@@ -121,9 +127,6 @@ class ComponentView(servers: ServerStates, components: Array[State])
   def this(servers: ServerStates, principal: State, others: Array[State]){
     this(servers, principal +: others)
   }
-
-  /** The principal component. */
-  def principal = components(0)
 
   /** Identities of components. */
 // IMPROVE: replace by cptIdsBitMap

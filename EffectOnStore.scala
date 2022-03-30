@@ -114,7 +114,8 @@ class SimpleEffectOnStore extends EffectOnStore{
     Profiler.count("EffectOnStore.add")
     for(mc <- missingCommon) assert(!mc.done)
     val mcArray = missingCommon.toArray
-    val missingInfo = new MissingInfo(nv, missing.toArray, mcArray)
+    val nv1 = new ReducedComponentView(nv.servers, nv.components)
+    val missingInfo = new MissingInfo(nv1, missing.toArray, mcArray)
     if(missingCommon.isEmpty){
       assert(missing.nonEmpty)
       missingInfo.log(McDoneStore(missingInfo.missingHead))
@@ -155,8 +156,9 @@ class SimpleEffectOnStore extends EffectOnStore{
   def complete(cv: ComponentView, views: ViewSet): List[ComponentView] = {
     var result = List[ComponentView]()
     // Add nv to result if not already there
-    @inline def maybeAdd(nv: ComponentView) = 
-      if(!result.contains(nv)) result ::= nv
+    @inline def maybeAdd(nv: ReducedComponentView) = 
+      if(!result.contains(nv)) result ::= nv.asComponentView 
+      else Profiler.count("maybeAdd repeat")
 
     // Update based upon the MissingCommon entries in mi being all completed.
     // Pre: the missingViews in mi have been updated (via mi.advanceMC).  If
@@ -193,14 +195,14 @@ class SimpleEffectOnStore extends EffectOnStore{
               // Register mi against each view in vb, and retain
               for(cpts <- vb){
                 val rcv = new ReducedComponentView(cv.servers, cpts)
-                // assert(!views.contains(cv1)) 
+                // assert(!views.contains(cv1))
                 mi.log(McNotDoneStore(rcv))
                 addToStore(mcNotDoneStore, rcv, mi)
               }
               mi.log(CandidateForMC(cv.servers, cv.principal))
-              if(!newMis.add(mi)){ 
+              if(!newMis.add(mi)){
                 mi.setNotAdded; mi.log(NotStored("candidateForMCStore"))
-              } 
+              }
             }
           }
         } // end of for loop
@@ -218,9 +220,9 @@ class SimpleEffectOnStore extends EffectOnStore{
           if(mi.mcDone) assert(mi.done || mi.transferred)
           else if(views.contains(mi.newView)) mi.markNewViewFound
           else{
-            val ab = mi.updateMissingViewsOfMissingCommon(views) 
-            if(mi.done) maybeAdd(mi.newView) 
-            else if(mi.mcDone) mcDone(mi) 
+            val ab = mi.updateMissingViewsOfMissingCommon(views)
+            if(mi.done) maybeAdd(mi.newView)
+            else if(mi.mcDone) mcDone(mi)
             else for(cpts <- ab){
               val rcv = new ReducedComponentView(cv.servers, cpts)
               mi.log(McNotDoneStore(rcv))

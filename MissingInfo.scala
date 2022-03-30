@@ -8,9 +8,9 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
   * of missingViews have been added, and all the obligations represented by
   * missingCommon have been satisfied. */
 class MissingInfo(
-  val newView: ComponentView, 
+  val newView: ReducedComponentView, 
   private var missingViews: Array[ComponentView], 
-  /*private*/ var missingCommon: Array[MissingCommon] // public for profiling
+  private var missingCommon: Array[MissingCommon] 
 ){
   /* missingViews contains component views that are necessary to satisfy this
    * constraint: all must be added to the ViewSet.  This corresponds to

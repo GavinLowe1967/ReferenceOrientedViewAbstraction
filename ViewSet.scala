@@ -8,7 +8,7 @@ trait ViewSet{
   def add(sv: ComponentView) : Boolean
 
   /** Does this contain sv? */
-  def contains(sv: ComponentView): Boolean 
+  def contains(sv: ReducedComponentView): Boolean 
 
   /** Does this contain a view corresponding to servers and cpts? */
   def contains(servers: ServerStates, cpts: Array[State]): Boolean
@@ -276,7 +276,7 @@ class PrincipalBasedViewSet(initSize: Int = 4){
   }
 
   /** Does this contain sv? */
-  def contains(sv: ComponentView): Boolean = {
+  def contains(sv: ReducedComponentView): Boolean = {
     val set = underlying.get(sv.principal)
     set != null && set.contains(sv.components)
   }
@@ -367,7 +367,7 @@ class ServerPrincipalBasedViewSet(initSize: Int = 16) extends ViewSet {
   }
 
   /** Does this contain sv? */
-  def contains(sv: ComponentView): Boolean = {
+  def contains(sv: ReducedComponentView): Boolean = {
     val set = underlying.get(sv.servers)
     set != null && set.contains(sv)
   }
