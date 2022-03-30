@@ -36,7 +36,7 @@ class MissingCommon(
     * component state c for which condition (1) is satisfied; cands contains
     * those components corresponding to conditions (2) and (3).  The list is
     * sorted (wrt StateArray.lessThan).  */
-  import MissingCommon.MissingComponents // = List[Array[State]]
+  import MissingCommon.MissingComponents // = Array[Array[State]]
 
   /** When any element of missingCandidates is satisfied, then this obligation
     * will be discharged.  Each MissingComponents within the list is sorted
@@ -71,7 +71,7 @@ class MissingCommon(
   /** The heads of the missing candidates.  The corresponding MissingInfo should
     * be registered against these in
     * EffectOnStore.mcMissingCandidatesStore. */
-  def missingHeads: List[Cpts] =  missingCandidates.map(_.head)
+  def missingHeads: List[Cpts] =  missingCandidates.map(_(0))
 
   import MissingCommon.ViewBuffer // = ArrayBuffer[Array[State]]
 
@@ -81,12 +81,14 @@ class MissingCommon(
   @inline private 
   def removeViews(mc: MissingComponents, views: ViewSet, toRegister: ViewBuffer)
       : MissingComponents = {
-    var mc1 = mc
+    // For simplicity, we convert to a List, and back to an Array at the end.
+    // This could be improved.
+    var mc1 = mc.toList
     while(mc1.nonEmpty && views.contains(servers, mc1.head))  mc1 = mc1.tail
     if(mc1.isEmpty) setDone    // This is now satisfied
     else toRegister += mc1.head
-    log(UpdateMC(mc, mc1))
-    mc1
+    // log(UpdateMC(mc, mc1))
+    mc1.toArray
   }
 
   /** Update missingCandidates based on views.  Remove elements of views from
@@ -169,9 +171,14 @@ class MissingCommon(
   }
 
   /** Is mCand sorted, without repetitions. */
-  private def isSorted(mCpts: MissingComponents): Boolean = 
-    mCpts.length < 2 || 
-      StateArray.compare(mCpts.head, mCpts.tail.head) < 0 && isSorted(mCpts.tail)
+  private def isSorted(mCpts: MissingComponents): Boolean = {
+    var i = 0
+    while(i < mCpts.length-1 && StateArray.compare(mCpts(i), mCpts(i+1)) < 0)
+      i += 1
+    i == mCpts.length-1
+  }
+  // mCpts.length < 2 || 
+  // StateArray.compare(mCpts.head, mCpts.tail.head) < 0 && isSorted(mCpts.tail)
 
   /** Sanity check that no head element of missingCandidates is in views. */
   def sanityCheck(views: ViewSet) = {
@@ -277,9 +284,28 @@ object MissingCommon{
     * registered in the EffectOnStore. */
   type ViewBuffer = ArrayBuffer[Cpts]
 
+  /** Each value cands of type MissingComponents represents that if
+    * (servers,cpts) is added to the ViewSet for each cpts in cands, then this
+    * obligation will be discharged.  Each corresponds to a particular
+    * component state c for which condition (1) is satisfied; cands contains
+    * those components corresponding to conditions (2) and (3).  The list is
+    * sorted (wrt StateArray.lessThan).  */
+  type MissingComponents = Array[Cpts]
+
   /** All the MissingCommon we have created.  */
   private var allMCs = 
     new HashMap[(ServerStates, List[State], ProcessIdentity), MissingCommon]
+
+  /** Perform a memory profile of this. */
+  def memoryProfile = {
+    import ox.gavin.profiling.MemoryProfiler.traverse
+    println("MissingCommon.allMCs size = "+allMCs.size)
+    for(mc <- allMCs.take(3)){
+      traverse("missingCommon", mc, maxPrint = 2); println
+    }
+    traverse("allMCs", allMCs, maxPrint = 1); println
+    traverse("MissingCommon", this, maxPrint = 1); println
+  }
 
   /** Get a MissingCommon corresponding to servers, cpts1, cpts2, pid: either
     * retrieving a previous such object, or creating a new one.  The
@@ -423,39 +449,47 @@ object MissingCommon{
       }
       j += 1
     }
-    missing.sortWith(StateArray.lessThan)
+    missing.toArray.sortWith(StateArray.lessThan)
   }
 
   // Possible returns from compare
   private val Eq = 0; private val Sub = 1; 
   private val Sup = 2; private val Inc = 4
 
-  /** Each value cands of type MissingComponents represents that if
-    * (servers,cpts) is added to the ViewSet for each cpts in cands, then this
-    * obligation will be discharged.  Each corresponds to a particular
-    * component state c for which condition (1) is satisfied; cands contains
-    * those components corresponding to conditions (2) and (3).  The list is
-    * sorted (wrt StateArray.lessThan).  */
-  type MissingComponents = List[Array[State]]
-
   /** Compare mc1 and mc2.  Return Eq is equal, Sub if mc1 is proper subset, Sup
     * if mc1 is a proper superset, and Inc if they are incomparable.  Pre:
     * both are sorted.  */
   @inline private 
   def compare(mc1: MissingComponents, mc2: MissingComponents): Int = {
-    var c1 = mc1; var c2 = mc2; var sub = true; var sup = true
+    var i1 = 0; var i2 = 0; var sub = true; var sup = true
     // Inv sub is true if elements of mc1 seen so far are all in mc2; sup is
     // true if elements of mc2 seen so far are all in mc1.  Still need to
-    // compare c1 and c2.
-    while(c1.nonEmpty && c2.nonEmpty && (sub || sup)){
-      val comp = StateArray.compare(c1.head, c2.head) //c1.head.compare(c2.head)
-      if(comp < 0){ sub = false; c1 = c1.tail } // c1.head not in mc2
-      else if(comp == 0){ c1 = c1.tail; c2 = c2.tail }
-      else{ sup = false; c2 = c2.tail } // c2.head is not in mc1
+    // compare from indices i1 and i2 onwards.
+    while(i1 < mc1.length && i2 < mc2.length && (sub || sup)){
+      val comp = StateArray.compare(mc1(i1), mc2(i2))
+      if(comp < 0){ sub = false; i1 += 1 } // c1.head not in mc2
+      else if(comp == 0){ i1 += 1; i2 += 1 }
+      else{ sup = false; i2 += 1 } // c2.head is not in mc1
     }
-    sub &&= c1.isEmpty; sup &&= c2.isEmpty
+    sub &&= (i1 == mc1.length); sup &&= (i2 == mc2.length)
     if(sub){ if(sup) Eq else Sub } else if(sup) Sup else Inc
   }
+
+  // @inline private 
+  // def compare(mc1: MissingComponents, mc2: MissingComponents): Int = {
+  //   var c1 = mc1; var c2 = mc2; var sub = true; var sup = true
+  //   // Inv sub is true if elements of mc1 seen so far are all in mc2; sup is
+  //   // true if elements of mc2 seen so far are all in mc1.  Still need to
+  //   // compare c1 and c2.
+  //   while(c1.nonEmpty && c2.nonEmpty && (sub || sup)){
+  //     val comp = StateArray.compare(c1.head, c2.head) //c1.head.compare(c2.head)
+  //     if(comp < 0){ sub = false; c1 = c1.tail } // c1.head not in mc2
+  //     else if(comp == 0){ c1 = c1.tail; c2 = c2.tail }
+  //     else{ sup = false; c2 = c2.tail } // c2.head is not in mc1
+  //   }
+  //   sub &&= c1.isEmpty; sup &&= c2.isEmpty
+  //   if(sub){ if(sup) Eq else Sub } else if(sup) Sup else Inc
+  // }
 
   // Events for log 
   trait MCEvent
