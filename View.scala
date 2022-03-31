@@ -113,6 +113,15 @@ class ReducedComponentView(
   }
 
   override val hashCode = mkHashCode
+
+ /** Ordering on ReducedComponentViews.  Return a value x s.t.: x < 0 if this <
+    * that; x == 0 when this == that; x > 0 when this > that. */
+  def compare(that: ReducedComponentView) = {
+    val serverComp = servers.compare(that.servers)
+    if(serverComp != 0) serverComp
+    else StateArray.compare(components, that.components)
+  }
+
 }
 
 // =======================================================
@@ -215,6 +224,9 @@ class ComponentView(servers: ServerStates, components: Array[State])
       paramsBound = View.getParamsBound(servers, components)
     paramsBound
   }
+
+  /** Produce a ReducedComponentView equivalent to this. */
+  def reduce = new ReducedComponentView(servers, components)
 
   /** A template used in getRemappingMap. */
   //private var remappingMapTemplate: RemappingMap = null
@@ -406,11 +418,11 @@ class ComponentView(servers: ServerStates, components: Array[State])
 
   /** Ordering on ComponentViews.  Return a value x s.t.: x < 0 if this < that;
     * x == 0 when this == that; x > 0 when this > that. */
-  def compare(that: ComponentView) = {
-    val serverComp = servers.compare(that.servers)
-    if(serverComp != 0) serverComp
-    else StateArray.compare(components, that.components)
-  }
+  // def compare(that: ComponentView) = {
+  //   val serverComp = servers.compare(that.servers)
+  //   if(serverComp != 0) serverComp
+  //   else StateArray.compare(components, that.components)
+  // }
 }
 
 

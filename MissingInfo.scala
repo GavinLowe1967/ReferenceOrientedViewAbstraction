@@ -9,7 +9,7 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
   * missingCommon have been satisfied. */
 class MissingInfo(
   val newView: ReducedComponentView, 
-  private var missingViews: Array[ComponentView], 
+  private var missingViews: Array[ReducedComponentView], 
   private var missingCommon: Array[MissingCommon] 
 ){
   /* missingViews contains component views that are necessary to satisfy this
@@ -311,7 +311,7 @@ class MissingInfo(
 object MissingInfo{
   /** Sort missingCommon and missingViews. */
   private def sort(
-    missingCommon: Array[MissingCommon], missingViews: Array[ComponentView])
+    missingCommon: Array[MissingCommon], missingViews: Array[ReducedComponentView])
   = {
     require(missingCommon.length <= 2)
     // Sort missingCommon
@@ -359,7 +359,7 @@ object MissingInfo{
 
   // Entries in the log of a MissingInfo.  Used for debugging
   trait LogEntry
-  case class McDoneStore(cv: ComponentView) extends LogEntry
+  case class McDoneStore(cv: ReducedComponentView) extends LogEntry
   case class McNotDoneStore(cv: ReducedComponentView) extends LogEntry
   case class CandidateForMC(servers: ServerStates, princ: State) extends LogEntry
   case object MarkNewViewFound extends LogEntry

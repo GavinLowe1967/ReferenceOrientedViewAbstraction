@@ -115,7 +115,8 @@ class SimpleEffectOnStore extends EffectOnStore{
     for(mc <- missingCommon) assert(!mc.done)
     val mcArray = missingCommon.toArray
     val nv1 = new ReducedComponentView(nv.servers, nv.components)
-    val missingInfo = new MissingInfo(nv1, missing.toArray, mcArray)
+// IMPROVE
+    val missingInfo = new MissingInfo(nv1, missing.map(_.reduce).toArray, mcArray)
     if(missingCommon.isEmpty){
       assert(missing.nonEmpty)
       missingInfo.log(McDoneStore(missingInfo.missingHead))
