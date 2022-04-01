@@ -79,81 +79,73 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   /** The main function. */
   def apply(): (CombineResult1, CombineResult2) = {
     // val map0 = cv.getRemappingMap // 
-    //Profiler.count("SREOU.apply")
-    // Early bail-out if servers don't change, no chance of unification with
-    // components that change state, and no chance of secondary induced
-    // transitions.  This captures over 50% of cases with lazySetNoDel.csp
-    if(false && !trans.mightGiveSufficientUnifs(cpts)) (result,result2)
-    else{
-      val map0 = servers.remappingMap1(cv.getParamsBound)
-      val allUnifs = Unification.allUnifs(map0, preCpts, cpts)
-      var k = 0
+    // Profiler.count("SREOU.apply")
+    val map0 = servers.remappingMap1(cv.getParamsBound)
+    val allUnifs = Unification.allUnifs(map0, preCpts, cpts)
+    var k = 0
 
-      while(k < allUnifs.length){
-        val (map1,unifs) = allUnifs(k); k += 1
-        if(isSufficientUnif(unifs)){
-          // Result-relevant parameters: parameters to map params of cv to, in
-          // order to create result-defining map.
-          val otherArgsBitMap = mkOtherArgsMap(map1, unifs)
-          //Profiler.count("SREOU.apply-iter")
+    while(k < allUnifs.length){
+      val (map1,unifs) = allUnifs(k); k += 1
+      if(isSufficientUnif(unifs)) makePrimaryInduced(map1, unifs)
+      makeSecondaryInduced(map1, unifs)
+    } // end of while loop iterating over unifs
+    (result,result2)
+  }
 
-          // Primary result-defining maps
-          val rdMaps =
-            // If there are no new parameters, then the only result-defining
-            // map is map1.  Note: it's necessary to clone below, because map1
-            // gets used again with secondary transitions.  With lazySet,
-            // bound 44, ~99.8% of iterations fall into this case.
-// In this case, can we use the cv.containsDoneInduced technique from
-// isSufficientUnifs?
-            if(isEmpty(otherArgsBitMap)){
-              //Profiler.count("SREOU: empty otherArgs")
-              ArrayBuffer(Remapper.cloneMap(map1))
-            }
-            else extendToRDMap(map1,otherArgsBitMap)
-
-          // Extend with extra linkages and fresh parameters
-          var i = 0
-          while(i < rdMaps.length){
-            val rdMap = rdMaps(i); i += 1
-            // post-states of unified components
-            val postUnified = trans.getPostUnified(unifs, cpts.length)
-            val reducedMapInfo = Remapper.reduceMap(rdMap)
-            // Does this duplicate a previous transition: no unifications, no
-            // acquired references, and the same result-defining map and
-            // post-states of unified components?
-            val duplicated = if(DetectRepeatRDMapWithUnification)
-              !trans.doesPrincipalAcquireRef(unifs) && {
-                val done = cv.containsDoneInducedPostServersRemaps(
-                  postServers, reducedMapInfo, postUnified)
-                // Profiler.count("containsDoneInducedPSR"+done+unifs.isEmpty);
-                // lazySet bound 44: TT: 2.3B; TF: 40M; FT:9.9M; FF: 2.9M
-                done }
-            else unifs.isEmpty && // old version; this might be better
-            cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo)
-            if(!duplicated)
-              makePrimaryExtension(unifs, otherArgsBitMap, rdMap, reducedMapInfo)
-          }
-        } // end of if(isSufficientUnifs(unifs))
-
-        //Secondary induced transitions; improve: test if sufficient unifs?
-        val secondaryInfo = getSecondaryInfo(map1); var i = 0
-        while(i < secondaryInfo.length){
-          val (map2,ix) = secondaryInfo(i); i += 1
-          val sc = postCpts(ix)
-          val otherArgsBitMap = mkSecondaryOtherArgsMap(map2, sc)
-          val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
-          // Secondary result-defining maps
-          val rdMaps =
-            remappingExtender.extendMapOverComponent(map2, cpts(0), otherArgs)
-          var j = 0
-          // Then consider linkages
-          while(j < rdMaps.length){
-            val rdMap = rdMaps(j); j += 1
-            makeSecondaryExtension(unifs, otherArgsBitMap, rdMap, ix)
-          }
+  /** Try to create primary induced transitions based on map1 and unifs. */
+  @inline private 
+  def makePrimaryInduced(map1: RemappingMap, unifs: UnificationList) = {
+    // Result-relevant parameters: parameters to map params of cv to, in order
+    // to create result-defining map.
+    val otherArgsBitMap = mkOtherArgsMap(map1, unifs)
+    Profiler.count("SREOU.apply-iter")
+    // Primary result-defining maps
+    val rdMaps =
+      // If there are no new parameters, then the only result-defining map is
+      // map1.  Note: it's necessary to clone below, because map1 gets used
+      // again with secondary transitions.  With lazySet, bound 44, ~99.8% of
+      // iterations fall into this case.
+      if(isEmpty(otherArgsBitMap)){
+        // If no unified component changes state and the servers do not get
+        // any new reference (which includes the case that unifs is empty),
+        // and we've previously successfully induced a transition with this
+        // change of servers, then this instance can only reproduce that
+        // transition.  With lazySet, bound 44, ~99.8% of cases fall into this
+        // category.
+        if((if(true) !trans.isChangingUnif(unifs) && !trans.serverGetsNewId
+            else unifs.isEmpty) &&
+          cv.containsDoneInduced(postServers)){
+          Profiler.count("SREOU: empty otherArgs previously done")
+          SingleRefEffectOnUnification.EmptyArrayBuffer
+        }
+        else{
+          Profiler.count("SREOU: empty otherArgs")
+          ArrayBuffer(Remapper.cloneMap(map1))
         }
       }
-      (result,result2)
+      else extendToRDMap(map1,otherArgsBitMap)
+
+    // Extend with extra linkages and fresh parameters
+    var i = 0
+    while(i < rdMaps.length){
+      val rdMap = rdMaps(i); i += 1
+      // post-states of unified components
+      val postUnified = trans.getPostUnified(unifs, cpts.length)
+      val reducedMapInfo = Remapper.reduceMap(rdMap)
+      // Does this duplicate a previous transition: no unifications, no
+      // acquired references, and the same result-defining map and
+      // post-states of unified components?
+      val duplicated = if(DetectRepeatRDMapWithUnification)
+        !trans.doesPrincipalAcquireRef(unifs) && {
+          val done = cv.containsDoneInducedPostServersRemaps(
+            postServers, reducedMapInfo, postUnified)
+          // Profiler.count("containsDoneInducedPSR"+done+unifs.isEmpty);
+          // lazySet bound 44: TT: 2.3B; TF: 40M; FT:9.9M; FF: 2.9M
+          done }
+      else unifs.isEmpty && // old version; this might be better
+        cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo)
+      if(!duplicated)
+        makePrimaryExtension(unifs, otherArgsBitMap, rdMap, reducedMapInfo)
     }
   }
 
@@ -268,22 +260,6 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
           }
           id1 += 1
         }
-/*
-        var toDoIds = otherArgs(t); var doneIds = List[Identity]()
-        // Inv: reverse(doneIds) ++ toDoIds = otherArgs(t)
-        while(toDoIds.nonEmpty){
-          val id1 = toDoIds.head; toDoIds = toDoIds.tail
-          // Don't map an identity to an identity
-          if(!(isId && preCptIds(t)(id1) /*.contains((t,id1))*/)){
-            otherArgs(t) = append1(doneIds, toDoIds) // temporary update (*)
-            map(t)(i) = id1  // temporary update (+)
-            rec(t, i+1)
-            map(t)(i) = -1   // backtrack (+)
-          }
-          doneIds ::= id1 // order doesn't matter
-        } // end of while loop
-        otherArgs(t) = doneIds // undo (*)
- */
         // Also include case of not updating this param
         rec(t, i+1)
       }
@@ -299,6 +275,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, reducedMapInfo: ReducedMap)
   = {
+    Profiler.count("makePrimaryExtension")
     val extensions = 
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, true)
     for(map1 <- extensions){
@@ -307,6 +284,29 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       result += ((map1, newCpts, unifs, reducedMapInfo))
     }
   }
+
+  // ========= Secondary induced transitions
+
+  @inline private 
+  def makeSecondaryInduced(map1: RemappingMap, unifs: UnificationList) = {
+    //Secondary induced transitions; improve: test if sufficient unifs?
+    val secondaryInfo = getSecondaryInfo(map1); var i = 0
+    while(i < secondaryInfo.length){
+      val (map2,ix) = secondaryInfo(i); i += 1; val sc = postCpts(ix)
+      val otherArgsBitMap = mkSecondaryOtherArgsMap(map2, sc)
+      val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
+      // Secondary result-defining maps
+      val rdMaps =
+        remappingExtender.extendMapOverComponent(map2, cpts(0), otherArgs)
+      var j = 0
+      // Then consider linkages
+      while(j < rdMaps.length){
+        val rdMap = rdMaps(j); j += 1
+        makeSecondaryExtension(unifs, otherArgsBitMap, rdMap, ix)
+      }
+    } // end of while loop iterating over secondaryInfo
+  }
+
 
   /* Extend the result-defining map rdMap, based on unifications unifs, to
    * produce all secondary representative extensions corresponding to
@@ -326,8 +326,6 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       result2 += ((newCpts, unifs, ix))
     }
   }
-
-  // ========= Secondary induced transitions
 
   /** Get information about secondary induced transitions: pairs (map2,i) such
     * that map2 extends map1 to map cv.principal's identity to match a
@@ -399,4 +397,12 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
 
     val extendMapOverComponent = outer.remappingExtender.extendMapOverComponent _
   } // end of TestHooks
+}
+
+// =======================================================
+
+object SingleRefEffectOnUnification{
+  /** An empty ArrayBuffer[RemappingMap], used in apply (to avoid unnecessarily
+    * creating a new ArrayBuffer. */
+  private val EmptyArrayBuffer = new ArrayBuffer[RemappingMap]()
 }

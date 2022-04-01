@@ -444,6 +444,8 @@ class Checker(system: SystemP.System){
     println("#abstractions = "+printLong(sysAbsViews.size))
     println(s"#transitions = ${printLong(transitions.size)}")
     println(s"#transition templates = ${printLong(transitionTemplates.size)}")
+    println(s"#ServerStates = ${ServerStates.count}")
+    println(s"#States = ${MyStateMap.stateCount}")
     
     // println(s"effectOnStore size = "+effectOnStore.size)
   }

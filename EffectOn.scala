@@ -57,7 +57,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   : Unit = 
     // Early bail-out if servers don't change, no chance of unification with
     // components that change state, and no chance of secondary induced
-    // transitions.  This captures over 50% of cases with lazySetNoDel.csp
+    // transitions.  This captures over about 25% of cases with lazySet.csp,
+    // bound 44; nearly all other cases have servers that change state.
     if(trans.mightGiveSufficientUnifs(cv.components)){
       val pre = trans.pre; val post = trans.post
       require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
@@ -149,10 +150,11 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
     newComponentsList: List[Array[State]])
       : Unit = {
+    Profiler.count(s"processInducedInfo $isPrimary")
     val pre = trans.pre; val e = trans.e; val post = trans.post
     val highlight = false
     // StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
-    if(showTransitions && isPrimary || highlight) 
+    if(highlight) 
       println("processInducedInfo: "+Remapper.show(map))
 
     /* Record this induced transition if singleRef and primary, and (1) if
@@ -169,6 +171,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           }
           else if(unifs.isEmpty) // old version
             cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
+          // Record that we've done a transition on cv with these post servers
+          // and no unifications
+          if(unifs.isEmpty) cv.addDoneInduced(post.servers)
         } // end of if(newEffectOn)
         else if(unifs.isEmpty)
           cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
@@ -215,8 +220,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     // If singleRef and there are references between components from pre and
     // cv, then check that that combination is possible in sysAbsViews:
     // those that are missing.
-    val missing: List[ComponentView] =
-      crossRefs.map(new ComponentView(pre.servers, _)).filter(!views.contains(_))
+    val missing: List[ReducedComponentView] =
+      crossRefs.map(new ReducedComponentView(pre.servers, _)).
+        filter(!views.contains(_))
     for(newComponents <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newComponents)
       Profiler.count("newViewCount") 

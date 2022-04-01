@@ -18,7 +18,8 @@ import scala.collection.mutable.{ArrayBuffer,HashMap,HashSet}
 trait EffectOnStore{
 
   /** Add MissingInfo(nv, missing, missingCommon) to the store. */
-  def add(missing: List[ComponentView], missingCommon: List[MissingCommon], 
+  def add(missing: List[ReducedComponentView], 
+    missingCommon: List[MissingCommon],
     nv: ComponentView): Unit
 
   /** Try to complete values in the store, based on the addition of cv, and with
@@ -108,20 +109,18 @@ class SimpleEffectOnStore extends EffectOnStore{
   }
 
   /** Add MissingInfo(nv, missing, missingCommon) to the stores. */
-  def add(missing: List[ComponentView], missingCommon: List[MissingCommon], 
-    nv: ComponentView)
+  def add(missing: List[ReducedComponentView], 
+    missingCommon: List[MissingCommon], nv: ComponentView)
       : Unit = {
     Profiler.count("EffectOnStore.add")
     for(mc <- missingCommon) assert(!mc.done)
     val mcArray = missingCommon.toArray
     val nv1 = new ReducedComponentView(nv.servers, nv.components)
-// IMPROVE
-    val missingInfo = new MissingInfo(nv1, missing.map(_.reduce).toArray, mcArray)
+    val missingInfo = new MissingInfo(nv1, missing.toArray, mcArray)
     if(missingCommon.isEmpty){
       assert(missing.nonEmpty)
       missingInfo.log(McDoneStore(missingInfo.missingHead))
       missingInfo.transferred = true
-// IMPROVE: use a ReducedComponentView here
       addToStore(mcDoneStore, missingInfo.missingHead, missingInfo)
     }
     else{

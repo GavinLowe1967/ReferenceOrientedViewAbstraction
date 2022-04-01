@@ -1,5 +1,7 @@
 package ViewAbstraction
 
+import ox.gavin.profiling.Profiler
+
 /** A transition, representing pre -e-> post. */
 class Transition(
   val pre: Concretization, val e: EventInt, val post: Concretization){
@@ -30,6 +32,18 @@ class Transition(
     val nsi = new Array[Array[Boolean]](numTypes); var t = 0
     while(t < numTypes){ nsi(t) = newServerIds(t).clone; t += 1 }
     nsi
+  }
+
+  /** Do the servers acquire any new parameter? */
+  val serverGetsNewId = {
+    // Search if any field of newServerIds is set
+    var res = false; var t = 0
+    while(t < numTypes && !res){
+      var i = 0; val len = newServerIds(t).length
+      while(i < len && !newServerIds(t)(i)) i += 1
+      res = i < len; t += 1
+    }
+    res
   }
 
   /** A NextArgMap, containing values greater than anything in pre or post. */
@@ -83,8 +97,10 @@ class Transition(
     * that changes state in this transition, or (3) we're using singleRef and
     * a secondary component might acquire a reference to cpts(0). */
   def mightGiveSufficientUnifs(cpts: Array[State]): Boolean = {
-    if(changedServers || (singleRef && acquiredRefs(cpts(0).family).nonEmpty))
-      true
+    if(changedServers || (singleRef && acquiredRefs(cpts(0).family).nonEmpty)){
+      //Profiler.count(s"mightGiveSufficientUnifs: true $changedServers"); 
+      true // cases (1) and (3)
+    }
     else{
       var i = 0; var result = false
       while(i < pre.components.length && !result){
@@ -96,9 +112,16 @@ class Transition(
         }
         i += 1
       }
+      // Profiler.count(s"mightGiveSufficientUnifs: $result")
       result
     }
   }
+  // Profiling results for lazySet.csp bound 44:
+  // mightGiveSufficientUnifs: false:                    877,453,018
+  // mightGiveSufficientUnifs: true:                     10,563,200
+  // mightGiveSufficientUnifs: true false:               17,203,482
+  // mightGiveSufficientUnifs: true true:                2,432,052,611
+
   
   import Unification.UnificationList // = List[(Int,Int)]
 

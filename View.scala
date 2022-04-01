@@ -254,7 +254,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * If not singleRef, we record all such, but only when there is no
     * unification.  */
   private val doneInducedPostServers: OpenHashSet[ServerStates] = 
-    if(singleRef) null else new OpenHashSet[ServerStates]
+    if(singleRef && !newEffectOn) null else new OpenHashSet[ServerStates]
 
   /** Record that we are considering an induced transition with this, with no
     * unification, and whose post-state has postServers.  Return true if this
