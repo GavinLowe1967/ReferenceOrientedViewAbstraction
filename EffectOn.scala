@@ -173,7 +173,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
             cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
           // Record that we've done a transition on cv with these post servers
           // and no unifications
-          if(unifs.isEmpty) cv.addDoneInduced(post.servers)
+          if(!trans.isChangingUnif(unifs) && !trans.serverGetsNewId) // unifs.isEmpty) 
+            cv.addDoneInduced(post.servers)
         } // end of if(newEffectOn)
         else if(unifs.isEmpty)
           cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)

@@ -92,7 +92,7 @@ gt(B) = {C,Infty}
 gt(C) = {C,Infty}
 
 -- Identities of nodes
-datatype NodeIDType = Null | N1 | N2 | N3 | N4 | N5 | N6 -- | N7 | N8 | N9 | N10 
+datatype NodeIDType = Null | N1 | N2 | N3 | N4 | N5 | N6 | N7 | N8 | N9 | N10 | N11
 
 NodeID = diff(NodeIDType, {Null}) -- real nodes
 

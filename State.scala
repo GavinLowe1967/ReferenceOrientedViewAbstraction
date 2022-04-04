@@ -460,13 +460,14 @@ object State{
   }
 
   /** A template used in indexMap. */
-  private var indexMapTemplate: Array[Array[Int]] = null
+  // private var indexMapTemplate: Array[Array[Int]] = null
 
   /** Reset for a new check */
-  def reset = indexMapTemplate = null
+  def reset = {} // indexMapTemplate = null
 
   /** A map, implemented as an array, giving the index of identities within
     * states, or -1 if an index does not appear. */ 
+/*
   @inline def indexMap(states: Array[State]): Array[Array[Int]] = {
     if(indexMapTemplate == null) 
       indexMapTemplate =
@@ -482,5 +483,6 @@ object State{
     }
     map
   }
+ */
 
 }

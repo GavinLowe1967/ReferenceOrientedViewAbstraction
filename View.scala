@@ -247,12 +247,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
 
   type UnificationList = List[(Int,Int)]
 
-  /** Information about transitions pre -> post for which we have considered
-    * induced transitions from this view, with pre.servers = this.servers !=
-    * post.servers.  The set of post.servers for such transitions.
-    * 
-    * If not singleRef, we record all such, but only when there is no
-    * unification.  */
+/*
   private val doneInducedPostServers: OpenHashSet[ServerStates] = 
     if(singleRef && !newEffectOn) null else new OpenHashSet[ServerStates]
 
@@ -265,6 +260,55 @@ class ComponentView(servers: ServerStates, components: Array[State])
   /** (With singleRef.) Have we previously stored postServers against this?  */
   def containsDoneInduced(postServers: ServerStates): Boolean = 
     doneInducedPostServers.contains(postServers)
+ */
+
+  /** Information about transitions pre -> post for which we have considered
+    * induced transitions from this view, with pre.servers = this.servers !=
+    * post.servers.  The set of post.servers for such transitions. 
+    * 
+    * If not singleRef, we record all such, but only when there is no
+    * unification.  
+    * 
+    * The representation is a bit map.  The ServerStates with index ssIx is
+    * stored in entry indexFor(ssIx); maskFor(ssIx) provides an appropriate
+    * bit mask.  */
+  private var doneInducedPostServersBM = 
+    if(singleRef && !newEffectOn) null else new Array[Long](0)
+
+  /** The index into doneInducedPostServersBM for a ServersState with index
+    * ssIx. */
+  @inline private def indexFor(ssIx: Int) = ssIx >> 6 // ssIx / 64
+
+  /** Bit mask to extract the bit for a ServerState with index ssIx. */
+  @inline private def maskFor(ssIx: Int) = 1 << (ssIx & 63)
+
+  /** (With singleRef.) Have we previously stored postServers against this?  */
+  def containsDoneInduced(postServers: ServerStates): Boolean = {
+    val ssIx = postServers.index; val ix = indexFor(ssIx)
+    ix < doneInducedPostServersBM.length && 
+      (doneInducedPostServersBM(ix) & maskFor(ssIx)) != 0
+  }
+
+  /** Record that we are considering an induced transition with this, with no
+    * unification, and whose post-state has postServers.  Return true if this
+    * is the first such. */
+  def addDoneInduced(postServers: ServerStates): Boolean = {
+    val ssIx = postServers.index; val ix = indexFor(ssIx)
+    if(ix >= doneInducedPostServersBM.length){
+      // Extend doneInducedPostServersBM
+      val newBM = new Array[Long](ix+1)
+      // for(i <- 0 until doneInducedPostServersBM.length)
+      //   newBM(i) = doneInducedPostServersBM(i)
+      doneInducedPostServersBM.copyToArray(newBM)
+      doneInducedPostServersBM = newBM
+    }
+    val mask = maskFor(ssIx)
+    if((doneInducedPostServersBM(ix) & mask) == 0){
+      doneInducedPostServersBM(ix) |= mask; true
+    }
+    else false
+  }
+
 
   // A representation of map |> post.servers
   import ServersReducedMap.ReducedMap // = Array[Long]
@@ -404,7 +448,8 @@ class ComponentView(servers: ServerStates, components: Array[State])
 
   /** Clear information about induced transitions.  Used in unit testing. */
   def clearInduced = {
-    if(doneInducedPostServers != null) doneInducedPostServers.clear
+    // if(doneInducedPostServers != null) doneInducedPostServers.clear
+    doneInducedPostServersBM = new Array[Long](0)
     if(conditionBInducedMap != null) conditionBInducedMap.clear 
   }
 

@@ -81,7 +81,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     // val map0 = cv.getRemappingMap // 
     // Profiler.count("SREOU.apply")
     val map0 = servers.remappingMap1(cv.getParamsBound)
-    val allUnifs = Unification.allUnifs(map0, preCpts, cpts)
+    val allUnifs = Unification.allUnifs(map0, pre/*Cpts*/, cpts)
     var k = 0
 
     while(k < allUnifs.length){
@@ -98,7 +98,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     // Result-relevant parameters: parameters to map params of cv to, in order
     // to create result-defining map.
     val otherArgsBitMap = mkOtherArgsMap(map1, unifs)
-    Profiler.count("SREOU.apply-iter")
+    // Profiler.count("SREOU.apply-iter")
     // Primary result-defining maps
     val rdMaps =
       // If there are no new parameters, then the only result-defining map is
@@ -110,20 +110,19 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
         // any new reference (which includes the case that unifs is empty),
         // and we've previously successfully induced a transition with this
         // change of servers, then this instance can only reproduce that
-        // transition.  With lazySet, bound 44, ~99.8% of cases fall into this
+        // transition.  Profiling stats with lazySet, bound 44.
         // category.
-        if((if(true) !trans.isChangingUnif(unifs) && !trans.serverGetsNewId
-            else unifs.isEmpty) &&
-          cv.containsDoneInduced(postServers)){
-          Profiler.count("SREOU: empty otherArgs previously done")
+        if(!trans.isChangingUnif(unifs) && !trans.serverGetsNewId &&
+            cv.containsDoneInduced(postServers)){
+          //Profiler.count("SREOU: empty otherArgs previously done") // ~99.7%
           SingleRefEffectOnUnification.EmptyArrayBuffer
         }
         else{
-          Profiler.count("SREOU: empty otherArgs")
+          //Profiler.count("SREOU: empty otherArgs") // ~0.13%
           ArrayBuffer(Remapper.cloneMap(map1))
         }
       }
-      else extendToRDMap(map1,otherArgsBitMap)
+      else extendToRDMap(map1,otherArgsBitMap) // ~0.19%
 
     // Extend with extra linkages and fresh parameters
     var i = 0

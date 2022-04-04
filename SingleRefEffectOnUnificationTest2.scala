@@ -12,9 +12,10 @@ object SingleRefEffectOnUnificationTest2{
   def mkTrans(pre: Concretization, post: Concretization) = 
     new Transition(pre,-1,post)
 
+
   def mkUnifs(pre: Concretization, cv: ComponentView) = 
     Unification.allUnifs(
-      pre.servers.remappingMap1(cv.getParamsBound), pre.components, cv.components)
+      pre.servers.remappingMap1(cv.getParamsBound), pre/*.components*/, cv.components)
 
   /* Test based on (fixed(N0); Th(T0, N1, N2), Nd_A(N1, N3)) ->
    *   (fixed(N4); Th'(T0, N1, N2), Nd_B(N1,N2))

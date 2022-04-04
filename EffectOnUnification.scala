@@ -178,7 +178,7 @@ class EffectOnUnification(
       ServerStates.newParamsBitMap(servers, post.servers)
 
     // Get all ways of unifying pre and cv. 
-    val allUs = Unification.allUnifs(map0, preCpts, cpts)
+    val allUs = Unification.allUnifs(map0, pre/*Cpts*/, cpts)
     // assert(allUs.distinct.length == allUs.length)
     var ix = 0
     while(ix < allUs.length){

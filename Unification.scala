@@ -66,12 +66,12 @@ object Unification{
     * For each combination of unifications, map0 is extended to a mapping map
     * so that if c = cpts(j) is unified with preC = preCpts(i), them map0(c) =
     * preC, and (j,i) is included in the UnificationList.  */
-  def allUnifs(
-    map0: RemappingMap, preCpts: Array[State], cpts: Array[State]) 
+  def OLDallUnifs(map0: RemappingMap, pre: Concretization, cpts: Array[State]) 
       : AllUnifsResult = {
+    val preCpts = pre.components
     // Map from identities to the index of the corresponding component in
     // preCpts, if any, otherwise -1.
-    val preCptsIndexMap = State.indexMap(preCpts)
+    val preCptsIndexMap = pre.idsIndexMap // State.indexMap(preCpts)
     val result = new AllUnifsResult // holds final result
 
     // Extend map and unifs to cpts[from..), adding results to results. 
@@ -102,10 +102,12 @@ object Unification{
           } // end of if
         } // end of tryUnify
 
-        // Test if (fc,fId) already mapped to a component of preCpts
+        // Test if (fc,fId) already mapped to a component of preCpts.  If so,
+        // try to unify those components; but don't unify the two principals
+        // if !singleRef (that would just recreate the same transition).
         val fc = c.family; val id1 = map(fc)(c.id)
         val ix = if(id1 < 0) -1 else preCptsIndexMap(fc)(id1)
-        if(ix >= 0) tryUnify(ix) 
+        if(ix >= 0){ if(singleRef || from > 0 || ix > 0) tryUnify(ix) }
         else{
           // Try to unify with each component in turn, but don't unify the two
           // principals if !singleRef (that would just recreate the same
@@ -120,6 +122,108 @@ object Unification{
 
     allUnifsRec(map0, 0, List())
     result
+  }
+
+  def allUnifs(map0: RemappingMap, pre: Concretization, cpts: Array[State])  =
+    NEWallUnifs(map0, pre, cpts)
+
+  def NEWallUnifs(map0: RemappingMap, pre: Concretization, cpts: Array[State]) 
+      : AllUnifsResult = {
+    val preCpts = pre.components
+    val result = new AllUnifsResult // holds final result
+
+    // Try to unify individual components.  Set each unifs1(j) to be pairs
+    // (i,map) s.t. cpts(j) will unify with preCpts(i) via map.
+    val unifs1 = new Array[List[(Int,RemappingMap)]](cpts.length); var j = 0
+    while(j < cpts.length){
+      unifs1(j) = List[(Int,RemappingMap)]()
+      for(i <- (if(!singleRef && j==0) 1 else 0) until preCpts.length){
+        val map = unify(map0, preCpts(i), cpts(j))
+        if(map != null){
+          unifs1(j) ::= (i,map) // ; println(s"$j: $i, "+Remapper.show(map))
+        }
+      }
+      j += 1
+    }
+
+    /* Is it possible for cpts(j) to not be unified, given map; i.e. its identity
+     * does not map to an identity in preCpts. */
+    @inline def mightNotUnify(j: Int, map: RemappingMap) = {
+      val cj = cpts(j); val f = cj.family; val id1 = map(f)(cj.ids(0))
+      id1 < 0 || pre.idsIndexMap(f)(id1) < 0
+    }
+
+    // pairs represents all unifications of cpts[0..j)
+    var pairs = new AllUnifsResult; j = 1
+    // Include map0 if cpts(0) can be not unified
+    if(mightNotUnify(0,map0)) pairs += ((map0, List[(Int,Int)]()))
+    for((i,map) <- unifs1(0)) pairs += ((map, List((0,i))))
+    while(j < cpts.length){
+      val nextPairs = new AllUnifsResult
+      for((map,unifs) <- pairs){
+        // Try to combine with elements of unifs1(j)
+        for((i,map1) <- unifs1(j)){
+          val map2 = tryCombine(pre, cpts, unifs, map, j, i, map1)
+          if(map2 != null) nextPairs += ((map2, (j,i)::unifs))
+        }
+        // Also carry forward this pair if cpts(j)'s id does not map to an
+        // identity in preCpts.
+        if(mightNotUnify(j,map))  nextPairs += ((map,unifs))
+      } // end of iteration over unifs1(j)
+      pairs = nextPairs; j += 1 // update for next round
+    } // end of iteration over cpts
+    pairs
+  }
+
+  /** Try to combine map, which gives unifications unifs over cpts[0..j), with
+    * map1 which unifies cpts(j) with preCpts(i).  Return the resulting
+    * RemappingMap, or null if not possible. */
+  @inline private def tryCombine(
+    pre: Concretization, cpts: Array[State],
+    unifs: UnificationList, map: RemappingMap,
+    j: Int, i: Int, map1: RemappingMap)
+      : RemappingMap = {
+    // println("tryCombine: "+Remapper.show(map)+"\n"+Remapper.show(map1))
+    // Check that if map1 maps an identity in cpts[0..j) to an identity in
+    // preCpts, then map does the same (so they are already unified).
+    var ok = true; var jj = 0
+    while(jj < j){
+      val cj = cpts(jj); val f = cj.family; val id = cj.ids(0); jj += 1
+      val id1 = map1(f)(id)
+      ok &&= id1 < 0 || map(f)(id) == id1 || pre.idsIndexMap(f)(id1) < 0
+    }
+    // Check map and map1 are compatible, so their union is a map.
+    var t = 0
+    while(t < numTypes && ok){
+      var id = 0
+      while(id < map(t).length && ok){
+        // Check map and map1 compatible on (t,id)
+        if(map(t)(id) >= 0){
+          if(map1(t)(id) >= 0) ok = map(t)(id) == map1(t)(id)
+          else ok = !map1(t).contains(map(t)(id)) 
+        }
+        else if(map1(t)(id) >= 0) ok = !map(t).contains(map1(t)(id))
+        id += 1
+      } // end of iteration over id
+      t += 1
+    } // end of iteration over t
+
+    if(ok){
+      //println("success")
+      // Build union
+      val result = new Array[Array[Int]](numTypes); t = 0
+      while(t < numTypes){
+        val len = map(t).length; result(t) = new Array[Int](len); var id = 0
+        while(id < len){
+          val id1 = map(t)(id)
+          if(id1 >= 0) result(t)(id) = id1 else result(t)(id) = map1(t)(id)
+          id += 1
+        }
+        t += 1
+      }
+      result
+    }
+    else null
   }
 
   // A representation of map |> post.servers

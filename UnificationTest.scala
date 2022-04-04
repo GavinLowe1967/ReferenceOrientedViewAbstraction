@@ -45,9 +45,12 @@ object UnificationTest
     def showBuffer(buff: AllUnifsResult) =
       buff.map{ case (map, us) => show(map)+"; "+us }.mkString("\n")
 
+    def mkConc(cpts: Array[State]) = new Concretization(servers0, cpts)
+
     def test1 = {
       val buffer = 
-        allUnifs(newRemappingMap, Array(aNode(N0,N1)), Array(aNode(N2,N3)))
+        allUnifs(newRemappingMap, mkConc(Array(aNode(N0,N1))), 
+          Array(aNode(N2,N3)))
       // println("\n"+showBuffer(buffer))
       // One result without unification: can't unify principals.
       assert(buffer.length == 1)
@@ -61,9 +64,9 @@ object UnificationTest
     def test2 = {
       //println("test2")
       val buffer = 
-        allUnifs(newRemappingMap, Array(aNode(N0,N1), aNode(N1,N2)), 
+        allUnifs(newRemappingMap, mkConc(Array(aNode(N0,N1), aNode(N1,N2))), 
           Array(aNode(N2,N3), aNode(N3,N4)))
-      // println("\n"+showBuffer(buffer))
+      //println("\n"+showBuffer(buffer))
       assert(buffer.length == 4)
       assert(buffer.forall{case (map, unifs) => 
         emptyMap(map(1)) && (
@@ -83,7 +86,7 @@ object UnificationTest
 
     def test3 = {
       val buffer = 
-        allUnifs(newRemappingMap, Array(initNodeSt(T0,N0), aNode(N0,N1)), 
+        allUnifs(newRemappingMap, mkConc(Array(initNodeSt(T0,N0), aNode(N0,N1))), 
           Array(unlock(T0), aNode(N2,N3)))
       // println("\n"+showBuffer(buffer))
       // One result without unification: can't unify principals.
@@ -99,7 +102,7 @@ object UnificationTest
       // println("test4")
       val buffer = 
         allUnifs(newRemappingMap, 
-          Array(initNodeSt(T0,N0), aNode(N0,N1), aNode(N1,N2)),
+          mkConc(Array(initNodeSt(T0,N0), aNode(N0,N1), aNode(N1,N2))),
           Array(unlock(T0), aNode(N2,N3), aNode(N3,N4)))
       // println("\n"+showBuffer(buffer))
       assert(buffer.length == 5)
@@ -120,7 +123,7 @@ object UnificationTest
     }
 
     test1; test2; test3; test4
-  }
+  } // end of allUnifsTest
 
   /** Test of Unification.combine. */
   private def combineTest = {
@@ -131,7 +134,7 @@ object UnificationTest
       }.mkString("\n")
 
     def test1 = {
-      println("=test1=")
+      //println("=test1=")
       val pre = new Concretization(servers0, 
         Array(/*initNodeSt*/getDatumSt(T0,N0,N1), aNode(N0,N2), aNode(N1,Null)) )
       val post = new Concretization(servers2, 
@@ -157,7 +160,7 @@ object UnificationTest
       cv.clearInduced
       val (buffer2,_) = combine(pre, post, cv /*, List()*/) // , false
       // Unifying, N0 -> N0, N1 -> N1
-      println(showBuffer(buffer2))
+      //println(showBuffer(buffer2))
       assert(buffer2.exists{case (map, states, unifs, _) =>
         unifs == List((0,1)) && 
         states.sameElements(Array(aNode(N0,N2), cNode(N2,Null)))
@@ -203,6 +206,7 @@ object UnificationTest
       val cv = new ComponentView(servers1, 
         Array(getDatumSt(T0,N0,Null), aNode(N0,N1)))
       val (buffer,_) = combine(pre, post, cv /*, List()*/) // , false
+      //println(showBuffer(buffer))
       // servers1 contains T0, and the T0 components in pre and cv can't be 
       // unified.
       assert(buffer.isEmpty)
@@ -378,8 +382,9 @@ object UnificationTest
       // N0 -> N0, N2 or neither; N1 -> N0, N2 or neither; but injective
     }
 
+
     test1; test2; test3
-  }
+}
  */
 
   /** Main test function. */

@@ -3,6 +3,8 @@ import ox.gavin.profiling.Profiler
 
 /** The states of the servers within a SystemView. */
 class ServerStates(val servers: List[State]){
+  val index = ServerStates.getNextIndex
+
   /* Note: equality is reference equality, because we avoid creating two
    * ServerStates with the same value of servers. */
 
@@ -132,8 +134,14 @@ object ServerStates{
   private val ssMap = new MyLockFreeReadHashMap[List[State], ServerStates]
   // private val ssMap: ServerStatesMap = new ServerStatesLockFreeReadHashMap
 
+  /** Index of the next ServerStates to create. */
+  private var nextIndex = 0
+
+  /** Get the index for the next ServerStates to create. */
+  private def getNextIndex: Int = { nextIndex += 1; nextIndex-1 }
+
   /** The number of ServerStates objects created so far. */
-  def count = ssMap.size
+  def count = { assert(nextIndex == ssMap.size); nextIndex }
 
   /** Factory method. */
   def apply(servers: List[State]): ServerStates = {

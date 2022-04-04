@@ -110,27 +110,33 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
 
     // Test with initialisation of node
     def test3 = {
-      println("= test3 =")
-      reset()
+      // println("= test3 =")
+      reset(); assert(!singleRef)
       val pre = new Concretization(servers1, 
         Array(initNodeSt(T0,Null), initNode(N0)))
       // servers1 has reference to T0
       val post = new Concretization(servers1,
         Array(setTopB(T0,N0), bNode(N0,Null)))
-      // pre.ply = 0; post.ply = 0
-
-      // Principal unifies with principal.
+      // Principal unifies with principal.  But we don't look for that if
+      // !singleRef.
       val cv1 = new ComponentView(servers1, Array(initNodeSt(T0,Null)))
-      // cv1.ply = 1
+
+      val map0 = servers1.remappingMap1(cv1.getParamsBound)
+      val unifs = Unification.allUnifs(map0, pre, cv1.components)
+      assert(unifs.isEmpty)
+      // println("unifs = \n"+unifs.map{case (map,unifs) =>
+      //   RemapperP.Remapper.show(map)+": "+unifs}.mkString("\n"))
+
       effectOn(pre, 1, post, cv1)        
-      // println("\n"+nextNewViews.mkString("\n"))
-      assert(nextNewViews.contains(
-        new ComponentView(servers1, Array(setTopB(T0,N0), bNode(N0,Null)))))
-      assert(nextNewViews.size == 1)
+      // println("\n"+nextNewViews.toList.mkString("\n"))
+      // println(nextNewViews.size)
+      assert(nextNewViews.size == 0)
+      // assert(nextNewViews.contains(
+      //   new ComponentView(servers1, Array(setTopB(T0,N0), bNode(N0,Null)))))
+      // assert(nextNewViews.size == 1)
 
       // Principal unifies with secondary component.
-      println("cv2")
-      val cv2 = new ComponentView(servers1, Array(initNode(N0))) //; cv2.ply = 1
+      val cv2 = new ComponentView(servers1, Array(initNode(N0)))
       effectOn(pre, 1, post, cv2)        
       //println("\n"+nextNewViews.mkString("\n"))
       // With unification
@@ -139,23 +145,22 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
       // Without unification -- not included
       // assert(nextNewViews.contains(
       //   new ComponentView(servers1, Array(initNode(N0)))))
-      assert(nextNewViews.size == 2)
+      assert(nextNewViews.size == 1)
 
-      println("cv3")
-      val cv3 = new ComponentView(servers1, Array(aNode(N0,Null))) //; cv3.ply = 1
+      val cv3 = new ComponentView(servers1, Array(aNode(N0,Null))) 
       effectOn(pre, 1, post, cv3)        
       //println("\n"+nextNewViews.mkString("\n"))
       // Without unification -- not included
       // assert(nextNewViews.contains(
       //   new ComponentView(servers1, Array(aNode(N0,Null)))))
-      assert(nextNewViews.size == 2)
+      assert(nextNewViews.size == 1)
     }
 
     def test4 = {
       // Principal of cv unifies with process that changes state, and so gains
       // reference to another component c; parameters can be mapped to other
       // parameters of c.
-      println("= test4 =")
+      //println("= test4 =")
       reset()
       val pre = new Concretization(servers0, 
         Array(getDatumSt(T0, N0, N1), aNode(N0, N2), bNode(N1, N3)) )
@@ -168,7 +173,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
       // The aNode in cv unifies with that in pre, and evolves to
       // dNode(N0,N1,N2), gaining a reference to N2.  The second parameter in
       // the cNode might be any one of N1, N3 (from the bNode) or N4 (fresh).
-      println(nextNewViews.iterator.mkString("\n"))
+      //println(nextNewViews.iterator.mkString("\n"))
       for(x <- List(N1, N3, N4))
         assert(nextNewViews.contains(new ComponentView(servers0, 
           Array(dNode(N0,N1,N2), bNode(N1,N3), cNode(N2,x)) )))

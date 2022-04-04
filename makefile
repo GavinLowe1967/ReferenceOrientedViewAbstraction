@@ -19,7 +19,7 @@ EXTENDERP = $(DIR)/ExtendabilityP
 FSC = fsc -deprecation -cp $(CP)
 
 # all:	$(DIR)/VA.class Instrumentation.class Experiment.class
-all:   $(DIR)/VA.class Instrumentation.class
+all:   $(DIR)/VA.class Instrumentation.class $(DIR)/CompileTest.class
 
 clean:
 	rm $(DIR)/*.class $(DIR)/*/*.class; fsc -shutdown
