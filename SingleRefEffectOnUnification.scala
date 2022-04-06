@@ -81,7 +81,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     // val map0 = cv.getRemappingMap // 
     // Profiler.count("SREOU.apply")
     val map0 = servers.remappingMap1(cv.getParamsBound)
-    val allUnifs = Unification.allUnifs(map0, pre/*Cpts*/, cpts)
+    val allUnifs = Unification.allUnifs(map0, pre, cpts)
     var k = 0
 
     while(k < allUnifs.length){

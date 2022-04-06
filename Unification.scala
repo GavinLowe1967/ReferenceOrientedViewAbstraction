@@ -23,7 +23,7 @@ object Unification{
   /** Try to extend map to map' such that map'(st2) = st1.
     * Note: map is unchanged.
     * @return the new map, or null if unsuccessful. */
-  def unify(map: RemappingMap, st1: State, st2: State): RemappingMap = {
+  @inline def unify(map: RemappingMap, st1: State, st2: State): RemappingMap = {
     // println(s"unify(${showRemappingMap(map)}, $st1, $st2)")
     if(st1.cs != st2.cs) null // false
     else{
@@ -66,7 +66,7 @@ object Unification{
     * For each combination of unifications, map0 is extended to a mapping map
     * so that if c = cpts(j) is unified with preC = preCpts(i), them map0(c) =
     * preC, and (j,i) is included in the UnificationList.  */
-  def OLDallUnifs(map0: RemappingMap, pre: Concretization, cpts: Array[State]) 
+  def allUnifs(map0: RemappingMap, pre: Concretization, cpts: Array[State]) 
       : AllUnifsResult = {
     val preCpts = pre.components
     // Map from identities to the index of the corresponding component in
@@ -124,26 +124,44 @@ object Unification{
     result
   }
 
-  def allUnifs(map0: RemappingMap, pre: Concretization, cpts: Array[State])  =
-    NEWallUnifs(map0, pre, cpts)
+  // def allUnifs(map0: RemappingMap, pre: Concretization, cpts: Array[State])  =
+  //   NEWallUnifs(map0, pre, cpts)
 
-  def NEWallUnifs(map0: RemappingMap, pre: Concretization, cpts: Array[State]) 
+  /*Storage used within allUnifs to store all unifications of a particular
+   * component.  This usage avoids repeated memory allocation.  The choice of
+   * MaxUnifsSize should be an upped bound on the number of unifications
+   * possible for a single component: 10 seems like more than enough.  */
+  private val MaxUnifsSize = 10
+  private val unifMaps = new Array[RemappingMap](MaxUnifsSize)
+  private val unifIndices = new Array[Int](MaxUnifsSize)
+  // private val theseUnifs = new Array[(Int,RemappingMap)](MaxUnifsSize)
+
+  /** All ways of extending map0 to unify elements of cpts with elements of
+    * preCpts, other than the two principal components.  
+    * 
+    * For each combination of unifications, map0 is extended to a mapping map
+    * so that if c = cpts(j) is unified with preC = preCpts(i), them map0(c) =
+    * preC, and (j,i) is included in the UnificationList. 
+    * 
+    * This version seems to work slower than the previous.  */
+  def allUnifsX(map0: RemappingMap, pre: Concretization, cpts: Array[State]) 
       : AllUnifsResult = {
-    val preCpts = pre.components
-    val result = new AllUnifsResult // holds final result
+    val preCpts = pre.components; val preLen = preCpts.length
 
-    // Try to unify individual components.  Set each unifs1(j) to be pairs
-    // (i,map) s.t. cpts(j) will unify with preCpts(i) via map.
-    val unifs1 = new Array[List[(Int,RemappingMap)]](cpts.length); var j = 0
-    while(j < cpts.length){
-      unifs1(j) = List[(Int,RemappingMap)]()
-      for(i <- (if(!singleRef && j==0) 1 else 0) until preCpts.length){
+    /* Extend map0 to unify cpts(j).  For ix in [0..size), set unifMaps(ix) to be
+     * a map and unifIndices(ix) to be an index i such that cpts(j) unifies
+     * with preCpts(i) via the map.  Return size, the number of such
+     * unifications.  */
+    @inline def getUnifs(j: Int): Int = {
+      var size = 0; var i = if(!singleRef && j==0) 1 else 0
+      while(i < preLen){
         val map = unify(map0, preCpts(i), cpts(j))
-        if(map != null){
-          unifs1(j) ::= (i,map) // ; println(s"$j: $i, "+Remapper.show(map))
-        }
+        if(map != null){ 
+          unifMaps(size) = map; unifIndices(size) = i; size += 1 
+        } 
+        i += 1
       }
-      j += 1
+      size
     }
 
     /* Is it possible for cpts(j) to not be unified, given map; i.e. its identity
@@ -154,22 +172,29 @@ object Unification{
     }
 
     // pairs represents all unifications of cpts[0..j)
-    var pairs = new AllUnifsResult; j = 1
+    var pairs = new AllUnifsResult; var j = 1
     // Include map0 if cpts(0) can be not unified
     if(mightNotUnify(0,map0)) pairs += ((map0, List[(Int,Int)]()))
-    for((i,map) <- unifs1(0)) pairs += ((map, List((0,i))))
-    while(j < cpts.length){
-      val nextPairs = new AllUnifsResult
-      for((map,unifs) <- pairs){
-        // Try to combine with elements of unifs1(j)
-        for((i,map1) <- unifs1(j)){
+    val size = getUnifs(0); var ix = 0
+    while(ix < size){
+      val map = unifMaps(ix); val i = unifIndices(ix); ix += 1
+      pairs += ((map, List((0,i))))
+    }
+    while(j < cpts.length && pairs.nonEmpty){
+      val nextPairs = new AllUnifsResult; var pix = 0
+      val size =  getUnifs(j)
+      while(pix < pairs.length){
+        val (map,unifs) = pairs(pix); pix += 1; ix = 0
+        // Try to combine with unifications of cpts(j)
+        while(ix < size){
+          val map1 = unifMaps(ix); val i = unifIndices(ix); ix += 1
           val map2 = tryCombine(pre, cpts, unifs, map, j, i, map1)
           if(map2 != null) nextPairs += ((map2, (j,i)::unifs))
         }
         // Also carry forward this pair if cpts(j)'s id does not map to an
         // identity in preCpts.
-        if(mightNotUnify(j,map))  nextPairs += ((map,unifs))
-      } // end of iteration over unifs1(j)
+        if(mightNotUnify(j,map)) nextPairs += ((map,unifs))
+      } // end of iteration over theseUnifs
       pairs = nextPairs; j += 1 // update for next round
     } // end of iteration over cpts
     pairs
@@ -187,10 +212,10 @@ object Unification{
     // Check that if map1 maps an identity in cpts[0..j) to an identity in
     // preCpts, then map does the same (so they are already unified).
     var ok = true; var jj = 0
-    while(jj < j){
+    while(jj < j && ok){
       val cj = cpts(jj); val f = cj.family; val id = cj.ids(0); jj += 1
       val id1 = map1(f)(id)
-      ok &&= id1 < 0 || map(f)(id) == id1 || pre.idsIndexMap(f)(id1) < 0
+      ok = id1 < 0 || map(f)(id) == id1 || pre.idsIndexMap(f)(id1) < 0
     }
     // Check map and map1 are compatible, so their union is a map.
     var t = 0

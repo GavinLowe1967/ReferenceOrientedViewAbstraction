@@ -107,7 +107,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         val crossRefs: List[Array[State]] =
           if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
           else List()
-        if(unifs.nonEmpty ||  reducedMapInfo == null ||
+        if(unifs.nonEmpty || reducedMapInfo == null ||
           !cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)){
           val newPrinc = getNewPrinc(cpts(0), unifs)
           var newComponentsList =
