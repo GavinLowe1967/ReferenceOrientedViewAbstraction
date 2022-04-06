@@ -191,10 +191,19 @@ class ComponentsSet(initSize: Int = 4){
     * h&mask. */
   @inline private def find1(h: Int, cpts: Array[State]): Int = {
     var i = h & mask
-    while(views(i) != null && !views(i).components.sameElements(cpts))
+    while(views(i) != null &&
+        !sameSecondaryComponents(views(i).components, cpts))
       i = (i+1) & mask
-    // IMPROVE: it's enough to compare the components from index 1
     i
+  }
+
+  @inline private 
+  def sameSecondaryComponents(cpts1: Array[State], cpts2: Array[State]) 
+      : Boolean = {
+    val len = cpts1.length; var i = 1
+    // assert(cpts1(0) == cpts2(0) && len == cpts2.length)
+    while(i < len && cpts1(i) == cpts2(i)) i += 1
+    i == len
   }
 
   /** Add v to this. */

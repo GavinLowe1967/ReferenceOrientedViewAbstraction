@@ -9,11 +9,12 @@ class Transition(
   /** Do the servers change state? */
   val changedServers = pre.servers != post.servers
 
+  private val cptsLength = pre.components.length
+
   /** Bit map indicating which components have changed state. */
   val changedStateBitMap = { 
-    val len = pre.components.length
-    val changedStateBitMap = new Array[Boolean](len); var i = 0
-    while(i < len){
+    val changedStateBitMap = new Array[Boolean](cptsLength); var i = 0
+    while(i < cptsLength){
       changedStateBitMap(i) = pre.components(i) != post.components(i); i += 1
     }
     changedStateBitMap
@@ -62,7 +63,7 @@ class Transition(
     val aRefs = Array.fill(numTypes)(List[(Int,Parameter)]()); var t = 0
     while(t < numTypes){
       var i = 1
-      while(i < pre.components.length){
+      while(i < cptsLength){
         if(changedStateBitMap(i)){
           val preCpt = pre.components(i); val postCpt = post.components(i)
           //if(preCpt != postCpt){
@@ -81,9 +82,13 @@ class Transition(
     aRefs
   }
 
+  /** For each type t, could a secondary component gain a reference to a
+    * component of type t? */
+  private val anyAcquiredRefs: Array[Boolean] = acquiredRefs.map(_.nonEmpty)
+
   /** Which components change state and acquire a reference? */
   private val referenceAcquirers: Array[Boolean] = {
-    val ra = new Array[Boolean](pre.components.length)
+    val ra = new Array[Boolean](cptsLength)
     for(t <- 0 until numTypes; (i,_) <- acquiredRefs(t)) ra(i) = true
     ra
   }
@@ -91,37 +96,60 @@ class Transition(
   // ==================================================================
   // Things relating to unification
 
-  /** Might there be sufficient unifications with a view with components cpts to
-    * give at least one induced transition?  Either (1) the servers change
-    * state, or (2) a state of cpts has the same control state as a component
-    * that changes state in this transition, or (3) we're using singleRef and
-    * a secondary component might acquire a reference to cpts(0). */
-  def mightGiveSufficientUnifs(cpts: Array[State]): Boolean = {
-    if(changedServers || (singleRef && acquiredRefs(cpts(0).family).nonEmpty)){
-      //Profiler.count(s"mightGiveSufficientUnifs: true $changedServers"); 
-      true // cases (1) and (3)
-    }
-    else{
-      var i = 0; var result = false
-      while(i < pre.components.length && !result){
-        if(changedStateBitMap(i)){
-          // Does cpts have a state with control state pre.components(i).cs?
-          val cs = pre.components(i).cs; var j = 0; val len = cpts.length
-          while(j < len && cpts(j).cs != cs) j += 1
-          result = j < len
-        }
-        i += 1
-      }
-      // Profiler.count(s"mightGiveSufficientUnifs: $result")
-      result
-    }
-  }
-  // Profiling results for lazySet.csp bound 44:
-  // mightGiveSufficientUnifs: false:                    877,453,018
-  // mightGiveSufficientUnifs: true:                     10,563,200
-  // mightGiveSufficientUnifs: true false:               17,203,482
-  // mightGiveSufficientUnifs: true true:                2,432,052,611
+  private val preCptCS: Array[ControlState] = pre.components.map(_.cs)
 
+  /** Might there be sufficient unifications with a view with components cpts to
+    * give at least one induced transition?  Either (1) we're using singleRef
+    * and a secondary component might acquire a reference to cpts(0); (2) the
+    * servers acquire a new reference; (3) the servers change state, and we
+    * haven't previously recorded a similar transition; or (4) a state of cpts
+    * has the same control state as a component that changes state in this
+    * transition. */
+  def mightGiveSufficientUnifs(cv: ComponentView): Boolean = {
+    val cpts = cv.components
+    singleRef && anyAcquiredRefs(cpts(0).family) ||         // case (1)
+    serverGetsNewId ||                                      // case (2)
+    changedServers &&                                       // case (3)
+      (singleRef && !newEffectOn || !cv.containsDoneInduced(post.servers)) ||
+    possibleUnification(cv)                               // case (4)
+
+    // if((singleRef && anyAcquiredRefs(cpts(0).family)) ||        // case (1)
+    //     serverGetsNewId ||                                      // case (2) 
+    //     changedServers &&                                       // case (3)
+    //       (singleRef && !newEffectOn || !cv.containsDoneInduced(post.servers)) ){
+    //   Profiler.count(s"mightGiveSufficientUnifs: true "+
+    //     anyAcquiredRefs(cpts(0).family)+s"; $serverGetsNewId")
+    //   true
+    // }
+    // else possibleUnification(cpts)  // case (4) 
+  }
+  // Profiling from lazySet bound 44: case 1 true: 20,870,708 + 1,132,780 =
+  // 22,003,488; case 2 first true 3,032,522; case 3 first true 4,030,617;
+  // case 4 first true 11,478,237; all false 3,296,727,447
+
+  /** Might a component of cpts be unified with a component of pre.components?
+    * More precisely, do they have the same control state? */
+  @inline private def possibleUnification(cv: ComponentView) = {
+    var i = 0
+    while(i <  cptsLength && 
+        (!changedStateBitMap(i) || !cv.hasControlState(preCptCS(i))))
+      i += 1
+    i < cptsLength
+
+    // var result = false
+    // while(i < pre.components.length && !result){
+    //   if(changedStateBitMap(i)){
+    //     // Does cpts have a state with control state pre.components(i).cs?
+    //     result = cv.hasControlState(preCptCS(i))
+    //     // val cs = preCptCS(i); var j = 0; val len = cpts.length
+    //     // while(j < len && cpts(j).cs != cs) j += 1
+    //     // result = j < len
+    //   }
+    //   i += 1
+    // }
+    // // Profiler.count(s"possibleUnifications: $result")
+    // result
+  }
   
   import Unification.UnificationList // = List[(Int,Int)]
 

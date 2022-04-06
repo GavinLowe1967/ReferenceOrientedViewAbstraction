@@ -148,10 +148,12 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * identity, or -1 if there is no such. */ 
   val idsIndexMap: Array[Array[Int]] = StateArray.makeIdsIndexMap(components)
 
+  private val cptsLen = components.length
+
   /** Check all components referenced by principal are included, and no more. */
   // IMRPOVE: this is moderately expensive
   @noinline private def checkValid = if(debugging){ 
-    val len = principal.ids.length; val cptsLen = components.length
+    val len = principal.ids.length; 
     if(singleRef){
       if(cptsLen == 2){
         // Check principal has a reference to the other component
@@ -198,6 +200,16 @@ class ComponentView(servers: ServerStates, components: Array[State])
   }
 
   checkValid
+
+  /** The control states of components. */
+  private val controlStates = components.map(_.cs)
+
+  /** Does this have a component with control state cs? */
+  @inline def hasControlState(cs: ControlState): Boolean = {
+    var j = 0
+    while(j < cptsLen && controlStates(j) != cs) j += 1
+    j < cptsLen
+  }
 
   /** Is this representable using the values defined in the script? */
   def representableInScript: Boolean = {

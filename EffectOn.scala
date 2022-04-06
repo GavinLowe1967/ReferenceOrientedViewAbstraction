@@ -59,7 +59,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     // components that change state, and no chance of secondary induced
     // transitions.  This captures over about 25% of cases with lazySet.csp,
     // bound 44; nearly all other cases have servers that change state.
-    if(trans.mightGiveSufficientUnifs(cv.components)){
+    if(trans.mightGiveSufficientUnifs(cv/*.components*/)){
       val pre = trans.pre; val post = trans.post
       require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
       val postCpts = post.components; // val preCpts = pre.components
@@ -282,26 +282,30 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
       : List[MissingCommon]  = {
     require(singleRef)
-    val missingRefs1 = StateArray.missingRefs(cpts1)
-    val missingRefs2 = StateArray.missingRefs(cpts2)
+    var missingRefs1: List[ProcessIdentity] = StateArray.missingRefs(cpts1)
+    val missingRefs2: List[ProcessIdentity] = StateArray.missingRefs(cpts2)
     // The common references considered so far for which there is no way of
     // instantiating the referenced component.
     var missingCommonRefs = List[ProcessIdentity]()
     var missingCommons = List[MissingCommon]()
-    for(pid <- missingRefs1; if missingRefs2.contains(pid)){
-      val mc = MissingCommon.makeMissingCommon(servers, cpts1, cpts2, pid, views)
-      if(mc != null){
+    while(missingRefs1.nonEmpty){
+      val pid = missingRefs1.head; missingRefs1 = missingRefs1.tail
+      if(contains(missingRefs2, pid)){
+        val mc = 
+          MissingCommon.makeMissingCommon(servers, cpts1, cpts2, pid, views)
+        if(mc != null){
 // FIXME: if the component c has a reference to one of the present secondary
 // components, or vice versa, check that that combination is also possible.
 // (Later:) isn't this just missingCrossRefs?
-        if(verbose){
-          println(s"checkCompatibleMissing($servers, ${StateArray.show(cpts1)},"+
-          s" ${StateArray.show(cpts2)})")
-          println(s"Failed to find states to instantiate common reference $pid")
+          if(verbose){
+            println(s"checkCompatibleMissing($servers, ${StateArray.show(cpts1)},"+
+              s" ${StateArray.show(cpts2)})")
+            println(s"Failed to find states to instantiate common reference $pid")
+          }
+          missingCommons ::= mc
         }
-        missingCommons ::= mc
       }
-    } // end of for loop
+    } // end of iteration over missingRefs1 for loop
     missingCommons
   }
 
