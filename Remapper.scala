@@ -450,6 +450,13 @@ object Remapper{
     MyStateMap.getByIndex(st.family, st.cs, remappedParams)
   }
 
+  /** Normalise st, returning the normalised version and the remapping map to
+    * produce it. */
+  @inline def normaliseState(st: State): (State, RemappingMap) = {
+    val map = newRemappingMap; val st1 = remapState(map, newNextArgMap, st)
+    (st1, map)
+  }
+
   // ------ Remapping List[State] or  Views
 
   /** Remap procs, updating map and nextArg.  */

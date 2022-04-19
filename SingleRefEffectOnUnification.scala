@@ -66,7 +66,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   val remappingExtender = new RemappingExtender(trans,cv)
 
   /** Bit map indicating which components have changed state. */
-  private val changedStateBitMap = trans.changedStateBitMap
+  // private val changedStateBitMap = trans.changedStateBitMap _
 
   /** Which secondary components can gain a reference to cv.principal?  All
     * pairs (i,p1) such that pre.components(i) changes state in the transition
@@ -192,12 +192,13 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       val (j, i) = us.head; us = us.tail
       // (2) Add new parameters of postCpts(i), which is unified with a
       // component of cv.
-      if(changedStateBitMap(i))
+      if(trans.changedStateBitMap(i))
         postCpts(i).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap)
       // (3) If this is the unification of the principal of cv, which changes
       // state and gains a reference to another component c, include the
       // parameters of c from postCpts.
-      if(j == 0 && changedStateBitMap(i)) addIdsFromNewRef(otherArgsBitMap, i)
+      if(j == 0 && trans.changedStateBitMap(i))
+        addIdsFromNewRef(otherArgsBitMap, i) 
     }
 // IMPROVE: avoid adding them in the first place? 
     Remapper.removeFromBitMap(map1, otherArgsBitMap)

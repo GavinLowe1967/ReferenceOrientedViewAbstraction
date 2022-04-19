@@ -48,8 +48,11 @@ class Debugger(
         if(i+1 < befores.length && afters(i) != befores(i+1)){
           if(! afters(i).matches(abss(i+1))) 
             println(pad0+Sqge+"\n"+pad+abss(i+1))
-          if(! befores(i+1).matches(abss(i+1)))
-            println(pad0+Sqle+"\n"+rPad((i+1).toString+": ")+befores(i+1))
+          if(! befores(i+1).matches(abss(i+1))){
+            // Use ">--->" in the last step, as Sqle might be incorrect
+            if(i+1 == plies) println(pad0+">--->\n") else println(pad0+Sqle+"\n")
+            println(rPad((i+1).toString+": ")+befores(i+1))
+          }
         }
       }
       if(toError){
@@ -68,15 +71,15 @@ class Debugger(
     apply1(last, null)
   }
 
-  /** Produce debugging information for last.
-    * @param penultimate if non-null, a View of size k+1 that contributed
-    * to last, and that should be included in the trace; penultimate will be
-    * null only in the top-level call. */
-  def apply1(last: View, penultimate: Concretization): Unit = {
+  /** Produce debugging information for target.
+    * @param last if non-null, a View to which target contributed, and 
+    * that should be included at the end of the trace; last will be null only
+    * in the top-level call. */
+  def apply1(target: View, last: Concretization): Unit = {
     // Find trace leading to error state.
-    val tr = findTrace(last, penultimate)
+    val tr = findTrace(target, last)
     // Print trace
-    tr.print(penultimate == null)
+    tr.print(last == null)
     // Interactively get next thing to do
     def help =
       println(
@@ -89,11 +92,11 @@ class Debugger(
       input match{
         case "q" => println("Goodbye."); sys.exit
         case "u" => 
-          if(penultimate != null) done = true // backtrack up the stack of traces
+          if(last != null) done = true // backtrack up the stack of traces
           else println("Already at the top level.")
         case st if st.nonEmpty && st.forall(_.isDigit) =>
           expandConc(tr.befores(st.toInt))
-          tr.print(penultimate == null) // re-print trace on return
+          tr.print(last == null) // re-print trace on return
         case "s" => showServers
         case "h" | "?" | "help" => help
         case _ => println("Invalid command."); help
@@ -132,10 +135,23 @@ class Debugger(
       // println(s"$pre -${system.showEvent(e)}-> $post ]= $v")
       befores += pre; events += e; afters += post
 // IMPROVE: is the "head" below what we want?
-      v = sysAbsViews.get/*Representative*/(pre.toComponentView.head); abss += v
-      // assert(v.ply <= pre.ply)
-      // if(v.ply > pre.ply) 
-      //   println("Unexpected ply in v: $v $v.ply$; $pre $pre.ply$")
+      val v1 = RemapperP.Remapper.remapComponentView(pre.toComponentView.head)
+      try{ v = sysAbsViews.get/*Representative*/(v1) }catch{
+        case e: java.lang.AssertionError =>
+          e.printStackTrace()
+          println("pre = $pre\n"+pre.toComponentView+
+            "\nabss =\n"+abss.mkString("\n")+
+            "\nevents =\n"+events.map(system.showEvent).mkString("\n")+
+            "\nbefores =\n"+befores.mkString("\n")+
+            "\nafters =\n"+afters.mkString("\n")
+          )
+          abss += v1
+          val beforesR = befores.reverse; if(conc != null) beforesR += conc
+          val ti = 
+            TraceInfo(abss.reverse, beforesR, events.reverse, afters.reverse)
+          ti.print(false); sys.exit
+      }
+      abss += v
       done = initViews.contains(v)
     }
     if(verbose) println
@@ -168,7 +184,12 @@ class Debugger(
         val input = scala.io.StdIn.readLine("> ")
         if(input.nonEmpty && input.forall(_.isDigit)){
           val n = input.toInt
-          if(0 <= n && n < len){ apply1(options(n), conc); done = true }
+          if(0 <= n && n < len){ 
+            // val target = options(n)
+            // val last = if(target == cv) conc else target
+            // Note: if options(n) != cv, then we might not have cv [= conc
+            apply1(options(n), conc); done = true 
+          }
           else help
         }
         else if(input == "u") done = true

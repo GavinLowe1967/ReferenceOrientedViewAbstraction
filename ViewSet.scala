@@ -236,7 +236,8 @@ class ComponentsSet(initSize: Int = 4){
 
   /** Get the view in this corresponding to v. */
   def get(v: ComponentView): ComponentView = {
-    require(count > 0); val i = find(v); assert(views(i) == v); views(i)
+    require(count > 0); val i = find(v); 
+    assert(views(i) == v, s"Searching for $v, found ${views(i)}"); views(i)
   }
 
   /** Iterator over the contents of this. */

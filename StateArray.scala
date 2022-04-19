@@ -162,7 +162,8 @@ object StateArray{
         // If we've got here, all the non-identity parameters of newPrinc must
         // be distinguished or omitted.
         for(i <- 1 until len)
-          assert(isDistinguished(pids(i)._2) || !newPrinc.includeParam(i),
+          assert(isDistinguished(pids(i)._2) || pids(i) == princId ||
+            !newPrinc.includeParam(i),
 //            includeInfo != null && !includeInfo(i),
             s"newPrinc = $newPrinc; postCpts = ${show(postCpts)}\n"+
               s"cpts = ${show(cpts)}")

@@ -144,7 +144,7 @@ channel setPrev : ThreadID . NodeID. NodeID
   
 -- Signal to node that it has been added to the list, with a particular
 -- predecessor
-channel joined: ThreadIDType . NodeID . NodeIDType
+-- channel joined: ThreadIDType . NodeID . NodeIDType
 
 -- Signal to node that it has been decoupled from the list.  The Bool
 -- parameter is true if the node is decoupled after the watchdog starts
@@ -166,9 +166,9 @@ channel setNextR : NodeIDType
 channel setPrevR : NodeID
 
 FreeNodeR(me) = 
-  initNode?t!me?value?next?prevX -> joined?_!me?prev -> 
-  if(value == NegInfty and prev != Null or value == Infty and next != Null or
-     prev != prevX and t != Constr) -- hack for construction of Tail
+  initNode?t!me?value?next?prev -> -- joined?_!me?prev -> 
+  if(value == NegInfty and prev != Null or value == Infty and next != Null)-- or
+  --   prev != prevX and t != Constr) -- hack for construction of Tail
   then NodeErr(me)
   else  NodeR(me, value, next, prev, false, 0)
 
@@ -274,7 +274,7 @@ alphaNode(me) =
        setNext.t.me, setMark.t.me, decoupled.t.me, 
        setPrev.t.me, unlockSetPrev.t.me | 
          t <- ThreadID |},
-    {| initNode.t.me, joined.t.me | t <- ThreadIDType |},
+    {| initNode.t.me | t <- ThreadIDType |}, -- , joined.t.me
     {| dummy.me, nodeError.me |}
   })
 
@@ -384,7 +384,8 @@ AddTest(me, v, p, c) =
 -- Insert new node containing v between p and c. 
 AddAdd(me, v, p, c) = 
   initNode.me?new!v!c!p -> setNext.me.p.new!AddLP.v -> 
-  joined.me.new.p -> unlockSetPrev.me.c.new -> Unlock'(me, p)
+  -- joined.me.new.p -> 
+  unlockSetPrev.me.c.new -> Unlock'(me, p)
 
 -- Add or delete complete: unlock p and c.
 Unlock(me, p, c) = unlock.me.p -> Unlock'(me, c)
@@ -444,7 +445,8 @@ DelDel'(me, p, c) = decoupled.me.c?_ -> Unlock(me, p, c)
 alphaThread(me) =
   {| getHead.me, initNode.me, getValue.me, getNext.me, getMark.me,
      setNext.me, setMark.me, lock.me, unlock.me, 
-     threadError.me, joined.me, decoupled.me, setPrev.me, unlockSetPrev.me |}
+     threadError.me, decoupled.me, setPrev.me, unlockSetPrev.me |}
+-- joined.me,
 
 alphaThreadChunked(me) = makeChunks_(seq(alphaThread(me)), 1000)
      
@@ -467,12 +469,12 @@ Constructor =
   initNode.Constr?tail!Infty.Null.Null -> 
   -- Create head pointing to tail
   initNode.Constr?head!NegInfty.tail.Null -> 
-  joined.Constr.tail.head -> joined.Constr.head.Null -> 
+  -- joined.Constr.tail.head -> joined.Constr.head.Null -> 
   initHead.head -> Constructor'
 
 Constructor' = nodeError?_ -> Constructor'
 
-alphaConstr = {| initNode.Constr, joined.Constr, initHead, nodeError |} 
+alphaConstr = {| initNode.Constr,  initHead, nodeError |} -- joined.Constr,
 
 --------------------- Watchdog
 
@@ -747,7 +749,7 @@ POR =
   decouple1?p?c?n -> 
     (if n != Null then setPrev1.n.p -> PORd(c) else PORd(c))
   []
-  initNodeR?n?c?p -> PORJ(n,c,p) -- (if c != Null then PORJ(n,c) else PORJ'(n))
+  initNodeR?n?c?p -> PORJ(n,c) -- (if c != Null then PORJ(n,c) else PORJ'(n))
   []
   done -> STOP
   []
@@ -756,9 +758,12 @@ POR =
 PORd(n) = decoupledR.n -> POR 
 
 -- Node n has been initialised to point to c, with prev = p
-PORJ(n,c,p) = 
-  addLP1.n -> joined?_!n?p -> unlockSetPrev?_!c.n -> POR 
+PORJ(n,c) = 
+  addLP1.n -> (unlockSetPrev?_!c.n -> POR [] done -> STOP)
+-- joined?_!n?p -> 
   [] done -> STOP
+
+-- IMPROVE: remove p; add done as alternative to unlockSetPrev
 
 -- Node n has been initialised to point to Null
 -- PORJ'(n) = 
@@ -790,7 +795,7 @@ PORRename = Union({
 
 alphaPOR = Union({
   {| setNext, setPrev, decoupled, unlockSetPrev |},
-  {| initNode.t, joined.t | t <- ThreadID |},
+  {| initNode.t | t <- ThreadID |}, -- , joined.t
   PORIgnore
 })
 
@@ -863,13 +868,13 @@ Servers =
 Components =
   let sync = -- synchronisation set
       {| getValue.t, getNext.t, setNext.t, getMark.t, setMark.t, 
-         lock, unlock, initNode.t, decoupled.t, joined.t, unlockSetPrev, setPrev | 
-           t <- ThreadID|}
+         lock, unlock, initNode.t, decoupled.t, unlockSetPrev, setPrev | 
+           t <- ThreadID|} -- joined.t,
   within AllNodes [| sync |] AllThreads
 
 System =
   let sync = Union({ diff(alphaWD, {error,done}), 
-                     {| initNode.Constr, joined.Constr |},
+                     {| initNode.Constr |}, -- , joined.Constr
                      alphaLastTracker, 
                      alphaPOR
                   })

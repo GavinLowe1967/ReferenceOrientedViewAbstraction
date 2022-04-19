@@ -11,6 +11,7 @@ class Transition(
 
   private val cptsLength = pre.components.length
 
+/*
   /** Bit map indicating which components have changed state. */
   val changedStateBitMap = { 
     val changedStateBitMap = new Array[Boolean](cptsLength); var i = 0
@@ -19,6 +20,24 @@ class Transition(
     }
     changedStateBitMap
   }
+ */
+
+  /** Bit map indicating which components have changed state, stored as an
+    * Int. */
+  private val changedStateBits: Int = {
+    var csb = 0; var mask = 1; var i = 0
+    while(i < cptsLength){
+      if(pre.components(i) != post.components(i)) csb += mask
+      mask += mask; i += 1
+    }
+    csb
+  }
+
+  /** Has component i changed state? */
+  def changedStateBitMap(i: Int) = (changedStateBits | (1 << i)) != 0
+
+  /** The control states of pre. */
+  private val preCptCS: Array[ControlState] = pre.components.map(_.cs)
 
   // ==================================================================
   // Things relating to parameters
@@ -96,7 +115,6 @@ class Transition(
   // ==================================================================
   // Things relating to unification
 
-  private val preCptCS: Array[ControlState] = pre.components.map(_.cs)
 
   /** Might there be sufficient unifications with a view with components cpts to
     * give at least one induced transition?  Either (1) we're using singleRef
@@ -106,22 +124,13 @@ class Transition(
     * has the same control state as a component that changes state in this
     * transition. */
   def mightGiveSufficientUnifs(cv: ComponentView): Boolean = {
-    val cpts = cv.components
-    singleRef && anyAcquiredRefs(cpts(0).family) ||         // case (1)
+    // val cpts = cv.components
+    val cvInfo = cv.mightGiveSufficientUnifsInfo
+    singleRef && anyAcquiredRefs(cvInfo.princFamily) ||         // case (1)
     serverGetsNewId ||                                      // case (2)
     changedServers &&                                       // case (3)
       (singleRef && !newEffectOn || !cv.containsDoneInduced(post.servers)) ||
-    possibleUnification(cv)                               // case (4)
-
-    // if((singleRef && anyAcquiredRefs(cpts(0).family)) ||        // case (1)
-    //     serverGetsNewId ||                                      // case (2) 
-    //     changedServers &&                                       // case (3)
-    //       (singleRef && !newEffectOn || !cv.containsDoneInduced(post.servers)) ){
-    //   Profiler.count(s"mightGiveSufficientUnifs: true "+
-    //     anyAcquiredRefs(cpts(0).family)+s"; $serverGetsNewId")
-    //   true
-    // }
-    // else possibleUnification(cpts)  // case (4) 
+    possibleUnification(cvInfo)                               // case (4)
   }
   // Profiling from lazySet bound 44: case 1 true: 20,870,708 + 1,132,780 =
   // 22,003,488; case 2 first true 3,032,522; case 3 first true 4,030,617;
@@ -129,26 +138,13 @@ class Transition(
 
   /** Might a component of cpts be unified with a component of pre.components?
     * More precisely, do they have the same control state? */
-  @inline private def possibleUnification(cv: ComponentView) = {
+  @inline private 
+  def possibleUnification(cvInfo: ComponentView.MightGiveSufficientUnifsInfo) = {
     var i = 0
-    while(i <  cptsLength && 
-        (!changedStateBitMap(i) || !cv.hasControlState(preCptCS(i))))
+    while(i < cptsLength && 
+        (!changedStateBitMap(i) || !cvInfo.hasControlState(preCptCS(i))))
       i += 1
     i < cptsLength
-
-    // var result = false
-    // while(i < pre.components.length && !result){
-    //   if(changedStateBitMap(i)){
-    //     // Does cpts have a state with control state pre.components(i).cs?
-    //     result = cv.hasControlState(preCptCS(i))
-    //     // val cs = preCptCS(i); var j = 0; val len = cpts.length
-    //     // while(j < len && cpts(j).cs != cs) j += 1
-    //     // result = j < len
-    //   }
-    //   i += 1
-    // }
-    // // Profiler.count(s"possibleUnifications: $result")
-    // result
   }
   
   import Unification.UnificationList // = List[(Int,Int)]

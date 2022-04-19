@@ -82,6 +82,8 @@ errors.
 Lazy Set
 ========
 
+lazySetCasteret.csp: POR doesn't force unlockSetPrev immediately after joined
+
 lazySetY.csp: incorrect version, with incorrect assumption made about nodes:
 that they can't be unlocked once decoupled.  Error found on ply 36, ~260K
 abstractions.

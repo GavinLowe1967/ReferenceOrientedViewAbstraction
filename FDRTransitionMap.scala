@@ -3,7 +3,6 @@ package ViewAbstraction
 import uk.ac.ox.cs.fdr.{Option => _, _} // hide fdr.Option
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer}
-// import scala.collection.parallel.CollectionConverters._
 
 /** Class that builds transition systems, based on FDR.
   * @param fdrSession the FDR session object
@@ -79,14 +78,11 @@ class FDRTransitionMap(
     * (excluding distinguished values of the supertype).*/
   private def buildIdRemap(typeName: String, superType: String)
       : (IdRemap, NameMap, Int) = {
-    // println("buildTypeMap: typeName = "+typeName+"; superType = "+superType)
     val idRemap = Map[Int, Int]() // the result
     val nameMap = Map[Int, String]() // map from values used here to script names
     // Values in the type and supertype
     val superTypeVals = fdrSession.getTypeValues(superType)
     val typeValues = fdrSession.getTypeValues(typeName)
-    // val superTypeVals = fdrSession.setStringToList(superType)
-    // val typeValues = fdrSession.setStringToList(typeName)
     // Next ints to use for ids and distinguished values
     var nextId = 0; var nextDistinguished = -1
 
@@ -115,9 +111,6 @@ class FDRTransitionMap(
   /** A map giving the types of the parameters of each state. */
   private val stateTypeMap0 = Map[ControlState, Array[Type]]()
 
-  /** Maximum control state used. */
-  // var maxCS = -1
-
   /** Convert a Node into a State, using the node's state group as the
     * ControlState, and the node's variable values as the Identities,
     * prepended with id if non-negative and the identity is not already there,
@@ -144,23 +137,15 @@ class FDRTransitionMap(
         else args0
       }
       else args0
-    val cs = machine.stateGroup(node).toInt // ; println(cs)
-    // maxCS = maxCS max cs
-    // assert(cs >= 0, cs+"\t"+machine.stateGroup(node))
-    // val idsX: Array[Identity] =
-    //   args1.map{ case (t,x) => idRemaps(t)(x) }.toArray
+    val cs = machine.stateGroup(node).toInt 
     val ids = State.getIdentityArray(args1.length); var i = 0
     for((t,x) <- args1){ ids(i) = idRemaps(t)(x); i += 1 }
-    // assert(idsX.sameElements(ids))
     stateTypeMap0.get(cs) match{
       case Some(ts) => { 
         assert(ts.length == args1.length, 
                "Error caused by having to add missing identity to process: "+
                  s"cs = $cs; id = $id\n"+ ts.mkString("<", ",", ">")+"\n"+
                  args1.mkString("<", ",", ">"))
-        // val types: Array[Type] = args1.map{ case (t,x) => typeMap(t) }.toArray
-        // assert(types.sameElements(ts), 
-        //        types.mkString("<",",",">")+" "+ts.mkString("<",",",">"))
       }
       case None => 
         val types: Array[Type] = args1.map{ case (t,x) => typeMap(t) }.toArray
@@ -172,7 +157,6 @@ class FDRTransitionMap(
 
   // Flag to cause transitions to be printed
   private val verbose = false
-
 
   /* Note: to make the following thread-safe, it is necessary to (1) protect
    * stateTypeMap0 in nodeToState; (2) protect transMap and seen within
@@ -207,7 +191,6 @@ class FDRTransitionMap(
         var lastE = -1
         for(t <- machine.transitions(node).iterator.asScala) {
           val e = t.event.toInt 
-          //  fdrSession.logEvent(e) -- unnecessary, I think
           assert(lastE <= e); lastE = e // check events non-decreasing
           val dst = t.destination
           val dstState = nodeToState(machine, dst, family, id, typeId)
@@ -224,6 +207,36 @@ class FDRTransitionMap(
       }
     }
     else println(s"$rootState already seen")
+    rootState
+  }
+
+  /** New version of augmentTransMap that tries to produce transitions by
+    * renaming those previously found for symmetrically bisimilar states. */
+  def newAugmentTransMap(
+    transMap: TransMap, seen: Set[State], machine: Machine,
+    family: Int, id: Int, typeId: Long, verbose: Boolean = false)
+      : State = {
+    val root = machine.rootNode
+    val rootState = nodeToState(machine, root, family, id, typeId)
+    // We'll perform a depth-first search.  stack will store Nodes, and the
+    // corresponding State values, that have to be expanded.
+    val stack = new Stack[(Node, State)]
+    stack.push((root, rootState)); seen += rootState
+// Does seen contain states done or just those that we've sen?
+
+    while(stack.nonEmpty){
+      val (node, st) = stack.pop
+      val (st1,map) = RemapperP.Remapper.normaliseState(st)
+      // Get transitions of st1, either recalling them or producing them
+      val trans1 = transMap.get(st1) match{
+        case None => 
+          // Create transitions for st1, store and return
+          ???
+        case Some(trans2) => trans2
+      }
+      // produce transitions for st by remapping st1 by the inverse of map
+
+    }
     rootState
   }
 
@@ -294,9 +307,6 @@ class FDRTransitionMap(
         // initialised.
         val e1 = fdrSession.eventToInt(eventsList(2*i))
         val e2 = fdrSession.eventToInt(eventsList(2*i+1))
-        // val name = fdrSession.eventToString(e1) 
-        // if(name == "getValueR.N1.A") 
-        //   println(name+" -> "+fdrSession.eventToString(e2))
         map.synchronized{
           map.get(e1) match{
             case Some(es) => map += e1 -> (e2::es)
@@ -313,17 +323,9 @@ class FDRTransitionMap(
                       renamingMap: RenamingMap)
       : List[(EventInt, State)] = 
     transList.flatMap{ case(e,s1) =>
-      // val name = fdrSession.eventToString(e) 
       renamingMap.get(e) match{
-        case Some(es) => 
-          // if(name == "getValueR.N1.A") 
-          //   println(s"$name -> "+
-          //             es.map(fdrSession.eventToString).mkString("<",",",">"))
-          es.map(e2 => (e2,s1))
-        case None =>
-          // if(name.contains("getValueR")) 
-          //   println(s"Warning: Event $name not in renaming. ")
-          List((e,s1))
+        case Some(es) => es.map(e2 => (e2,s1))
+        case None => List((e,s1))
       }
     }.sortBy(_._1)
 
@@ -390,7 +392,6 @@ class FDRTransitionMap(
     val stateTypeMapArray = new Array[Array[Type]](maxCS-minCS+1)
     for((cs,ts) <- stateTypeMap0.iterator) stateTypeMapArray(cs-minCS) = ts
     State.setStateTypeMap(stateTypeMapArray, minCS)
-    // MyStateMap.renewStateStore(stateTypeMapArray.length, minCS)
     MyStateMap.doneCompiling
   }
 

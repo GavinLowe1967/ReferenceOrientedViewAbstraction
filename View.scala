@@ -201,15 +201,28 @@ class ComponentView(servers: ServerStates, components: Array[State])
 
   checkValid
 
-  /** The control states of components. */
-  private val controlStates = components.map(_.cs)
+  /** Object containing the information needed for
+    * Transition.mightGiveSufficientUnifs.  This is designed to give better
+    * memory behaviour. */
+  val mightGiveSufficientUnifsInfo = 
+    new ComponentView.MightGiveSufficientUnifsInfo{
+      /** The family of the principal. */
+      val princFamily = components(0).family
 
-  /** Does this have a component with control state cs? */
-  @inline def hasControlState(cs: ControlState): Boolean = {
-    var j = 0
-    while(j < cptsLen && controlStates(j) != cs) j += 1
-    j < cptsLen
-  }
+      /** The control states of components. */
+      private val controlStates = components.map(_.cs)
+
+      private val cptsLen = controlStates.length
+
+      /** Does this have a component with control state cs? */
+      @inline def hasControlState(cs: ControlState): Boolean = {
+        var j = 0
+        while(j < cptsLen && controlStates(j) != cs) j += 1
+        j < cptsLen
+      }
+
+      // IMPROVE: maybe also include doneInducedPostServersBM here
+    }
 
   /** Is this representable using the values defined in the script? */
   def representableInScript: Boolean = {
@@ -507,6 +520,17 @@ object View{
 object ComponentView{
   /** Is v1 < v2. */
   def compare(v1: ComponentView, v2: ComponentView): Boolean = v1.compare(v2) < 0
+
+  /** Object containing the information needed for
+    * Transition.mightGiveSufficientUnifs. */
+  trait MightGiveSufficientUnifsInfo{
+    /** The family of the principal. */
+    val princFamily: Family
+
+    /** Does a component have control state cs? */
+    def hasControlState(cs: ControlState): Boolean
+
+  }
 }
 
 // =======================================================
