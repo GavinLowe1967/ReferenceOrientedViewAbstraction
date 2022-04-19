@@ -1,11 +1,13 @@
+HOME = /home/gavin
+
 # Path to where ox.gavin is stored.
-UTIL = /home/gavin/Scala/Util
+UTIL = $(HOME)/Scala/Util
 
 # Path to the FDR installation 
 FDRHOME = /home/gavin/bin/FDRSym/fdr
 
 # Path to the Scala installation
-SCALAHOME = /users/gavin/bin/scala/scala-2.13.1
+#SCALAHOME = /users/gavin/bin/scala/scala-2.13.1
 
 CP = .:$(UTIL):$(FDRHOME)/lib/fdr.jar
 # :scala-parallel-collections_2.13-0.2.0.jar
@@ -50,11 +52,13 @@ $(DIR)/FDRTransitionMap.class: $(DIR)/State.class $(DIR)/CSPFileParser.class	\
 
 $(DIR)/ServersReducedMap.class: $(DIR)/ServerStates.class
 
-$(DIR)/View.class:  $(DIR)/StateArray.class $(DIR)/MyHashSet.class $(DIR)/ServersReducedMap.class
+$(DIR)/View.class:  $(DIR)/StateArray.class $(DIR)/ServerStates.class
+
+$(DIR)/ComponentView.class: $(DIR)/View.class $(DIR)/MyHashSet.class $(DIR)/ServersReducedMap.class
 
 $(DIR)/TestStates.class: $(DIR)/MyStateMap.class
 
-$(DIR)/RemapperP/Remapper.class: $(DIR)/View.class 
+$(DIR)/RemapperP/Remapper.class: $(DIR)/ComponentView.class 
 
 $(DIR)/RemapperP/RemapperTest.class: $(DIR)/TestStates.class $(DIR)/RemapperP/Remapper.class $(DIR)/Unification.class
 
@@ -76,18 +80,18 @@ $(DIR)/SingleRefEffectOnUnificationTest.class: $(DIR)/SingleRefEffectOnUnificati
 
 $(COMBINERP)/CombinerTest.class:  $(DIR)/TestStates.class $(COMBINERP)/Combiner.class 
 
-$(DIR)/Transition.class: $(DIR)/Unification.class $(DIR)/System.class
+$(DIR)/Transition.class: $(DIR)/Unification.class $(DIR)/SystemP/System.class
 
-$(DIR)/TransitionSet.class: $(DIR)/Transition.class $(DIR)/View.class
+$(DIR)/TransitionSet.class: $(DIR)/Transition.class $(DIR)/ComponentView.class
 
-$(DIR)/TransitionTemplateSet.class: $(DIR)/View.class
+$(DIR)/TransitionTemplateSet.class: $(DIR)/ComponentView.class
 
-$(DIR)/ViewSet.class: $(DIR)/View.class $(DIR)/MyHashSet.class
+$(DIR)/ViewSet.class: $(DIR)/ComponentView.class $(DIR)/MyHashSet.class
 
 # # The system itself
 
 $(DIR)/Components.class: $(DIR)/FDRSession.class	\
-  $(DIR)/FDRTransitionMap.class $(DIR)/View.class
+  $(DIR)/FDRTransitionMap.class $(DIR)/ComponentView.class
 
 $(DIR)/Servers.class: $(DIR)/FDRSession.class $(DIR)/MyHashMap.class	\
    $(DIR)/FDRTransitionMap.class
@@ -155,7 +159,8 @@ $(DIR)/%.class:     %.scala
 ScalaInstrumentation.class: ScalaInstrumentation.scala
 	$(FSC) ScalaInstrumentation.scala
 
-ICP = .:$(UTIL):$(SCALAHOME)/lib/scala-library.jar
+ICP = .:$(UTIL)
+# :$(SCALAHOME)/lib/scala-library.jar
 
 Instrumentation.class: Instrumentation.java ScalaInstrumentation.class
 	javac -cp $(ICP) Instrumentation.java

@@ -157,7 +157,9 @@ class SimpleEffectOnStore extends EffectOnStore{
     var result = List[ComponentView]()
     // Add nv to result if not already there
     @inline def maybeAdd(nv: ReducedComponentView) = 
-      if(!result.contains(nv)) result ::= nv.asComponentView 
+      if(!result.contains(nv)) 
+        result ::= ComponentView.fromReducedComponentView(nv) 
+        // nv.asComponentView
       else Profiler.count("maybeAdd repeat")
 
     // Update based upon the MissingCommon entries in mi being all completed.
