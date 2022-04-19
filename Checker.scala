@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
   * @param aShapes the shapes of abstractions.
   * @param cShapes the shapes of concretizations. */
 class Checker(system: SystemP.System){
-  setSystem(system) // set system in package, for showEvent
+  SystemP.System.setSystem(system) // set system in package, for showEvent
 
   /** Exception thrown to indicate that an error transition has been found.
     * This is caught within process. */
@@ -92,33 +92,30 @@ class Checker(system: SystemP.System){
 
   // ========= Processing a single view
 
-  /** Process v, calculating all the concrete transitions from v, adding the
+  /** Process cv, calculating all the concrete transitions from cv, adding the
     * post-states to sysAbsViews, and adding new ones to nextNewViews.
     * @return true if a concrete transition on error is generated. 
     */
-  private def process(v: View): Boolean = { 
-    if(verbose) println(s"\n**** Processing $v")
-    v match{
-      case cv: ComponentView =>
-        if(debugging) StateArray.checkDistinct(cv.components)
-        for((pre, e, post, outsidePid) <- system.transitions(cv)){
-          if(showTransitions)
-            println(s"$pre -${system.showEvent(e)}-> $post ["+
-              (if(outsidePid != null) State.showProcessId(outsidePid) else "")+
-              "]")
-          assert(pre.components(0) == cv.principal)
-          // Find new views as a result of this transition
-          try{ processTransition(pre, e, post, outsidePid) }
-          catch{ 
-            case _: FoundErrorException =>
-              assert(e == system.Error); return true
-          }
-        } // end of for((pre, e, post, outsidePids) <- trans)
-        // Effect of previous transitions on this view
-        effectOfPreviousTransitions(cv)
-        effectOfPreviousTransitionTemplates(cv)
-        if(singleRef) effectOn.completeDelayed(cv, nextNewViews)
-    }
+  private def process(cv: ComponentView): Boolean = { 
+    if(verbose) println(s"\n**** Processing $cv")
+    if(debugging) StateArray.checkDistinct(cv.components)
+    for((pre, e, post, outsidePid) <- system.transitions(cv)){
+      if(showTransitions)
+        println(s"$pre -${system.showEvent(e)}-> $post ["+
+          (if(outsidePid != null) State.showProcessId(outsidePid) else "")+
+          "]")
+      assert(pre.components(0) == cv.principal)
+      // Find new views as a result of this transition
+      try{ processTransition(pre, e, post, outsidePid) }
+      catch{
+        case _: FoundErrorException =>
+          assert(e == system.Error); return true
+      }
+    } // end of for((pre, e, post, outsidePids) <- trans)
+      // Effect of previous transitions on this view
+    effectOfPreviousTransitions(cv)
+    effectOfPreviousTransitionTemplates(cv)
+    if(singleRef) effectOn.completeDelayed(cv, nextNewViews)
     false
   } 
 
@@ -356,7 +353,7 @@ class Checker(system: SystemP.System){
     // Get the initial views
     val (sav, initViews) = system.initViews; sysAbsViews = sav
     println("initViews = "+initViews.mkString("; "))
-    var newViews: Array[View] = initViews
+    var newViews: Array[ComponentView] = initViews
     extendability = new Extendability(sysAbsViews)
     effectOn = new EffectOn(sysAbsViews, system)
 

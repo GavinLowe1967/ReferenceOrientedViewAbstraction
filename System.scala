@@ -11,8 +11,6 @@ import ox.gavin.profiling.Profiler
 /** An object that creates the System corresponding to the CSP file fname.
   * @param checkDeadlock are we checking for deadlock? */
 class System(fname: String) {
-  // type View = Views.View
-
   var verbose = false
 
   /** The parser of the annotations in the CSP file. */
@@ -89,9 +87,7 @@ class System(fname: String) {
   private val componentAlphaBitMap = components.alphaBitMap 
 
   /** Is v a ComponentView for an active component? */
-  def isActive(v: View) = v match{
-    case cv: ComponentView => actives(cv.principal.family)
-  }
+  def isActive(cv: ComponentView) = actives(cv.principal.family)
 
   /** Model of the servers. */
   val servers =
@@ -330,11 +326,11 @@ class System(fname: String) {
   finalise
 
   /** The initial system views. */
-  def initViews: (ViewSet, Array[View]) = {
+  def initViews: (ViewSet, Array[ComponentView]) = {
     // val k = aShapes.head.sum
     // println("initViews "+k+"; "+aShapes.map(_.mkString("<", ",", ">")))
     val serverInits: List[State] = servers.inits
-    val viewSet = ViewSet(); val activeViews = new ArrayBuffer[View]
+    val viewSet = ViewSet(); val activeViews = new ArrayBuffer[ComponentView]
     // All views 
     val views = components.initViews(ServerStates(serverInits))
     // println("views = \n  "+views.map(_.toString).mkString("\n  "))
@@ -792,6 +788,20 @@ class System(fname: String) {
     }
     else false
   }
+
+}
+
+// ==================================================================
+
+object System{
+
+  /** The System being checked.  Set by Checker. */
+  private var system: System = null
+
+  def setSystem(sys: System) = system = sys
+
+  /** Show event e. */
+  def showEvent(e: EventInt) = system.showEvent(e)
 
 
 

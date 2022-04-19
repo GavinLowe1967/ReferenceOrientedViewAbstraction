@@ -520,9 +520,8 @@ object Remapper{
     new ComponentView(servers1, components1) // principal1, others1)
   }
 
-  def remapView(v: View) = v match{
-    case cv: ComponentView => remapComponentView(cv)
-  }
+  def remapView(cv: ComponentView) = remapComponentView(cv)
+  // IMPROVE
 
   /** Apply map to cpt. 
     * Pre: map is defined on all parameters of cpt. */

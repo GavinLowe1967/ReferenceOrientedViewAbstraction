@@ -10,7 +10,7 @@ import scala.collection.mutable.ArrayBuffer
   * @param sysAbsViews the abstract views encountered during the search.
   * @param initViews the initial views (of size k). */
 class Debugger(
-  system: SystemP.System, sysAbsViews: ViewSet, initViews: Array[View]
+  system: SystemP.System, sysAbsViews: ViewSet, initViews: Array[ComponentView]
 ){
 
   // Parameters used in printing: indent is the width of the left-hand column;
@@ -27,7 +27,7 @@ class Debugger(
     * latter exists.
     */
   private case class TraceInfo(
-    abss: ArrayBuffer[View], befores: ArrayBuffer[Concretization],
+    abss: ArrayBuffer[ComponentView], befores: ArrayBuffer[Concretization],
     events: ArrayBuffer[EventInt], afters: ArrayBuffer[Concretization])
   {
     val plies = events.size
@@ -66,7 +66,7 @@ class Debugger(
   /** Produce debugging information for last.
     * @param plies the number of plies in the search, i.e. the number of events
     * that happened before the state last was reached. */
-  def apply(last: View): Unit = {
+  def apply(last: ComponentView): Unit = {
     println("debugging "+last+"\n")
     apply1(last, null)
   }
@@ -75,7 +75,7 @@ class Debugger(
     * @param last if non-null, a View to which target contributed, and 
     * that should be included at the end of the trace; last will be null only
     * in the top-level call. */
-  def apply1(target: View, last: Concretization): Unit = {
+  def apply1(target: ComponentView, last: Concretization): Unit = {
     // Find trace leading to error state.
     val tr = findTrace(target, last)
     // Print trace
@@ -110,16 +110,16 @@ class Debugger(
   /** Find the trace leading to target. 
     * @param conc if non-null, a concretization, which is an extension 
     * of target, and that should be included in the trace. */
-  private def findTrace(target: View, conc: Concretization = null)
+  private def findTrace(target: ComponentView, conc: Concretization = null)
       : TraceInfo = { 
-    var v: View = target
+    var v: ComponentView = target
     var done = initViews.contains(v)
     // init records whether we should select penultimate as the source of the
     // next gamma transition.
     // var init = penultimate != null
     // Build up trace in reverse.
     val befores, afters = new ArrayBuffer[Concretization]
-    val abss = new ArrayBuffer[View];
+    val abss = new ArrayBuffer[ComponentView];
     val events = new ArrayBuffer[EventInt]
     abss += target // IMPROVE: should we have the next Concretization here?
     // Inv: for each i in [0..events.length),

@@ -52,7 +52,7 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
     // transition on setTop.T0.N1
     def test2 = {
       println("= test2 =")
-      reset() // nextNewViews = new ArrayBuffer[View]
+      reset() 
       val serversA = ServerStates(List(lock1(T0), top(N0), wd0B))
       val pre = new Concretization(serversA, Array(setTopB(T0,N1), bNode(N1,N0)))
       val serversB = ServerStates(List(lock1(T0), top(N1), wd1))

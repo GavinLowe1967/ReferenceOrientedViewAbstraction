@@ -76,6 +76,7 @@ $(DIR)/SingleRefEffectOnUnificationTest.class: $(DIR)/SingleRefEffectOnUnificati
 
 $(COMBINERP)/CombinerTest.class:  $(DIR)/TestStates.class $(COMBINERP)/Combiner.class 
 
+$(DIR)/Transition.class: $(DIR)/Unification.class $(DIR)/System.class
 
 $(DIR)/TransitionSet.class: $(DIR)/Transition.class $(DIR)/View.class
 

@@ -182,7 +182,7 @@ class Transition(
   // ==================================================================
   // Overriding standard things.
 
-  override def toString = s"$pre -${showEvent(e)}->\n  $post"
+  override def toString = s"$pre -${SystemP.System.showEvent(e)}->\n  $post"
 
   /** Equality. */
   override def equals(that: Any) = that match{

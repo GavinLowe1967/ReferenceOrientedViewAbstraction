@@ -375,7 +375,7 @@ class Components(
     * @return an array of pairs (princ, others), where princ will be the 
     * principal component in a ComponentView, and others will be those
     * referenced by princ. */
-  def initViews(servers: ServerStates): Array[View] = { 
+  def initViews(servers: ServerStates): Array[ComponentView] = { 
     val fInits = inits.flatten
     fInits.map(princ => 
       new ComponentView(servers, StateArray.referencedStates(princ, fInits)))
