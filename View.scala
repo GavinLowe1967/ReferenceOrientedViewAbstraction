@@ -2,82 +2,9 @@ package ViewAbstraction
 
 import ox.gavin.profiling.Profiler
 
-/** Superclass of views of a system state. */
-//abstract class View{
-  // /** This view was created by the extended transition pre -e-> post. */
-  // private var pre, post: Concretization = null
-  // private var e: EventInt = -1
-
-  // /** Ingredients for making an extended transition.  If this contains a tuple
-  //   * (pre1, cpts, cv, post1, newCpts) then this was created by the extended
-  //   * transition 
-  //   * mkExtendedPre(pre1, cpts, cv) -e1-> mkExtendedPost(post1, newCpts). 
-  //   * We lazily avoid creating these concretizations until needed. */ 
-  // private var creationIngredients: 
-  //     (Concretization, Array[State], ComponentView, Concretization, Array[State])
-  // = null
-
-  // /** Get the creation information for this. */
-  // def getCreationInfo: (Concretization, EventInt, Concretization) = 
-  //   if(pre != null) (pre, e, post) 
-  //   else{ 
-  //     val (pre1, cpts, cv, post1, newCpts) = creationIngredients
-  //     (mkExtendedPre(pre1, cpts, cv), e, mkExtendedPost(post1, newCpts))
-  //   }
-
-  // def getCreationIngredients = creationIngredients
-
-  // /** Record that this view was created by the extended transition 
-  //   * pre1 -e1-> post1. */
-  // def setCreationInfo(pre1: Concretization, e1: EventInt, post1: Concretization)
-  // = {
-  //   require(creationIngredients == null && pre == null)
-  //   pre = pre1; e = e1; post = post1
-  // }
-
-  // /** Record that this view was created by the extended transition
-  //   * mkExtendedPre(pre1, cpts, cv) -e1-> mkExtendedPost(post1, newCpts).
-  //   */
-  // def setCreationInfoIndirect(
-  //   pre1: Concretization, cpts: Array[State], cv: ComponentView,
-  //   e1: EventInt, post1: Concretization, newCpts: Array[State]) 
-  // = {
-  //   creationIngredients = (pre1, cpts, cv, post1, newCpts); e = e1
-  // }
-
-  // /** Make the extended pre-state by extending pre1 with cpts, and setting cv as
-  //   * the secondary view. */
-  // private def mkExtendedPre(
-  //   pre1: Concretization, cpts: Array[State], cv: ComponentView)
-  //     : Concretization = {
-  //   val extendedPre = new Concretization(pre1.servers,
-  //     StateArray.union(pre1.components, cpts))
-  //   extendedPre.setSecondaryView(cv, null)
-  //   extendedPre
-  // }
-
-  // /** Make the extended post-state by extending post1 with newCpts. */
-  // private def mkExtendedPost(post1: Concretization, newCpts: Array[State]) = 
-  //   new Concretization(post1.servers, 
-  //     StateArray.union(post1.components, newCpts))
-
-  // def showCreationInfo: String = creationIngredients match{
-  //   case (pre1, cpts, cv, post1, newCpts) => s"induced by $pre1 -> $post1 on $cv"
-  //   case null => s"produced by $pre -> $post"
-  // }
-
-  // /** Was this induced by a transition from cv1?  Used in trying to understand
-  //   * why so many induced transitions are redundant. */
-  // def inducedFrom(cv1: ComponentView) = 
-  //   creationIngredients != null && creationIngredients._3 == cv1
-//}
-
-// =======================================================
-
 /** A minimal ComponentView.  Used where it's useful to use less memory. */
 class ReducedComponentView(
-  val servers: ServerStates, val components: Array[State])
-    /*extends View*/{
+  val servers: ServerStates, val components: Array[State]){
 
   /** The principal component. */
   def principal = components(0)
@@ -121,6 +48,13 @@ class ReducedComponentView(
     if(serverComp != 0) serverComp
     else StateArray.compare(components, that.components)
   }
+
+
+  override def toString = s"$servers || "+components.mkString("[", " || ", "]")
+
+  def toString0 = 
+    servers.toString0+" || "+
+      components.map(_.toString0).mkString("[", " || ", "]")
 
 }
 

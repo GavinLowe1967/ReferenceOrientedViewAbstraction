@@ -54,7 +54,9 @@ $(DIR)/ServersReducedMap.class: $(DIR)/ServerStates.class
 
 $(DIR)/View.class:  $(DIR)/StateArray.class $(DIR)/ServerStates.class
 
-$(DIR)/ComponentView.class: $(DIR)/View.class $(DIR)/MyHashSet.class $(DIR)/ServersReducedMap.class
+$(DIR)/ComponentView0.class: $(DIR)/View.class $(DIR)/MyHashSet.class $(DIR)/ServersReducedMap.class
+
+$(DIR)/ComponentView.class: $(DIR)/ComponentView0.class
 
 $(DIR)/TestStates.class: $(DIR)/MyStateMap.class
 
