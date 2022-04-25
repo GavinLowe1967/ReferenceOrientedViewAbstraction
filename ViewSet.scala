@@ -142,7 +142,7 @@ class BasicHashMap[K: scala.reflect.ClassTag, D: scala.reflect.ClassTag]
 
     def hasNext = ix < n
 
-    def next = { val d = data(ix); ix += 1; advance; d }
+    def next() = { val d = data(ix); ix += 1; advance; d }
   } // end of iterator
 } // end of BasicHashMap
 
@@ -252,7 +252,7 @@ class ComponentsSet(initSize: Int = 4){
 
     def hasNext = ix < n
 
-    def next = { val d = views(ix); ix += 1; advance; d }
+    def next() = { val d = views(ix); ix += 1; advance; d }
   } // end of iterator
 
 
@@ -313,11 +313,11 @@ class PrincipalBasedViewSet(initSize: Int = 4){
       if(current != null && current.hasNext) true
       else if(iter.hasNext){
         // Move onto next element in underlying
-        current = iter.next.iterator; assert(current.hasNext); true 
+        current = iter.next().iterator; assert(current.hasNext); true 
       }
       else false
 
-    def next = { assert(hasNext); current.next }
+    def next() = { assert(hasNext); current.next() }
   } // end of iterator
 
   /** Iterator over all views matching principal. */
@@ -406,11 +406,11 @@ class ServerPrincipalBasedViewSet(initSize: Int = 16) extends ViewSet {
     def hasNext = 
       if(current != null && current.hasNext) true
       else if(iter.hasNext){
-        current = iter.next.iterator; assert(current.hasNext); true 
+        current = iter.next().iterator; assert(current.hasNext); true 
       }
       else false
 
-    def next = { assert(hasNext); current.next }
+    def next() = { assert(hasNext); current.next() }
   } // end of iterator
 
 
@@ -442,7 +442,7 @@ class ServerPrincipalBasedViewSet(initSize: Int = 16) extends ViewSet {
     val sets = underlying.iterator.toArray
     // Summary by servers
     val st0 = 
-      sets.map(pbvs => pbvs.iterator.next.toString+": "+pbvs.size).
+      sets.map(pbvs => pbvs.iterator.next().toString+": "+pbvs.size).
         sorted.mkString("\n")
     // The largest such
     val max: PrincipalBasedViewSet = sets.maxBy(_.size)

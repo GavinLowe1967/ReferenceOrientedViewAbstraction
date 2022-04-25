@@ -224,7 +224,7 @@ class Checker(system: SystemP.System){
     Profiler.count("instantiateTransitionTemplate")
     val iter = sysAbsViews.iterator(pre.servers)
     while(iter.hasNext){
-      val cv = iter.next
+      val cv = iter.next()
       instantiateTransitionTemplateBy(pre, post, newPid, e, include, cv)
     }
   }
@@ -234,7 +234,7 @@ class Checker(system: SystemP.System){
   private def effectOfPreviousTransitionTemplates(cv: ComponentView) = {
     val iter = transitionTemplates.iterator(cv.servers)
     while(iter.hasNext){
-      val (pre, post, id, e, include) = iter.next
+      val (pre, post, id, e, include) = iter.next()
       // assert(pre.servers == cv.servers)
       instantiateTransitionTemplateBy(pre, post, id, e, include, cv)
     }
@@ -319,7 +319,7 @@ class Checker(system: SystemP.System){
     val princ = Remapper.remapToPrincipal(pre.servers, refState)
     val iter = sysAbsViews.iterator(pre.servers, princ)
     while(iter.hasNext){
-      val cv = iter.next
+      val cv = iter.next()
       instantiateTransitionTemplateBy(pre, post, newPid, e, include, cv)
       // IMPROVE: can simplify isExtendable, consistentStates, using the fact
       // that newPid is in position ix.
@@ -333,15 +333,15 @@ class Checker(system: SystemP.System){
     * contains at least one process that changes state, then update as per
     * this transition. */
   private def effectOnOthers(t: Transition) = if(t.pre != t.post){
-    if(false) println(s"effectOnOthers $t")
+    // if(false) println(s"effectOnOthers $t")
     val iter = sysAbsViews.iterator(t.pre.servers)
-    while(iter.hasNext){ val cv = iter.next; effectOn(t, cv, nextNewViews) }
+    while(iter.hasNext){ val cv = iter.next(); effectOn(t, cv, nextNewViews) }
   }
 
   /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
     val iter = transitions.iterator(cv.servers)
-    while(iter.hasNext){ val t = iter.next; effectOn(t, cv, nextNewViews) }
+    while(iter.hasNext){ val t = iter.next(); effectOn(t, cv, nextNewViews) }
   }
 
   // ========= Main function
@@ -451,31 +451,31 @@ class Checker(system: SystemP.System){
 
   /** Perform a memory profile of this. */
   def memoryProfile = {
-    println("Memory profile"); println
+    println("Memory profile"); println()
 
     println("# states = "+MyStateMap.stateCount)
-    traverse("MyStateMap", MyStateMap, maxPrint = 0); println
+    traverse("MyStateMap", MyStateMap, maxPrint = 0); println()
 
-    traverse("ServerStates", ServerStates, maxPrint = 0); println
+    traverse("ServerStates", ServerStates, maxPrint = 0); println()
 
-    traverse("first view", sysAbsViews.iterator.next, maxPrint = 0); println
+    traverse("first view", sysAbsViews.iterator.next(), maxPrint = 0); println()
 
-    traverse("sysAbsViews", sysAbsViews, maxPrint = 0); println
+    traverse("sysAbsViews", sysAbsViews, maxPrint = 0); println()
 
-    traverse("transitions", transitions, maxPrint = 0); println
+    traverse("transitions", transitions, maxPrint = 0); println()
 
-    traverse("transitionTemplates", transitionTemplates, maxPrint = 0); println
+    traverse("transitionTemplates", transitionTemplates, maxPrint = 0); println()
 
-    traverse("extendability", extendability, maxPrint = 0); println
+    traverse("extendability", extendability, maxPrint = 0); println()
 
     if(true){
-      traverse("system", system, maxPrint = 0); println }
+      traverse("system", system, maxPrint = 0); println() }
     else println("Omitting system\n") 
 
     //traverse("effectOn", effectOn, maxPrint = 5, maxPrintArray = 8); println
-    effectOn.memoryProfile; println
+    effectOn.memoryProfile; println()
 
-    traverse("checker", this, maxPrint = 0); println
+    traverse("checker", this, maxPrint = 0); println()
   }
 }
 

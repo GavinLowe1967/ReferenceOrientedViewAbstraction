@@ -110,28 +110,37 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
 
   // -------------------------------------------------------
 
+  import ComponentView0._
   /** Object containing the information needed for
     * Transition.mightGiveSufficientUnifs.  This is designed to give better
     * memory behaviour. */
-  val mightGiveSufficientUnifsInfo = 
-    new ComponentView.MightGiveSufficientUnifsInfo{
-      /** The family of the principal. */
-      val princFamily = components(0).family
+  val mightGiveSufficientUnifsInfo: MightGiveSufficientUnifsInfo = {
+    val princFamily = components(0).family
+    val cStates = components.map(_.cs) // IMPROVE: remove dups?
+    val len = cStates.length
+    if(len == 1) new MightGiveSufficientUnifs1(princFamily, cStates(0))
+    else if(len == 2) 
+      new MightGiveSufficientUnifs2(princFamily, cStates(0), cStates(1))
+    else new MightGiveSufficientUnifsN(princFamily, cStates)
+  }
+    // new ComponentView0.MightGiveSufficientUnifsInfo{
+    //   /** The family of the principal. */
+    //   val princFamily = components(0).family
 
-      /** The control states of components. */
-      private val controlStates = components.map(_.cs)
+    //   /** The control states of components. */
+    //   private val controlStates = components.map(_.cs)
 
-      private val cptsLen = controlStates.length
+    //   private val cptsLen = controlStates.length
 
-      /** Does this have a component with control state cs? */
-      @inline def hasControlState(cs: ControlState): Boolean = {
-        var j = 0
-        while(j < cptsLen && controlStates(j) != cs) j += 1
-        j < cptsLen
-      }
+    //   /** Does this have a component with control state cs? */
+    //   @inline def hasControlState(cs: ControlState): Boolean = {
+    //     var j = 0
+    //     while(j < cptsLen && controlStates(j) != cs) j += 1
+    //     j < cptsLen
+    //   }
 
-      // IMPROVE: maybe also include doneInducedPostServersBM here
-    }
+    //   // IMPROVE: maybe also include doneInducedPostServersBM here
+    // }
 
   // -------------------------------------------------------
 
@@ -324,7 +333,52 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   def clearInduced = {
     // if(doneInducedPostServers != null) doneInducedPostServers.clear
     doneInducedPostServersBM = new Array[Long](0)
-    if(conditionBInducedMap != null) conditionBInducedMap.clear 
+    if(conditionBInducedMap != null) conditionBInducedMap.clear()
   }
 
+}
+
+// ==================================================================
+
+object ComponentView0{
+
+  /** Object containing the information needed for
+    * Transition.mightGiveSufficientUnifs. */
+  trait MightGiveSufficientUnifsInfo{
+    /** The family of the principal. */
+    val princFamily: Family
+
+    /** Does a component have control state cs? */
+    def hasControlState(cs: ControlState): Boolean
+  }
+    //   // IMPROVE: maybe also include doneInducedPostServersBM here
+
+  /** Implementation of MightGiveSufficientUnifsInfo for one control state. */
+  class MightGiveSufficientUnifs1(val princFamily: Family, cs1: ControlState)
+      extends MightGiveSufficientUnifsInfo{
+    @inline def hasControlState(cs: ControlState) = cs == cs1
+  }
+
+  /** Implementation of MightGiveSufficientUnifsInfo for two control states. */
+  class MightGiveSufficientUnifs2(
+    val princFamily: Family, cs1: ControlState, cs2: ControlState)
+      extends MightGiveSufficientUnifsInfo{
+    @inline def hasControlState(cs: ControlState) = cs == cs1 || cs == cs2
+  }
+
+  /** Implementation of MightGiveSufficientUnifsInfo for arbitrary many control
+    * states. */
+  class MightGiveSufficientUnifsN(
+    val princFamily: Family, controlStates: Array[ControlState])
+      extends MightGiveSufficientUnifsInfo{
+
+    private val cptsLen = controlStates.length
+
+    /** Does this have a component with control state cs? */
+    @inline def hasControlState(cs: ControlState): Boolean = {
+      var j = 0
+      while(j < cptsLen && controlStates(j) != cs) j += 1
+      j < cptsLen
+    }
+  }
 }

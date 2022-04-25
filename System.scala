@@ -17,9 +17,9 @@ class System(fname: String) {
   private val file: CSPFileParser =
     try{ new CSPFileParser(fname) }
     catch {
-      case error: java.io.FileNotFoundException => println(error); sys.exit
-      case error: InputFileError => println(error); sys.exit
-      case error: FileLoadError => println(error); sys.exit
+      case error: java.io.FileNotFoundException => println(error); sys.exit()
+      case error: InputFileError => println(error); sys.exit()
+      case error: FileLoadError => println(error); sys.exit()
     }
  
   /** Object encapsulating the FDR session. */
@@ -281,7 +281,7 @@ class System(fname: String) {
             }
             // print(".")
           }
-          println
+          println()
         } // end of if(debugging)
       }
       else println(s"Control state $cs not reachable")
@@ -679,7 +679,7 @@ class System(fname: String) {
             println("Not enough identities in script to make\n"+
               s"$pre and\n$cv consistent.\n"+
               s"Renaming of $st1 gives ${renamedState.toString0}")
-            sys.exit 
+            sys.exit()
           }
         for((map, renamedState) <- maps){
           assert(renamedState.representableInScript) 

@@ -102,9 +102,9 @@ class Servers(
         if(usesRenaming) s"third4_(${entry(i)})" else s"second3_(${entry(i)})",
         st => st)
       for(st <- alpha) alphas(i) += fdrSession.eventToInt(st)
-      println
+      println()
     }
-    println
+    println()
     // val maxEvent = alphas.map(_.max).max // IMPROVE: use eventsSize?
     // Build map (as array) from events to the list of synchronising servers.
     eventMap = Array.tabulate(eventsSize)( // (maxEvent+1)( 

@@ -9,7 +9,7 @@ package ViewAbstraction
 class ComponentView(servers: ServerStates, components: Array[State])
     extends ComponentView0(servers, components){
 
-  def this(servers: ServerStates, principal: State, others: Array[State]){
+  def this(servers: ServerStates, principal: State, others: Array[State]) = {
     this(servers, principal +: others)
   }
 
@@ -86,16 +86,6 @@ class ComponentView(servers: ServerStates, components: Array[State])
 object ComponentView{
   /** Is v1 < v2. */
   def compare(v1: ComponentView, v2: ComponentView): Boolean = v1.compare(v2) < 0
-
-  /** Object containing the information needed for
-    * Transition.mightGiveSufficientUnifs. */
-  trait MightGiveSufficientUnifsInfo{
-    /** The family of the principal. */
-    val princFamily: Family
-
-    /** Does a component have control state cs? */
-    def hasControlState(cs: ControlState): Boolean
-  }
 
   /** Create a ComponentView from a ReducedComponentView. */
   def fromReducedComponentView(v: ReducedComponentView) = 

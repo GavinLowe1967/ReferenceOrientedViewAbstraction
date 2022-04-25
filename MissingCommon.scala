@@ -301,10 +301,10 @@ object MissingCommon{
     import ox.gavin.profiling.MemoryProfiler.traverse
     println("MissingCommon.allMCs size = "+allMCs.size)
     for(mc <- allMCs.take(3)){
-      traverse("missingCommon", mc, maxPrint = 2); println
+      traverse("missingCommon", mc, maxPrint = 2); println()
     }
-    traverse("allMCs", allMCs, maxPrint = 1); println
-    traverse("MissingCommon", this, maxPrint = 1); println
+    traverse("allMCs", allMCs, maxPrint = 1); println()
+    traverse("MissingCommon", this, maxPrint = 1); println()
   }
 
   /** Get a MissingCommon corresponding to servers, cpts1, cpts2, pid: either
@@ -353,7 +353,7 @@ object MissingCommon{
       // has identity pid
       val iter = views.iterator(servers, princ1)
       while(iter.hasNext && !found){
-        val cv = iter.next; val cpts = cv.components; 
+        val cv = iter.next(); val cpts = cv.components; 
         assert(cpts.length == 2, cv); val cpt1 = cpts(1)
         if(cpt1.hasPID(pid)) found = updateMissingCandidates(mc, cpt1, views, ab)
       }

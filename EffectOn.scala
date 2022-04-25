@@ -240,7 +240,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           if(!nv.representableInScript){
             println("Not enough identities in script to combine transition\n"+
               s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
-            sys.exit
+            sys.exit()
           }
         } // end of if(missing.isEmpty && nextNewViews.add(nv))
         else if(missing.nonEmpty || missingCommons.nonEmpty){
@@ -365,7 +365,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
         println("Not enough identities in script to combine transition\n"+
           s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
-        sys.exit
+        sys.exit()
       }
     } // end of outer if
   }
@@ -377,7 +377,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
   /** Perform a memory profile of this. */
   def memoryProfile = {
     import ox.gavin.profiling.MemoryProfiler.traverse
-    effectOnStore.report; println
+    effectOnStore.report; println()
     effectOnStore.memoryProfile
     traverse("effectOn", this, maxPrint = 1)
 

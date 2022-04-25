@@ -11,7 +11,6 @@ class Transition(
 
   private val cptsLength = pre.components.length
 
-/*
   /** Bit map indicating which components have changed state. */
   val changedStateBitMap = { 
     val changedStateBitMap = new Array[Boolean](cptsLength); var i = 0
@@ -20,8 +19,8 @@ class Transition(
     }
     changedStateBitMap
   }
- */
 
+/*
   /** Bit map indicating which components have changed state, stored as an
     * Int. */
   private val changedStateBits: Int = {
@@ -32,12 +31,30 @@ class Transition(
     }
     csb
   }
+ */
 
   /** Has component i changed state? */
-  def changedStateBitMap(i: Int) = (changedStateBits | (1 << i)) != 0
+  //def changedStateBitMap(i: Int) = (changedStateBits | (1 << i)) != 0
 
   /** The control states of pre. */
-  private val preCptCS: Array[ControlState] = pre.components.map(_.cs)
+  //private val preCptCS: Array[ControlState] = pre.components.map(_.cs)
+
+  /** The control states in pre of components that change state. */
+  private val changingCptCS: Array[ControlState] = {
+    var res = List[ControlState](); var i = cptsLength
+    while(i > 0){
+      i -= 1
+      if(changedStateBitMap(i)){
+        val cs = pre.components(i).cs
+        if(!res.contains(cs)) res ::= cs
+      }
+    }
+    res.toArray
+    // IMPROVE: use ArrayBuffer or Array
+  }
+
+  private val changingCSLen = changingCptCS.length
+
 
   // ==================================================================
   // Things relating to parameters
@@ -136,15 +153,19 @@ class Transition(
   // 22,003,488; case 2 first true 3,032,522; case 3 first true 4,030,617;
   // case 4 first true 11,478,237; all false 3,296,727,447
 
-  /** Might a component of cpts be unified with a component of pre.components?
-    * More precisely, do they have the same control state? */
+  /** Might a component of cpts be unified with a component of pre.components
+    * that changes state?  More precisely, do they have the same control
+    * state? */
   @inline private 
-  def possibleUnification(cvInfo: ComponentView.MightGiveSufficientUnifsInfo) = {
+  def possibleUnification(cvInfo: ComponentView0.MightGiveSufficientUnifsInfo) = {
     var i = 0
-    while(i < cptsLength && 
-        (!changedStateBitMap(i) || !cvInfo.hasControlState(preCptCS(i))))
+    while(i < changingCSLen && !cvInfo.hasControlState(changingCptCS(i)))
       i += 1
-    i < cptsLength
+    i < changingCSLen
+    // while(i < cptsLength && 
+    //     (!changedStateBitMap(i) || !cvInfo.hasControlState(preCptCS(i))))
+    //   i += 1
+    // i < cptsLength
   }
   
   import Unification.UnificationList // = List[(Int,Int)]

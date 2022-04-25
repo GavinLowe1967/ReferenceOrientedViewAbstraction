@@ -39,7 +39,7 @@ class Debugger(
 
     /** Print this trace. */
     def print(toError: Boolean = false) = {
-     println
+     println()
       println(pad+abss(0))
       if(!befores(0).matches(abss(0))) 
         println(pad0+Sqle+"\n"+rPad("0: ")+befores(0))
@@ -90,7 +90,7 @@ class Debugger(
     while(!done){
       val input = scala.io.StdIn.readLine("> ")
       input match{
-        case "q" => println("Goodbye."); sys.exit
+        case "q" => println("Goodbye."); sys.exit()
         case "u" => 
           if(last != null) done = true // backtrack up the stack of traces
           else println("Already at the top level.")
@@ -149,12 +149,12 @@ class Debugger(
           val beforesR = befores.reverse; if(conc != null) beforesR += conc
           val ti = 
             TraceInfo(abss.reverse, beforesR, events.reverse, afters.reverse)
-          ti.print(false); sys.exit
+          ti.print(false); sys.exit()
       }
       abss += v
       done = initViews.contains(v)
     }
-    if(verbose) println
+    if(verbose) println()
     // Add conc at end if appropriate
     val beforesR = befores.reverse; if(conc != null) beforesR += conc
     TraceInfo(abss.reverse, beforesR, events.reverse, afters.reverse)
@@ -193,7 +193,7 @@ class Debugger(
           else help
         }
         else if(input == "u") done = true
-        else if(input == "q") { println("Goodbye."); sys.exit }
+        else if(input == "q") { println("Goodbye."); sys.exit() }
         else help
       }
     }

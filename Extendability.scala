@@ -115,7 +115,7 @@ class Extendability(views: ViewSet){
     // principal component, and the same servers as conc.  
     var found = false; val iter = views.iterator(servers, st1)
     while(iter.hasNext && !found){
-      val cv1 = iter.next; assert(cv1.principal == st1)
+      val cv1 = iter.next(); assert(cv1.principal == st1)
       // Does a renaming of the other components of cv1 (consistent with
       // servers and st1) also agree with components on common components?
       // Try to get cached result.
@@ -176,7 +176,7 @@ class Extendability(views: ViewSet){
     val iter = views.iterator(servers, pCptR); var found = false
     var cv1: ComponentView = null
     while(iter.hasNext && !found){
-      cv1 = iter.next; assert(cv1.principal == pCptR) 
+      cv1 = iter.next(); assert(cv1.principal == pCptR) 
       if(verbose) println(s"cv1 = $cv1")
       if(includeRef){
         // Test if cv1 contains a component that is a renaming of st under an

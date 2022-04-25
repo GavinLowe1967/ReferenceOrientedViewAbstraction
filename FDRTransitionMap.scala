@@ -185,7 +185,7 @@ class FDRTransitionMap(
       stack.push((root, rootState)); seen += rootState
 
       while(stack.nonEmpty){
-        val (node, st) = stack.pop
+        val (node, st) = stack.pop()
         // Build up transitions from node in trans
         var trans = ArrayBuffer[(Int, State)]()
         var lastE = -1
@@ -225,7 +225,7 @@ class FDRTransitionMap(
 // Does seen contain states done or just those that we've sen?
 
     while(stack.nonEmpty){
-      val (node, st) = stack.pop
+      val (node, st) = stack.pop()
       val (st1,map) = RemapperP.Remapper.normaliseState(st)
       // Get transitions of st1, either recalling them or producing them
       val trans1 = transMap.get(st1) match{
