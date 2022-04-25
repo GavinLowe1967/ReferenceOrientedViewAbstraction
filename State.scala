@@ -39,8 +39,12 @@ class State(val family: Family, val cs: ControlState,
   /** The process identities corresponding to ids. */
   private var pIds: Array[ProcessIdentity] = null
 
+  /** The process identities. */
   def processIdentities: Array[ProcessIdentity] = {
-    if(pIds == null) pIds = Array.tabulate(ids.length)(i => (typeMap(i), ids(i)))
+    if(pIds == null) synchronized{
+      if(pIds == null)
+        pIds = Array.tabulate(ids.length)(i => (typeMap(i), ids(i)))
+    }
     pIds
   }
 
@@ -49,12 +53,14 @@ class State(val family: Family, val cs: ControlState,
 
   /** Initialise paramsBitMap.  Needs typeMap to be initialised. */
   @inline private def initParamsBitMap = 
-    if(paramsBitMap == null){
-      paramsBitMap = newBitMap; var i = 0
-      while(i < length){
-        val id = ids(i)
-        if(!isDistinguished(id)) paramsBitMap(typeMap(i))(id) = true
-        i += 1
+    if(paramsBitMap == null) synchronized{
+      if(paramsBitMap == null){
+        paramsBitMap = newBitMap; var i = 0
+        while(i < length){
+          val id = ids(i)
+          if(!isDistinguished(id)) paramsBitMap(typeMap(i))(id) = true
+          i += 1
+        }
       }
     }
 
@@ -67,9 +73,6 @@ class State(val family: Family, val cs: ControlState,
   /** Does this have a parameter (t,id)? */
   @inline def hasParam(t: Family, id: Identity): Boolean = {
     initParamsBitMap; paramsBitMap(t)(id)
-    // var i = 0
-    // while(i < length && (typeMap(i) != t || ids(i) != id)) i += 1
-    // i < length
   }
 
   /** Information about which references are used to create views.  It is set
@@ -83,10 +86,10 @@ class State(val family: Family, val cs: ControlState,
 
   /** Should the ith parameter of this be used for creating views? */
   @inline def includeParam(i: Int) = {
-    // IMPROVE: cache includeInfo in this object.  This can't be done during
-    // compilation, however.
-    if(!includeInfoSet){ 
-      includeInfo = State.getIncludeInfo(cs); includeInfoSet = true 
+    if(!includeInfoSet) synchronized{
+      if(!includeInfoSet){
+        includeInfo = State.getIncludeInfo(cs); includeInfoSet = true
+      }
     }
     includeInfo == null || includeInfo(i)
   }
@@ -98,13 +101,15 @@ class State(val family: Family, val cs: ControlState,
   /** Does this state have a parameter (f,id) that is not an omitted
     * reference?  */
   def hasIncludedParam(f: Family, id: Identity) = {
-    if(includedParamBitMap == null){ 
-      includedParamBitMap =
-        // FIXME: the +2 is a hack
-        Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)))
-      for(i <- 0 until length)
-        if(!isDistinguished(ids(i)) && includeParam(i)) 
-          includedParamBitMap(typeMap(i))(ids(i)) = true
+    if(includedParamBitMap == null) synchronized{ 
+      if(includedParamBitMap == null){
+        includedParamBitMap =
+          // FIXME: the +2 is a hack
+          Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)))
+        for(i <- 0 until length)
+          if(!isDistinguished(ids(i)) && includeParam(i))
+            includedParamBitMap(typeMap(i))(ids(i)) = true
+      }
     }
     includedParamBitMap(f)(id)
   }
@@ -114,11 +119,13 @@ class State(val family: Family, val cs: ControlState,
 
   /** A bound on the values of each type. */
   def getParamsBound: Array[Int] = {
-    if(paramsBound == null){
-      paramsBound = new Array[Int](numTypes); var i = 0
-      while(i < length){
-        val id = ids(i); val t = typeMap(i); i += 1
-        paramsBound(t) = paramsBound(t) max (id+1)
+    if(paramsBound == null) synchronized{
+      if(paramsBound == null){
+        paramsBound = new Array[Int](numTypes); var i = 0
+        while(i < length){
+          val id = ids(i); val t = typeMap(i); i += 1
+          paramsBound(t) = paramsBound(t) max (id+1)
+        }
       }
     }
     paramsBound
@@ -238,70 +245,6 @@ class State(val family: Family, val cs: ControlState,
 // ------------------------------------------------ Companion object
 
 object State{
-  // Following all moved to MyStateMap.scala
-
-  // private val UseTrieStateMap = true // false // true // IMPROVE
-
-  // /** Mapping storing all the States found so far. */
-  // @volatile private var stateStore: StateMap = new InitialisationStateHashMap
-  //   // if(UseTrieStateMap) new InitialisationStateHashMap else new ShardedStateMap
-
-  // // private var renewed = false
-
-  // /* We initially use a MyStateHashMap, but later transfer values into a
-  //  * MyTrieStateMap (in renewStateStore).  This is because the latter
-  //  * makes assumptions about various data structures being
-  //  * initialised, but some States are created before this happens. */
-
-  // /** The number of States stored. */
-  // def stateCount = stateStore.size
-
-  // /** Factory method to either find existing state matching (family, cs,
-  //   * ids), or to create new one. 
-  //   * If existing state is returned, ids is recycled. */
-  // @inline 
-  // def apply(family: Int, cs: ControlState, ids: Array[Identity]): State =
-  //   stateStore.getOrAdd(family, cs, ids)
-  //   // assert(st.family == family); if(renewed) assert(stateStore.get(ix) == st)
-
-  // /** Factory method to either find existing state matching (family, cs,
-  //   * ids), or to create new one, returning the State's index. 
-  //   * If existing state is returned, ids is recycled. */
-  // @inline 
-  // def getByIndex(family: Int, cs: ControlState, ids: Array[Identity])
-  //     : StateIndex = {
-  //   val st = stateStore.getOrAddByIndex(family, cs, ids)
-  //   // Note: there was a bug that made the following sometimes false.  I've
-  //   // made stateStore volatile, as that might have been the issue.
-  //   // 09/06/2020.
-  //   assert(st != 0, 
-  //          s"family = $family; cs = $cs; ids = "+ids.mkString("(", ",", ")"))
-  //   st
-  // }
-  //   // assert(st.family == family); if(renewed) assert(stateStore.get(ix) == st)
-
-  // /** The State with index ix. */
-  // @noinline def get(ix: StateIndex): State = stateStore.get(ix)
-
-  /** Replace the initial StateMap with a Trie-based one. */
-  // def renewStateStore(numCS: Int, minCS: Int) = /* if(UseTrieStateMap) */ {
-  //   print("Creating Trie-based StateMap...")
-  //   // IMPROVE following if just tsm used
-  //   val it = stateStore.asInstanceOf[InitialisationStateHashMap].iterator.toArray
-  //   // Entry i in it will receive index i+1
-  //   val tsm = new MyTrieStateMap(numCS, minCS)
-  //   // var i = 1
-  //   for(st <- it){ tsm.add(st); /* assert(tsm.get(i) == st, i); i += 1 */ }
-  //   assert(tsm.size == stateStore.size, s"${tsm.size}; ${stateStore.size}")
-  //   if(true) stateStore = tsm // IMPROVE
-  //   else{
-  //     val tlshm = new ThreadLocalStateHashMap(tsm)
-  //     for(i <- 0 until it.length) tlshm.add(it(i), i+1)
-  //     stateStore = new ThreadLocalStateHashMaps(tlshm, tsm)
-  //   }
-  //   println(".  Done.")
-  // }
-
   /** Ordering over states. */
   implicit object StateOrdering extends Ordering[State]{
     /** Ordering on states. */
@@ -323,6 +266,7 @@ object State{
 
   private type IdArray = Array[Identity]
 
+/*
   /** Maximum number of IdArrays of each size to store. */
   private val PoolSize = 40
 
@@ -332,14 +276,9 @@ object State{
     private var count = 0
     /* buff[0..count) stores IdArrays for re-use. */
 
-    //var fails = 0
-
     /** Add ids to this pool. */
     @inline def add(ids: IdArray) =
       if(count < PoolSize){ buff(count) = ids; count += 1 }
-      // else{ Profiler.count("IdArray pool add fail "+size) 
-      //   //fails += 1; if(fails%1000 == 0) print("X")
-      // }
 
     /** Get an IdArray, either from the pool or a new one. */
     @inline def get: IdArray = 
@@ -377,12 +316,11 @@ object State{
   @inline def returnIdentityArray(ids: Array[Identity]) = /*if(false)*/{
     val pools = ThreadLocalIdentityArraySupply.get; pools(ids.length).add(ids)
   }
+ */
 
   // ----- Variables and functions concerning states. 
 
-  /** Minimum value that new identities are mapped to, when splitting
-    * views in Remapper.remapSplitCanonical. */
-  // val SplitFreshVal = 1 << 30
+  /* The following variables are initialised in setStateTypeMap. */
 
   /** Array storing information about types of parameters.
     * stateTypeMapArray(cs-minCS) stores information about the types of
@@ -397,10 +335,6 @@ object State{
 
   /** Array giving the maximum number of parameters of any type in a state. */
   var maxParamsOfType: Array[Int] = null
-
-  /** Max number of values of each type that we need to keep track of in any
-    * remapping. */
-  //var rowSizes: Array[Int] = null
 
   /** Array giving the type of the identity for control states.
     * idTypeArray(cs-minCS) gives the type of processes with control state cs,
@@ -427,8 +361,6 @@ object State{
       stma.filter(_ != null).map(_.count(_ == t)).max )
     println("maxParamsOfType = "+maxParamsOfType.mkString(", "))
     includeInformation = new Array[Array[Boolean]](State.numCS)
-    //rowSizes = Array.tabulate(numTypes)( t => typeSizes(t) /* + maxParamsOfType(t) */ )
-    // MyStateMap.renewStateStore(stma.length, minCS)
   }
 
   /** Array giving the types of identities for control state cs. */

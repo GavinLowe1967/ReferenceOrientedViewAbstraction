@@ -207,7 +207,7 @@ class ShardedStateMap(shards: Int = 128, initLength: Int = 16)
     } // end of synchronized block
     else{
       // assert(oldSt.cs == cs && oldSt.ids.sameElements(ids))
-      State.returnIdentityArray(ids) // recycle
+      // State.returnIdentityArray(ids) // recycle
       shard.indexes(i) // (oldSt, shard.indexes(i))
     }
   }
@@ -242,7 +242,7 @@ class ShardedStateMap(shards: Int = 128, initLength: Int = 16)
     } // end of synchronized block
     else{
       // assert(oldSt.cs == cs && oldSt.ids.sameElements(ids))
-      State.returnIdentityArray(ids) // recycle
+      // State.returnIdentityArray(ids) // recycle
       oldSt
     }
   }

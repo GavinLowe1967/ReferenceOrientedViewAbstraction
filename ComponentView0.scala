@@ -351,7 +351,7 @@ object ComponentView0{
     /** Does a component have control state cs? */
     def hasControlState(cs: ControlState): Boolean
   }
-    //   // IMPROVE: maybe also include doneInducedPostServersBM here
+  // IMPROVE: maybe also include doneInducedPostServersBM here
 
   /** Implementation of MightGiveSufficientUnifsInfo for one control state. */
   class MightGiveSufficientUnifs1(val princFamily: Family, cs1: ControlState)

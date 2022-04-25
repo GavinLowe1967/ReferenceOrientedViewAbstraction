@@ -194,7 +194,8 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
         } // end of synchronized block
       } // end of if(trie == null)
       else{ 
-        State.returnIdentityArray(ids); trie.asInstanceOf[StateTrie].getIndex 
+        // State.returnIdentityArray(ids); 
+        trie.asInstanceOf[StateTrie].getIndex
       }
         // assert(st.cs == cs && st.ids.sameElements(ids))
     } // end of if(len == 0)
@@ -238,7 +239,7 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
       // that slows things down).
       if(st != null && myIndex != 0){ 
         // assert(myIndex != 0)
-        State.returnIdentityArray(ids) // recycle 
+        // State.returnIdentityArray(ids) // recycle 
         myIndex 
       }
       //assert(st.cs == cs && st.ids.sameElements(ids));

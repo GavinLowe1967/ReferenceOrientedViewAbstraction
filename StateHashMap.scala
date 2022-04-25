@@ -170,7 +170,7 @@ class InitialisationStateHashMap(initLength: Int = 4096)
     def hasNext = i < n
 
     /** The next element of the iterator. */
-    def next = { val result = states(i); i += 1; advance; result }    
+    def next() = { val result = states(i); i += 1; advance; result }    
   } // end of iterator
 
   /** Create an Array holding all the states.  Not currently used. */

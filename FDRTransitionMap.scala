@@ -138,7 +138,8 @@ class FDRTransitionMap(
       }
       else args0
     val cs = machine.stateGroup(node).toInt 
-    val ids = State.getIdentityArray(args1.length); var i = 0
+    val ids = /*State.getIdentityArray*/new Array[Identity](args1.length); 
+    var i = 0
     for((t,x) <- args1){ ids(i) = idRemaps(t)(x); i += 1 }
     stateTypeMap0.get(cs) match{
       case Some(ts) => { 
