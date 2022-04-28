@@ -72,7 +72,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       // cv.principal.
       val (inducedInfo, secondaryInduced)
           : (InducedInfos, ArrayBuffer[(Array[State], UnificationList, Int)]) =
-        if(singleRef && newEffectOn)
+        if(singleRef /*&& newEffectOn*/)
           new SingleRefEffectOnUnification(trans,cv)()
         else EffectOnUnification.combine(pre, post, cv)
 
@@ -161,7 +161,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
      * newEffectOn, no acquired references, (2) otherwise no unifs. */
     @inline def recordInduced() = {
       if(singleRef && isPrimary){
-        if(newEffectOn){
+        //if(newEffectOn){
 // IMPROVE: repeats work from SingleRefEffectOnUnification:
 // doesPrincipalAcquireRef and getPostUnified
           if(DetectRepeatRDMapWithUnification){
@@ -175,9 +175,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           // and no unifications
           if(!trans.isChangingUnif(unifs) && !trans.serverGetsNewId) // unifs.isEmpty) 
             cv.addDoneInduced(post.servers)
-        } // end of if(newEffectOn)
-        else if(unifs.isEmpty)
-          cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
+        //} // end of if(newEffectOn)
+        // else if(unifs.isEmpty)
+        //   cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
       }
     }
 

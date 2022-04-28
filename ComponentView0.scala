@@ -155,7 +155,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * stored in entry indexFor(ssIx); maskFor(ssIx) provides an appropriate
     * bit mask.  */
   private var doneInducedPostServersBM = 
-    if(singleRef && !newEffectOn) null else new Array[Long](0)
+    /*if(singleRef && !newEffectOn) null else*/ new Array[Long](0)
 
   /** The index into doneInducedPostServersBM for a ServersState with index
     * ssIx. */

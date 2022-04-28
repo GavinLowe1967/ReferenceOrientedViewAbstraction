@@ -334,7 +334,7 @@ class Checker(system: SystemP.System){
     * this transition. */
   private def effectOnOthers(t: Transition) = if(t.pre != t.post){
     // if(false) println(s"effectOnOthers $t")
-    val iter = sysAbsViews.iterator(t.pre.servers)
+    val iter = sysAbsViews.iterator(t.preServers)
     while(iter.hasNext){ val cv = iter.next(); effectOn(t, cv, nextNewViews) }
   }
 

@@ -15,17 +15,17 @@ class ScalaInstrumentation{
     // heap.
     for(arg <- args) println(arg)
     var fname = ""; var i = 0; 
-    var singleRef = false; var newEffectOn = false
+    var singleRef = false // ; var newEffectOn = false
     var bound = Int.MaxValue
     while(i < args.length) args(i) match{
       case "--singleRef" => singleRef = true; i += 1
-      case "--newEffectOn" => newEffectOn = true; i += 1
+      // case "--newEffectOn" => newEffectOn = true; i += 1
       case "--bound" => bound = args(i+1).toInt; i += 2
       case fn => fname = fn; i += 1
     }
 
     assert(fname.nonEmpty)
-    VA.check(fname, bound, singleRef, newEffectOn)
+    VA.check(fname, bound, singleRef)
   }
 
 }

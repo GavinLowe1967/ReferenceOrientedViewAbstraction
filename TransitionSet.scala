@@ -73,7 +73,6 @@ class ServerBasedTransitionSet(initSize: Int = 16) extends TransitionSet{
   /** The array holding the servers. */
   private var keys = new Array[ServerStates](initSize)
 
-
   /** The array holding the corresponding TransitionTemplates. */
   private var transitions = new Array[Set[Transition]](initSize)
   // IMPROVE: replace the Set[_] by something more efficient

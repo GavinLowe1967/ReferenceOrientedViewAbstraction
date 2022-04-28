@@ -6,8 +6,11 @@ import ox.gavin.profiling.Profiler
 class Transition(
   val pre: Concretization, val e: EventInt, val post: Concretization){
 
+  /** The servers in the pre-state. */
+  val preServers = pre.servers
+
   /** Do the servers change state? */
-  val changedServers = pre.servers != post.servers
+  val changedServers = preServers != post.servers
 
   private val cptsLength = pre.components.length
 
@@ -61,7 +64,7 @@ class Transition(
 
   /** All parameters in post.servers but not in pre.servers, as a bitmap. */
   private val newServerIds: Array[Array[Boolean]] = 
-    ServerStates.newParamsBitMap(pre.servers, post.servers)
+    ServerStates.newParamsBitMap(preServers, post.servers)
 
   /** All parameters in post.servers but not in pre.servers, as a bitmap. */
   def getNewServerIds: Array[Array[Boolean]] = {
@@ -146,7 +149,7 @@ class Transition(
     singleRef && anyAcquiredRefs(cvInfo.princFamily) ||         // case (1)
     serverGetsNewId ||                                      // case (2)
     changedServers &&                                       // case (3)
-      (singleRef && !newEffectOn || !cv.containsDoneInduced(post.servers)) ||
+      (/*singleRef && !newEffectOn || */ !cv.containsDoneInduced(post.servers)) ||
     possibleUnification(cvInfo)                               // case (4)
   }
   // Profiling from lazySet bound 44: case 1 true: 20,870,708 + 1,132,780 =

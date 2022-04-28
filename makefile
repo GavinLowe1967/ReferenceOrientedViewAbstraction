@@ -84,7 +84,7 @@ $(COMBINERP)/CombinerTest.class:  $(DIR)/TestStates.class $(COMBINERP)/Combiner.
 
 $(DIR)/Transition.class: $(DIR)/Unification.class $(DIR)/SystemP/System.class
 
-$(DIR)/TransitionSet.class: $(DIR)/Transition.class $(DIR)/ComponentView.class
+$(DIR)/TransitionSet.class $(DIR)/NewTransitionSet.class: $(DIR)/Transition.class $(DIR)/ComponentView.class
 
 $(DIR)/TransitionTemplateSet.class: $(DIR)/ComponentView.class
 
@@ -126,7 +126,7 @@ $(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(DIR)/EffectOnUnification.cl
 
 # # Checker and main program
 
-$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/Unification.class  $(DIR)/Debugger.class  $(DIR)/EffectOn.class $(EXTENDERP)/Extendability.class
+$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/NewTransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/Unification.class  $(DIR)/Debugger.class  $(DIR)/EffectOn.class $(EXTENDERP)/Extendability.class
 
 $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 
@@ -158,11 +158,11 @@ $(DIR)/%.class:     %.scala
 
 # Instrumentation
 
-ScalaInstrumentation.class: ScalaInstrumentation.scala
+ScalaInstrumentation.class: ScalaInstrumentation.scala $(DIR)/VA.class
 	$(FSC) ScalaInstrumentation.scala
 
 ICP = .:$(UTIL)
 # :$(SCALAHOME)/lib/scala-library.jar
 
-Instrumentation.class: Instrumentation.java ScalaInstrumentation.class
+Instrumentation.class: Instrumentation.java ScalaInstrumentation.class 
 	javac -cp $(ICP) Instrumentation.java

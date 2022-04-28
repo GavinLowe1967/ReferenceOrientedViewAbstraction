@@ -12,10 +12,9 @@ object VA{
   var checker: Checker = null
 
   /** Run a check.  Called by ScalaInstrumentation. */
-  def check(fname: String, bound: Int, 
-    singleRefX: Boolean, newEffectOnX: Boolean)
+  def check(fname: String, bound: Int, singleRefX: Boolean)
       : Unit = {
-    singleRef = singleRefX; newEffectOn = newEffectOnX
+    singleRef = singleRefX; // newEffectOn = newEffectOnX
     system = new SystemP.System(fname); println("Created system")
     // Create and run the checker
     checker = new Checker(system); checker(bound = bound)
@@ -156,7 +155,7 @@ object VA{
       case "--showEachPly" => showEachPly = true; i += 1
       case "--showTransitions" => showTransitions = true; i += 1
       case "--showRedundancies" => showRedundancies = true; i += 1
-      case "--newEffectOn" => newEffectOn = true; i += 1
+      // case "--newEffectOn" => newEffectOn = true; i += 1
       case "--memoryProfile" => memoryProfile = true; i += 1
       case "-p" => numThreads = args(i+1).toInt; i += 2
       case fn => fname = fn; i += 1

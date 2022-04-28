@@ -8,7 +8,7 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
   * calculating transitions induced by pre -> post upon cv. */
 class EffectOnUnification(
   pre: Concretization, post: Concretization, cv: ComponentView){
-  require(!newEffectOn)
+  require(!singleRef) // require(!newEffectOn)
 
   import Unification.CombineResult 
     // = ArrayBuffer[(RemappingMap, Array[State], UnificationList)]
