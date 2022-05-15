@@ -6,11 +6,18 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
 
 /** Information capturing when newView might be added to the ViewSet: once all
   * of missingViews have been added, and all the obligations represented by
-  * missingCommon have been satisfied. */
+  * missingCommon have been satisfied. 
+  * 
+  * This corresponds to transition pre -e-> post inducing
+  * cv == (pre.servers, newCpts) -> (post.servers, newCpts) == newView. */
+// IMPROVE: can we store these in a more memory-efficient way?  Do we need
+// them all?
 class MissingInfo(
   val newView: ReducedComponentView, 
   private var missingViews: Array[ReducedComponentView], 
-  private var missingCommon: Array[MissingCommon] 
+  private var missingCommon: Array[MissingCommon],
+  val pre: Concretization, val oldCpts: Array[State], val cv: ComponentView,
+  val e: EventInt, val post: Concretization, val newCpts: Array[State]
 ){
   /* missingViews contains component views that are necessary to satisfy this
    * constraint: all must be added to the ViewSet.  This corresponds to
@@ -44,6 +51,9 @@ class MissingInfo(
    * updateMissingViewsBy    (called from EffectOnStore)
    * |--updateMissingViews
    */
+
+  /** For debugging. */
+  val highlight = ComponentView0.highlight(newView)
 
   require(missingCommon.forall(!_.done))
   require(missingViews.forall(_ != null))
@@ -134,6 +144,7 @@ class MissingInfo(
   /** Record that newView has already been seen, so this is redundant. */
   def markNewViewFound = {
     log(MissingInfo.MarkNewViewFound)
+    if(highlight) println(s"markNewViewFound:\n$this")
     newViewFound = true
   }
 
@@ -150,6 +161,8 @@ class MissingInfo(
     * @return a ViewBuffer containing all views that this needs to be registered
     * against in the store if not all MissingCommon are done. */
   def updateMissingCommon(cv: ComponentView, views: ViewSet): ViewBuffer = {
+// IMPROVE
+    if(highlight){ println(s"updateMissingCommon:\n$this"); assert(false) } 
     val mc = missingCommon(mcIndex); assert(mc != null && mc.matches(cv))
     if(mc.done){
       mcNull(mcIndex); advanceMC(views)
@@ -171,6 +184,9 @@ class MissingInfo(
     * null if all the missingCommon entries are satisfied.  If all
     * missingCommon are done, also update missingViews. */ 
   def updateMissingViewsOfMissingCommon(views: ViewSet): ViewBuffer = {
+// IMPROVE
+    if(highlight){ 
+      println(s"updateMissingViewsOfMissingCommon:\n$this"); assert(false) }
     val mc = missingCommon(mcIndex)
     val vb: ViewBuffer = mc.updateMissingViews(views)
     if(mc.done){ mcNull(mcIndex); advanceMC(views) }
@@ -183,10 +199,14 @@ class MissingInfo(
     * views.  */
   private def updateMissingViews(views: ViewSet) = {
     require(mcDone)
+    if(highlight) println(s"updateMissingViews on\n$this")
     while(mvIndex < missingViews.length && 
       (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))){
       missingViews(mvIndex) = null; mvIndex += 1
     }
+    if(highlight) 
+      println(s"now missingViews = "+
+        missingViews.mkString("<", ",\n", ">")+s"\ndone = $done")
     rehashMV()
   }
 
@@ -197,6 +217,7 @@ class MissingInfo(
   /** Update missingViews and mvIndex based on the addition of cv.  cv is
     * expected to match the next missing view. */
   def updateMissingViewsBy(cv: ComponentView, views: ViewSet): Unit = {
+    if(highlight) println(s"updateMissingViewsBy($cv) on\n$this")
     require(mcDone && mvIndex < missingViews.length && 
       missingViews(mvIndex) == cv,
       s"mvIndex = $mvIndex, cv = $cv, missingViews = \n"+

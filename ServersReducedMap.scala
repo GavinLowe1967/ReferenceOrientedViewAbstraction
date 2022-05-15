@@ -60,6 +60,8 @@ class ServersReducedMap0(
   }
 
   override def hashCode = servers.hashCode ^ hashCpts(newCpts)
+
+  override def toString = s"ServersReducedMap0($servers, $newCpts)"
 }
 
 // ==================================================================
@@ -75,6 +77,8 @@ class ServersReducedMap1(
   }
 
   override def hashCode = combine(servers.hashCode, map) ^ hashCpts(newCpts)
+
+  override def toString = s"ServersReducedMap1($servers, $map, $newCpts)"
 }
 
 // ==================================================================
@@ -100,6 +104,9 @@ class ServersReducedMapN(
     while(i < map.length){ h = combine(h, map(i)); i += 1 }
     h ^ hashCpts(newCpts)
   }
+
+  override def toString = 
+    s"ServersReducedMapN($servers, ${map.mkString(", ")}, $newCpts)"
 }
 
 // It might be worth having a case for exactly two Longs.

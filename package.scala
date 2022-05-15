@@ -245,6 +245,14 @@ package object ViewAbstraction{
   /** The script names for parameters. */
   var scriptNames: Map[Type, Map[Identity, String]] = null
 
+  /** The number of component control states.  Set by constructor of System.
+    * Component control states will be in the range
+    * [0..numCptControlStates). */
+  var numCptControlStates = -1
+
   /** Number of machine threads. */
   var numThreads = Runtime.getRuntime.availableProcessors 
+
+
+
 }

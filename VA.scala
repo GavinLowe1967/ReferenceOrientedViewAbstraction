@@ -155,10 +155,13 @@ object VA{
       case "--showEachPly" => showEachPly = true; i += 1
       case "--showTransitions" => showTransitions = true; i += 1
       case "--showRedundancies" => showRedundancies = true; i += 1
+      case "--reverseTransitionIter" => TransitionSet.reversed = true; i += 1 
       // case "--newEffectOn" => newEffectOn = true; i += 1
       case "--memoryProfile" => memoryProfile = true; i += 1
       case "-p" => numThreads = args(i+1).toInt; i += 2
-      case fn => fname = fn; i += 1
+      case fn => 
+        if(fn(0) == '-'){ println(s"Command not recognised: $fn"); sys.exit() }
+        else{ fname = fn; i += 1 }
     }
     assert(fname.nonEmpty || testing || testSuite, "no filename specified")
     println("numThreads = "+numThreads)

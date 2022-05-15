@@ -17,10 +17,14 @@ import scala.collection.mutable.{ArrayBuffer,HashMap,HashSet}
   * These are added in effectOn when a transition are not yet in the store. */ 
 trait EffectOnStore{
 
-  /** Add MissingInfo(nv, missing, missingCommon) to the store. */
+  /** Add MissingInfo(nv, missing, missingCommon) to the store. 
+    * This corresponds to transition pre -e-> post inducing
+    * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView.*/
   def add(missing: List[ReducedComponentView], 
     missingCommon: List[MissingCommon],
-    nv: ComponentView): Unit
+    nv: ComponentView,
+    pre: Concretization, oldCpts: Array[State], cv: ComponentView,
+    e: EventInt, post: Concretization, newCpts: Array[State]): Unit
 
   /** Try to complete values in the store, based on the addition of cv, and with
     * views as the ViewSet.  Return the Views that can now be added.  */
@@ -34,6 +38,24 @@ trait EffectOnStore{
   def report: Unit
 
   def memoryProfile: Unit
+}
+
+// =======================================================
+
+object EffectOnStore{
+  /** Show an induced transition. */
+  def showInduced(cv: ComponentView0, oldCpts: Array[State], 
+    postServers: ServerStates, newCpts: Array[State], nv: ReducedComponentView)
+  = (
+    s"$cv\n"+
+      (if(!cv.components.sameElements(oldCpts))
+        s"  == ${View.show(cv.servers, oldCpts)}\n"
+      else "")+
+      s"  --> ${View.show(postServers, newCpts)}\n"+
+      (if(postServers != nv.servers || !newCpts.sameElements(nv.components))
+        s"  ==  $nv"
+      else "")
+  )
 }
 
 // =======================================================
@@ -108,15 +130,25 @@ class SimpleEffectOnStore extends EffectOnStore{
     } // mis += missingInfo
   }
 
-  /** Add MissingInfo(nv, missing, missingCommon) to the stores. */
+  /** Add MissingInfo(nv, missing, missingCommon) to the stores. 
+    * This corresponds to transition pre -e-> post inducing
+    * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView. */
   def add(missing: List[ReducedComponentView], 
-    missingCommon: List[MissingCommon], nv: ComponentView)
+    missingCommon: List[MissingCommon], nv: ComponentView,
+    pre: Concretization, oldCpts: Array[State], cv: ComponentView,
+    e: EventInt, post: Concretization, newCpts: Array[State])
       : Unit = {
+    if(ComponentView0.highlight(nv))
+      println(s"\nEffectOnStore.add($nv);\n missingCommon = $missingCommon;\n"+
+        s"missing = "+missing.mkString("List(", ",\n    ", ")")+
+        s"\nFrom\n$pre ->\n  $post induces\n"+
+        EffectOnStore.showInduced(cv, oldCpts, post.servers, newCpts, nv))
     Profiler.count("EffectOnStore.add")
     for(mc <- missingCommon) assert(!mc.done)
     val mcArray = missingCommon.toArray
     val nv1 = new ReducedComponentView(nv.servers, nv.components)
-    val missingInfo = new MissingInfo(nv1, missing.toArray, mcArray)
+    val missingInfo = new MissingInfo(nv1, missing.toArray, mcArray, 
+      pre, oldCpts, cv, e, post, newCpts)
     if(missingCommon.isEmpty){
       assert(missing.nonEmpty)
       missingInfo.log(McDoneStore(missingInfo.missingHead))
@@ -155,19 +187,25 @@ class SimpleEffectOnStore extends EffectOnStore{
     * views as the ViewSet.  Return the Views that can now be added.  */
   def complete(cv: ComponentView, views: ViewSet): List[ComponentView] = {
     var result = List[ComponentView]()
-    // Add nv to result if not already there
-    @inline def maybeAdd(nv: ReducedComponentView) = 
-      if(!result.contains(nv)) 
-        result ::= ComponentView.fromReducedComponentView(nv) 
+    // Add mi.newView to result if not already there
+    @inline def maybeAdd(mi: MissingInfo) = {
+      val nv = mi.newView
+      if(!result.contains(nv)){
+        val newView = ComponentView.fromReducedComponentView(nv) 
+        newView.setCreationInfoIndirect(
+          mi.pre, mi.oldCpts, mi.cv, mi.e, mi.post, mi.newCpts)
+        result ::= newView
+      }
         // nv.asComponentView
       else Profiler.count("maybeAdd repeat")
+    }
 
     // Update based upon the MissingCommon entries in mi being all completed.
     // Pre: the missingViews in mi have been updated (via mi.advanceMC).  If
     // now done, then add the newView to result; otherwise add to mcDoneStore.
     @inline def mcDone(mi: MissingInfo) = {
       require(mi.mcDone); require(mi.missingViewsUpdated(views))
-      if(mi.done) maybeAdd(mi.newView) 
+      if(mi.done) maybeAdd(mi) 
       else{
         mi.log(McDoneStore(mi.missingHead))
         mi.transferred = true
@@ -187,11 +225,12 @@ class SimpleEffectOnStore extends EffectOnStore{
       case Some(mis) => 
         val newMis = new MissingInfoSet // those to retain
         for(mi <- mis){
+          //val hl = ComponentView.highlight(mi.newView)
           if(mi.mcDone) assert(mi.done || mi.transferred) 
           else if(views.contains(mi.newView)) mi.markNewViewFound
           else{
             val vb: ViewBuffer = mi.updateMissingCommon(cv, views)
-            if(mi.done) maybeAdd(mi.newView)
+            if(mi.done) maybeAdd(mi)
             else if(mi.mcDone) mcDone(mi)
             else{
               // Register mi against each view in vb, and retain
@@ -223,7 +262,7 @@ class SimpleEffectOnStore extends EffectOnStore{
           else if(views.contains(mi.newView)) mi.markNewViewFound
           else{
             val ab = mi.updateMissingViewsOfMissingCommon(views)
-            if(mi.done) maybeAdd(mi.newView)
+            if(mi.done) maybeAdd(mi)
             else if(mi.mcDone) mcDone(mi)
             else for(cpts <- ab){
               val rcv = new ReducedComponentView(cv.servers, cpts)
@@ -243,7 +282,7 @@ class SimpleEffectOnStore extends EffectOnStore{
           if(views.contains(mi.newView)) mi.markNewViewFound
           else{
             mi.updateMissingViewsBy(cv, views)
-            if(mi.done) maybeAdd(mi.newView)
+            if(mi.done) maybeAdd(mi)
             else{
               mi.log(McDoneStore(mi.missingHead))
               addToStore(mcDoneStore, mi.missingHead, mi)

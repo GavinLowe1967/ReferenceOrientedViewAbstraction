@@ -106,17 +106,23 @@ class ServerBasedTransitionSet(initSize: Int = 16) extends TransitionSet{
     while(i < oldSlots){
       val ss = oldKeys(i)
       if(ss != null){ // copy across
-        val j = find(ss); keys(j) = ss; transitions(j) = oldTrans(i)
+        val j = find(ss); assert(keys(j) == null)
+        keys(j) = ss; transitions(j) = oldTrans(i)
       }
       i += 1
     }
   }
 
+
   /** An iterator giving just extended transitions where the pre-state matches
     * servers. */
   override def iterator(servers: ServerStates) : Iterator[Transition] = {
     val i = find(servers); val set = transitions(i)
-    if(set == null) Iterator.empty[Transition] else set.iterator
+    if(set == null) Iterator.empty[Transition] 
+    else if(TransitionSet.reversed) set.iterator.toArray.reverse.iterator 
+    else set.iterator
+    // scala.util.Random.shuffle(set.iterator)
+// FIXME
   }
 
   def size = theSize
@@ -125,4 +131,11 @@ class ServerBasedTransitionSet(initSize: Int = 16) extends TransitionSet{
     val servers = trans.pre.servers; val i = find(servers)
     keys(i) != null && transitions(i).contains(trans)
   }
+}
+
+
+object TransitionSet{
+  // Should the iterator be reversed.
+//IMPROVE
+  var reversed = false
 }

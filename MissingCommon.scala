@@ -38,6 +38,9 @@ class MissingCommon(
     * sorted (wrt StateArray.lessThan).  */
   import MissingCommon.MissingComponents // = Array[Array[State]]
 
+  def showMissingComponents(cptsList: MissingComponents) =
+    cptsList.map(StateArray.show).mkString("; ")
+
   /** When any element of missingCandidates is satisfied, then this obligation
     * will be discharged.  Each MissingComponents within the list is sorted
     * (wrt StateArray.lessThan). */
@@ -194,7 +197,8 @@ class MissingCommon(
   override def toString = 
     s"MissingCommon($servers, ${StateArray.show(cpts1)},\n"+
       s"  ${StateArray.show(cpts2)}, $pid)\n"+
-      s"  missingCandidates = \n    "+missingCandidates.mkString("\n    ")+
+      s"  missingCandidates = \n    "+
+      missingCandidates.map(showMissingComponents).mkString("\n    ")+
       s"\ndone = $done; " // "theLog = \n"+theLog.reverse.mkString("\n")
 
   /* Note: we avoid creating duplicates of MissingCommon objects, so we can use

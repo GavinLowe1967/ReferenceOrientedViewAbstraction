@@ -74,18 +74,31 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     * same type as cv.principal.id, and not matching and parameter of pre. */
   private val acquiredRefs: List[(Int,Parameter)] = trans.acquiredRefs(cvpf)
 
+  val highlight = 
+    Transition.highlight(trans) && {
+      val princ = cv.components(0); // 44(T2,N2,N3)
+      princ.cs == 44 && princ.ids.sameElements(Array(1,1,2))
+    } && {
+      val second = cv.components(1); // 16(N2,T3,N4,N5)
+      second.cs == 16 && second.ids.sameElements(Array(1,2,3,4))
+    }
+
+
   // =======================================================
 
   /** The main function. */
   def apply(): (CombineResult1, CombineResult2) = {
     // val map0 = cv.getRemappingMap // 
     // Profiler.count("SREOU.apply")
+    if(highlight) println(s"SREOU.apply($trans,\n  $cv)")
     val map0 = servers.remappingMap1(cv.getParamsBound)
     val allUnifs = Unification.allUnifs(map0, pre, cpts)
     var k = 0
 
     while(k < allUnifs.length){
       val (map1,unifs) = allUnifs(k); k += 1
+      if(highlight && map1(0)(3) == 2) 
+        println(s"map1 = "+Remapper.show(map1)+s"; unifs = $unifs")
       if(isSufficientUnif(unifs)) makePrimaryInduced(map1, unifs)
       makeSecondaryInduced(map1, unifs)
     } // end of while loop iterating over unifs
@@ -95,9 +108,13 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   /** Try to create primary induced transitions based on map1 and unifs. */
   @inline private 
   def makePrimaryInduced(map1: RemappingMap, unifs: UnificationList) = {
+    val hl = highlight && map1(0)(3) == 2 // N4 -> N3
+    if(hl) println("makePrimaryInduced("+Remapper.show(map1)+s", $unifs)")
     // Result-relevant parameters: parameters to map params of cv to, in order
     // to create result-defining map.
     val otherArgsBitMap = mkOtherArgsMap(map1, unifs)
+    if(highlight) println("otherArgsBitMap = "+
+      otherArgsBitMap.map(_.mkString("<", ", ", ">")).mkString("; "))
     // Profiler.count("SREOU.apply-iter")
     // Primary result-defining maps
     val rdMaps =
@@ -128,21 +145,26 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     var i = 0
     while(i < rdMaps.length){
       val rdMap = rdMaps(i); i += 1
+      // if(highlight) println("rdMap = "+Remapper.show(rdMap))
       // post-states of unified components
       val postUnified = trans.getPostUnified(unifs, cpts.length)
       val reducedMapInfo = Remapper.reduceMap(rdMap)
       // Does this duplicate a previous transition: no unifications, no
       // acquired references, and the same result-defining map and
       // post-states of unified components?
-      val duplicated = if(DetectRepeatRDMapWithUnification)
-        !trans.doesPrincipalAcquireRef(unifs) && {
-          val done = cv.containsDoneInducedPostServersRemaps(
-            postServers, reducedMapInfo, postUnified)
-          // Profiler.count("containsDoneInducedPSR"+done+unifs.isEmpty);
-          // lazySet bound 44: TT: 2.3B; TF: 40M; FT:9.9M; FF: 2.9M
-          done }
-      else unifs.isEmpty && // old version; this might be better
-        cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo)
+// FIXME or IMPROVE below.  Turning off optimisation
+      val duplicated = false && (
+        if(DetectRepeatRDMapWithUnification)
+          !trans.doesPrincipalAcquireRef(unifs) && {
+            val done = cv.containsDoneInducedPostServersRemaps(
+              postServers, reducedMapInfo, postUnified)
+            // Profiler.count("containsDoneInducedPSR"+done+unifs.isEmpty);
+            // lazySet bound 44: TT: 2.3B; TF: 40M; FT:9.9M; FF: 2.9M
+            done }
+        else unifs.isEmpty && // old version; this might be better
+          cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo) )
+      if(hl)
+        println("rdMap = "+Remapper.show(rdMap)+s"; duplicated = $duplicated")
       if(!duplicated)
         makePrimaryExtension(unifs, otherArgsBitMap, rdMap, reducedMapInfo)
     }
@@ -275,12 +297,17 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, reducedMapInfo: ReducedMap)
   = {
+    val hl = highlight && rdMap(0).sameElements(Array(0,-1,-1,2,3))
+    if(hl) println(s"makePrimaryExtension(unifs = $unifs, "+
+      "rdMap = "+Remapper.show(rdMap))
     Profiler.count("makePrimaryExtension")
     val extensions = 
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, true)
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
       val newCpts = Remapper.applyRemapping(map1, cpts)
+      if(hl) println("map1 = "+Remapper.show(map1)+
+        "\nnewCpts = "+StateArray.show(newCpts))
       result += ((map1, newCpts, unifs, reducedMapInfo))
     }
   }

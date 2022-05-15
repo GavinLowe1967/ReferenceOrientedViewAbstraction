@@ -38,8 +38,6 @@ class Checker(system: SystemP.System){
 
   private var done = new AtomicBoolean(false); protected var ply = 1
 
-  //import TransitionSet.Transition // (Concretization, EventInt, Concretization)
-
   /* A Transition is a tuple (pre, e, post): (Concretization, EventInt,
    * Concretization), representing the transition pre -e-> post.  The pre
    * state extends a View by adding all relevant components: components that
@@ -48,7 +46,11 @@ class Checker(system: SystemP.System){
 
   /** The extended transitions found on previous plies.  Abstractly, a set of
     * Transitions.  */
-  private val transitions: TransitionSet = new ServerBasedTransitionSet(16)
+  // private val transitions: TransitionSet = new ServerBasedTransitionSet(16)
+
+  // private val transitionsX = transitions
+
+  private val transitions = new NewTransitionSet
 
   /** Transitions found on this ply.  Transitions are initially added to
     * newTransitions, but transferred to transitions at the end of the ply. */
@@ -80,14 +82,21 @@ class Checker(system: SystemP.System){
   @inline private 
   def addTransition(pre: Concretization, e: EventInt, post: Concretization)
   = {
+    // val highlight = 
+    //   ComponentView0.highlightServers(pre.servers) && 
+    //     pre.servers.servers(5).cs == 152 &&
+    //     ComponentView0.highlightServers(post.servers) &&
+    //     post.servers.servers(5).cs == 155 &&
+    //     pre.components(0).cs == 128 && pre.components(1).cs == 26
     addTransitionCount += 1
-    // assert(pre.ply < Int.MaxValue)
-    // assert(post.ply < Int.MaxValue)
     val newTrans = new Transition(pre, e, post)
+    // if(highlight) println(s"\naddTransition($newTrans)")
     if(!transitions.contains(newTrans)){
+      // assert(!transitions.contains(newTrans))
       if(newTransitions.add(newTrans)) effectOnOthers(newTrans)
       // Note: the views of post get added to sysAbsViews within apply.
     }
+    // else assert(transitions.contains(newTrans))
   }
 
   // ========= Processing a single view
@@ -334,14 +343,43 @@ class Checker(system: SystemP.System){
     * this transition. */
   private def effectOnOthers(t: Transition) = if(t.pre != t.post){
     // if(false) println(s"effectOnOthers $t")
+    // val highlight = 
+    //   ComponentView0.highlightServers(t.preServers) && 
+    //     t.pre.components(0).cs == 26 && t.preServers.servers(5).cs == 152
+    // if(highlight) println(s"effectOnOthers($t)")
     val iter = sysAbsViews.iterator(t.preServers)
     while(iter.hasNext){ val cv = iter.next(); effectOn(t, cv, nextNewViews) }
   }
 
   /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
-    val iter = transitions.iterator(cv.servers)
-    while(iter.hasNext){ val t = iter.next(); effectOn(t, cv, nextNewViews) }
+    // val highlight = 
+    //   ComponentView0.highlightServers(cv.servers) && 
+    //     cv.servers.servers(5).cs == 152 && {
+    //     val princ = cv.components(0);
+    //     (princ.cs == 45 || princ.cs == 90 || princ.cs == 91) 
+    //   } && {
+    //     val second = cv.components(1);
+    //     second.cs == 11 && second.ids(1) == 4 && second.ids(2) == 5
+    //   }
+    // if(highlight) println(s"\neffectOfPreviousTransitions($cv)")
+    val iter = transitions.iterator(cv)//.toArray
+    //var count = 0
+    //val iter = transitions.iterator(cv.servers)
+    while(iter.hasNext){ 
+      val t = iter.next()
+      //assert(iterX.contains(t))
+      // Note: second clause is because another transition in the same batch
+      // might have succeeded.
+/*
+      assert(t.mightGiveSufficientUnifs(cv) || 
+          cv.containsDoneInduced(t.post.servers),
+        s"t = $t;\n cv = $cv\n"+cv.containsDoneInduced(t.post.servers))
+ */
+      effectOn(t, cv, nextNewViews)
+      //count += 1
+    }
+    //assert(count == iterX.length)
   }
 
   // ========= Main function
@@ -360,6 +398,7 @@ class Checker(system: SystemP.System){
     while(!done.get && ply <= bound){
       println("\nSTEP "+ply) 
       println("#abstractions = "+printLong(sysAbsViews.size))
+      // println(s"#transitionsX = ${printLong(transitionsX.size)}")
       println(s"#transitions = ${printLong(transitions.size)}")
       println(s"#transition templates = ${printLong(transitionTemplates.size)}")
       println("#new active abstract views = "+printInt(newViews.size))
@@ -396,12 +435,14 @@ class Checker(system: SystemP.System){
         else false
       } // end of addView
       for(t <- newTransitions.iterator){
+        // assert(transitionsX.add(t)); 
         assert(transitions.add(t))
         for(v0 <- t.post.toComponentView){
           val v = Remapper.remapComponentView(v0)
           if(addView(v)){
             v.setCreationInfo(t.pre, t.e, t.post) 
-            if(showTransitions) println(s"${t.toString}\ngives $v")
+            if(showTransitions /* || ComponentView0.highlight(v) */) 
+              println(s"${t.toString}\ngives $v")
           }
         }
       }
@@ -439,6 +480,7 @@ class Checker(system: SystemP.System){
     if(showViews) println(sysAbsViews)
     if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
+    // println(s"#transitionsX = ${printLong(transitionsX.size)}")
     println(s"#transitions = ${printLong(transitions.size)}")
     println(s"#transition templates = ${printLong(transitionTemplates.size)}")
     println(s"#ServerStates = ${ServerStates.count}")

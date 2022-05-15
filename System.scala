@@ -73,6 +73,9 @@ class System(fname: String) {
     familyNames, file.componentAlphabets.toArray, 
     file.componentRenames.toArray, actives)
 
+  // Store (in package object) an upper bound on component control states
+  numCptControlStates = transMapBuilder.getMaxCS+1
+
   /** The size of each indexing subtype, by type number. */
   private val idSizes = typeSizes
 

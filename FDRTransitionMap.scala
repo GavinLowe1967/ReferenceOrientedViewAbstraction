@@ -140,7 +140,14 @@ class FDRTransitionMap(
     val cs = machine.stateGroup(node).toInt 
     val ids = /*State.getIdentityArray*/new Array[Identity](args1.length); 
     var i = 0
-    for((t,x) <- args1){ ids(i) = idRemaps(t)(x); i += 1 }
+    for((t,x) <- args1){ 
+      try{ ids(i) = idRemaps(t)(x); i += 1 }
+      catch{ case e: NoSuchElementException =>
+        println(s"Not found ($t,$x)"); println(idRemaps(t))
+        sys.exit()
+      }
+      // There is sometimes an exception here, but I don't understand why. 
+    }
     stateTypeMap0.get(cs) match{
       case Some(ts) => { 
         assert(ts.length == args1.length, 
@@ -381,6 +388,9 @@ class FDRTransitionMap(
  
     (init, newTransMap)
   }
+
+  /** The maximum control state so far. */
+  def getMaxCS = stateTypeMap0.keysIterator.max
 
   /** Create stateTypeMap, giving the types of parameters of each state.  This
     * should be called after the transition maps of the components and servers
