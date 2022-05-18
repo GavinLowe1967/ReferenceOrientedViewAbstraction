@@ -181,10 +181,18 @@ package object ViewAbstraction{
   /** Are we supporting debugging? */ 
   var debuggable = true
 
-  /** With singleRef and newEffectOn, in SingleRefEffectOnUnification, do we
-    * detect a repeat of a result-defining map with the same post.servers,
-    * *and* allowing unifications? */
-  val DetectRepeatRDMapWithUnification = true
+  /** Do we do the sanity check on EffectOnStore? */
+  var doSanityCheck = false
+
+  /** Are we using the optimisation with
+    * ComponentView0.doneInducedPostServersRemaps?  This seems to give a
+    * marginal advantage. */
+  val StoreDoneInducedPostServersRemaps = true
+
+  /** With singleRef, in SingleRefEffectOnUnification, do we detect a repeat of
+    * a result-defining map with the same post.servers, *and* allowing
+    * unifications?  This seems to give a marginal advantage. */
+  val DetectRepeatRDMapWithUnification = false
 
   // IMPROVE: move
   /** The number of indexing types in the current system. */
@@ -210,6 +218,9 @@ package object ViewAbstraction{
   /** The number of non-distinguished values of each type that we might need to
     * deal with in remappings. */
   var remapSizes: Array[Int] = null
+
+  /** The maximum allowed size of any type.  Required for Remapper.summarise. */
+  val MaxTypeSize = (1<<7)-2
 
   /** Set numTypes to be nt, and numFamilies to be nf; initialise arrays
     * indexed by types. */

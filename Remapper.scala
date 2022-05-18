@@ -145,7 +145,7 @@ object Remapper{
           val summary = summarise(t,x,y); 
           //assert(0 < summary && summary < 65536)
           bits = (bits << 16) + summary; k += 1
-          if(k == 4){ result0(i) = summary; i += 1; bits = 0; k = 0 }
+          if(k == 4){ result0(i) = bits; i += 1; bits = 0; k = 0 }
         }
         x += 1
       }
@@ -156,10 +156,22 @@ object Remapper{
     // Normally 1 to 4, but sometimes more or less
     if(k > 0){ result0(i) = bits; i += 1 }
     // Copy into new array
-    val result = new Array[Long](i); var j = 0
-    while(j < i){ result(j) = result0(j); j += 1 }
+    truncate(result0, i)
+    // val result = new Array[Long](i); var j = 0
+    // while(j < i){ result(j) = result0(j); j += 1 }
+    // result
+  }
 
-    result
+  /** Truncate result0 to length entries. */
+  @inline private def truncate(result0: Array[Long], length: Int)
+      : Array[Long] = {
+    Profiler.count("truncate: "+(result0.length == length))
+    if(result0.length == length) result0 
+    else{
+      val result = new Array[Long](length); var j = 0
+      while(j < length){ result(j) = result0(j); j += 1 }
+      result
+    }
   }
 
   /** The range restriction of map to the parameters of servers, i.e. 
@@ -185,8 +197,7 @@ object Remapper{
     val result0 = new Array[Long](((len-1) >> 2) + 1) // size = ceiling(len/4)
     t = 0; var i = 0 // result in result0[0..i)
     while(t < numTypes){
-      val thisSIds = sIds(t); val sidsLen = thisSIds.length; 
-      // var tResult = List[Int]()
+      val thisSIds = sIds(t); val sidsLen = thisSIds.length
       var x = 0; val thisLen = map(t).length 
       //assert(sidsLen < (1 << 7) && thisLen < (1 << 7))
       while(x < thisLen){
@@ -195,7 +206,7 @@ object Remapper{
           val summary = summarise(t,x,y); 
           //assert(0 < summary && summary < 65536)
           bits = (bits << 16) + summary; k += 1
-          if(k == 4){ result0(i) = summary; i += 1; bits = 0; k = 0 }
+          if(k == 4){ result0(i) = bits; i += 1; bits = 0; k = 0 }
         }
         x += 1
       }
@@ -206,17 +217,17 @@ object Remapper{
     // Normally 1 to 4, but sometimes more or less
     if(k > 0){ result0(i) = bits; i += 1 }
     // Copy into new array
-    val result = new Array[Long](i); var j = 0
-    while(j < i){ result(j) = result0(j); j += 1 }
-
-    result
+    truncate(result0, i)
+    // val result = new Array[Long](i); var j = 0
+    // while(j < i){ result(j) = result0(j); j += 1 }
+    // result
   }  
 
   // The following assumption is necessary to ensure summarise forms a bijection.
   assert(numTypes > 0 && numTypes <= 4)
 
   /** Summarise t, x and y into 16 bits.  This assumes 0 <= t < 4, 0 <= x <
-    * (1<<7), and 0 <= y < (1<<7).  This mapping forms an injection over such
+    * (1<<7), and 0 <= y < (1<<7)-1.  This mapping forms an injection over such
     * values. */
   @inline private[RemapperP] 
   def summarise(t: Int, x: Int, y: Int) = (x << 9)+(t << 7) + y + 1

@@ -147,10 +147,9 @@ class Transition(
     // val cpts = cv.components
     val cvInfo = cv.mightGiveSufficientUnifsInfo
     singleRef && anyAcquiredRefs(cvInfo.princFamily) ||         // case (1)
-    serverGetsNewId ||                                      // case (2)
-    changedServers &&                                       // case (3)
-      (/*singleRef && !newEffectOn || */ !cv.containsDoneInduced(post.servers)) ||
-    possibleUnification(cvInfo)                               // case (4)
+    serverGetsNewId ||                                          // case (2)
+    changedServers && !cv.containsDoneInduced(post.servers) ||  // case (3)
+    possibleUnification(cvInfo)                                 // case (4)
   }
   // Profiling from lazySet bound 44: case 1 true: 20,870,708 + 1,132,780 =
   // 22,003,488; case 2 first true 3,032,522; case 3 first true 4,030,617;

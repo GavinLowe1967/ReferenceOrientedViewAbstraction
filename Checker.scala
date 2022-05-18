@@ -416,7 +416,7 @@ class Checker(system: SystemP.System){
           ??? // This should be unreachable.
         }
         i += 1
-        if(i%50 == 0){ print("."); if(i%500 == 0) print(i) }
+        if(i%200 == 0){ print("."); if(i%2000 == 0) print(i) }
       }
 
       // Add views and transitions found on this ply into the main set.
@@ -474,7 +474,7 @@ class Checker(system: SystemP.System){
     } // end of main loop
 
     println("\nSTEP "+ply+"\n")
-    if(singleRef && bound == Int.MaxValue) effectOn.sanityCheck
+    if(singleRef && doSanityCheck && bound == Int.MaxValue) effectOn.sanityCheck
     // Following is expensive: IMPROVE: enable via switch
     if(singleRef) effectOn.report
     if(showViews) println(sysAbsViews)

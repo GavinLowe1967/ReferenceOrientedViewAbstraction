@@ -150,17 +150,14 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       val postUnified = trans.getPostUnified(unifs, cpts.length)
       val reducedMapInfo = Remapper.reduceMap(rdMap)
       // Does this duplicate a previous transition: no unifications, no
-      // acquired references, and the same result-defining map and
-      // post-states of unified components?
-// FIXME or IMPROVE below.  Turning off optimisation
-      val duplicated = false && (
+      // acquired references, and the same result-defining map and post-states
+      // of unified components?  Currently disabled, because it doesn't make
+      // much difference.  IMPROVE
+      val duplicated =  StoreDoneInducedPostServersRemaps && (
         if(DetectRepeatRDMapWithUnification)
-          !trans.doesPrincipalAcquireRef(unifs) && {
-            val done = cv.containsDoneInducedPostServersRemaps(
+          !trans.doesPrincipalAcquireRef(unifs) && 
+            cv.containsDoneInducedPostServersRemaps(
               postServers, reducedMapInfo, postUnified)
-            // Profiler.count("containsDoneInducedPSR"+done+unifs.isEmpty);
-            // lazySet bound 44: TT: 2.3B; TF: 40M; FT:9.9M; FF: 2.9M
-            done }
         else unifs.isEmpty && // old version; this might be better
           cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo) )
       if(hl)

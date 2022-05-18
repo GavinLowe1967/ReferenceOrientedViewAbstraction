@@ -12,8 +12,7 @@ class NewTransitionSet{
 
   /** The transitions, partitioned according to their preServers value. */
   private val byPreServers = new HashMap[ServerStates, ServersTransitionSet]
-  //private val byPreServers = new HashMap[ServerStates, ArrayBuffer[Transition]]
-  // Improve: use array indexed by ServerStates
+  // Improve: use array indexed by ServerStates?
 
   /** Add the transition t. */
   def add(t: Transition): Boolean = {
@@ -23,7 +22,6 @@ class NewTransitionSet{
         case Some(ts) => /*ts += t*/ ts.add(t)
         case None => 
           val ts = new ServersTransitionSet(preServers);  ts.add(t)
-          // val ts = new ArrayBuffer[Transition]; ts += t
           byPreServers += preServers -> ts
       }
       true
@@ -52,14 +50,11 @@ class NewTransitionSet{
 
 /** A set of transitions corresponding to pre.servers = preServers. */
 class ServersTransitionSet(preServers: ServerStates){
-  // FIXME: testing
-  //private val all = new ArrayBuffer[Transition]
-
   /** For each family f, those transitions(t) such that singleRef &&
     * t.anyAcquiredRefs(f) || t.serverGetsNewId.  Each entry is initialised
     * lazily. */
-  private val acquiringTrans =// new Array[ArrayBuffer[Transition]](numTypes)
-    Array.fill(numTypes)(new ArrayBuffer[Transition])
+  private val acquiringTrans = new Array[ArrayBuffer[Transition]](numTypes)
+  //  Array.fill(numTypes)(new ArrayBuffer[Transition])
 
   // IMPROVE: maybe transitions s.t. t.serverGetsNewId shouldn't be stored in
   // all entries of acquiringTrans.
@@ -68,8 +63,8 @@ class ServersTransitionSet(preServers: ServerStates){
     * partitioned according to their post.servers value.  Each entry is
     * initialised lazily. */
   private val byPostServers = 
-    //new Array[HashMap[ServerStates, ServersServersTransitionSet]](numTypes)
-    Array.fill(numTypes)(new HashMap[ServerStates,ServersServersTransitionSet])
+    new Array[HashMap[ServerStates, ServersServersTransitionSet]](numTypes)
+    //Array.fill(numTypes)(new HashMap[ServerStates,ServersServersTransitionSet])
 
   /* For each f, acquiringTrans(f) U U { ssts | (_,ssts) <- byPostServers(f) }
    * gives the same value, and that is the abstract value of this set.  */
@@ -80,13 +75,13 @@ class ServersTransitionSet(preServers: ServerStates){
     var f = 0
     while(f < numTypes){
       if(singleRef && t.anyAcquiredRefs(f) || t.serverGetsNewId){
-        // if(acquiringTrans(f) == null) 
-        //   acquiringTrans(f) = new ArrayBuffer[Transition]
+        if(acquiringTrans(f) == null) 
+          acquiringTrans(f) = new ArrayBuffer[Transition]
         acquiringTrans(f) += t
       }
       else{
-        // if(byPostServers(f) == null) byPostServers(f) = 
-        //   new HashMap[ServerStates, ServersServersTransitionSet]
+        if(byPostServers(f) == null) byPostServers(f) = 
+          new HashMap[ServerStates, ServersServersTransitionSet]
         byPostServers(f).get(t.post.servers) match{
           case Some(ts) => ts.add(t)
           case None =>
@@ -97,39 +92,6 @@ class ServersTransitionSet(preServers: ServerStates){
       f += 1
     }
   }
-
-  //def iterator(cv: ComponentView) = all.iterator
-
-/*
-  /** An iterator over the transitions, producing transitions that might produce
-    * sufficient unifications with cv to give at least one induced
-    * transition. */
-  def iterator(cv: ComponentView) = {
-    // Count # items in all that satisfy mightGiveSufficientUnifs
-    var i = 0; var count = 0
-    while(i < all.length){
-      if(all(i).mightGiveSufficientUnifs(cv)) count += 1
-      i += 1
-    }
-    val iter1 = mkIterator(cv).toArray
-    if(iter1.length == count) mkIterator(cv)
-    else{
-      // Find element of all that doesn't appear in iter1
-      i = 0
-      while(i < all.length){
-        val t1 = all(i); i += 1
-        if(t1.mightGiveSufficientUnifs(cv)){
-          var j = 0
-          while(j < iter1.length && iter1(j) != t1) j += 1
-          if(j == iter1.length){
-            println(s"Not found $t1 for $cv"); sys.exit()
-          }
-        }
-      }
-      mkIterator(cv)
-    }
-  }
- */
 
   def iterator(cv: ComponentView) = new Iterator[Transition]{
     private val princFamily = cv.principal.family
@@ -159,7 +121,6 @@ class ServersTransitionSet(preServers: ServerStates){
 
     /** Replace thisIterator if it's finished. */
     private def advance: Unit = 
-// FIXME: bracketing below? (... || ...) && ...
       while((thisIterator == null || !thisIterator.hasNext) &&
           byPostServersIterator.hasNext){
         val (postServers, ssts) = byPostServersIterator.next()

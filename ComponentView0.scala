@@ -200,7 +200,8 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * post.servers)) for which we have produced a primary induced transition
     * from this with no unifications.  */
   private val doneInducedPostServersRemaps = 
-    if(singleRef) new OpenHashSet[ServersReducedMap] 
+    if(singleRef && StoreDoneInducedPostServersRemaps)
+      new OpenHashSet[ServersReducedMap]
     else null
 
   /** Record that this has been used to create an induced transition, with
@@ -391,21 +392,12 @@ object ComponentView0{
     highlightServers(v.servers) && highlightPrinc(princ) && {
       val second = v.components(1);      // 16(N5,T3,N4,N2)
       second.cs == 16 && second.ids.sameElements(Array(4,2,3,1))
-      // (second.cs == 16 /* || second.cs == 17 */ ) && // 16|17(N5|N6,_,N4,N2) 
-      // second.ids(2) == 3 && second.ids(3) == 1 &&
-      // // second is first ref (N5) of 44, or second ref (N6) of 45
-      // (princ.cs == 44 && second.ids(0) == 4 || 
-      //   princ.cs == 45 && second.ids(0) == 5)
-    } // 11(_,N4,N7)
+    }
   }
-// FIXME
-
 
   // The principal that is missing 44(T2,N5,N6)
   def highlightPrinc(princ: State) = 
-    (princ.cs == 44 /* || princ.cs == 45 */ ) && 
-      princ.ids.sameElements(Array(1,4,5))
-
+    princ.cs == 44 && princ.ids.sameElements(Array(1,4,5))
 
   /** Common terms in all the servers of views of interest. 
     * [137(N1) || 140(T1) || 146(N1) || 147(Null) || 151() || _. */

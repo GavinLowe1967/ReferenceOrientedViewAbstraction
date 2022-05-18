@@ -125,7 +125,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
           else List()
 // IMPROVE.  Turning off optimisation
-        if(true || unifs.nonEmpty || reducedMapInfo == null ||
+        if(unifs.nonEmpty || reducedMapInfo == null ||
           !cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)){
           val newPrinc = getNewPrinc(cpts(0), unifs)
           var newComponentsList =
@@ -185,15 +185,17 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     /* Record this induced transition if singleRef and primary, and (1) if
      * newEffectOn, no acquired references, (2) otherwise no unifs. */
     @inline def recordInduced() = if(singleRef && isPrimary){ // and newEffectOn
-// IMPROVE: repeats work from SingleRefEffectOnUnification:
-// doesPrincipalAcquireRef and getPostUnified
-      if(DetectRepeatRDMapWithUnification){
-        if(!trans.doesPrincipalAcquireRef(unifs))
-          cv.addDoneInducedPostServersRemaps(post.servers, reducedMap,
-            trans.getPostUnified(unifs, cv.components.length) )
+      // IMPROVE: repeats work from SingleRefEffectOnUnification:
+      // doesPrincipalAcquireRef and getPostUnified.  Currently disabled.
+      if(StoreDoneInducedPostServersRemaps){
+        if(DetectRepeatRDMapWithUnification){
+          if(!trans.doesPrincipalAcquireRef(unifs))
+            cv.addDoneInducedPostServersRemaps(post.servers, reducedMap,
+              trans.getPostUnified(unifs, cv.components.length) )
+        }
+        else if(unifs.isEmpty) // old version
+          cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
       }
-      else if(unifs.isEmpty) // old version
-        cv.addDoneInducedPostServersRemaps(post.servers, reducedMap)
       // Record that we've done a transition on cv with these post servers
       // and no unifications
       if(!trans.isChangingUnif(unifs) && !trans.serverGetsNewId)
@@ -245,10 +247,10 @@ class EffectOn(views: ViewSet, system: SystemP.System){
             showTransition(newComponents, nv)
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents)
           recordInduced() 
-// IMPROVE: remove following?
-          if(false && singleRef && isPrimary && unifs.isEmpty){
-            val ok = cv.addDoneInduced(post.servers); assert(ok)
-          }
+          // Following superceded by recordInduced
+          // if(false && singleRef && isPrimary && unifs.isEmpty){
+          //   val ok = cv.addDoneInduced(post.servers); assert(ok)
+          // }
           if(!nv.representableInScript){
             println("Not enough identities in script to combine transition\n"+
               s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
@@ -269,10 +271,9 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           //  missingCommons.nonEmpty)
           nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents)
 // IMPROVE: do we need to check isPrimary here? 
-          if(isPrimary && unifs.isEmpty /*reducedMap != null*/ && missingCommons.isEmpty){
+          if(isPrimary && unifs.isEmpty && missingCommons.isEmpty){
             val ok = cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
-// IMPROVE, if still using this optimisation
-            // assert(ok)
+            assert(ok)
           }
         }
         else{ // nv was in nextNewViews 

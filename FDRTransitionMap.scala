@@ -62,6 +62,7 @@ class FDRTransitionMap(
       val (idRemap, nameMap, typeSize) =
         buildIdRemap(familyTypeNames(i), superTypeName)
       idRemaps += t -> idRemap; theNameMap += i -> nameMap;
+      assert(typeSize <= MaxTypeSize, s"Type $superTypeName has too many values")
       typeSizes(i) = typeSize; superTypeSizes(i) = idRemap.size
       distinguishedSizes(i) = superTypeSizes(i) - typeSize
       println("Supertype size = "+idRemap.size)
