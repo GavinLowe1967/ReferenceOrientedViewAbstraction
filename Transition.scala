@@ -43,7 +43,7 @@ class Transition(
   //private val preCptCS: Array[ControlState] = pre.components.map(_.cs)
 
   /** The control states in pre of components that change state. */
-  private val changingCptCS: Array[ControlState] = {
+  val changingCptCS: Array[ControlState] = {
     var res = List[ControlState](); var i = cptsLength
     while(i > 0){
       i -= 1
@@ -205,7 +205,7 @@ class Transition(
   // ==================================================================
   // Overriding standard things.
 
-  override def toString = s"$pre\n  -${SystemP.System.showEvent(e)}->\n  $post"
+  override def toString = s"$pre\n  -${showEvent(e)}->\n  $post"
 
   /** Equality. */
   override def equals(that: Any) = that match{

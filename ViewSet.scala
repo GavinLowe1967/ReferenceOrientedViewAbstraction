@@ -23,21 +23,14 @@ trait ViewSet{
   def iterator : Iterator[ComponentView] 
 
   /** Iterator over all views matching servers. */
-  def iterator(servers: ServerStates) : Iterator[ComponentView] =
-    iterator.filter(cv => cv.servers == servers)
+  def iterator(servers: ServerStates) : Iterator[ComponentView]
 
   /** Iterator over all views matching servers and principal. */
-  def iterator(servers: ServerStates, principal: State)
-      : Iterator[ComponentView] =
-    iterator(servers).filter(cv => cv.principal == principal)
+  def iterator(servers: ServerStates, principal: State): Iterator[ComponentView]
 
-  /** Get the representative of sv.  Used in debugging only.
-    * Pre: this includes such a representative. */
-  //def getRepresentative(sv: ComponentView): ComponentView
-
-  def summarise: String
-
-  def summarise1: String = ???
+  /** Iterator over all views v such that trans might induce a new view from
+    * v. */
+  def iterator(trans: Transition): Iterator[ComponentView] = ???
 
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 
@@ -46,7 +39,8 @@ trait ViewSet{
 // =======================================================
 
 object ViewSet{
-  def apply(): ViewSet = new ServerPrincipalBasedViewSet(16)
+  // Now constructed directly in System.scala
+//  def apply(): ViewSet = new NewViewSet // new ServerPrincipalBasedViewSet(16)
 }
 
 // =======================================================
@@ -270,10 +264,15 @@ class ComponentsSet(initSize: Int = 4){
 
 // =======================================================
 
+import scala.collection.mutable.ArrayBuffer
+
 /** An implementation of a set of Views, all with the same ServerStates.  This
   * allows efficient iteration over the views corresponding to a particular
   * principal.  Used in ServerPrincipalBasedViewSet. */
 class PrincipalBasedViewSet(initSize: Int = 4){
+  /** All the views in this set. */
+  private val allViews = new ArrayBuffer[ComponentView]
+
   /** The underlying BasicHashMap, representing a mapping from principal states
     * to sets of Views. */
   private val underlying = new BasicHashMap[State, ComponentsSet](
@@ -282,7 +281,7 @@ class PrincipalBasedViewSet(initSize: Int = 4){
   /** Add sv to this. */
   def add(sv: ComponentView) : Boolean = {
     val views = underlying.getOrInit(sv.principal)
-    views.add(sv)
+    if(views.add(sv)){ allViews += sv; true } else false
   }
 
   /** Does this contain sv? */
@@ -302,23 +301,25 @@ class PrincipalBasedViewSet(initSize: Int = 4){
     underlying.get(v.principal).get(v)
 
   /** Iterator over the set.  */
-  def iterator : Iterator[ComponentView] = new Iterator[ComponentView]{
-    /** An iterator over underlying, giving ComponentsSets. */
-    private val iter = underlying.iterator
+  def iterator : Iterator[ComponentView] = 
+    if(true) allViews.iterator
+    else new Iterator[ComponentView]{
+      /** An iterator over underlying, giving ComponentsSets. */
+      private val iter = underlying.iterator
 
-    /** The current iterator over a ComponentsSet. */
-    private var current: Iterator[ComponentView] = null
+      /** The current iterator over a ComponentsSet. */
+      private var current: Iterator[ComponentView] = null
 
-    def hasNext = 
-      if(current != null && current.hasNext) true
-      else if(iter.hasNext){
-        // Move onto next element in underlying
-        current = iter.next().iterator; assert(current.hasNext); true 
-      }
-      else false
+      def hasNext =
+        if(current != null && current.hasNext) true
+        else if(iter.hasNext){
+          // Move onto next element in underlying
+          current = iter.next().iterator; assert(current.hasNext); true
+        }
+        else false
 
-    def next() = { assert(hasNext); current.next() }
-  } // end of iterator
+      def next() = { assert(hasNext); current.next() }
+    } // end of iterator
 
   /** Iterator over all views matching principal. */
   def iterator(principal: State): Iterator[ComponentView] = {
@@ -351,7 +352,7 @@ class PrincipalBasedViewSet(initSize: Int = 4){
 
   /** The number of elements in this.  
     * Note: inefficient. */
-  def size = underlying.iterator.map(_.size).sum
+  def size = allViews.size //  underlying.iterator.map(_.size).sum
 
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 }
@@ -433,22 +434,22 @@ class ServerPrincipalBasedViewSet(initSize: Int = 16) extends ViewSet {
   //   underlying.get(sv.servers).getRepresentative(sv)
   // }
 
-  def summarise: String = 
-    underlying.iterator.flatMap(_.summarise).toArray.sorted.mkString("\n")
+  // def summarise: String = 
+  //   underlying.iterator.flatMap(_.summarise).toArray.sorted.mkString("\n")
 
-  /** A brief summary. 
-    * The summary gives the number of Views for each ServerSet, and expands the largest. */
-  override def summarise1: String = {
-    val sets = underlying.iterator.toArray
-    // Summary by servers
-    val st0 = 
-      sets.map(pbvs => pbvs.iterator.next().toString+": "+pbvs.size).
-        sorted.mkString("\n")
-    // The largest such
-    val max: PrincipalBasedViewSet = sets.maxBy(_.size)
-    val st1 = max.summarise1 
-    st0+"\n\n"+st1
-  }
+  // /** A brief summary. 
+  //   * The summary gives the number of Views for each ServerSet, and expands the largest. */
+  // override def summarise1: String = {
+  //   val sets = underlying.iterator.toArray
+  //   // Summary by servers
+  //   val st0 = 
+  //     sets.map(pbvs => pbvs.iterator.next().toString+": "+pbvs.size).
+  //       sorted.mkString("\n")
+  //   // The largest such
+  //   val max: PrincipalBasedViewSet = sets.maxBy(_.size)
+  //   val st1 = max.summarise1 
+  //   st0+"\n\n"+st1
+  // }
 
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 

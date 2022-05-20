@@ -347,7 +347,9 @@ class Checker(system: SystemP.System){
     //   ComponentView0.highlightServers(t.preServers) && 
     //     t.pre.components(0).cs == 26 && t.preServers.servers(5).cs == 152
     // if(highlight) println(s"effectOnOthers($t)")
-    val iter = sysAbsViews.iterator(t.preServers)
+    val iter = 
+      if(UseNewViewSet) sysAbsViews.iterator(t)
+      else sysAbsViews.iterator(t.preServers)
     while(iter.hasNext){ val cv = iter.next(); effectOn(t, cv, nextNewViews) }
   }
 
@@ -478,7 +480,7 @@ class Checker(system: SystemP.System){
     // Following is expensive: IMPROVE: enable via switch
     if(singleRef) effectOn.report
     if(showViews) println(sysAbsViews)
-    if(false) println(sysAbsViews.summarise)
+    //if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
     // println(s"#transitionsX = ${printLong(transitionsX.size)}")
     println(s"#transitions = ${printLong(transitions.size)}")

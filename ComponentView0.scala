@@ -166,7 +166,13 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
 
   /** (With singleRef.) Have we previously stored postServers against this?  */
   def containsDoneInduced(postServers: ServerStates): Boolean = {
-    val ssIx = postServers.index; val ix = indexFor(ssIx)
+    containsDoneInducedByIndex(postServers.index)
+  }
+
+  /** (With singleRef.) Have we previously stored some postServers with
+    * postServers.index == ssIx against this?  */
+  @inline def containsDoneInducedByIndex(ssIx: Int): Boolean = {
+    val ix = indexFor(ssIx)
     ix < doneInducedPostServersBM.length && 
       (doneInducedPostServersBM(ix) & maskFor(ssIx)) != 0
   }

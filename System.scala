@@ -25,6 +25,9 @@ class System(fname: String) {
   /** Object encapsulating the FDR session. */
   protected[SystemP] val fdrSession = new FDRSession(fname)
 
+  // Store in package object
+  eventPrinter = fdrSession
+
   /** Convert event represented by e to the String corresponding to the
     * script. */
   def showEvent(e: EventInt) = fdrSession.eventToString(e)
@@ -333,7 +336,9 @@ class System(fname: String) {
     // val k = aShapes.head.sum
     // println("initViews "+k+"; "+aShapes.map(_.mkString("<", ",", ">")))
     val serverInits: List[State] = servers.inits
-    val viewSet = ViewSet(); val activeViews = new ArrayBuffer[ComponentView]
+    val viewSet: ViewSet = 
+      if(UseNewViewSet) new NewViewSet else new ServerPrincipalBasedViewSet(16)
+    val activeViews = new ArrayBuffer[ComponentView]
     // All views 
     val views = components.initViews(ServerStates(serverInits))
     // println("views = \n  "+views.map(_.toString).mkString("\n  "))

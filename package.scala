@@ -184,6 +184,8 @@ package object ViewAbstraction{
   /** Do we do the sanity check on EffectOnStore? */
   var doSanityCheck = false
 
+  var UseNewViewSet = false
+
   /** Are we using the optimisation with
     * ComponentView0.doneInducedPostServersRemaps?  This seems to give a
     * marginal advantage. */
@@ -264,6 +266,15 @@ package object ViewAbstraction{
   /** Number of machine threads. */
   var numThreads = Runtime.getRuntime.availableProcessors 
 
+  trait EventPrinter{
+    def eventToString(e: Int): String
+  }
 
+  /** Object that can give script name of events.  Instantiated by fdrSession by
+    * System. */
+  var eventPrinter: EventPrinter = null
+
+  /** Show the script name corresponding to event e. */
+  def showEvent(e: Int) = eventPrinter.eventToString(e)
 
 }

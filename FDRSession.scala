@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /** An object that creates an FDR session, and offers various operations on
   * it. 
   * @param fname the name of the file. */
-class FDRSession(fname: String){
+class FDRSession(fname: String) extends EventPrinter{
   /** The FDR Session object. */
   private val session = new Session
 

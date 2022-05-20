@@ -82,13 +82,16 @@ $(DIR)/SingleRefEffectOnUnificationTest.class: $(DIR)/SingleRefEffectOnUnificati
 
 $(COMBINERP)/CombinerTest.class:  $(DIR)/TestStates.class $(COMBINERP)/Combiner.class 
 
-$(DIR)/Transition.class: $(DIR)/Unification.class $(DIR)/SystemP/System.class
+$(DIR)/Transition.class: $(DIR)/Unification.class 
+# $(DIR)/SystemP/System.class
 
 $(DIR)/TransitionSet.class $(DIR)/NewTransitionSet.class: $(DIR)/Transition.class $(DIR)/ComponentView.class
 
 $(DIR)/TransitionTemplateSet.class: $(DIR)/ComponentView.class
 
-$(DIR)/ViewSet.class: $(DIR)/ComponentView.class $(DIR)/MyHashSet.class
+$(DIR)/ViewSet.class: $(DIR)/ComponentView.class $(DIR)/MyHashSet.class $(DIR)/Transition.class
+
+$(DIR)/NewViewSet.class: $(DIR)/ViewSet.class 
 
 # # The system itself
 
@@ -99,7 +102,7 @@ $(DIR)/Servers.class: $(DIR)/FDRSession.class $(DIR)/MyHashMap.class	\
    $(DIR)/FDRTransitionMap.class
 
 $(DIR)/SystemP/System.class: $(DIR)/FDRTransitionMap.class		\
-  $(DIR)/Components.class $(DIR)/Servers.class $(DIR)/ViewSet.class	\
+  $(DIR)/Components.class $(DIR)/Servers.class $(DIR)/NewViewSet.class	\
   $(COMBINERP)/Combiner.class
 
 $(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.class
@@ -114,7 +117,7 @@ $(EXTENDERP)/Extendability.class: $(DIR)/Unification.class $(DIR)/CompatibleWith
 
 $(EXTENDERP)/ExtendabilityTest.class: $(DIR)/TestStates.class $(EXTENDERP)/Extendability.class 
 
-$(DIR)/MissingCommon.class: $(DIR)/Unification.class
+$(DIR)/MissingCommon.class: $(DIR)/Unification.class $(DIR)/ViewSet.class
 
 $(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
 
