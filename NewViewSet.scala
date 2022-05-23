@@ -5,8 +5,6 @@ import ox.gavin.profiling.Profiler
 
 /** An implementation of ViewSet allowing efficient iteration. */
 class NewViewSet extends ViewSet{
-  println("NewViewSet")
-  assert(singleRef) // For the moment IMPROVE
   /** A set containing all the views. */
   private val allViews = new HashSet[ReducedComponentView]
   // IMPROVE: it would be better to use ComponentView here.  But then we
@@ -112,38 +110,38 @@ class ServerBasedViewSet{
   }
 
   def iterator(trans: Transition): Iterator[ComponentView] = {
-    // Build index into byAcquiredRefs corresponding to the acquired
-    // references in trans.  Inv: index is the representation of
-    // trans.anyAcquiredRefs[0..i), giving value 2^j for a true in position j;
-    // k = 2^i.
-    var i = 0; var index = 0; var k = 1
-    while(i < numTypes){
-      if(trans.anyAcquiredRefs(i)) index += k
-      i += 1; k *= 2
+    if(trans.serverGetsNewId) iteratorAll
+    else{
+      val index =
+        if(singleRef) ServerBasedViewSet.boolArrayToInt(trans.anyAcquiredRefs)
+        else 0
+      byAcquiredRefTypes(index).iterator(trans)
     }
-    assert(intToBoolArray(index).sameElements(trans.anyAcquiredRefs))//IMPROVE
-    byAcquiredRefTypes(index).iterator(trans)
-    // IMPROVE
-    //views.iterator
   }
 
-  def iteratorAll: Iterator[ComponentView] = views.iterator
+  @inline def iteratorAll: Iterator[ComponentView] = views.iterator
 }
 
 // ==================================================================
 
 object ServerBasedViewSet{
   /** The number of sets of types. */
-  private val numTypeSets = 1<<numTypes
+  private val numTypeSets = if(singleRef) 1<<numTypes else 1
 
   /** An array of Bools, whose j'th entry is true if the j'th bit of i is 1. */
   @inline private def intToBoolArray(i: Int): Array[Boolean] = 
     Array.tabulate(numTypes)(j => (i&(1 << j)) != 0)
+  // IMPROVE: Maybe tabulate these
 
-  // Maybe tabulate these
-  // val intToBoolArrayX: Array[Array[Boolean]] = 
-  //   Array.tabulate(1 << numTypes)(i => intToBoolArray(i))
-
+  /** Convert a to an int, interpreting it as a binary number. */
+  @inline private def boolArrayToInt(a: Array[Boolean]): Int = {
+    var i = 0; var index = 0; var k = 1 
+    // Inv: index is the representation of a[0..i), giving value 2^j for a
+    // true in position j; k = 2^i.
+    while(i < numTypes){ if(a(i)) index += k; i += 1; k *= 2 }
+    assert(intToBoolArray(index).sameElements(a))
+    index
+  }
 }
 
 // ==================================================================
@@ -153,7 +151,8 @@ object ServerBasedViewSet{
   * principal is of one of these types.  */
 class PrincTypesViewSet(typeFlags: Array[Boolean]){
   /** All views in the set whose principal's type is an element of typeFlags. */
-  private val ofTheseTypes = new ArrayBuffer[ComponentView]
+  private val ofTheseTypes = 
+    if(singleRef) new ArrayBuffer[ComponentView] else null
 
   /** All views in the set whose principal's type is not an element of
     * typeFlags. */
@@ -170,30 +169,49 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
   private val byControlState = 
     new Array[ArrayBuffer[ComponentView]](numCptControlStates)
 
+  /** Get the element of ofOtherTypesByPostServers corresponding to
+    * postServersIndex, initialising it if needs be. */
+  private def getIndexSet(postServersIndex: Int): IndexSet = {
+    if(postServersIndex >= ofOtherTypesByPostServers.length){ // extend array
+      val oldOOTBPS = ofOtherTypesByPostServers; val oldLen = oldOOTBPS.length
+      ofOtherTypesByPostServers = new Array[IndexSet](postServersIndex+1)
+      var i = 0
+      while(i < oldLen){ ofOtherTypesByPostServers(i) = oldOOTBPS(i); i += 1 }
+    }
+    val ixSet = ofOtherTypesByPostServers(postServersIndex)
+    if(ixSet == null){ // Initialise new IndexSet
+      val newIxSet = new IndexSet(postServersIndex); var j = 0
+      while(j < ofOtherTypes.length){ newIxSet.add(j, false); j += 1 }
+      ofOtherTypesByPostServers(postServersIndex) = newIxSet; newIxSet
+    }
+    else ixSet
+  }
+
   /** Add view to this set. */
   def add(view: ComponentView) = {
-    if(typeFlags(view.principal.family))
+    if(singleRef && typeFlags(view.principal.family))
       ofTheseTypes += view
     else{
       ofOtherTypes += view
-      // Add to ofOtherTypesByPostServers
-      var i = 0
+      // Add index to ofOtherTypesByPostServers
+      val index = ofOtherTypes.length-1; var i = 0
       while(i < ofOtherTypesByPostServers.size){
-        assert(!view.containsDoneInducedByIndex(i))
+        // assert(!view.containsDoneInducedByIndex(i)) // IMPROVE
         val ixSet = ofOtherTypesByPostServers(i)
-        if(ixSet != null /* && !view.containsDoneInducedByIndex(i)*/)
-          ixSet.add(i)
+        if(ixSet != null) ixSet.add(index, true)
         i += 1
       }
       // add to byControlState(cs) for each component control state cs
       val cpts = view.components; i = 0
       while(i < cpts.length){
-        val cs = cpts(i).cs; i += 1
-        // IMPROVE: only if this is the first occurrence of cs
-        // add to byControlState(cs)
-        if(byControlState(cs) == null)
-          byControlState(cs) = new ArrayBuffer[ComponentView]
-        byControlState(cs) += view
+        val cs = cpts(i).cs; i += 1; var j = 0
+        // Test if this is the first occurrence of cs
+        while(j < i-1 && cpts(j).cs != cs) j += 1
+        if(j == i-1){ // First occurrence; add to byControlState(cs)
+          if(byControlState(cs) == null)
+            byControlState(cs) = new ArrayBuffer[ComponentView]
+          byControlState(cs) += view
+        }
       }
     }
   }
@@ -209,18 +227,24 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
     private val postServersIndex = postServers.index
 
     /* This represents the concatenation of the following:
-     * 1. ofThesetypes
+     * 1. ofThesetypes if singleRef
      * 2. if trans.changedServers, 
      *    ofOtherTypes.filter(v => !v.containsDoneInduced(trans.postServers))
+     *    which we implement by iterating over 
+     *    ofOtherTypesByPostServers(trans.postServers.index)
      * 3. byControlState(cs) for each cs in trans.changingCptCS (avoiding 
      *    repetitions of views from 2). */
 
     /** Which of the above three stages are we at? */
-    private var stage = 1
+    private var stage = if(singleRef) 1 else 2
 
     /** Index into ofThesetypes at stage 1; index into ofOtherTypes at stage
       * 2; index into trans.changingCptCS at stage 3. */
     private var i = 0
+
+    /** At stage 2, the Indexset to use. */
+    val ixSet: Iterator[Int] = 
+      if(transChangedServers) getIndexSet(postServersIndex).iterator else null
 
     /** At stage 3, the views for the next changing component,
       * byControlState(changingCptCS(i)). */
@@ -229,13 +253,10 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
     /** Index into ab at stage 3. */
     private var j = 0
 
+
     /** Have we produced an induced view with v and postServers? */
-    @inline def cdi(v: ComponentView) = {
-      val res = v.containsDoneInducedByIndex(postServersIndex)
-      // Profiler.count(s"NewViewSet.cdi: $res")
-      // With lazySetNoJoined, ~80B, 8M false
-      res
-    }
+    @inline def cdi(v: ComponentView) = 
+      v.containsDoneInducedByIndex(postServersIndex)
 
     /** Advance to reference the next valid view, if appropriate.  */
     @inline private def advance = {
@@ -245,11 +266,7 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
         if(transChangedServers){ stage = 2; i = 0 }
         else advanceToStage3
       }
-      if(stage == 2){
-        // skip views v s.t. v.containsDoneInduced(postServers)
-        while(i < ofOtherTypes.length && cdi(ofOtherTypes(i))) i += 1
-        if(i == ofOtherTypes.length) advanceToStage3
-      }
+      if(stage == 2){ if(!ixSet.hasNext) advanceToStage3  }
       if(stage == 3){
         advance1 // advance within ab
         // If we've reached the end of ab, advance to the next non-empty one
@@ -265,40 +282,35 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
       }
     }
 
-// IMPROVE: inline following
-
     /** During stage 3, advance j within ab to the next view v such that
       * !trans.changedServers || v.containsDoneInduced(postServers)).  This is
       * to avoid repetitions of views from stage 2. */
-    @noinline private def advance1 = if(transChangedServers && ab != null){
+    @inline private def advance1 = if(transChangedServers && ab != null){
       while(j < ab.length && !cdi(ab(j))) j += 1
     }
 
     /** Advance to stage 3 if non-empty; else stage 4. */
-    @noinline private def advanceToStage3 = {
+    @inline private def advanceToStage3 = {
       if(numChangingCpts > 0){ 
         stage = 3; i = 0; ab = byControlState(changingCptCS(i)); j = 0
       }
       else stage = 4
     }
     
+    // If !singleRef, maybe skip stage 2
+    if(!singleRef && !transChangedServers) advanceToStage3
+
     def hasNext = { advance; stage < 4 }
 
     /** The next element of the iterator.  Note: this assumes hasNext was called
       * since the previous call of next. */
     def next() = 
       if(stage == 1){ val res = ofTheseTypes(i); i += 1; res }
-      else if(stage == 2){
-        val res = ofOtherTypes(i); i += 1; 
-        //assert(transChangedServers && !cdi(res)) // IMPROVE
-        res
-      }
-      else{
-        assert(stage == 3); val res = ab(j); j += 1; 
-        //assert(!transChangedServers || cdi(res)) // IMPROVE
-        res
-      }
+      else if(stage == 2) ofOtherTypes(ixSet.next())
+      else{ assert(stage == 3); val res = ab(j); j += 1; res }
   } // end of Iterator
+
+  // =========
 
   /** A set of indices into ofOthertypes.  The set contains at least all indices
     * i s.t. !ofOtherTypes(i).containsDoneInducedByIndex(postServersIndex).
@@ -318,26 +330,33 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
     @inline private def include(ix: Int) =
       !ofOtherTypes(ix).containsDoneInducedByIndex(postServersIndex)
 
-    /** Add i to the set. */
-    def add(i: Int) = if(include(i)){
-      if(n == spaces){   
-        // Purge old values
-        val oldIndices = indices; indices = new Array[Int](spaces)
-        var j = 0; n = 0
-        while(j < spaces){
-          val ix = oldIndices(j); j += 1
-          if(include(ix)){ indices(n) = ix; n += 1 }
-        }
-        Profiler.count("NewViewSet.purge")
-        if(n > spaces/2){ // Also resize
-          Profiler.count("NewViewSet.resize")
-          val oldSpaces = spaces; spaces = spaces*2
+    /** Add i to the set.  If purge = true, try purging old values if we need to
+      * extend the array. */
+    def add(i: Int, purge: Boolean) = if(include(i)){
+      if(n == spaces){ 
+        if(purge){   // Purge old values
           val oldIndices = indices; indices = new Array[Int](spaces)
-          var j = 0
-          while(j < n){ indices(j) = oldIndices(j); j += 1 }
+          var j = 0; n = 0
+          while(j < spaces){
+            val ix = oldIndices(j); j += 1
+            if(include(ix)){ indices(n) = ix; n += 1 }
+          }
+          //Profiler.count("NewViewSet.purge")
+        }
+        if(n > 3*spaces/4){ // Also resize.  IMPROVE: think about condition
+          //Profiler.count(s"NewViewSet.resize $purge")
+          resizeTo(spaces*2)
         }
       } // end of purging and resizing
       indices(n) = i; n += 1
+    }
+
+    /** Resize indices to size newSpaces. */
+    @inline def resizeTo(newSpaces: Int) = {
+      val oldSpaces = spaces; spaces = newSpaces
+      val oldIndices = indices; indices = new Array[Int](spaces)
+      var j = 0
+      while(j < n){ indices(j) = oldIndices(j); j += 1 }
     }
 
     /** Produce an iterator.  No call to add should happen while the iterator is
@@ -356,20 +375,26 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
        * isn't thread-safe. */
 
       /** Advance i to the next value s.t. include(i). */
-      private def advance = while(i < n && !include(i)) i += 1
+      private def advance = while(i < n && !include(indices(i))) i += 1
       
       advance
 
       def hasNext = 
         if(i < n) true 
-        else{ n = nextFree; false } // Update n corresponding to purged entries
+        else{ // finished
+          n = nextFree // Update n corresponding to purged entries
+          if(spaces > 4 && spaces > 2*n){ // downsize
+            // Profiler.count("NewViewSet.downsize")
+            resizeTo(3*n/2 max 4) 
+          }
+          false 
+        }
 
       def next() = { 
         val res = indices(i)
         // Copy this index into the initial segment.  If nextFree = i, this is
         // a no-op.
-        indices(nextFree) = res; nextFree += 1
-        i += 1; advance; res
+        indices(nextFree) = res; nextFree += 1; i += 1; advance; res
       }
     }
 

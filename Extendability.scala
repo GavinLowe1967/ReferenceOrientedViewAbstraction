@@ -33,10 +33,9 @@ class Extendability(views: ViewSet){
     */
   @inline def isExtendable(pre: Concretization, st: State)
       : Array[ComponentView] = {
-    if(verbose) println(s"isExtendable($pre, $st)")
-    for(v <- pre.toComponentView) require(views.contains(v))
-    require(pre.components.forall(
-      _.componentProcessIdentity != st.componentProcessIdentity))
+    // for(v <- pre.toComponentView) require(views.contains(v))
+    // require(pre.components.forall(
+    //   _.componentProcessIdentity != st.componentProcessIdentity))
     val servers = pre.servers; val components = pre.components
     val (k, rv) = isExtendableCache.getOrElse((pre, st), (-1, null))
     if(verbose) println("isExtendableCache: "+k)
@@ -44,7 +43,6 @@ class Extendability(views: ViewSet){
     // Does SysAbsViews contain a view consistent with pre and with a
     // renaming of st as principal component?
     var found = k >= 0 || compatibleWith(pre, st)
-    if(verbose) println(s"found = $found")
     if(found){
       // If any component cpt of pre references st, then search for a
       // suitable view with a renaming of cpt and st. 
@@ -57,9 +55,7 @@ class Extendability(views: ViewSet){
 // IMPROVE: this seems inefficient if we got here via instantiatetransitionTemplateViaRef
       while(j < length && found){
         if(components(j).processIdentities.contains(id)){
-          if(false) println(s"isExtendable($pre) with reference to $st from $j")
           referencingViews(j) = findReferencingView(pre, st, j)
-          if(verbose) println(referencingViews(j))
           found = referencingViews(j) != null
         }
         j += 1
@@ -144,7 +140,6 @@ class Extendability(views: ViewSet){
   protected[ExtendabilityP] 
   def findReferencingView(pre: Concretization, st: State, j : Int)
       : ComponentView = {
-    if(verbose) println(s"findReferencingView($pre, $st, $j)")
     val servers = pre.servers; val pCpt = pre.components(j)
     val stF = st.family; val stId = st.id; val pLen = pCpt.length
     // Index of st within pCpt's references
@@ -158,32 +153,32 @@ class Extendability(views: ViewSet){
     // st.id gets renamed to stIdR
     val stIdR = map(stF)(stId)
     // Check pCpt references st, i.e. precondition.
-    assert(pCptR.processIdentities(stIx) == (stF,stIdR))
+    //assert(pCptR.processIdentities(stIx) == (stF,stIdR))
     // Find other components of pre that are referenced by pCpt, and included
     // in views with pCpt as principal.
-    val pRefs = new Array[State](pLen)
-    for(i <- 0 until pre.components.length; if i != j){
-      val cpt = pre.components(i) 
-      // Index of cpt.componentProcessIdentity in pCpt's parameters
-      val ix = pCpt.indexOf(cpt.family, cpt.id)
-      if(ix < pLen && (includeInfo == null || includeInfo(ix))) pRefs(ix) = cpt
+    val pRefs = new Array[State](pLen); var i = 0
+    while(i < pre.components.length){
+      if(i != j){
+        val cpt = pre.components(i)
+        // Index of cpt.componentProcessIdentity in pCpt's parameters
+        val ix = pCpt.indexOf(cpt.family, cpt.id)
+        if(ix < pLen && (includeInfo == null || includeInfo(ix))) pRefs(ix) = cpt
+      }
+      i += 1
     }
 
     // Test whether sysAbsViews contains a view cv1 matching servers, with
     // cptR as the principal component, and containing component with identity
     // (stF,stIdR) unifiable with st.  map (and map2) tries to map pre onto cv1.
-    if(verbose) println(s"Searching for $servers, $pCptR, ($stF, $stIdR)")
     val iter = views.iterator(servers, pCptR); var found = false
     var cv1: ComponentView = null
     while(iter.hasNext && !found){
-      cv1 = iter.next(); assert(cv1.principal == pCptR) 
-      if(verbose) println(s"cv1 = $cv1")
+      cv1 = iter.next(); assert(cv1.principal == pCptR)
       if(includeRef){
         // Test if cv1 contains a component that is a renaming of st under an
         // extension of map. Find component with identity (stF, stIdR) in cv1
         val cpt1 = StateArray.find(cv1.components, stF, stIdR)
         if(cpt1 != null){
-          if(verbose) println(s"cpt1 = $cpt1")
           // test if cpt1 is a renaming of st under an extension of map
           var map2 = Unification.unify(map, cpt1, st)
           if(singleRef) found = map2 != null
@@ -195,7 +190,6 @@ class Extendability(views: ViewSet){
             var k = 1
             while(k < pLen && map2 != null){
               if(pRefs(k) != null){
-                if(verbose) println(s"k = $k, "+cv1.components(k)+", "+pRefs(k))
 // FIXME: do those components correspond if there are excluded refs?
                 map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
               }
@@ -206,14 +200,10 @@ class Extendability(views: ViewSet){
         } // end of if(cpt1 != null)
         else assert(singleRef) 
       } // end of if(includeRef)
-      else{
+      else
         // Omitted reference, so we approximate this situation by taking cv1
         // to match.
-        if(false)
-          println(s"findReferencingView: $cv1 has omitted reference to "+
-            scriptNames(stF)(stIdR))
         found = true
-      }
     } // end of while(iter.hasNext && !found)
     if(found) cv1 else null
   }
