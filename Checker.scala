@@ -478,7 +478,7 @@ class Checker(system: SystemP.System){
     println("\nSTEP "+ply+"\n")
     if(singleRef && doSanityCheck && bound == Int.MaxValue) effectOn.sanityCheck
     // Following is expensive: IMPROVE: enable via switch
-    if(singleRef) effectOn.report
+    if(singleRef && reportEffectOn) effectOn.report
     if(showViews) println(sysAbsViews)
     //if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))

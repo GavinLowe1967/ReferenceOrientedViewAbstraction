@@ -123,7 +123,6 @@ object StateArray{
     @inline def include(i: Int) = {
       val pid = pids(i) ; val (f,id) = pid
       if(!isDistinguished(pid._2) && pid != princId && newPrinc.includeParam(i)){
-//          (includeInfo == null || includeInfo(i))){
         // check this is first occurrence of pid
         var j = 1; while(j < i && pids(j) != pid) j += 1
         j == i
@@ -164,7 +163,6 @@ object StateArray{
         for(i <- 1 until len)
           assert(isDistinguished(pids(i)._2) || pids(i) == princId ||
             !newPrinc.includeParam(i),
-//            includeInfo != null && !includeInfo(i),
             s"newPrinc = $newPrinc; postCpts = ${show(postCpts)}\n"+
               s"cpts = ${show(cpts)}")
         List(Array(newPrinc))
@@ -263,31 +261,6 @@ object StateArray{
     result
   }
 
-  /** A representation of cross references between cpts1 and cpts2.  List of
-    * pairs (i,c) such that c in cpts2, and cpts1(i) has a reference to c or
-    * vice versa. */
-  // def crossRefsX(cpts1: Array[State], cpts2: Array[State])
-  //     : List[(Int, State)] = {
-  //   require(singleRef)
-  //   var result = List[(Int,State)](); var i = 0
-  //   while(i < cpts1.length){
-  //     val c1 = cpts1(i)
-  //     if(! contains(cpts2, c1)){
-  //       var j = 0
-  //       while(j < cpts2.length){
-  //         val c2 = cpts2(j); j += 1
-  //         if(! contains(cpts1, c2)){
-  //           if(c1.hasIncludedParam(c2.family, c2.id) ||
-  //               c2.hasIncludedParam(c1.family, c1.id))
-  //             result ::= (i, c2)
-  //         }
-  //       }
-  //     } // end of if
-  //     i += 1
-  //   }
-  //   result
-  // }
-
   /** Make a bitmap representing the identities in cpts. */
   def makeIdsBitMap(cpts: Array[State]): BitMap = {
     val bitMap = newBitMap
@@ -325,7 +298,6 @@ object StateArray{
     indexMap
   }
 
-
   /** Remove identities of components in cpts from bitMap. */
   def removeIdsFromBitMap(cpts: Array[State], bitMap: BitMap) = {
     var i = 0
@@ -360,13 +332,6 @@ object StateArray{
     }
     missing
   }
-
-  /** Hash of cpts.  Used for hashcode of MissingCommon values. */
-  // @inline def mkHash(cpts: Array[State]) = {
-  //   var h = cpts(0).hashCode; var i = 1; var n = cpts.length
-  //   while(i < n){ h = h*71+cpts(i).hashCode; i += 1 }    
-  //   h
-  // }
 
   @inline def mkHash(start: Int = 0, cpts: Array[State]) = {
     var h = start; var i = 0; var n = cpts.length

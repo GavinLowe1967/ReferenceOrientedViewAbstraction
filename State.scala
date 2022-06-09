@@ -168,7 +168,6 @@ class State(val family: Family, val cs: ControlState,
     }
   }
 
-
   // Note: Equality is reference equality, as we avoid creating duplicate
   // states.
 
@@ -320,7 +319,8 @@ object State{
 
   // ----- Variables and functions concerning states. 
 
-  /* The following variables are initialised in setStateTypeMap. */
+  /* The following variables are initialised in setStateTypeMap during
+   * compilation. */
 
   /** Array storing information about types of parameters.
     * stateTypeMapArray(cs-minCS) stores information about the types of

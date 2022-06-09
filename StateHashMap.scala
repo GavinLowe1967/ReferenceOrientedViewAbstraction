@@ -90,9 +90,7 @@ abstract class StateHashMap(initLength: Int) extends StateMap{
     while(hashes(i) != 0 &&
             (hashes(i) != h || controlStates(i) != cs || 
                differentElements(identities(i), ids))){
-//               ! identities(i).sameElements(ids))){
       i = (i+1) & mask // = (i+1)%n
-      // if(i == (h&mask)){ println(hashes.mkString("<",",",">")+h); sys.exit } 
     }
     i
   }
@@ -112,8 +110,7 @@ abstract class StateHashMap(initLength: Int) extends StateMap{
 // =======================================================
 
 /** A hash map storing States, keyed by ControlStates and Identitys. Not
-  * thread safe.  Doesn't support the global array.  Used only during
-  * compilation. */
+  * thread safe.  Doesn't support the global array.   */
 class InitialisationStateHashMap(initLength: Int = 4096) 
     extends StateHashMap(initLength){
   // println("InitialisationStateHashMap")
@@ -132,8 +129,6 @@ class InitialisationStateHashMap(initLength: Int = 4096)
     * is no such. */
   @inline def getOrAdd(family: Int, cs: ControlState, ids: Array[Identity])
       : State = {
-    // assert(isNew)
-    // Profiler.count("getOrAdd")
     if(count >= threshold) resize()
     val h = hashOf(cs, ids); val i = find(cs, ids, h); val oldSt = states(i)
     if(oldSt == null){
@@ -188,6 +183,8 @@ class InitialisationStateHashMap(initLength: Int = 4096)
 
 // =======================================================
 
+/* 
+NOT CURRENTLY USED
 /** A thread-local StateMap, with access to a shared state map, trieStateMap.
   * The shared state map is used for obtaining States that are new to the
   * current thread; these are then cached in this object. 
@@ -277,3 +274,4 @@ class ThreadLocalStateHashMaps(
 }
 
 // IMPROVE: inline throughout
+ */

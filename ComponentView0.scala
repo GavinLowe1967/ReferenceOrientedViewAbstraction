@@ -11,8 +11,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     extends ReducedComponentView(servers, components){
 
   /** Identities of components. */
-// IMPROVE: replace by cptIdsBitMap
-  val cptIds = components.map(_.componentProcessIdentity)
+  //val cptIds = components.map(_.componentProcessIdentity)
 
   /** Identities of components as a bit map. */
   val cptIdsBitMap = StateArray.makeIdsBitMap(components)
@@ -43,7 +42,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   // -------------------------------------------------------
 
   /** Check all components referenced by principal are included, and no more. */
-  // IMRPOVE: this is moderately expensive
+  // IMPROVE: this is moderately expensive
   @noinline private def checkValid = if(debugging){ 
     val len = principal.ids.length; 
     if(singleRef){
@@ -123,24 +122,6 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
       new MightGiveSufficientUnifs2(princFamily, cStates(0), cStates(1))
     else new MightGiveSufficientUnifsN(princFamily, cStates)
   }
-    // new ComponentView0.MightGiveSufficientUnifsInfo{
-    //   /** The family of the principal. */
-    //   val princFamily = components(0).family
-
-    //   /** The control states of components. */
-    //   private val controlStates = components.map(_.cs)
-
-    //   private val cptsLen = controlStates.length
-
-    //   /** Does this have a component with control state cs? */
-    //   @inline def hasControlState(cs: ControlState): Boolean = {
-    //     var j = 0
-    //     while(j < cptsLen && controlStates(j) != cs) j += 1
-    //     j < cptsLen
-    //   }
-
-    //   // IMPROVE: maybe also include doneInducedPostServersBM here
-    // }
 
   // -------------------------------------------------------
 
@@ -153,9 +134,8 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * 
     * The representation is a bit map.  The ServerStates with index ssIx is
     * stored in entry indexFor(ssIx); maskFor(ssIx) provides an appropriate
-    * bit mask.  */
-  private var doneInducedPostServersBM = 
-    /*if(singleRef && !newEffectOn) null else*/ new Array[Long](0)
+    * bit mask.  Protected by synchronized blocks.  */
+  private var doneInducedPostServersBM = new Array[Long](0)
 
   /** The index into doneInducedPostServersBM for a ServersState with index
     * ssIx. */
@@ -171,7 +151,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
 
   /** (With singleRef.) Have we previously stored some postServers with
     * postServers.index == ssIx against this?  */
-  @inline def containsDoneInducedByIndex(ssIx: Int): Boolean = {
+  @inline def containsDoneInducedByIndex(ssIx: Int): Boolean = synchronized{
     val ix = indexFor(ssIx)
     ix < doneInducedPostServersBM.length && 
       (doneInducedPostServersBM(ix) & maskFor(ssIx)) != 0
@@ -180,7 +160,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   /** Record that we are considering an induced transition with this, with no
     * unification, and whose post-state has postServers.  Return true if this
     * is the first such. */
-  def addDoneInduced(postServers: ServerStates): Boolean = {
+  def addDoneInduced(postServers: ServerStates): Boolean = synchronized{
     val ssIx = postServers.index; val ix = indexFor(ssIx)
     if(ix >= doneInducedPostServersBM.length){
       // Extend doneInducedPostServersBM

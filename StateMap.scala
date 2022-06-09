@@ -38,6 +38,8 @@ trait StateMap{
 
 // =======================================================
 
+/*
+NOT CURRENTLY USED
 /** A thread-safe implementation of StateMap, using sharding. */
 class ShardedStateMap(shards: Int = 128, initLength: Int = 16) 
     extends Sharding(shards) with StateMap{
@@ -250,3 +252,4 @@ class ShardedStateMap(shards: Int = 128, initLength: Int = 16)
     var c = 0; for(sh <- theShards) c += sh.count; c
   }
 }
+ */

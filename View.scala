@@ -9,9 +9,6 @@ class ReducedComponentView(
   /** The principal component. */
   def principal = components(0)
 
-  /** The complete ComponentView corresponding to this. */
-  //def asComponentView = new ComponentView(servers, components)
-
   override def equals(that: Any) = {
     if(that != null){
       val cv = that.asInstanceOf[ReducedComponentView]
@@ -49,13 +46,11 @@ class ReducedComponentView(
     else StateArray.compare(components, that.components)
   }
 
-
   override def toString = s"$servers || "+components.mkString("[", " || ", "]")
 
   def toString0 = 
     servers.toString0+" || "+
       components.map(_.toString0).mkString("[", " || ", "]")
-
 }
 
 // =======================================================

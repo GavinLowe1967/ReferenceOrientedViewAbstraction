@@ -32,7 +32,7 @@ $(DIR)/State.class: $(DIR)/package.class
 
 $(DIR)/StateArray.class: $(DIR)/State.class
 
-$(DIR)/StateMap.class: $(DIR)/State.class $(DIR)/Sharding.class
+$(DIR)/StateMap.class: $(DIR)/State.class
 
 $(DIR)/MyTrieStateMap.class $(DIR)/StateHashMap.class: $(DIR)/StateMap.class
 
@@ -54,13 +54,15 @@ $(DIR)/ServersReducedMap.class: $(DIR)/ServerStates.class
 
 $(DIR)/View.class:  $(DIR)/StateArray.class $(DIR)/ServerStates.class
 
+$(DIR)/MyHashSet.class:  $(DIR)/Sharding.class
+
 $(DIR)/ComponentView0.class: $(DIR)/View.class $(DIR)/MyHashSet.class $(DIR)/ServersReducedMap.class
 
 $(DIR)/ComponentView.class: $(DIR)/ComponentView0.class
 
 $(DIR)/TestStates.class: $(DIR)/MyStateMap.class
 
-$(DIR)/RemapperP/Remapper.class: $(DIR)/ComponentView.class 
+$(DIR)/RemapperP/Remapper.class: $(DIR)/ComponentView.class $(DIR)/MyStateMap.class
 
 $(DIR)/RemapperP/RemapperTest.class: $(DIR)/TestStates.class $(DIR)/RemapperP/Remapper.class $(DIR)/Unification.class
 

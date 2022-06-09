@@ -42,7 +42,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   private val (cvpf, cvpid) = cv.principal.componentProcessIdentity
   // IDs of components in pre, cv
   private val preCptIds = pre.cptIdsBitMap 
-  private val cptIds = cv.cptIds 
+  private val cptIds = cv.cptIdsBitMap //  cptIds 
 
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
@@ -263,7 +263,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       else if(i == map(t).length) rec(t+1, 0) // advance
       else if(map(t)(i) >= 0) rec(t, i+1) // advance
       else{
-        val isId = cptIds.contains((t,i)) // Is this an identity?
+        val isId = cptIds(t)(i) // .contains((t,i)) // Is this an identity?
         // map (t,i) to each element of otherArgs(t)
         var id1 = 0
         while(id1 < bounds(t)){ // resultRelevantParams(t).length){ // IMPROVE bound?

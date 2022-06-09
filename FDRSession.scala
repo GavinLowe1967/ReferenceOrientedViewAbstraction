@@ -16,8 +16,6 @@ class FDRSession(fname: String) extends EventPrinter{
 
   session.loadFile(fname)
 
-  // session.loadFile("definitions.csp")
-
   /** The Cancellor, used in queries on the session. */
   private val canceller = new Canceller
 
@@ -26,8 +24,6 @@ class FDRSession(fname: String) extends EventPrinter{
   /** Use the FDR session to evaluate the expression st. */ 
   def eval(st: String): String =
     session.evaluateExpression(st, canceller).result
-
-  // eval("let nth(xs_,n_) = if n_ == 0 then head(xs_) else nth(tail(xs_), n_-1)")
 
   /** Convert internal representation of event into the corresponding 
     * String. */
@@ -42,9 +38,7 @@ class FDRSession(fname: String) extends EventPrinter{
     * 
     * Note: avoid calling this on type names; use getTypeValues, instead. */
   def setStringToList(st: String): List[String] = {
-    // print("setStringToList: "+st)
     val xs = session.evaluateIterableExpression(st, canceller)
-    // println(".  Done.")
     xs.result.asScala.toList
   }
 
@@ -78,11 +72,6 @@ class FDRSession(fname: String) extends EventPrinter{
     result.toList
   }
 
-  /** FDR function to extract nth element of a list. */
-  // val nthString =
-  //   "let nth(xs_,n_) = if n_ == 0 then head(xs_) else nth(tail(xs_), n_-1) "+
-  //     "within "
-
   /** Convert a String, representing an FDR sequence of sequences xss, into a
     * list of strings, representing the elements of concat (map f yss), where
     * yss is a permutation of xss.  */
@@ -90,7 +79,6 @@ class FDRSession(fname: String) extends EventPrinter{
     // Note: the following also evaluates st, which can be expensive.
     // However, st needs to be evaluated anyway, so there doesn't seem much to
     // be gained by avoiding this.
-    // println("seqSeqStringToList")
     val length = eval(s"length($st)").toInt; print(s"($length chunks.)")
     val result = new ArrayBuffer[String]() // holds result
     // Index into the sequence
@@ -107,12 +95,10 @@ class FDRSession(fname: String) extends EventPrinter{
           val thisChunk =
             session.evaluateIterableExpression(thisChunkString, canceller).
               result.asScala
-          // print("*")
           myResult ++= thisChunk
         }
         else done = true
       } while(!done);
-      // print("#")
       result.synchronized{ result ++= myResult }
     }
 
@@ -123,8 +109,6 @@ class FDRSession(fname: String) extends EventPrinter{
 
   /** Does st represent a sequence of type <<a>>? */
   private def isSeqSeq(st: String): Boolean = {
-    // println(s"isSeqSeq($st)")
-    // eval(st).take(2) == "<<" -- too slow
     // Ugh!
     try{ 
       // The following throws an exception if st does not represent a sequence
@@ -150,13 +134,8 @@ class FDRSession(fname: String) extends EventPrinter{
   /** Evaluate the expression f(g(x)), where g is either an FDR Map or an FDR
     * function. */ 
   def applyFunctionOrMap[A](f: String => A, g: String, x: String): A = {
-    if(isMapApp(g, x)){ /* println("map: "+g); */ f(s"mapLookup($g, $x)") }
-    else{ /* println("function: "+g); */ f(s"$g($x)") }
-
-    // try{ f(s"mapLookup($g, $x)") }
-    // catch{ case _: Exception => /* println("function"); */ f(s"$g($x)") }
+    if(isMapApp(g, x)) f(s"mapLookup($g, $x)") else f(s"$g($x)") 
   }
-
 
   /** Int representing the value st from the symmetry sub-type. */
   def symmetryValue(st: String): Int =
@@ -177,7 +156,7 @@ class FDRSession(fname: String) extends EventPrinter{
 
   /** Get and record the type that includes the subtype typeName. */
   def getSuperType(typeName: String) = {
-    val typeValues = getTypeValues(typeName) // setStringToList(typeName)
+    val typeValues = getTypeValues(typeName)
     val superType = session.typeOfExpression(typeValues.head).result
     types.add(superType)
     superType
@@ -232,25 +211,8 @@ class FDRSession(fname: String) extends EventPrinter{
     try{ stringEventMap(st) }  // IMPROVE
     catch{  
       case _: java.util.NoSuchElementException =>
-        println("eventToInt: Event not found: "+st); sys.exit
+        println("eventToInt: Event not found: "+st); sys.exit()
     }
-
-  // stringEventMap.get(st) match{
-  //   case Some(n) => n
-  //   case None =>
-  //     val n = compileEvent(st); eventStringMap += n -> st
-  //     println("eventToInt "+n+" "+st)
-  //     stringEventMap += st -> n; n
-  // }
-
-  /** Add an event to eventStringMap and stringEventMap. */
-  // def logEvent(event: Int) = {
-  //   if(!eventStringMap.contains(event)){
-  //     val st = session.uncompileEvent(event).toString()
-  //     //println(st)
-  //     eventStringMap += event -> st; stringEventMap += st -> event
-  //   }
-  // }
 
   /** Initialise eventStringMap and stringEventMap.
     * @param eventsSize the number of events (including tau and tick) plus one.
@@ -259,17 +221,8 @@ class FDRSession(fname: String) extends EventPrinter{
     println("Initialising events.")
     // Something like following is necessary or else uncompileEvent barfs.
     evalProc("let P_ = error -> STOP within P_[[ error <- e_ | e_ <- Events ]]")
-    // evalProc("RUN(Events)") 
     println(s"Logging events ($eventsSize events).")
     assert(eventStringMap.isEmpty && stringEventMap.isEmpty)
-    // IMPROVE: following is quite slow
-    // for(e <- (1 until eventsSize).par){ //  logEvent(e)
-    //   val st = session.uncompileEvent(e).toString()
-    //   //println(st)
-    //   synchronized{ 
-    //     eventStringMap += e -> st; stringEventMap += st -> e 
-    //   }
-    // }
     val eventIndex = new AtomicInteger(1) // Next event to handle
     val ChunkSize = 100 // Each task is ChunkSize events
     // A single worker
@@ -295,7 +248,7 @@ class FDRSession(fname: String) extends EventPrinter{
     } // end of worker 
     // session is a sequential bottleneck, so no gain in lots of workers.
     Concurrency.runSystem(4, worker)
-    println
+    println()
   } 
 
   /** Delete the underlying session, to free up memory. */

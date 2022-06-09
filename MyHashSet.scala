@@ -103,7 +103,7 @@ class BasicHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
 
     def hasNext = ix < n
 
-    def next = { val k = keys(ix); ix += 1; advance; k }
+    def next() = { val k = keys(ix); ix += 1; advance; k }
   } // end of iterator
 
   /** Does this set contain x? */
@@ -198,7 +198,7 @@ class OpenHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
 
     def hasNext = ix < n
 
-    def next = { val k = keys(ix); ix += 1; advance; k }
+    def next() = { val k = keys(ix); ix += 1; advance; k }
   } // end of iterator
 
   /** Does this set contain x? */
@@ -353,7 +353,7 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
     def hasNext = sh < shards
 
     /** The next element of the iterator. */
-    def next = { val result = elements(sh)(i); advance1; advance; result }
+    def next() = { val result = elements(sh)(i); advance1; advance; result }
   } // end of iterator
 
   /** Get the element of this that is equal (==) to x. */
@@ -590,7 +590,7 @@ class LockFreeReadHashSet[A : scala.reflect.ClassTag](
     def hasNext = sh < shards
 
     /** The next element of the iterator. */
-    def next = { val result = shard.values(i); advance1; advance; result }
+    def next() = { val result = shard.values(i); advance1; advance; result }
   } // end of iterator
 
   /** Get the element of this that is equal (==) to x. */

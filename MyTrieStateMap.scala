@@ -2,7 +2,11 @@ package ViewAbstraction
 
 /** An implementation of a StateMap based upon a trie. 
   * @param numCS the number of control states. */
+// Not currently used
 class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
+
+  assert(false)
+
   /** A Trie for each control state, offset by minCS. */
   private var tries = new Array[Trie](numCS)
 

@@ -156,8 +156,9 @@ object VA{
       case "--showTransitions" => showTransitions = true; i += 1
       case "--showRedundancies" => showRedundancies = true; i += 1
       case "--reverseTransitionIter" => TransitionSet.reversed = true; i += 1
-      case "--useNewViewSet" => UseNewViewSet = true; i += 1
+      case "--useOldViewSet" => UseNewViewSet = false; i += 1
       case "--doSanityCheck" => doSanityCheck = true; i += 1
+      case "--reportEffectOn" => reportEffectOn = true; i += 1
       // case "--newEffectOn" => newEffectOn = true; i += 1
       case "--memoryProfile" => memoryProfile = true; i += 1
       case "-p" => numThreads = args(i+1).toInt; i += 2

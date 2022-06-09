@@ -184,7 +184,11 @@ package object ViewAbstraction{
   /** Do we do the sanity check on EffectOnStore? */
   var doSanityCheck = false
 
-  var UseNewViewSet = false
+  /** Do we use NewViewSet? */
+  var UseNewViewSet = true
+
+  /** Do we report the size of the EffectOnStore? */
+  var reportEffectOn = false
 
   /** Are we using the optimisation with
     * ComponentView0.doneInducedPostServersRemaps?  This seems to give a

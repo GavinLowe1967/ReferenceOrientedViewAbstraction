@@ -8,15 +8,12 @@ class ServerStates(val servers: List[State]){
   /* Note: equality is reference equality, because we avoid creating two
    * ServerStates with the same value of servers. */
 
-  /** Create hash code. */
-  @inline private def mkHash: Int = {
+  /** Override hash function. */
+  override val hashCode = {
     var h = 0
     for(st <- servers) h = h*73 + st.hashCode
     h
-  }
-
-  /** Override hash function. */
-  override val hashCode = mkHash
+  } 
   
   /** Is this normalised? */
   private var normalised = true
@@ -138,7 +135,7 @@ object ServerStates{
   private var nextIndex = 0
 
   /** Get the index for the next ServerStates to create. */
-  private def getNextIndex: Int = { nextIndex += 1; nextIndex-1 }
+  private def getNextIndex: Int = synchronized{ nextIndex += 1; nextIndex-1 }
 
   /** The number of ServerStates objects created so far. */
   def count = { assert(nextIndex == ssMap.size); nextIndex }
@@ -171,23 +168,28 @@ object ServerStates{
     * Note: each should be used in only one way at a time.  In a concurrent
     * implementation, these would need to be thread-local. */
   private[this] val remappingMapRowStore = 
-    Array.tabulate(numTypes)(t => new Array[Array[Int]](2*typeSizes(t)))
+    if(false)
+      Array.tabulate(numTypes)(t => new Array[Array[Int]](2*typeSizes(t)))
+    else null 
 
   /** Get a rows of a RemappingMap, for type t and size size. 
     * 
     * Note: each result should be used in only one way at a time.  */
-  private def getRemappingMapRow(t: Int, size: Int) = {
+  private def getRemappingMapRow(t: Int, size: Int) = 
+  if(false){
     if(remappingMapRowStore(t)(size) == null)
       remappingMapRowStore(t)(size) = new Array[Identity](size)
     remappingMapRowStore(t)(size)
   }
+  else new Array[Identity](size)
+  // IMPROVE: reuse
 
   /** A RemappingMap, used in remappingMap1(size).
     * 
     * Note: this should be used in only one way at a time.  In a concurrent
     * implementation, these would need to be thread-local. */
-  private val remappingMapStore = new Array[Array[Identity]](numTypes)
-
+  private def remappingMapStore = new Array[Array[Identity]](numTypes)
+  // IMPROVE: reuse
 }
 
 // =======================================================
