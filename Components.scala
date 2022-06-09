@@ -381,7 +381,6 @@ class Components(
       new ComponentView(servers, StateArray.referencedStates(princ, fInits)))
   }
 
-
   /** Get the transitions of the component in state st. */
   def getTransComponent(st: State): ComponentTransitions =
     try{ transComponentStore(st) }

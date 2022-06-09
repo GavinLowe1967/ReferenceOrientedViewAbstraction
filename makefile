@@ -104,8 +104,7 @@ $(DIR)/Servers.class: $(DIR)/FDRSession.class $(DIR)/MyHashMap.class	\
    $(DIR)/FDRTransitionMap.class
 
 $(DIR)/SystemP/System.class: $(DIR)/FDRTransitionMap.class		\
-  $(DIR)/Components.class $(DIR)/Servers.class $(DIR)/NewViewSet.class	\
-  $(COMBINERP)/Combiner.class
+  $(DIR)/Components.class $(DIR)/Servers.class $(DIR)/NewViewSet.class
 
 $(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.class
 
@@ -127,13 +126,22 @@ $(DIR)/EffectOnStore.class: $(DIR)/MissingInfo.class
 
 $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 
-$(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(DIR)/EffectOnUnification.class $(DIR)/SingleRefEffectOnUnification.class
+$(DIR)/EffectOn.class: $(DIR)/EffectOnStore.class				\
+  $(DIR)/EffectOnUnification.class $(DIR)/SingleRefEffectOnUnification.class
+
+$(DIR)/ConsistentStateFinder.class: $(DIR)/SystemP/System.class	\
+  $(COMBINERP)/Combiner.class
+
+$(DIR)/TransitionTemplateExtender.class: $(DIR)/Transition.class	\
+  $(EXTENDERP)/Extendability.class $(DIR)/TransitionTemplateSet.class	\
+  $(DIR)/ConsistentStateFinder.class
 
 # # Checker and main program
 
-$(DIR)/TransitionTemplateExtender.class: $(DIR)/SystemP/System.class $(DIR)/Transition.class $(EXTENDERP)/Extendability.class $(DIR)/TransitionTemplateSet.class
-
-$(DIR)/Checker.class: $(DIR)/TransitionSet.class $(DIR)/NewTransitionSet.class $(DIR)/Unification.class $(DIR)/Debugger.class $(DIR)/EffectOn.class $(DIR)/TransitionTemplateExtender.class
+$(DIR)/Checker.class: $(DIR)/TransitionSet.class		\
+  $(DIR)/NewTransitionSet.class $(DIR)/Unification.class	\
+  $(DIR)/Debugger.class $(DIR)/EffectOn.class			\
+  $(DIR)/TransitionTemplateExtender.class
 
 $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 

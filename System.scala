@@ -2,7 +2,7 @@ package ViewAbstraction.SystemP
 
 import ViewAbstraction._
 import ViewAbstraction.RemapperP.Remapper
-import ViewAbstraction.CombinerP.Combiner
+// import ViewAbstraction.CombinerP.Combiner
 import uk.ac.ox.cs.fdr.{Option => _, _}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer,HashMap}
@@ -113,8 +113,6 @@ class System(fname: String) {
   // f2.
   var threeWaySyncs: Array[Array[Boolean]] = null
 
-
-
   private def init() = {
     // Create the mapping from control states to types of parameters
     transMapBuilder.createStateTypeMap
@@ -160,6 +158,11 @@ class System(fname: String) {
 
   init()
 
+  /** The next states possible from component state st after event e
+      * synchronising with component (f,id). */
+  /** Get the transitions of the component in state st. */
+  def getNexts(st: State, e: EventInt, f: Family, id: Identity): Array[State] = 
+    components.getTransComponent(st).nexts(e,f,id)
 
   /** Process the omit information from the file.  We build a partial mapping
     * from control states to bitmaps, showing which referenced states are
@@ -651,7 +654,7 @@ class System(fname: String) {
   // IMPROVE: store mapping from (pre, pid, st1) to the maps that map st1's
   // identity to pid.  Avoid recalculating.
 
-
+/*
   /** Get all renamings of cv that: (1) include a component with identity pid;
     * (2) agree with pre on the states of all common components; and (3) can
     * perform e with pre.principal if e >= 0.
@@ -663,20 +666,18 @@ class System(fname: String) {
     val buffer = new ArrayBuffer[(State, Array[State])]()
     val (f,id) = pid; val servers = pre.servers; require(cv.servers == servers)
     val preCpts = pre.components; val cpts = cv.components
-    val serverRefs = servers.idsBitMap(f)(id) // id < servers.numParams(f) // do servers reference pid?
+    val serverRefs = servers.idsBitMap(f)(id)  // do servers reference pid?
     val (fp, idp) = preCpts(0).componentProcessIdentity// id of principal of pre
-    //println(s"consistentStates(${State.showProcessId(pid)}, $pre, $cv)")
     // Find all components of cv that can be renamed to a state of pid
     // that can perform e.
     for(i <- 0 until cpts.length){ 
       val st1 = cpts(i)
-      // Profiler.count(pre.toString+pid+cv)
       // Try to make st1 the component that gets renamed.  Need st1 of family
       // f, and its identity either equal to id, or neither of those
       // identities in the server identities (so the renaming doesn't change
       // servers).
       if(st1.family == f && 
-        (st1.id == id || !serverRefs && !servers.idsBitMap(f)(st1.id) /*st1.id >= servers.numParams(f) */ )){
+        (st1.id == id || !serverRefs && !servers.idsBitMap(f)(st1.id))){
         // Calculate (in maps) all ways of remapping st1 (consistent with the
         // servers) so that: (1) its identity maps to id; (2) other parameters
         // are injectively mapped either to a parameter in pre.components,
@@ -690,8 +691,7 @@ class System(fname: String) {
             sys.exit()
           }
         for((map, renamedState) <- maps){
-          assert(renamedState.representableInScript) 
-// IMPROVE: not needed, I think
+          // assert(renamedState.representableInScript) 
           val nexts = (
             if(e >= 0) 
               components.getTransComponent(renamedState).nexts(e, fp, idp)
@@ -699,7 +699,7 @@ class System(fname: String) {
           )
           @inline def isNew = !buffer.exists{case (st1,nxts1) => 
             st1 == renamedState && nxts1.sameElements(nexts)}
-          if(nexts.nonEmpty && isNew /*!buffer.contains((renamedState, nexts))*/){
+          if(nexts.nonEmpty && isNew){
             if(checkCompatible(map, renamedState, cpts, i, preCpts, otherArgs))
               buffer += ((renamedState, nexts))
           }
@@ -708,7 +708,6 @@ class System(fname: String) {
     } // end of for(i <- ...)
     buffer
   } // end of consistentStates
-
 
   /** Exception showing renamedState is not representable using values in the
     * script. */
@@ -739,12 +738,11 @@ class System(fname: String) {
       : (RenamingTuples, OtherArgMap) = {
     val preCptsL = preCpts.toList
     mapCache.get(st, pid, servers, preCptsL) match{
-      case Some(tuple) => /* Profiler.count("getMaps: retrieved"); */ tuple
-      case  None =>
-        // Profiler.count("getMaps: new") ~1.5%
+      case Some(tuple) => tuple
+      case  None =>     // Profiler.count("getMaps: new") ~1.5%
         val (f,id) = pid; val map0 = servers.remappingMap
         val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
-        otherArgs(f) = removeFromList(otherArgs(f), id) // otherArgs(f).filter(_ != id)
+        otherArgs(f) = removeFromList(otherArgs(f), id) 
         nextArg(f) = nextArg(f) max (id+1)
         val maps = Combiner.remapToId(map0, otherArgs, nextArg, st, id)
         // Create corresponding renamed States, and pair with maps
@@ -754,16 +752,6 @@ class System(fname: String) {
           val renamedState = Remapper.applyRemappingToState(map, st)
           if(!renamedState.representableInScript)
             throw UnrepresentableException(renamedState)
-          // should have renamedState.ids in ran map.  IMPROVE: assertion only
-          // if(false){
-          //   val ids1 = renamedState.ids; val typeMap = renamedState.typeMap
-          //   var j = 0
-          //   while(j < ids1.length){
-          //     assert( ids1(j) < 0 || map(typeMap(j)).contains(ids1(j)) ,
-          //       "\nmap = "+Remapper.show(map)+"undefined on = "+renamedState)
-          //     j += 1
-          //   }
-          // }
           mapStates(i) = (map, renamedState); i += 1
         }
         mapCache += (st, pid, servers, preCptsL) -> (mapStates, otherArgs)
@@ -796,7 +784,7 @@ class System(fname: String) {
     }
     else false
   }
-
+ */
 }
 
 // ==================================================================
