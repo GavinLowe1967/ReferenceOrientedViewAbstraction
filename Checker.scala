@@ -13,12 +13,16 @@ import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
 class Checker(system: SystemP.System){
   SystemP.System.setSystem(system) // set system in package, for showEvent
 
-  /** Exception thrown to indicate that an error transition has been found.
-    * This is caught within process. */
-  class FoundErrorException extends Exception
+  // /** Exception thrown to indicate that an error transition has been found.
+  //   * This is caught within process. */
+  // class FoundErrorException extends Exception
 
   /** The abstract views. */
   protected var sysAbsViews: ViewSet = null
+  // Note: reset by CheckerTest
+
+  val (sav, initViews) = system.initViews; sysAbsViews = sav
+
   // Note: in various places, we iterate over sysAbsViews.  We should avoid
   // adding new views to the set while that is going on.
 
@@ -28,7 +32,7 @@ class Checker(system: SystemP.System){
   protected var nextNewViews: MyHashSet[ComponentView] = null
 
   /** Utility object encapsulating the isExtendable function. */
-  private var extendability: Extendability = _
+  //private var extendability: Extendability = _
 
   /** Utility object encapsulating the effectOn and completeDelayed
   * functions. */
@@ -43,12 +47,6 @@ class Checker(system: SystemP.System){
    * state extends a View by adding all relevant components: components that
    * synchronise on the transition, and any components to which the principal
    * component obtains a reference.*/
-
-  /** The extended transitions found on previous plies.  Abstractly, a set of
-    * Transitions.  */
-  // private val transitions: TransitionSet = new ServerBasedTransitionSet(16)
-
-  // private val transitionsX = transitions
 
   private val transitions = new NewTransitionSet
 
@@ -70,6 +68,10 @@ class Checker(system: SystemP.System){
   private val transitionTemplates: TransitionTemplateSet = 
     new ServerBasedTransitionTemplateSet
 
+  /** Utility object for extending transition templates. */
+  private var transitionTemplateExtender = 
+    new TransitionTemplateExtender(transitionTemplates, system, sysAbsViews)
+
   /** Transition templates found on this ply.  Transition templates are
     * initially added to newTransitionTemplates, but transferred to
     * transitionsTemplates at the end of the ply. */
@@ -79,24 +81,24 @@ class Checker(system: SystemP.System){
 
   /** Store the ExtendedTransition pre -> post, and calculate its effect on
     * previously found views. */
-  @inline private 
-  def addTransition(pre: Concretization, e: EventInt, post: Concretization)
-  = {
+  // @inline private 
+  // def addTransition(pre: Concretization, e: EventInt, post: Concretization)
+  //     : Unit =
+  //   addTransition(new Transition(pre, e, post))
+
+  def addTransition(trans: Transition): Unit = {
     // val highlight = 
     //   ComponentView0.highlightServers(pre.servers) && 
     //     pre.servers.servers(5).cs == 152 &&
     //     ComponentView0.highlightServers(post.servers) &&
     //     post.servers.servers(5).cs == 155 &&
     //     pre.components(0).cs == 128 && pre.components(1).cs == 26
-    addTransitionCount += 1
-    val newTrans = new Transition(pre, e, post)
     // if(highlight) println(s"\naddTransition($newTrans)")
-    if(!transitions.contains(newTrans)){
-      // assert(!transitions.contains(newTrans))
-      if(newTransitions.add(newTrans)) effectOnOthers(newTrans)
+    addTransitionCount += 1
+    if(!transitions.contains(trans)){
+      if(newTransitions.add(trans)) effectOnOthers(trans)
       // Note: the views of post get added to sysAbsViews within apply.
     }
-    // else assert(transitions.contains(newTrans))
   }
 
   // ========= Processing a single view
@@ -123,7 +125,10 @@ class Checker(system: SystemP.System){
     } // end of for((pre, e, post, outsidePids) <- trans)
       // Effect of previous transitions on this view
     effectOfPreviousTransitions(cv)
-    effectOfPreviousTransitionTemplates(cv)
+    // Effect of previous transition templates
+    val buffer = 
+      transitionTemplateExtender.effectOfPreviousTransitionTemplates(cv)
+    for(trans <- buffer) addTransition(trans)
     if(singleRef) effectOn.completeDelayed(cv, nextNewViews)
     false
   } 
@@ -172,7 +177,7 @@ class Checker(system: SystemP.System){
       if(e == system.Error) throw new FoundErrorException
       // if(!newVersion) addViewFromConc(pre, e, post)
       // Store this transition, and calculate effect on other views.
-      addTransition(pre, e, post)
+      addTransition(new Transition(pre, e, post))
     }
     else{ // Case 2: one new parameter from outside the view
       assert(newPids.length == 1) // simplifying assumption
@@ -196,8 +201,10 @@ class Checker(system: SystemP.System){
         else i += 1
       }
       if(i < len){
-        instantiateTransitionTemplateViaRef(
-          pre, post, newPid, e, outsidePid != null, preCpts(i))
+        val buffer = 
+          transitionTemplateExtender.instantiateTransitionTemplateViaRef(
+            pre, post, newPid, e, outsidePid != null, preCpts(i))
+        for(trans <- buffer) addTransition(trans)
       }
       else{
         // Counting of different types of TransitionTemplates; IMPROVE
@@ -212,7 +219,10 @@ class Checker(system: SystemP.System){
           }
         } // end of if(false)
         // Get extended transitions based on this
-        instantiateTransitionTemplate(pre, post, newPid, e, outsidePid != null)
+        val buffer = 
+          transitionTemplateExtender.instantiateTransitionTemplate(
+            pre, post, newPid, e, outsidePid != null)
+        for(trans <- buffer) addTransition(trans)
       }
     } // end of else
   }
@@ -224,116 +234,116 @@ class Checker(system: SystemP.System){
     * Called from processTransition. 
     * @throw FoundErrorException is a concrete transition on error is
     * generated. */
-  private def instantiateTransitionTemplate(
-    pre: Concretization, post: Concretization, 
-    newPid: ProcessIdentity, e: EventInt, include: Boolean)  = {
-    if(verbose) 
-      println(s"instantiateTransitiontemplate($pre, $post, $newPid, "+
-        s"${system.showEvent(e)}, $include)")
-    Profiler.count("instantiateTransitionTemplate")
-    val iter = sysAbsViews.iterator(pre.servers)
-    while(iter.hasNext){
-      val cv = iter.next()
-      instantiateTransitionTemplateBy(pre, post, newPid, e, include, cv)
-    }
-  }
+  // private def instantiateTransitionTemplate(
+  //   pre: Concretization, post: Concretization, 
+  //   newPid: ProcessIdentity, e: EventInt, include: Boolean)  = {
+  //   if(verbose) 
+  //     println(s"instantiateTransitiontemplate($pre, $post, $newPid, "+
+  //       s"${system.showEvent(e)}, $include)")
+  //   Profiler.count("instantiateTransitionTemplate")
+  //   val iter = sysAbsViews.iterator(pre.servers)
+  //   while(iter.hasNext){
+  //     val cv = iter.next()
+  //     instantiateTransitionTemplateBy(pre, post, newPid, e, include, cv)
+  //   }
+  // }
 
-  /** The effect of view cv on previous TransitionTemplates.
-    *  Called from process. */
-  private def effectOfPreviousTransitionTemplates(cv: ComponentView) = {
-    val iter = transitionTemplates.iterator(cv.servers)
-    while(iter.hasNext){
-      val (pre, post, id, e, include) = iter.next()
-      // assert(pre.servers == cv.servers)
-      instantiateTransitionTemplateBy(pre, post, id, e, include, cv)
-    }
-  }
+  // /** The effect of view cv on previous TransitionTemplates.
+  //   *  Called from process. */
+  // private def effectOfPreviousTransitionTemplates(cv: ComponentView) = {
+  //   val iter = transitionTemplates.iterator(cv.servers)
+  //   while(iter.hasNext){
+  //     val (pre, post, id, e, include) = iter.next()
+  //     // assert(pre.servers == cv.servers)
+  //     instantiateTransitionTemplateBy(pre, post, id, e, include, cv)
+  //   }
+  // }
 
-  /** Produce ExtendedTransitions from the TransitionTemplate (pre, post,
-    * newPid, e, include) and the view cv.  That is, find each renaming of cv
-    * compatible with pre, and that includes a component with identity newPid
-    * that optionally can perform oe.  For each, store the transition
-    * (extending pre -> post with the transition of the component with
-    * identity newPid), the post-state, and calculate the effect on other
-    * views.  Called from instantiateTransitionTemplate and
-    * effectOfPreviousTransitionTemplates. 
-    * @throw FoundErrorException is a concrete transition on error is
-    * generated.  */
-  @inline private def instantiateTransitionTemplateBy(
-    pre: Concretization, post: Concretization, 
-    newPid: ProcessIdentity, e: EventInt, include: Boolean, cv: ComponentView)
-  = {
-    if(false && verbose) 
-      println(s"instantiateTransitionTemplateBy:\n "+
-        s"  $pre \n -${system.showEvent(e)}-> $post\n  $cv $newPid")
-    Profiler.count("instantiateTransitionTemplateBy")
-    require(pre.servers == cv.servers)
-    // All states outsideSt that rename a state of cv to give a state with
-    // identity newPid, and such that the renaming of cv is consistent with
-    // pre; also the next-states of outsideSt after e (if e >= 0).
-    val extenders = 
-      system.consistentStates(pre, newPid, if(include) e else -1, cv)
-    if(false) println(s"extenders = $extenders")
-    var i = 0
-    while(i < extenders.length){
-      val (outsideSt, outsidePosts) = extenders(i); i += 1
-      assert(outsidePosts.nonEmpty && 
-        outsideSt.componentProcessIdentity == newPid) 
-      extendTransitionTemplateBy(pre, post, e, outsideSt, outsidePosts, cv)
-    }
-  }
+  // /** Produce ExtendedTransitions from the TransitionTemplate (pre, post,
+  //   * newPid, e, include) and the view cv.  That is, find each renaming of cv
+  //   * compatible with pre, and that includes a component with identity newPid
+  //   * that optionally can perform oe.  For each, store the transition
+  //   * (extending pre -> post with the transition of the component with
+  //   * identity newPid), the post-state, and calculate the effect on other
+  //   * views.  Called from instantiateTransitionTemplate and
+  //   * effectOfPreviousTransitionTemplates. 
+  //   * @throw FoundErrorException is a concrete transition on error is
+  //   * generated.  */
+  // @inline private def instantiateTransitionTemplateBy(
+  //   pre: Concretization, post: Concretization, 
+  //   newPid: ProcessIdentity, e: EventInt, include: Boolean, cv: ComponentView)
+  // = {
+  //   if(false && verbose) 
+  //     println(s"instantiateTransitionTemplateBy:\n "+
+  //       s"  $pre \n -${system.showEvent(e)}-> $post\n  $cv $newPid")
+  //   Profiler.count("instantiateTransitionTemplateBy")
+  //   require(pre.servers == cv.servers)
+  //   // All states outsideSt that rename a state of cv to give a state with
+  //   // identity newPid, and such that the renaming of cv is consistent with
+  //   // pre; also the next-states of outsideSt after e (if e >= 0).
+  //   val extenders = 
+  //     system.consistentStates(pre, newPid, if(include) e else -1, cv)
+  //   if(false) println(s"extenders = $extenders")
+  //   var i = 0
+  //   while(i < extenders.length){
+  //     val (outsideSt, outsidePosts) = extenders(i); i += 1
+  //     assert(outsidePosts.nonEmpty && 
+  //       outsideSt.componentProcessIdentity == newPid) 
+  //     extendTransitionTemplateBy(pre, post, e, outsideSt, outsidePosts, cv)
+  //   }
+  // }
 
-  /** Extend the transition template pre -e-> post by adding outsideSt.
-    * @param outsidePosts the next state of outsideSt after e
-    * @param cv the ComponentView giving the origin of outsideSt.
-    * @throw FoundErrorException is a concrete transition on error is
-    * generated.*/
-  @inline private def extendTransitionTemplateBy(
-    pre: Concretization, post: Concretization, e: EventInt, 
-    outsideSt: State, outsidePosts: Array[State], cv: ComponentView) 
-  = {
-    if(false && verbose) 
-      println(s"extendTransitionTemplateBy($pre, $post, ${system.showEvent(e)},"+
-        s" $outsideSt)")
-    val referencingViews = extendability.isExtendable(pre, outsideSt)
-    if(false) println(s"referencingViews = $referencingViews")
-    if(referencingViews != null){
-      val extendedPre = pre.extend(outsideSt)
-      // Set debugging info
-      extendedPre.setSecondaryView(cv, referencingViews) 
-      var i = 0 
-      while(i < outsidePosts.size){
-        val postSt = outsidePosts(i); i += 1
-        val extendedPost = post.extend(postSt)
-        if(e == system.Error) throw new FoundErrorException
-        // Store this transition, and calculate effect on other views.
-        addTransition(extendedPre, e, extendedPost)
-      }
-    }
-  }
+  // /** Extend the transition template pre -e-> post by adding outsideSt.
+  //   * @param outsidePosts the next state of outsideSt after e
+  //   * @param cv the ComponentView giving the origin of outsideSt.
+  //   * @throw FoundErrorException is a concrete transition on error is
+  //   * generated.*/
+  // @inline private def extendTransitionTemplateBy(
+  //   pre: Concretization, post: Concretization, e: EventInt, 
+  //   outsideSt: State, outsidePosts: Array[State], cv: ComponentView) 
+  // = {
+  //   if(false && verbose) 
+  //     println(s"extendTransitionTemplateBy($pre, $post, ${system.showEvent(e)},"+
+  //       s" $outsideSt)")
+  //   val referencingViews = extendability.isExtendable(pre, outsideSt)
+  //   if(false) println(s"referencingViews = $referencingViews")
+  //   if(referencingViews != null){
+  //     val extendedPre = pre.extend(outsideSt)
+  //     // Set debugging info
+  //     extendedPre.setSecondaryView(cv, referencingViews) 
+  //     var i = 0 
+  //     while(i < outsidePosts.size){
+  //       val postSt = outsidePosts(i); i += 1
+  //       val extendedPost = post.extend(postSt)
+  //       if(e == system.Error) throw new FoundErrorException
+  //       // Store this transition, and calculate effect on other views.
+  //       addTransition(extendedPre, e, extendedPost)
+  //     }
+  //   }
+  // }
 
-  /** Produce ExtendedTransitions from the TransitionTemplate (pre, post,
-    * newPid, e, include) based on prior views with a renamed version of
-    * refState as the principal state.  Called from processTransition.
-    * Pre: refState is a component of newPid, with a reference to newPid. */
-  private def instantiateTransitionTemplateViaRef(
-    pre: Concretization, post: Concretization, 
-    newPid: ProcessIdentity, e: EventInt, include: Boolean, refState: State)
-  = { 
-    if(verbose) 
-      println(s"** instantiateTransitionTemplateViaRef:\n "+
-        s"$pre \n  -${system.showEvent(e)}-> $post from $refState")
-    Profiler.count("instantiateTransitionTemplateViaRef") // ~60% of TTs
-    // Look for views with following as principal
-    val princ = Remapper.remapToPrincipal(pre.servers, refState)
-    val iter = sysAbsViews.iterator(pre.servers, princ)
-    while(iter.hasNext){
-      val cv = iter.next()
-      instantiateTransitionTemplateBy(pre, post, newPid, e, include, cv)
-      // IMPROVE: can simplify isExtendable, consistentStates, using the fact
-      // that newPid is in position ix.
-    }
-  }
+  // /** Produce ExtendedTransitions from the TransitionTemplate (pre, post,
+  //   * newPid, e, include) based on prior views with a renamed version of
+  //   * refState as the principal state.  Called from processTransition.
+  //   * Pre: refState is a component of newPid, with a reference to newPid. */
+  // private def instantiateTransitionTemplateViaRef(
+  //   pre: Concretization, post: Concretization, 
+  //   newPid: ProcessIdentity, e: EventInt, include: Boolean, refState: State)
+  // = { 
+  //   if(verbose) 
+  //     println(s"** instantiateTransitionTemplateViaRef:\n "+
+  //       s"$pre \n  -${system.showEvent(e)}-> $post from $refState")
+  //   Profiler.count("instantiateTransitionTemplateViaRef") // ~60% of TTs
+  //   // Look for views with following as principal
+  //   val princ = Remapper.remapToPrincipal(pre.servers, refState)
+  //   val iter = sysAbsViews.iterator(pre.servers, princ)
+  //   while(iter.hasNext){
+  //     val cv = iter.next()
+  //     instantiateTransitionTemplateBy(pre, post, newPid, e, include, cv)
+  //     // IMPROVE: can simplify isExtendable, consistentStates, using the fact
+  //     // that newPid is in position ix.
+  //   }
+  // }
 
   // ========= Effect of transitions on other views
 
@@ -391,10 +401,12 @@ class Checker(system: SystemP.System){
     * effectively infinite).  */
   def apply(bound: Int = Int.MaxValue)  = {
     // Get the initial views
-    val (sav, initViews) = system.initViews; sysAbsViews = sav
+    //val (sav, initViews) = system.initViews; sysAbsViews = sav
+    // transitionTemplateExtender =
+    //   new TransitionTemplateExtender(transitionTemplates, system, sysAbsViews)
     println("initViews = "+initViews.mkString("; "))
     var newViews: Array[ComponentView] = initViews
-    extendability = new Extendability(sysAbsViews)
+    //extendability = new Extendability(sysAbsViews)
     effectOn = new EffectOn(sysAbsViews, system)
 
     while(!done.get && ply <= bound){
@@ -510,7 +522,10 @@ class Checker(system: SystemP.System){
 
     traverse("transitionTemplates", transitionTemplates, maxPrint = 0); println()
 
-    traverse("extendability", extendability, maxPrint = 0); println()
+    // traverse("extendability", extendability, maxPrint = 0); println()
+    traverse("transitionTemplateExtender", transitionTemplateExtender, 
+      maxPrint = 0)
+    println()
 
     if(true){
       traverse("system", system, maxPrint = 0); println() }

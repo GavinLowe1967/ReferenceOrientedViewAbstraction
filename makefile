@@ -131,7 +131,9 @@ $(DIR)/EffectOn.class:  $(DIR)/EffectOnStore.class $(DIR)/EffectOnUnification.cl
 
 # # Checker and main program
 
-$(DIR)/Checker.class: $(DIR)/SystemP/System.class $(DIR)/TransitionSet.class $(DIR)/NewTransitionSet.class $(DIR)/TransitionTemplateSet.class $(DIR)/Unification.class  $(DIR)/Debugger.class  $(DIR)/EffectOn.class $(EXTENDERP)/Extendability.class
+$(DIR)/TransitionTemplateExtender.class: $(DIR)/SystemP/System.class $(DIR)/Transition.class $(EXTENDERP)/Extendability.class $(DIR)/TransitionTemplateSet.class
+
+$(DIR)/Checker.class: $(DIR)/TransitionSet.class $(DIR)/NewTransitionSet.class $(DIR)/Unification.class $(DIR)/Debugger.class $(DIR)/EffectOn.class $(DIR)/TransitionTemplateExtender.class
 
 $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 
