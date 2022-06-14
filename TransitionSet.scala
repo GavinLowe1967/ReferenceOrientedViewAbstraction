@@ -2,8 +2,10 @@ package ViewAbstraction
 
 import scala.collection.mutable.HashSet
 
-
-/** A set recording the transitions seen so far. */
+/** A set recording the transitions seen so far. 
+  * 
+  * contains and iterator need to be thread-safe; add and size are called only
+  * sequentially. */
 trait TransitionSet{
   /** Add the transition t. */
   def add(t: Transition): Boolean
@@ -113,16 +115,13 @@ class ServerBasedTransitionSet(initSize: Int = 16) extends TransitionSet{
     }
   }
 
-
   /** An iterator giving just extended transitions where the pre-state matches
     * servers. */
   override def iterator(servers: ServerStates) : Iterator[Transition] = {
     val i = find(servers); val set = transitions(i)
     if(set == null) Iterator.empty[Transition] 
-    else if(TransitionSet.reversed) set.iterator.toArray.reverse.iterator 
+    // else if(TransitionSet.reversed) set.iterator.toArray.reverse.iterator 
     else set.iterator
-    // scala.util.Random.shuffle(set.iterator)
-// FIXME
   }
 
   def size = theSize
@@ -136,6 +135,5 @@ class ServerBasedTransitionSet(initSize: Int = 16) extends TransitionSet{
 
 object TransitionSet{
   // Should the iterator be reversed.
-//IMPROVE
-  var reversed = false
+  // var reversed = false
 }

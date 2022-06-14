@@ -37,6 +37,7 @@ trait TransitionTemplateSet{
 
 // ==================================================================
 
+/*
 /** A very simple (prototype) implementation of TransitionTemplateSet. */
 class SimpleTransitionTemplateSet extends TransitionTemplateSet{
   /** A HashSet containing the transition templates. */
@@ -55,6 +56,7 @@ class SimpleTransitionTemplateSet extends TransitionTemplateSet{
 
   def size = set.size
 }
+ */
 
 // =====================================================================
 

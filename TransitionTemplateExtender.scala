@@ -10,6 +10,30 @@ class TransitionTemplateExtender(
   transitionTemplates: TransitionTemplateSet, 
   system: SystemP.System, sysAbsViews: ViewSet
 ){
+  /* Extend a particular transition template by a particular view.  Private.  
+   * Called from various places below.
+   * instantiateTransitionTemplateBy
+   * |- ConsistentStateFinder.consistentStates
+   * |- extendTransitionTemplateBy
+   *    |- Extendability.isExtendable
+
+   * Instantiate a particular transition template via all previous views.
+   * Called from Checker.processTransition
+   * instantiateTransitionTemplate
+   * |- instantiateTransitionTemplateViaRef
+   * |  |- sysAbsViews.iterator
+   * |  |- instantiateTransitionTemplateBy
+   * |- instantiateTransitionTemplateAll
+   *    |- sysAbsViews.iterator
+   *    |- instantiateTransitionTemplateBy
+   * 
+   * Instantiate all previous transition templates via a particular view.  
+   * Called from Checker.process.
+   * effectOfPreviousTransitionTemplates
+   * |- transitionTemplates.iterator
+   * |- instantiateTransitionTemplateBy
+   */
+
 
   /** Utility object encapsulating the isExtendable function. */
   private var extendability: Extendability = new Extendability(sysAbsViews)
@@ -62,15 +86,18 @@ class TransitionTemplateExtender(
     newPid: ProcessIdentity, e: EventInt, include: Boolean, cv: ComponentView, 
     buffer: Buffer)
   = {
-    if(false) println(s"instantiateTransitionTemplateBy:\n "+
+// IMPROVE
+    val highlight = 
+      { val servers = post.servers.servers; servers(0).cs == 25 && servers(1).cs == 26 } && post.components(0).cs == 15 
+    if(highlight) println(s"instantiateTransitionTemplateBy:\n "+
         s"  $pre \n -${system.showEvent(e)}-> $post\n  $cv $newPid")
     Profiler.count("instantiateTransitionTemplateBy")
     require(pre.servers == cv.servers)
     // All states outsideSt that rename a state of cv to give a state with
     // identity newPid, and such that the renaming of cv is consistent with
     // pre; also the next-states of outsideSt after e (if e >= 0).
-    val extenders = 
-      consistentStateFinder.consistentStates(pre, newPid, if(include) e else -1, cv)
+    val extenders = consistentStateFinder.consistentStates(
+      pre, newPid, if(include) e else -1, cv)
     var i = 0
     while(i < extenders.length){
       val (outsideSt, outsidePosts) = extenders(i); i += 1
@@ -81,7 +108,6 @@ class TransitionTemplateExtender(
     }
   }
 
-  // IMPROVE: move system.consistentStates here
 
   /** Produce ExtendedTransitions from the TransitionTemplate (pre, post,
     * newPid, e, include) based on prior views with a renamed version of

@@ -2,7 +2,9 @@ package ViewAbstraction
 
 import scala.collection.mutable.{HashMap,HashSet}
 
-/** A set of system views. */
+/** A set of system views. 
+  * 
+  * Calls to contains, get and iterator should be thread-safe. */
 trait ViewSet{
   /** Add sv to this. */
   def add(sv: ComponentView) : Boolean

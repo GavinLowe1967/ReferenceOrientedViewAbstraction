@@ -427,6 +427,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
 
 object SingleRefEffectOnUnification{
   /** An empty ArrayBuffer[RemappingMap], used in apply (to avoid unnecessarily
-    * creating a new ArrayBuffer. */
+    * creating a new ArrayBuffer.  It's fine for this to be shared between
+    * threads. */
   private val EmptyArrayBuffer = new ArrayBuffer[RemappingMap]()
 }

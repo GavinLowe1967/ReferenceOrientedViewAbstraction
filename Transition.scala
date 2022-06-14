@@ -159,7 +159,8 @@ class Transition(
     * that changes state?  More precisely, do they have the same control
     * state? */
   @inline private 
-  def possibleUnification(cvInfo: ComponentView0.MightGiveSufficientUnifsInfo) = {
+  def possibleUnification(cvInfo: ComponentView0.MightGiveSufficientUnifsInfo)
+      : Boolean = {
     var i = 0
     while(i < changingCSLen && !cvInfo.hasControlState(changingCptCS(i)))
       i += 1
@@ -223,9 +224,6 @@ object Transition{
 //   -initNode.T2.N4.A.N3.N2->
 //   [137(N1) || 140(T1) || 146(N2) || 147(Null) || 151() || 155(N4,N3)] || 
 //     [129(T2,N4,N3,N2) || 26(N2,T2,N3,N1) || 9(N4,N3,N2)])
-
-
-
 
   /** Function used when debugging.  The transition that should induce the 
     * missing view. 

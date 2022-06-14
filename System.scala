@@ -36,7 +36,6 @@ class System(fname: String) {
   // [3..fdrSession.numEvents+3), so we initialise arrays indexed by events to
   // size fdrSession.numEvents+3.
   numEvents = fdrSession.numEvents
-  // println("numEvents = "+numEvents)
   eventsSize = numEvents+3
 
   fdrSession.initEvents(eventsSize)
@@ -107,11 +106,11 @@ class System(fname: String) {
     * servers' alphabet. */ 
   // private val serverAlphaBitMap = servers.alphaBitMap
 
-  var threeWaySyncFound = false
+  //var threeWaySyncFound = false
   // Boolean array giving three-way syncs.  threeWaySyncs(f1)(f2) is true for
   // f1 >= f2 if there is a three-way synchronisation between families f1 and
   // f2.
-  var threeWaySyncs: Array[Array[Boolean]] = null
+  //var threeWaySyncs: Array[Array[Boolean]] = null
 
   private def init() = {
     // Create the mapping from control states to types of parameters
@@ -132,11 +131,12 @@ class System(fname: String) {
 
     // find three-way synchronisations
     assert(cptEventMap.length == eventsSize, 
-           s"${cptEventMap.length}; $numEvents")
+      s"${cptEventMap.length}; $numEvents")
     assert(serverAlphaMap.length == eventsSize, 
            s"${serverAlphaMap.length}; $numEvents; ${showEvent(numEvents+2)}")
-    var e = 3
-    threeWaySyncs = Array.tabulate(numFamilies)(f => new Array[Boolean](f+1))
+    //var e = 3
+    //threeWaySyncs = Array.tabulate(numFamilies)(f => new Array[Boolean](f+1))
+/*
     while(e < eventsSize){
       if(cptEventMap(e).length == 2 && serverAlphaMap(e)){
         val family1 = cptEventMap(e)(0)._1; val family2 = cptEventMap(e)(1)._1
@@ -148,8 +148,9 @@ class System(fname: String) {
       }
       e += 1
     } // end of while
-    for(f1 <- 0 until numFamilies; f2 <- 0 to f1; if threeWaySyncs(f1)(f2))
-      println(s"Three-way synchronisation involving families $f2 and $f1")
+ */
+    // for(f1 <- 0 until numFamilies; f2 <- 0 to f1; if threeWaySyncs(f1)(f2))
+    //   println(s"Three-way synchronisation involving families $f2 and $f1")
 
     for(oi <- file.omitInfos) processOmitInfo(oi)
 
@@ -157,12 +158,6 @@ class System(fname: String) {
   }
 
   init()
-
-  /** The next states possible from component state st after event e
-      * synchronising with component (f,id). */
-  /** Get the transitions of the component in state st. */
-  def getNexts(st: State, e: EventInt, f: Family, id: Identity): Array[State] = 
-    components.getTransComponent(st).nexts(e,f,id)
 
   /** Process the omit information from the file.  We build a partial mapping
     * from control states to bitmaps, showing which referenced states are
@@ -321,10 +316,6 @@ class System(fname: String) {
     }
   }
 
-
-  /** Representation of the tau event. */
-  // private val Tau = 1
-
   /** Representation of the event error. */
   val Error = fdrSession.eventToInt("error")
 
@@ -336,20 +327,14 @@ class System(fname: String) {
 
   /** The initial system views. */
   def initViews: (ViewSet, Array[ComponentView]) = {
-    // val k = aShapes.head.sum
-    // println("initViews "+k+"; "+aShapes.map(_.mkString("<", ",", ">")))
     val serverInits: List[State] = servers.inits
     val viewSet: ViewSet = 
       if(UseNewViewSet) new NewViewSet else new ServerPrincipalBasedViewSet(16)
     val activeViews = new ArrayBuffer[ComponentView]
     // All views 
     val views = components.initViews(ServerStates(serverInits))
-    // println("views = \n  "+views.map(_.toString).mkString("\n  "))
-    // println("#views = "+views.length)
-    // assert(cptViews.forall(_.length == k))
     for(v <- views){
       val v1 = Remapper.remapView(v)
-      // v1.setPly(0)
       if(verbose) 
         println(v.toString+" -> "+v1.toString+(if(isActive(v)) "*" else ""))
       if(viewSet.add(v1)){ activeViews += v1; if(verbose) println("**") }
@@ -388,35 +373,12 @@ class System(fname: String) {
     val princTrans = components.getTransComponent(cv.principal)
     val (pf,pi) = cv.principal.componentProcessIdentity
     val pParams = cv.principal.processIdentities
-    // println(s"Transitions for ${(pf,pi)}")
     val serverTrans: servers.ServerTransitions = 
       servers.transitions(cv.servers.servers)
 
     // IMPROVE: the transitions probably aren't in the best form
     val conc0 = Concretization(cv)
     val activePrincipal = isActive(cv) // is the principal active
-
-    // With singleRef, is the process corresponding to the first non-null
-    // reference included (if any)?  If not, we can omit certain transitions
-    // that would be found for the view with that components.  I think this
-    // isn't sound.
-/*
-    var firstRefIncluded = true
-    if(singleRef){
-      // Find first non-null reference from cv.principal
-      var i = 1
-      while(i < pParams.length && isDistinguished(pParams(i)._2)) i += 1
-      if(i < pParams.length){
-        // Find if there is a component with identity pParams(i)
-        // Following assertion fails if we have omitted components. 
-        assert(cv.components.length == 2, cv)
-        if(cv.components(1).componentProcessIdentity != pParams(i)){
-          firstRefIncluded = false; // println(s"Excluding $cv")
-        }
-      }
-    }
- */
-         
 
     // Case 1: events of the principal component with no synchronisation
     if(activePrincipal) 
@@ -463,11 +425,9 @@ class System(fname: String) {
       val theseTrans = princTrans.transComponent(f)(id)
       val componentIx = // index of (f,id) in components, or -1
         StateArray.findIndex(cv.components, f, id)
-        // cv.components.indexWhere(_.componentProcessIdentity == (f,id))
       assert(componentIx != 0)
       val isOmitted = // reference to (f,id) but omitted from cv
         componentIx < 0 && pParams.contains((f,id))
-      // if(isOmitted) println(s"Omitting transition with ${(f,id)} from $cv")
       if(isOmitted) assert(singleRef) // IMPROVE
       // If isOmitted, we suppress these transitions: we'll find them from a
       // different view including (f,id)
@@ -509,12 +469,10 @@ class System(fname: String) {
     val sEsSolo = serverTrans.eventsSolo; val sNsSolo = serverTrans.nextsSolo
     var index = 0; var e = sEsSolo(0)
     while(e < Sentinel){
-      // println("System.transitions"+showEvent(e))
       for(newServers <- sNsSolo(index)){
         val post = new Concretization(ServerStates(newServers), cv.components)
         maybeAdd(conc0, e, post, null)
       }
-      // println("sEsSolo = "+sEsSolo.init.map(showEvent).mkString("; "))
       index += 1; e = sEsSolo(index)
     }
 
@@ -577,10 +535,6 @@ class System(fname: String) {
                       newCpts(0) = newPrincSt; newCpts(otherIndex) = st
                       val post =
                         new Concretization(ServerStates(newServers), newCpts)
-                      // if(verbose)
-                      //   println(s"Three-way synchronisation: "+
-                      //     s"$pre -${showEvent(sE)}-> $post "+
-                      //     "with present other ${(of,oi)}")
                       maybeAdd(pre, sE, post, null)
                     }
                   }
@@ -643,148 +597,11 @@ class System(fname: String) {
     ok
   }
 
-  /** Next states of st after performing e, synchronising with pid. */
-  def nextsAfter(st: State, e: EventInt, pid: ProcessIdentity): Array[State] = 
-    components.getTransComponent(st).nexts(e, pid._1, pid._2)
+  /** Next states of st after performing e, synchronising with (f,id). */
+  def nextsAfter(st: State, e: EventInt, f: Family, id: Identity)
+      : Array[State] =
+    components.getTransComponent(st).nexts(e, f, id)
 
-  // private val consistentStatesCache = 
-  //   new HashMap[(ProcessIdentity, Concretization, EventInt, ComponentView),
-  //     ArrayBuffer[(State, List[State])] ]()
-
-  // IMPROVE: store mapping from (pre, pid, st1) to the maps that map st1's
-  // identity to pid.  Avoid recalculating.
-
-/*
-  /** Get all renamings of cv that: (1) include a component with identity pid;
-    * (2) agree with pre on the states of all common components; and (3) can
-    * perform e with pre.principal if e >= 0.
-    * @return the renaming of the component with identity pid, and all
-    * post-states of that component optionally after oe.  */
-  def consistentStates(pre: Concretization, pid: ProcessIdentity, 
-    e: EventInt, cv: ComponentView)
-      : ArrayBuffer[(State, Array[State])] = {
-    val buffer = new ArrayBuffer[(State, Array[State])]()
-    val (f,id) = pid; val servers = pre.servers; require(cv.servers == servers)
-    val preCpts = pre.components; val cpts = cv.components
-    val serverRefs = servers.idsBitMap(f)(id)  // do servers reference pid?
-    val (fp, idp) = preCpts(0).componentProcessIdentity// id of principal of pre
-    // Find all components of cv that can be renamed to a state of pid
-    // that can perform e.
-    for(i <- 0 until cpts.length){ 
-      val st1 = cpts(i)
-      // Try to make st1 the component that gets renamed.  Need st1 of family
-      // f, and its identity either equal to id, or neither of those
-      // identities in the server identities (so the renaming doesn't change
-      // servers).
-      if(st1.family == f && 
-        (st1.id == id || !serverRefs && !servers.idsBitMap(f)(st1.id))){
-        // Calculate (in maps) all ways of remapping st1 (consistent with the
-        // servers) so that: (1) its identity maps to id; (2) other parameters
-        // are injectively mapped either to a parameter in pre.components,
-        // but not the servers; or the next fresh parameter.
-        val (maps, otherArgs) = 
-          try{ getMaps(st1, pid, servers, preCpts) }
-          catch{ case UnrepresentableException(renamedState) => 
-            println("Not enough identities in script to make\n"+
-              s"$pre and\n$cv consistent.\n"+
-              s"Renaming of $st1 gives ${renamedState.toString0}")
-            sys.exit()
-          }
-        for((map, renamedState) <- maps){
-          // assert(renamedState.representableInScript) 
-          val nexts = (
-            if(e >= 0) 
-              components.getTransComponent(renamedState).nexts(e, fp, idp)
-            else Array(renamedState) // List(renamedState)
-          )
-          @inline def isNew = !buffer.exists{case (st1,nxts1) => 
-            st1 == renamedState && nxts1.sameElements(nexts)}
-          if(nexts.nonEmpty && isNew){
-            if(checkCompatible(map, renamedState, cpts, i, preCpts, otherArgs))
-              buffer += ((renamedState, nexts))
-          }
-        } // end of for(map <- maps)
-      }
-    } // end of for(i <- ...)
-    buffer
-  } // end of consistentStates
-
-  /** Exception showing renamedState is not representable using values in the
-    * script. */
-  private case class UnrepresentableException(renamedState: State) 
-      extends Exception
-
-  /** Part of the result of getMaps.  Each tuple represents a map, and the
-    * renamed states. */
-  private type RenamingTuples = Array[(RemappingMap, State)]
-
-  /** Cache of previous results of getMaps. */
-  private val mapCache = 
-    new HashMap[(State, ProcessIdentity, ServerStates, List[State]), 
-      (RenamingTuples, OtherArgMap)]
-
-  /** Calculate all ways of remapping st (consistent with the servers) so
-    * that: (1) its identity maps to pid; (2) other parameters are injectively
-    * mapped either to a parameter in preCpts, but not the servers; or the
-    * next fresh parameter.  
-// .....
-    * @return (1) an Array of (RemappingMap, State) pairs, giving the map and 
-    * remapped state; and (2) an OtherArgMap corresponding to servers with pid
-    * removed.  
-    * @throw  UnrepresentableException if a renamed state is not representable 
-    * in the script. */
-  private def getMaps(st: State, pid: ProcessIdentity,
-    servers: ServerStates, preCpts: Array[State])
-      : (RenamingTuples, OtherArgMap) = {
-    val preCptsL = preCpts.toList
-    mapCache.get(st, pid, servers, preCptsL) match{
-      case Some(tuple) => tuple
-      case  None =>     // Profiler.count("getMaps: new") ~1.5%
-        val (f,id) = pid; val map0 = servers.remappingMap
-        val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
-        otherArgs(f) = removeFromList(otherArgs(f), id) 
-        nextArg(f) = nextArg(f) max (id+1)
-        val maps = Combiner.remapToId(map0, otherArgs, nextArg, st, id)
-        // Create corresponding renamed States, and pair with maps
-        val mapStates = new RenamingTuples(maps.length); var i = 0
-        while(i < maps.length){
-          val map = maps(i)
-          val renamedState = Remapper.applyRemappingToState(map, st)
-          if(!renamedState.representableInScript)
-            throw UnrepresentableException(renamedState)
-          mapStates(i) = (map, renamedState); i += 1
-        }
-        mapCache += (st, pid, servers, preCptsL) -> (mapStates, otherArgs)
-        (mapStates, otherArgs)
-    }
-  }
-
-  /** xs with x removed. */
-  @inline def removeFromList(xs: List[Int], x: Int): List[Int] = 
-    if(xs.isEmpty) xs
-    else{
-      val y = xs.head
-      if(x == y){ /* assert(!contains(xs.tail, x));*/ xs.tail } 
-      else y::removeFromList(xs.tail, x)
-    }
-
-  /** Check that renamedState agrees with preCpts on common components, and test
-    * whether the remainder of cpts (excluding component i) can be unified
-    * with preCpts (based on map and otherArgs1). */
-  private def checkCompatible(
-    map: RemappingMap, renamedState: State, cpts: Array[State], i: Int,
-    preCpts: Array[State], otherArgs: OtherArgMap)
-      : Boolean = {
-    if(StateArray.agreesWithCommonComponent(renamedState, preCpts)){
-      // Renamed state consistent with preCpts. Check a corresponding renaming
-      // of the rest of cpts agrees with cpts on common components.  IMPROVE:
-      // Trivially true if singleton.
-      val otherArgs1 = Remapper.removeParamsOf(otherArgs, renamedState)
-      Combiner.areUnifiable(cpts, preCpts, map, i, otherArgs1)
-    }
-    else false
-  }
- */
 }
 
 // ==================================================================
@@ -798,7 +615,5 @@ object System{
 
   /** Show event e. */
   def showEvent(e: EventInt) = system.showEvent(e)
-
-
 
 }

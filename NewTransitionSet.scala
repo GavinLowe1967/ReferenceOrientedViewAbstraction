@@ -54,7 +54,6 @@ class ServersTransitionSet(preServers: ServerStates){
     * t.anyAcquiredRefs(f) || t.serverGetsNewId.  Each entry is initialised
     * lazily. */
   private val acquiringTrans = new Array[ArrayBuffer[Transition]](numTypes)
-  //  Array.fill(numTypes)(new ArrayBuffer[Transition])
 
   // IMPROVE: maybe transitions s.t. t.serverGetsNewId shouldn't be stored in
   // all entries of acquiringTrans.
@@ -64,14 +63,12 @@ class ServersTransitionSet(preServers: ServerStates){
     * initialised lazily. */
   private val byPostServers = 
     new Array[HashMap[ServerStates, ServersServersTransitionSet]](numTypes)
-    //Array.fill(numTypes)(new HashMap[ServerStates,ServersServersTransitionSet])
 
   /* For each f, acquiringTrans(f) U U { ssts | (_,ssts) <- byPostServers(f) }
    * gives the same value, and that is the abstract value of this set.  */
 
   /** Add the transition t. */
   def add(t: Transition) = {
-    //all += t
     var f = 0
     while(f < numTypes){
       if(singleRef && t.anyAcquiredRefs(f) || t.serverGetsNewId){

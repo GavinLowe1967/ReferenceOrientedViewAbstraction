@@ -27,19 +27,20 @@ class ComponentView(servers: ServerStates, components: Array[State])
   = null
 
   /** Get the creation information for this. */
-  def getCreationInfo: (Concretization, EventInt, Concretization) = 
+  def getCreationInfo: (Concretization, EventInt, Concretization) = synchronized{
     if(pre != null) (pre, e, post) 
     else{ 
       val (pre1, cpts, cv, post1, newCpts) = creationIngredients
       (mkExtendedPre(pre1, cpts, cv), e, mkExtendedPost(post1, newCpts))
     }
+  }
 
-  def getCreationIngredients = creationIngredients
+  def getCreationIngredients = synchronized{ creationIngredients }
 
   /** Record that this view was created by the extended transition 
     * pre1 -e1-> post1. */
   def setCreationInfo(pre1: Concretization, e1: EventInt, post1: Concretization)
-  = {
+  = synchronized{
     require(creationIngredients == null && pre == null)
     pre = pre1; e = e1; post = post1
   }
@@ -50,7 +51,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
   def setCreationInfoIndirect(
     pre1: Concretization, cpts: Array[State], cv: ComponentView,
     e1: EventInt, post1: Concretization, newCpts: Array[State]) 
-  = {
+  = synchronized{
     creationIngredients = (pre1, cpts, cv, post1, newCpts); e = e1
   }
 
@@ -208,17 +209,17 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   // less memory?
 
   /** Set the secondary view. */
-  def setSecondaryView(sv: ComponentView, rv: Array[ComponentView]) = {
+  def setSecondaryView(sv: ComponentView, rv: Array[ComponentView]) = synchronized{
     require(sv != null && (secondaryView == null || secondaryView == sv),
     s"this = $this\nsecondaryView = $secondaryView\nsv = $sv")
     secondaryView = sv; referencingViews = rv 
   }
 
   /** Get the secondary view. */
-  def getSecondaryView = secondaryView
+  def getSecondaryView = synchronized{ secondaryView }
 
   /** Get the referencing views. */
-  def getReferencingViews = referencingViews
+  def getReferencingViews = synchronized{ referencingViews }
 
   // =========== Combining maps
 
@@ -263,13 +264,13 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   }
 
   /** Get a (fresh) NextArgMap. */
-  def getNextArgMap: NextArgMap = {
+  def getNextArgMap: NextArgMap = synchronized{
     if(otherArgs == null) initMaps()
     nextArg.clone
   }
 
   /** Update nextArgMap, so entries are greater than all identities in this. */
-  def updateNextArgMap(nextArgMap: NextArgMap) = {
+  def updateNextArgMap(nextArgMap: NextArgMap) = synchronized{
     if(nextArg == null) initNextArgMap
     var f = 0
     while(f < numTypes){
@@ -299,7 +300,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   private var allParams: Array[List[Identity]] = null
 
   /** All parameters of components, indexed by type. */
-  def getAllParams: Array[List[Identity]] = {
+  def getAllParams: Array[List[Identity]] = synchronized{
     // assert(singleRef && newEffectOn) -- or also from test
     if(allParams == null){
       allParams = Array.fill(numTypes)(List[Identity]()); var f = 0

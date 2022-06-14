@@ -492,7 +492,7 @@ object Remapper{
   /** Remap ss to normal form.  Also return resulting RemappingMap and
     * NextArgMap. */
   @inline private def remapServerStates(ss: ServerStates)
-      : (ServerStates, RemappingMap, NextArgMap) = {
+      : (ServerStates, RemappingMap, NextArgMap) = synchronized{
     remapSSCache.get(ss) match{ // Try to retrieve from cache. 
       case Some((ss1, map, nextArgs)) => 
         // Profiler.count("remapServerStates found")

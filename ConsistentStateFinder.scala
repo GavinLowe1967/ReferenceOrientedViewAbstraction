@@ -18,11 +18,16 @@ class ConsistentStateFinder(system: SystemP.System){
     val buffer = new ArrayBuffer[(State, Array[State])]()
     val (f,id) = pid; val servers = pre.servers; require(cv.servers == servers)
     val preCpts = pre.components; val cpts = cv.components
+// IMPROVE
+    val highlight = servers.servers(0).cs == 25 && servers.servers(1).cs == 26
+    if(highlight) println(s"consistentStates($pre, $pid, $cv")
+
     val serverRefs = servers.idsBitMap(f)(id)  // do servers reference pid?
     val (fp, idp) = preCpts(0).componentProcessIdentity// id of principal of pre
     // Find all components of cv that can be renamed to a state of pid
     // that can perform e.
-    for(i <- 0 until cpts.length){ 
+// FIXME
+    for(i <- 0 until (if(true) cpts.length else 1)){ 
       val st1 = cpts(i)
       // Try to make st1 the component that gets renamed.  Need st1 of family
       // f, and its identity either equal to id, or neither of those
@@ -45,11 +50,12 @@ class ConsistentStateFinder(system: SystemP.System){
         for((map, renamedState) <- maps){
           // assert(renamedState.representableInScript) 
           val nexts = (
-            if(e >= 0) system.getNexts(renamedState, e, fp, idp)
+            if(e >= 0) system.nextsAfter(renamedState, e, fp, idp)
             else Array(renamedState) )
           @inline def isNew = !buffer.exists{case (st1,nxts1) => 
             st1 == renamedState && nxts1.sameElements(nexts)}
           if(nexts.nonEmpty && isNew){
+            if(highlight) println(s"renamedState == $renamedState")
             if(checkCompatible(map, renamedState, cpts, i, preCpts, otherArgs))
               buffer += ((renamedState, nexts))
           }
@@ -118,7 +124,6 @@ class ConsistentStateFinder(system: SystemP.System){
       else y::removeFromList(xs.tail, x)
     }
 
-
   /** Check that renamedState agrees with preCpts on common components, and test
     * whether the remainder of cpts (excluding component i) can be unified
     * with preCpts (based on map and otherArgs1). */
@@ -135,6 +140,4 @@ class ConsistentStateFinder(system: SystemP.System){
     }
     else false
   }
-
-
 }

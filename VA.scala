@@ -155,7 +155,7 @@ object VA{
       case "--showEachPly" => showEachPly = true; i += 1
       case "--showTransitions" => showTransitions = true; i += 1
       case "--showRedundancies" => showRedundancies = true; i += 1
-      case "--reverseTransitionIter" => TransitionSet.reversed = true; i += 1
+      // case "--reverseTransitionIter" => TransitionSet.reversed = true; i += 1
       case "--useOldViewSet" => UseNewViewSet = false; i += 1
       case "--doSanityCheck" => doSanityCheck = true; i += 1
       case "--reportEffectOn" => reportEffectOn = true; i += 1

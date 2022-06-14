@@ -33,7 +33,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   private var paramsBound: Array[Int] = null 
 
   /** A bound on the values of each type. */
-  def getParamsBound: Array[Int] = {
+  def getParamsBound: Array[Int] = synchronized{
     if(paramsBound == null)
       paramsBound = View.getParamsBound(servers, components)
     paramsBound
@@ -197,7 +197,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     servers: ServerStates, map: ReducedMap, postUnified: List[State] = null)
       : Boolean = {
     val key = ServersReducedMap(servers, map, postUnified)
-    doneInducedPostServersRemaps.add(key)
+    synchronized{ doneInducedPostServersRemaps.add(key) }
   }
 
   /** Has this been used to create an induced transition, with post.servers =
@@ -207,7 +207,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     servers: ServerStates, map: ReducedMap, postUnified: List[State] = null)
       : Boolean = {
     val key = ServersReducedMap(servers, map, postUnified)
-    doneInducedPostServersRemaps.contains(key) 
+    synchronized{ doneInducedPostServersRemaps.contains(key) }
   }
 
   // ======
@@ -238,7 +238,8 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * crossRefs in conditionBInducedMap(srm), where srm is the
     * ServersReducedMap representing (servers, map).  Inv: for each such
     * mapping, post.servers != this.servers; and for each list in the range,
-    * no element of the list is a subset of another.  */
+    * no element of the list is a subset of another.  Protected by
+    * synchronized blocks. */
   private val conditionBInducedMap = 
     if(singleRef) 
       new scala.collection.mutable.HashMap[ServersReducedMap, List[CrossRefInfo]]
@@ -270,7 +271,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * subsumes the transition corresponding to (servers, map, crossRefs)? */
   def containsConditionBInduced(
     servers: ServerStates, map: ReducedMap, crossRefs: CrossRefInfo)
-      : Boolean = {
+      : Boolean = synchronized{
     val key = ServersReducedMap(servers, map)
     conditionBInducedMap.get(key) match{
       case Some(crl) =>
@@ -291,7 +292,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * (with a subset of the crossRefs) */
   def addConditionBInduced(
     servers: ServerStates, map: ReducedMap, crossRefs: CrossRefInfo)
-      : Boolean = {
+      : Boolean = synchronized{
     val key = ServersReducedMap(servers, map)
     conditionBInducedMap.get(key) match{
       case Some(crl) => 
