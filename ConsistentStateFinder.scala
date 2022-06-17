@@ -7,27 +7,35 @@ import scala.collection.mutable.{ArrayBuffer,HashMap}
 /** Utility object for finding the consistent states for a transition
   * template. */
 class ConsistentStateFinder(system: SystemP.System){
+  /* consistentStates
+   * |- getMaps
+   * |- checkCompatible
+   */
+
   /** Get all renamings of cv that: (1) include a component with identity pid;
     * (2) agree with pre on the states of all common components; and (3) can
     * perform e with pre.principal if e >= 0.
     * @return the renaming of the component with identity pid, and all
-    * post-states of that component optionally after oe.  */
+    * post-states of that component after e (if relevant).  */
   def consistentStates(pre: Concretization, pid: ProcessIdentity, 
     e: EventInt, cv: ComponentView)
       : ArrayBuffer[(State, Array[State])] = {
     val buffer = new ArrayBuffer[(State, Array[State])]()
     val (f,id) = pid; val servers = pre.servers; require(cv.servers == servers)
+    require(!pre.hasPid(f,id))
     val preCpts = pre.components; val cpts = cv.components
-// IMPROVE
-    val highlight = servers.servers(0).cs == 25 && servers.servers(1).cs == 26
-    if(highlight) println(s"consistentStates($pre, $pid, $cv")
+    // val highlight = servers.servers(0).cs == 32 && servers.servers(1).cs == 33 &&
+    //   preCpts(0).cs == 19 && preCpts(1).cs == 10
+    if(false) println(s"consistentStates($pre, $pid, $cv")
 
     val serverRefs = servers.idsBitMap(f)(id)  // do servers reference pid?
     val (fp, idp) = preCpts(0).componentProcessIdentity// id of principal of pre
     // Find all components of cv that can be renamed to a state of pid
-    // that can perform e.
-// FIXME
-    for(i <- 0 until (if(true) cpts.length else 1)){ 
+    // that can perform e.  Note that it's not enough to consider just the
+    // principal: if several views are required for compatibility, the one
+    // that is found on the latest ply might not have the relevant state as
+    // principal.
+    for(i <- 0 until cpts.length){ 
       val st1 = cpts(i)
       // Try to make st1 the component that gets renamed.  Need st1 of family
       // f, and its identity either equal to id, or neither of those
@@ -55,8 +63,9 @@ class ConsistentStateFinder(system: SystemP.System){
           @inline def isNew = !buffer.exists{case (st1,nxts1) => 
             st1 == renamedState && nxts1.sameElements(nexts)}
           if(nexts.nonEmpty && isNew){
-            if(highlight) println(s"renamedState == $renamedState")
-            if(checkCompatible(map, renamedState, cpts, i, preCpts, otherArgs))
+            // if(highlight) println(s"renamedState == $renamedState")
+// IMPROVE
+            if(true || checkCompatible(map, renamedState, cpts, i, preCpts, otherArgs))
               buffer += ((renamedState, nexts))
           }
         } // end of for(map <- maps)
@@ -83,7 +92,6 @@ class ConsistentStateFinder(system: SystemP.System){
     * that: (1) its identity maps to pid; (2) other parameters are injectively
     * mapped either to a parameter in preCpts, but not the servers; or the
     * next fresh parameter.  
-// .....
     * @return (1) an Array of (RemappingMap, State) pairs, giving the map and 
     * remapped state; and (2) an OtherArgMap corresponding to servers with pid
     * removed.  
@@ -131,6 +139,9 @@ class ConsistentStateFinder(system: SystemP.System){
     map: RemappingMap, renamedState: State, cpts: Array[State], i: Int,
     preCpts: Array[State], otherArgs: OtherArgMap)
       : Boolean = {
+    val pid = renamedState.componentProcessIdentity
+    assert(preCpts.forall(!_.hasPID(pid)))
+// IMPROVE: I think following is guaranteed to be true
     if(StateArray.agreesWithCommonComponent(renamedState, preCpts)){
       // Renamed state consistent with preCpts. Check a corresponding renaming
       // of the rest of cpts agrees with cpts on common components.  IMPROVE:
@@ -138,6 +149,6 @@ class ConsistentStateFinder(system: SystemP.System){
       val otherArgs1 = Remapper.removeParamsOf(otherArgs, renamedState)
       Combiner.areUnifiable(cpts, preCpts, map, i, otherArgs1)
     }
-    else false
+    else{ assert(false); false }
   }
 }

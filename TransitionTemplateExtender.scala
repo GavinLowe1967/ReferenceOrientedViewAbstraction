@@ -5,6 +5,15 @@ import ViewAbstraction.RemapperP.Remapper
 import scala.collection.mutable.ArrayBuffer
 import ox.gavin.profiling.Profiler
 
+/* Relationship of classes.
+ * TransitionTemplateExtender
+ * |- ConsistentStateFinder
+ * |  |- Combiner
+ * |- Extendability
+ *    |- Combiner
+ * The latter classes aren't accessed elsewhere. 
+ */
+
 /** Utility object to extend transition templates. */ 
 class TransitionTemplateExtender(
   transitionTemplates: TransitionTemplateSet, 
@@ -78,7 +87,9 @@ class TransitionTemplateExtender(
     * newPid, e, include) and the view cv.  That is, find each renaming of cv
     * compatible with pre, and that includes a component with identity newPid
     * that optionally can perform oe.  Add each to buffer.  Called from
-    * instantiateTransitionTemplate and effectOfPreviousTransitionTemplates.
+    * instantiateTransitionTemplateViaRef, instantiateTransitionTemplateAll,
+    * and effectOfPreviousTransitionTemplates.  If onlyPrinc, consider only
+    * renamings of cv.princ.
     * @throw FoundErrorException is a concrete transition on error is
     * generated.  */
   @inline private def instantiateTransitionTemplateBy(
@@ -86,10 +97,11 @@ class TransitionTemplateExtender(
     newPid: ProcessIdentity, e: EventInt, include: Boolean, cv: ComponentView, 
     buffer: Buffer)
   = {
-// IMPROVE
-    val highlight = 
-      { val servers = post.servers.servers; servers(0).cs == 25 && servers(1).cs == 26 } && post.components(0).cs == 15 
-    if(highlight) println(s"instantiateTransitionTemplateBy:\n "+
+    // val highlight = 
+    //   { val servers = post.servers.servers; 
+    //     servers(0).cs == 32 && servers(1).cs == 33 }  &&
+    //      post.components(0).cs == 26  && post.components(1).cs == 10
+    if(false) println(s"instantiateTransitionTemplateBy:\n "+
         s"  $pre \n -${system.showEvent(e)}-> $post\n  $cv $newPid")
     Profiler.count("instantiateTransitionTemplateBy")
     require(pre.servers == cv.servers)

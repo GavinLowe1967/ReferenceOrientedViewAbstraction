@@ -7,10 +7,15 @@ import scala.collection.mutable.{HashMap}
 
 /** Utility object, encapsulating the isExtendable function, to test whether a
   * Concretization pre is extendable by a state st given the current set of
-  * views. 
+  * views.  Used within TransitiontemplateExtender.
   * 
   * @param views the current set of views. */
 class Extendability(views: ViewSet){ 
+  /* isExtendable
+   * |- compatibleWith
+   * |- findReferencingView
+   */
+
   /** A cache of results of previous calls to isExtendable.  If a value isn't in
     * the mapping, then that indicates that compatibleWith previously gave
     * only false.  A result of (k,rv) with k >= 0 indicates that
@@ -25,7 +30,7 @@ class Extendability(views: ViewSet){
     * pre on servers and common components?  And (2) for each component cpt of
     * pre that references st, is there an existing view with cpt as principal
     * and containing st (modulo renaming).  If so, return an array of those
-    * referencing views found under (2).
+    * referencing views found under (2); otherwise return null.
     * 
     * PRE: pre is compatible with SysAbsViews, and pre does not include
     * st.identity.  This means it is enough to check the condition for cpt =
@@ -83,8 +88,9 @@ class Extendability(views: ViewSet){
       : Boolean = {
     val servers = pre.servers; val components = pre.components
     // Remap st so it can be the principal component with servers.
-    val map = servers.remappingMap; val nextArgs = servers.nextArgMap
-    var st1 = Remapper.remapState(map, nextArgs, st)
+    // val map = servers.remappingMap; val nextArgs = servers.nextArgMap
+    // var st1 = Remapper.remapState(map, nextArgs, st)
+    val st1 = Remapper.remapState(servers.remappingMap, servers.nextArgMap, st)
     // IMPROVE: compare with Remapper.remapToPrincipal(servers, st)
 
     val otherArgs = Remapper.newOtherArgMap
@@ -126,7 +132,8 @@ class Extendability(views: ViewSet){
           cache.add(cpts1,found)
       } // end of match
     } // end of while ... match
-    // Profiler.count("compatibleWith"+found)  
+    // Profiler.count("compatibleWith"+found)
+    // assert(found, s"pre = $pre; st = $st") 
     found
   }
 

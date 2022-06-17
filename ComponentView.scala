@@ -183,6 +183,9 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   val cptIdsBitMap = StateArray.makeIdsBitMap(components)
 // IMPROVE: do we need above given idsIndexMap?
 
+  /** Does this have a component with id (f,id)? */
+  def hasPid(f: Family, id: Identity) = cptIdsBitMap(f)(id)
+
   /** For each parameter (t,i), the index of the component that has (t,i) as its
     * identity, or -1 if there is no such. */ 
   val idsIndexMap: Array[Array[Int]] = StateArray.makeIdsIndexMap(components)

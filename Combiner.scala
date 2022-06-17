@@ -5,24 +5,59 @@ import ViewAbstraction.RemapperP.Remapper
 import scala.collection.mutable.ArrayBuffer
 import ox.gavin.profiling.Profiler
 
-/** Utility object to combine Views, Concretizations, etc. */
+/** Utility object to combine Views, Concretizations, etc.  Used within
+  * Extendability and ConsistentStateFinder. */
 object Combiner{
+  /* remapToId (called from ConsistentStateFinder.getMaps)
+   * |- remapState
+   * 
+   * areUnifiable (called from ConsistentStateFinder.checkCompatible and 
+   * |             Extendability.compatibleWith)
+   * |- remapRest
+   *    |- remapSelectedStates
+   */
+
   import Remapper.{show,extendMap}
+
+  /** All ways of remapping st, consistent with map0, otherArgs and
+    * nextArg, so that its identity maps to id.  Each parameter (f,id1) not in
+    * the domain of map0 can be mapped to an element of otherArgs(f), or a
+    * fresh value given by nextArg(f).  Note: map0 is mutated.  otherArgs and 
+    * nextArg are mutated but backtracked.  Called from 
+    * ConsistentStateFinder.getMaps.
+    * Pre: extending map0 with so st.id -> id gives an injective map, and 
+    * id is not in otherArgs(f).  Also otherArgs(f) is disjoint from ran(f). */
+  def remapToId(map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap,
+    /*cpts: Array[State], i: Int,*/ st: State, id: Identity)
+      : ArrayBuffer[RemappingMap] = {
+    assert(Remapper.isInjective(map0), show(map0))
+    // Map identity of cpts(i) to id
+    val f = st.family; val id0 = st.ids(0)
+    // Check id not already in ran map0(f) other than at id0
+    assert(map0(f).indices.forall(j => j == id0 || map0(f)(j) != id))
+    assert(map0(f)(id0) < 0 || map0(f)(id0) == id, st)
+    assert(!otherArgs(f).contains(id))
+    for(f <- 0 until numTypes)
+      require(otherArgs(f).forall(id1 => !map0(f).contains(id1)))
+    map0(f)(id0) = id
+    // Now remap the remaining components.
+    remapState(map0, otherArgs, nextArg, st, 1)
+  }
 
   /** All ways of remapping st.ids[from..), consistent with map0, otherArgs
     * and nextArg.  Each parameter (f,id) not in the domain of map0 can be
     * mapped to an element of otherArgs(f), or a fresh value given by
     * nextArg(f).  map0 is treated immutably, but cloned.  otherArgs and
     * nextArg are treated mutably, but all updates are backtracked. */
-  private[CombinerP] def remapState(
+  @inline private[CombinerP] def remapState(
     map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap, 
     st: State, from: Int)
       : ArrayBuffer[RemappingMap] = {
-    require(Remapper.isInjective(map0), show(map0))
+    // require(Remapper.isInjective(map0), show(map0))
     // Elements of otherArgs should not appear in the range of the
     // corresponding part of map.
-    for(f <- 0 until numTypes)
-      require(otherArgs(f).forall(id => !map0(f).contains(id)))
+    // for(f <- 0 until numTypes)
+    //   require(otherArgs(f).forall(id => !map0(f).contains(id)))
     val ids = st.ids; val typeMap = st.typeMap
     val result = ArrayBuffer[RemappingMap]()
 
@@ -116,29 +151,6 @@ object Combiner{
     // }
     rec(map0, 0, 0)
     result
-  }
-
-  /** All ways of remapping st, consistent with map0, otherArgs and
-    * nextArg, so that its identity maps to id.  Each parameter (f,id1) not in
-    * the domain of map0 can be mapped to an element of otherArgs(f), or a
-    * fresh value given by nextArg(f).  Note: map0 is mutated. 
-    * Pre: extending map0 with so st.id -> id gives an injective map, and 
-    * id is not in otherArgs(f).  Also otherArgs(f) is disjoint from ran(f). */
-  def remapToId(map0: RemappingMap, otherArgs: OtherArgMap, nextArg: NextArgMap,
-    /*cpts: Array[State], i: Int,*/ st: State, id: Identity)
-      : ArrayBuffer[RemappingMap] = {
-    assert(Remapper.isInjective(map0), show(map0))
-    // Map identity of cpts(i) to id
-    val f = st.family; val id0 = st.ids(0)
-    // Check id not already in ran map0(f) other than at id0
-    assert(map0(f).indices.forall(j => j == id0 || map0(f)(j) != id))
-    assert(map0(f)(id0) < 0 || map0(f)(id0) == id, st)
-    assert(!otherArgs(f).contains(id))
-    for(f <- 0 until numTypes)
-      require(otherArgs(f).forall(id1 => !map0(f).contains(id1)))
-    map0(f)(id0) = id
-    // Now remap the remaining components.
-    remapState(map0, otherArgs, nextArg, st, 1)
   }
 
   /** Extend map0 to all elements of cpts except cpts(i), consistently with map0
