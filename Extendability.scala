@@ -57,7 +57,7 @@ class Extendability(views: ViewSet){
       val referencingViews = 
         (if(rv != null) rv else new Array[ComponentView](length))
 // IMPROVE: does this always hold for j = 0, i.e. is this a preconditon? 
-// IMPROVE: this seems inefficient if we got here via instantiatetransitionTemplateViaRef
+// IMPROVE: this seems inefficient if we got here via instantiatetransitionTemplateViaRef (but this is a low-cost route).
       while(j < length && found){
         if(components(j).processIdentities.contains(id)){
           referencingViews(j) = findReferencingView(pre, st, j)

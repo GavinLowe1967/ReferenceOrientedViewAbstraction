@@ -83,6 +83,9 @@ class TransitionTemplateExtender(
     }
   }
 
+// IMPROVE: record when we successfully extend a transition template with a
+// particular outside state, and avoid duplicating.
+
   /** Produce ExtendedTransitions from the TransitionTemplate (pre, post,
     * newPid, e, include) and the view cv.  That is, find each renaming of cv
     * compatible with pre, and that includes a component with identity newPid

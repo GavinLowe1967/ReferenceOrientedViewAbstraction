@@ -60,13 +60,14 @@ class ConsistentStateFinder(system: SystemP.System){
           val nexts = (
             if(e >= 0) system.nextsAfter(renamedState, e, fp, idp)
             else Array(renamedState) )
-          @inline def isNew = !buffer.exists{case (st1,nxts1) => 
-            st1 == renamedState && nxts1.sameElements(nexts)}
-          if(nexts.nonEmpty && isNew){
-            // if(highlight) println(s"renamedState == $renamedState")
-// IMPROVE
-            if(true || checkCompatible(map, renamedState, cpts, i, preCpts, otherArgs))
-              buffer += ((renamedState, nexts))
+          // @inline def isNew = !buffer.exists{case (st1,nxts1) => 
+          //   st1 == renamedState && nxts1.sameElements(nexts)}
+          if(nexts.nonEmpty && 
+            !buffer.exists{case (st1,nxts1) =>
+              st1 == renamedState && nxts1.sameElements(nexts)}){
+            // Note: following duplicates later work
+            // if(checkCompatible(map, renamedState, cpts, i, preCpts,otherArgs))
+            buffer += ((renamedState, nexts))
           }
         } // end of for(map <- maps)
       }
@@ -132,6 +133,7 @@ class ConsistentStateFinder(system: SystemP.System){
       else y::removeFromList(xs.tail, x)
     }
 
+/*
   /** Check that renamedState agrees with preCpts on common components, and test
     * whether the remainder of cpts (excluding component i) can be unified
     * with preCpts (based on map and otherArgs1). */
@@ -141,14 +143,15 @@ class ConsistentStateFinder(system: SystemP.System){
       : Boolean = {
     val pid = renamedState.componentProcessIdentity
     assert(preCpts.forall(!_.hasPID(pid)))
-// IMPROVE: I think following is guaranteed to be true
-    if(StateArray.agreesWithCommonComponent(renamedState, preCpts)){
-      // Renamed state consistent with preCpts. Check a corresponding renaming
-      // of the rest of cpts agrees with cpts on common components.  IMPROVE:
-      // Trivially true if singleton.
-      val otherArgs1 = Remapper.removeParamsOf(otherArgs, renamedState)
-      Combiner.areUnifiable(cpts, preCpts, map, i, otherArgs1)
-    }
-    else{ assert(false); false }
+    // Note: following is guaranteed to be true
+    // if(StateArray.agreesWithCommonComponent(renamedState, preCpts)){
+    // Renamed state consistent with preCpts. Check a corresponding renaming
+    // of the rest of cpts agrees with cpts on common components.  IMPROVE:
+    // Trivially true if singleton.
+    val otherArgs1 = Remapper.removeParamsOf(otherArgs, renamedState)
+    Combiner.areUnifiable(cpts, preCpts, map, i, otherArgs1)
+    // }
+    // else{ assert(false); false }
   }
+ */
 }
