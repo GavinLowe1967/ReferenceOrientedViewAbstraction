@@ -190,6 +190,13 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     * identity, or -1 if there is no such. */ 
   val idsIndexMap: Array[Array[Int]] = StateArray.makeIdsIndexMap(components)
 
+  /** The component state of this with identity (f,id), or null if there is no
+    * such component. */
+  // def find(f: Family, id: Identity): State = {
+  //   val ix = idsIndexMap(f)(id)
+  //   if(ix < 0) null else components(ix)
+  // }
+
   /** For each (t,i), the indices of the components c such that (t,i) is a
     * reference of c but not its identity. */
   val refsIndexMap: Array[Array[List[Int]]] =

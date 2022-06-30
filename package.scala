@@ -152,6 +152,9 @@ package object ViewAbstraction{
 
   // ------------------------------------------- Global variables
 
+  /** Current ply of the search. */
+  var ply = 1
+
   /** Are we running in verbose mode, giving more output? */
   var verbose = false
 

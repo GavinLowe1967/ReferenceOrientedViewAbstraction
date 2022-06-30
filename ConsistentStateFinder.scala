@@ -47,7 +47,7 @@ class ConsistentStateFinder(system: SystemP.System){
         // servers) so that: (1) its identity maps to id; (2) other parameters
         // are injectively mapped either to a parameter in pre.components,
         // but not the servers; or the next fresh parameter.
-        val (maps, otherArgs) = 
+        val maps = 
           try{ getMaps(st1, pid, servers, preCpts) }
           catch{ case UnrepresentableException(renamedState) => 
             println("Not enough identities in script to make\n"+
@@ -95,16 +95,16 @@ class ConsistentStateFinder(system: SystemP.System){
     * next fresh parameter.  
     * @return (1) an Array of (RemappingMap, State) pairs, giving the map and 
     * remapped state; and (2) an OtherArgMap corresponding to servers with pid
-    * removed.  
+    * removed ** no longer ** .  
     * @throw  UnrepresentableException if a renamed state is not representable 
     * in the script. */
   private def getMaps(st: State, pid: ProcessIdentity,
     servers: ServerStates, preCpts: Array[State])
-      : (RenamingTuples, OtherArgMap) = {
+      : RenamingTuples = {
     val preCptsL = preCpts.toList
     mapCache.get(st, pid, servers, preCptsL) match{
-      case Some(tuple) => tuple
-      case  None =>     // Profiler.count("getMaps: new") ~1.5%
+      case Some(tuple) => tuple._1
+      case None =>     // Profiler.count("getMaps: new") ~1.5%
         val (f,id) = pid; val map0 = servers.remappingMap
         val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
         otherArgs(f) = removeFromList(otherArgs(f), id) 
@@ -120,7 +120,7 @@ class ConsistentStateFinder(system: SystemP.System){
           mapStates(i) = (map, renamedState); i += 1
         }
         mapCache += (st, pid, servers, preCptsL) -> (mapStates, otherArgs)
-        (mapStates, otherArgs)
+        mapStates
     }
   }
 

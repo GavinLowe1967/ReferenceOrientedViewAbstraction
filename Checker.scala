@@ -35,7 +35,8 @@ class Checker(system: SystemP.System){
 
   val Million = 1000000
 
-  private var done = new AtomicBoolean(false); protected var ply = 1
+  private var done = new AtomicBoolean(false); 
+  // protected var ply = 1
 
   /* A Transition is a tuple (pre, e, post): (Concretization, EventInt,
    * Concretization), representing the transition pre -e-> post.  The pre
@@ -49,7 +50,7 @@ class Checker(system: SystemP.System){
     * newTransitions, but transferred to transitions at the end of the ply. */
   private var newTransitions: BasicHashSet[Transition] = null
 
-  import TransitionTemplateSet.TransitionTemplate
+  //import TransitionTemplateSet.TransitionTemplate
   // = (Concretization, Concretization, ProcessIdentity, EventInt, Boolean)
 
   /* A TransitionTemplate (pre, post, id, e, include): (Concretization,
@@ -175,13 +176,13 @@ class Checker(system: SystemP.System){
       assert(newPids.length == 1) // simplifying assumption
       val newPid = newPids.head
       // Store transition template
-      val newTransTemp = (pre, post, newPid, e, outsidePid != null)
+      val newTransTemp =
+        new TransitionTemplate(pre, post, newPid, e, outsidePid != null)
       assert(!transitionTemplates.contains(newTransTemp)) // IMPROVE
       newTransitionTemplates.add(newTransTemp)
       // Instantiate the template based on previous views
       addTransitions(
-        transitionTemplateExtender.instantiateTransitionTemplate( 
-          pre, post, newPid, e, outsidePid != null) )
+        transitionTemplateExtender.instantiateTransitionTemplate(newTransTemp) )
     } // end of else
   }
 
@@ -258,7 +259,7 @@ class Checker(system: SystemP.System){
           ??? // This should be unreachable.
         }
         i += 1
-        if(i%200 == 0){ print("."); if(i%2000 == 0) print(i) }
+        if(i%500 == 0){ print("."); if(i%5000 == 0) print(i) }
       }
 
       // Add views and transitions found on this ply into the main set.
@@ -286,9 +287,9 @@ class Checker(system: SystemP.System){
         }
       }
       // Store transition templates
-      for((pre, post, id, e, inc) <- newTransitionTemplates.iterator)
-        transitionTemplates.add(pre, post, id, e, inc)
-      // Strore new views
+      for(template <- newTransitionTemplates.iterator)
+        transitionTemplates.add(template)
+      // Store new views
       for(v <- nextNewViews.iterator){
         addView(v)
         // if(showTransitions){

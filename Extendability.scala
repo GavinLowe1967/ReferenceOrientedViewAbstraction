@@ -41,7 +41,7 @@ class Extendability(views: ViewSet){
     // for(v <- pre.toComponentView) require(views.contains(v))
     // require(pre.components.forall(
     //   _.componentProcessIdentity != st.componentProcessIdentity))
-    val servers = pre.servers; val components = pre.components
+    //val servers = pre.servers; 
     val (k, rv) = isExtendableCache.getOrElse((pre, st), (-1, null))
     if(verbose) println("isExtendableCache: "+k)
 
@@ -51,7 +51,7 @@ class Extendability(views: ViewSet){
     if(found){
       // If any component cpt of pre references st, then search for a
       // suitable view with a renaming of cpt and st. 
-      val id = st.componentProcessIdentity
+      val components = pre.components; val id = st.componentProcessIdentity
       // Test whether any component of pre references st
       var j = k max 0; val length = components.length
       val referencingViews = 
@@ -184,7 +184,7 @@ class Extendability(views: ViewSet){
       if(includeRef){
         // Test if cv1 contains a component that is a renaming of st under an
         // extension of map. Find component with identity (stF, stIdR) in cv1
-        val cpt1 = StateArray.find(cv1.components, stF, stIdR)
+        val cpt1 = cv1.find(stF, stIdR) // StateArray.find(cv1.components, stF, stIdR)
         if(cpt1 != null){
           // test if cpt1 is a renaming of st under an extension of map
           var map2 = Unification.unify(map, cpt1, st)

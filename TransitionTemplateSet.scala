@@ -1,26 +1,56 @@
 package ViewAbstraction
 
-import scala.collection.mutable.HashSet
+import ox.gavin.profiling.Profiler
+import scala.collection.mutable.{HashSet,HashMap}
+
+/** A TransitionTemplate.  This represents a template pre U st -e-> post U st'
+  * for every state st and st' such that (1) st and st' have identity id; (2)
+  * st is compatible with pre; (3) if include then st -e-> st', otherwise st =
+  * st'.  */
+case class TransitionTemplate(
+  pre: Concretization, post: Concretization, id: ProcessIdentity, 
+  e: EventInt, include: Boolean){
+
+  /** Map recording information about states that have been used to instantiate
+    * this template.  A mapping st -> -1 indicates that st successfully
+    * instantiated this template.  A mapping st -> ply indicates that st was
+    * used unsuccessfully on ply ply. */
+  private val doneExtend = new HashMap[State,Int]
+  // IMPROVE: an array indexed by State ids might be better
+
+  /** Record that st has been successfully used to instantiate this template. */
+  def addDoneExtend(st: State) = synchronized{ doneExtend += st -> -1 }
+
+  /** Has st been used to instantiate this template, either successfully or
+    * previously on this ply? */
+  def containsDoneExtend(st: State) = synchronized{ 
+    doneExtend.get(st) match{
+      case None => doneExtend += st -> ply; false
+      case Some(p) => 
+        if(p == -1 || p == ply) true
+        else{ doneExtend += st -> ply; false }
+    }
+  }
+
+}
 
 object TransitionTemplateSet{
   /** A TransitionTemplate (pre, post, id, e, include) represents an extended
     * transition pre U st -e-> post U st' for every state st and st' such that
     * (1) st and st' have identity id; (2) st is compatible with pre; (3) if
     * include then st -e-> st', otherwise st = st'.  */ 
-  type TransitionTemplate = 
-    (Concretization, Concretization, ProcessIdentity, EventInt, Boolean)
+  // type TransitionTemplate = 
+  //   (Concretization, Concretization, ProcessIdentity, EventInt, Boolean)
 }
 
 // ==================================================================
  
-import TransitionTemplateSet.TransitionTemplate
+// import TransitionTemplateSet.TransitionTemplate
 
 /** A set giving the transition templates seen so far. */
 trait TransitionTemplateSet{
-  /** Add the tuple (pre, post, id, e, include) to the set. */
-  def add(pre: Concretization, post: Concretization, 
-    id: ProcessIdentity, e: EventInt, include: Boolean)
-      : Unit
+  /** Add template to the set. */
+  def add(template: TransitionTemplate): Unit
 
   // /** An iterator over the set. */
   // def iterator: Iterator[TransitionTemplate]
@@ -101,15 +131,14 @@ class ServerBasedTransitionTemplateSet(initSize: Int = 16)
     i
   }
 
-  /** Add the tuple (pre, post, id, e, include) to the set. */
-  def add(pre: Concretization, post: Concretization,
-      id: ProcessIdentity, e: EventInt, include: Boolean): Unit = {
-    val servers = pre.servers; val i = find(servers)
+  /** Add template to the set. */
+  def add(template: TransitionTemplate): Unit = {
+    val servers = template.pre.servers; val i = find(servers)
     if(keys(i) == null){
-      if(count >= threshold){ resize(); return add(pre,post,id,e,include) }
+      if(count >= threshold){ resize(); return add(template) }
       keys(i) = servers; transitions(i) = Set[TransitionTemplate](); count += 1
     }
-    if(transitions(i).add((pre, post, id, e, include))) theSize += 1
+    if(transitions(i).add(template)) theSize += 1
   }
 
   /** Resize the hash table. */
@@ -131,7 +160,7 @@ class ServerBasedTransitionTemplateSet(initSize: Int = 16)
 
   /** Does this contain temp? */
   def contains(temp: TransitionTemplate): Boolean = {
-    val servers = temp._1.servers; val i = find(servers)
+    val servers = temp.pre.servers; val i = find(servers)
     keys(i) != null && transitions(i).contains(temp)
   }
 
