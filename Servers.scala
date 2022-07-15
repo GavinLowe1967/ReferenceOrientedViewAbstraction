@@ -47,17 +47,14 @@ class Servers(
   var inits: StateVector = null
 
   /** Bit map showing which events are in the alphabet of any server (used in
-    * System.scala). */
+    * System.scala).  Set in init. */
   var alphaBitMap: Array[Boolean] = null
 
   /** Map that gives, for each event e, the indices of servers that synchronise
-    * on e. */
+    * on e.  Set in init.  */
   private var eventMap: Array[Array[Int]] = null
 
-  private def showEvent(e: EventInt) = fdrSession.eventToString(e)
-
-  /** Representation of the tau event. */
-  // private val Tau = 1
+  // private def showEvent(e: EventInt) = fdrSession.eventToString(e)
 
   /** List of server names. */
   val serverNames = new Array[String](numServers)
@@ -73,27 +70,25 @@ class Servers(
   /** Maximum event number synchronised on with a component. */
   val maxComponentEvent = componentEventMap.length-1
 
+  /** String giving i'th entry in the servers set. */
+  private def entry(i: Int) =
+    if(usesRenaming) s"nth_(${file.serversRenameName}, $i)"
+    else s"nth_(${file.serversName}, $i)"
+
   /** Build transition system for servers. */
-// FIXME: has not been tested without renaming (FDR may give type error)
   private def init() = {
     println("Creating servers")
     val indices = (0 until numServers).toList
-    // String giving i'th entry in the servers set.
-    def entry(i: Int) = 
-      if(usesRenaming) s"nth_(${file.serversRenameName}, $i)"
-      else s"nth_(${file.serversName}, $i)"
-    for(i <- 0 until numServers){ 
+    for(i <- 0 until numServers){
       serverNames(i) = fdrSession.eval(
-        if(usesRenaming) s"first4_(${entry(i)})"   
-          // "first4_(nth_(${file.serversRenameName}, $i))"
-        else s"first3_(${entry(i)})") // "first_(nth_(${file.serversName}, $i))")
+        if(usesRenaming) s"first4_(${entry(i)})" else s"first3_(${entry(i)})" ) 
       val activeString = fdrSession.eval(
         if(usesRenaming) s"fourth4_(${entry(i)})" else s"third3_(${entry(i)})")
       assert(activeString == "true" || activeString == "false")
       activeServer(i) = activeString == "true"
       println(serverNames(i)+": "+(if(activeServer(i)) "active" else "passive"))
     }
-    // Build alphabet for each component
+    // Build alphabet for each server
     print("Creating alphabets")
     val alphas: Array[Set[EventInt]] = Array.fill(numServers)(Set[Int]())
     for(i <- indices){
@@ -105,7 +100,6 @@ class Servers(
       println()
     }
     println()
-    // val maxEvent = alphas.map(_.max).max // IMPROVE: use eventsSize?
     // Build map (as array) from events to the list of synchronising servers.
     eventMap = Array.tabulate(eventsSize)( // (maxEvent+1)( 
       e => indices.filter(alphas(_).contains(e)).toArray)
@@ -115,14 +109,11 @@ class Servers(
       alphaBitMap(e) = true
       if(activeServer(i)) activeServerEvent(e) = true
     }
-    // for(e <- 0 until eventsSize) 
-    //   if(activeServerEvent(e)) println("Active event "+showEvent(e))
     // Build transitions
     val initStates: Array[State] = new Array[State](numServers)
     for(i <- indices){
       val sName = serverNames(i)
       print(s"Building serverTransMap for server $i: $sName")
-      // serverNames(i) = sName
       val oRenamingString = 
         if(usesRenaming) Some(s"second4_(${entry(i)})") else None
       val (init, map) = 
@@ -185,11 +176,7 @@ class Servers(
         val es = transSync(f)(i)._1
         if(es.nonEmpty) es += Sentinel else transSync(f)(i) = null
       }
-      for(((p1,p2),(es,_)) <- transSync2Map.iterator){
-        // println("Three-way synchronisations involving "+p1+" and "+p2+
-        //           ": "+es.length)
-        es += Sentinel
-      }
+      for(((p1,p2),(es,_)) <- transSync2Map.iterator){ es += Sentinel }
     }
   } // end of ServerTransitions
 
@@ -197,11 +184,6 @@ class Servers(
     * of states. */
   private val transStore: MyHashMap[StateVector, ServerTransitions] =
     new MyLockFreeReadHashMap[StateVector, ServerTransitions]
-    // new SimpleHashMap[StateVector, ServerTransitions]
-    // new ShardedHashMap[StateVector, ServerTransitions](128, 4)
-  // Map[StateVector, ServerTransitions]()
-  /* All accesses to transStore should be protected by a synchronized
-   * block. */
 
   def transStoreSize = transStore.size
 
@@ -248,11 +230,7 @@ class Servers(
     while(!done){
       val e = es.min // next event to consider
       if(e != Int.MaxValue){
-        // val eString = showEvent(e)
-        // val isConst = eString.startsWith("initNode.Constr") && eString.contains(".Infty.Null")
-        // if(isConst) println(showEvent(e))
         var serverIndices = eventMap(e) // indices of servers that synch on e
-        //if(isConst) println(serverIndices.mkString(","))
         assert(e != Tau && serverIndices.nonEmpty, fdrSession.eventToString(e))
         // Calculate (in cptDsts) states after e, for each server in
         // serverIndices
@@ -270,7 +248,6 @@ class Servers(
           else canSync = false // This event is blocked
           j += 1
         }
-        //if(isConst) println(canSync)
         // Advance over other events if j < serverIndices.size, so !canSync
         while(j < serverIndices.size){
           val c = serverIndices(j); val index = indices(c)
@@ -301,8 +278,6 @@ class Servers(
             serverTransitions.nextsSolo += nexts
           }
           else{ // synchronisation with one component, with identity (t,i)
-            // if(cpts.length == 2)
-            //   println("Three-way synchronisation on "+showEvent(e))
             val (f,i) = cpts.head
             val (es,nextss) =
               if(cpts.length == 1) serverTransitions.transSync(f)(i)

@@ -21,7 +21,7 @@ class Extendability(views: ViewSet){
     * only false.  A result of (k,rv) with k >= 0 indicates that
     * compatibleWith gave true, that calls to containsReferencingView gave
     * true for all relevant j in [0..k), and rv[0..k) gives the corresponding
-    * referencing views. */
+    * referencing views.  Protected by synchronized blocks. */
   private val isExtendableCache = 
     new HashMap[(Concretization, State), (Int, Array[ComponentView])] 
 
@@ -41,8 +41,8 @@ class Extendability(views: ViewSet){
     // for(v <- pre.toComponentView) require(views.contains(v))
     // require(pre.components.forall(
     //   _.componentProcessIdentity != st.componentProcessIdentity))
-    //val servers = pre.servers; 
-    val (k, rv) = isExtendableCache.getOrElse((pre, st), (-1, null))
+    val (k, rv) = 
+      synchronized{ isExtendableCache.getOrElse((pre, st), (-1, null)) }
     if(verbose) println("isExtendableCache: "+k)
 
     // Does SysAbsViews contain a view consistent with pre and with a
@@ -51,7 +51,7 @@ class Extendability(views: ViewSet){
     if(found){
       // If any component cpt of pre references st, then search for a
       // suitable view with a renaming of cpt and st. 
-      val components = pre.components; val id = st.componentProcessIdentity
+      val components = pre.components; val (f,id) = st.componentProcessIdentity
       // Test whether any component of pre references st
       var j = k max 0; val length = components.length
       val referencingViews = 
@@ -59,13 +59,15 @@ class Extendability(views: ViewSet){
 // IMPROVE: does this always hold for j = 0, i.e. is this a preconditon? 
 // IMPROVE: this seems inefficient if we got here via instantiatetransitionTemplateViaRef (but this is a low-cost route).
       while(j < length && found){
-        if(components(j).processIdentities.contains(id)){
+        if(components(j).hasParam(f,id)/*processIdentities.contains(id)*/){
           referencingViews(j) = findReferencingView(pre, st, j)
           found = referencingViews(j) != null
         }
         j += 1
       }
-      isExtendableCache += (pre,st) -> (if(found) j else j-1, referencingViews)
+      synchronized{ 
+        isExtendableCache += (pre,st) -> (if(found) j else j-1, referencingViews)
+      }
       if(found) referencingViews else null
     }
     else null
@@ -88,8 +90,6 @@ class Extendability(views: ViewSet){
       : Boolean = {
     val servers = pre.servers; val components = pre.components
     // Remap st so it can be the principal component with servers.
-    // val map = servers.remappingMap; val nextArgs = servers.nextArgMap
-    // var st1 = Remapper.remapState(map, nextArgs, st)
     val st1 = Remapper.remapState(servers.remappingMap, servers.nextArgMap, st)
     // IMPROVE: compare with Remapper.remapToPrincipal(servers, st)
 

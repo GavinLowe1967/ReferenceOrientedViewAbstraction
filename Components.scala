@@ -1,10 +1,7 @@
 package ViewAbstraction
 
-//import uk.ac.ox.cs.fdr.{Option => _}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{Map,Set,ArrayBuffer}
-// import scala.collection.parallel.CollectionConverters._
-// import ox.cads.util.Profiler
 
 /** Model of the replicated components, possibly comprising multiple families
   * of processes.
@@ -66,27 +63,28 @@ class Components(
   // @inline private val Tau = 1
 
   /** Bit map, indexed by events, showing whether each event is in the alphabet
-    * of these components. */
+    * of these components.  Initialised by initAlphas.  */
   var alphaBitMap: Array[Boolean] = null
 
   /** Map that gives, for each event e, the identities of components that
-    * synchronise on e. */
+    * synchronise on e.  Initialised by initAlphas. */
   private var eventMap: Array[List[ProcessIdentity]] = null
 
   /** List of passive components that synchronise on each event; indexed by 
-    * events. */
+    * events.  Initialised by initAlphas. */
   var passiveCptsOfEvent: Array[List[ProcessIdentity]] = null
 
   def getEventMap = eventMap
 
-  /** Show a particular event. */
-  private def showEvent(e: EventInt) = fdrSession.eventToString(e)
+  /** Show a particular event.  Now in package. */
+  //private def showEvent(e: EventInt) = fdrSession.eventToString(e)
 
   // Set global variable: the type identifiers of the indexing types,
   // by component family.
   indexingTypes = fdrTypeIds.map(ti => transMapBuilder.fdrTypeToType(ti))
   println("indexingTypes = "+indexingTypes.mkString(", "))
 
+  // Set global variable: the names of types. 
   typeNames = 
     (0 until numTypes).map(i => 
       familyTypeNames(indexingTypes.indexOf(i))).toArray
@@ -114,8 +112,8 @@ class Components(
     assert(maxSubtypeSize > 0)
   }
 
-  /** Initialise information relevant to the alphabets: eventMap and
-    * alphaBitMap. */
+  /** Initialise information relevant to the alphabets: eventMap, alphaBitMap
+    * and passiveCptsOfEvent. */
   private def initAlphas() = { 
     // Build alphabets: alphas(pt)(j) gives the alphabet of the jth element
     // (identity idTypes(pt)(j)) from process type pt.
@@ -254,10 +252,9 @@ class Components(
       val ens = transComponent(f)(id)
       if(ens != null){ val (es, ns) = ens; binSearch(e, es, ns) }
       else{ 
-        // val (es, ns) = transServerComponent(f)(id); binSearch(e, es, ns) 
         val ens1 =  transServerComponent(f)(id)
         if(ens1 != null){ val (es,ns) = ens1; binSearch(e, es, ns) }
-        else EmptyStateArray // Array()
+        else EmptyStateArray 
       }
     }
 
@@ -366,7 +363,6 @@ class Components(
       transComponentStore += st -> trans1
     } // end of for
     transMap = null // for GC
-    // eventMap = null // IMPROVE: do this; also the ref to this in Servers
   }
 
   // --------- Functions used during the main check ---------
@@ -391,10 +387,7 @@ class Components(
           "This probably means that the script contains too few identities,\n"+
           "or the state spaces are not symmetric.")
         assert(!st.representableInScript)
-        // println(typeSizes.mkString(", "))
-        // println(st.isNew)
         throw new InsufficientIdentitiesException
-        // sys.exit
     }
 }
 

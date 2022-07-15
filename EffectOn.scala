@@ -22,6 +22,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
    * |--EffectOnStore.complete
    * |--tryAddNewView 
    */
+// IMPROVE: factor out apply into separate class?
 
   /** A mapping showing which component views might be added later.
     * Abstractly it stores tuples (missing, missingCommon, nv) such that:
@@ -287,7 +288,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
         showRedundancy(views.get(nv), newComponents, nv)
       }
     } // end of for loop
-  }
+  } // end of processInducedInfo
 
   /** Test whether, if the principal components of cpts1 and cpts2 both have a
     * reference to the same missing component then there is a way of
@@ -408,8 +409,5 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     effectOnStore.report; println()
     effectOnStore.memoryProfile
     traverse("effectOn", this, maxPrint = 1)
-
-
   }
-
 }

@@ -11,9 +11,9 @@ class CompatibleWithCache{
   private val compatibleWithCache = new HashMap[Key, Cache]
 
   /** Get the Cache associated with Key. */
-  def get(key: Key): Cache =  
-    compatibleWithCache.getOrElseUpdate(key,
-      new Cache) // new BasicHashMap[List[State], Boolean](16,true) )
+  def get(key: Key): Cache = synchronized{ 
+    compatibleWithCache.getOrElseUpdate(key, new Cache) 
+  }
 }
 
 // ==================================================================
@@ -83,14 +83,14 @@ class ResultCache(initSize: Int = 16){
   private var data = new Array[Boolean](initSize)
 
   /** Optionally get the value associated with k. */
-  def get(k: States): Option[Boolean] = {
+  def get(k: States): Option[Boolean] = synchronized{
     val i = find(k)
     if(keys(i) == null) None
     else Some(data(i))
   }
 
   /** Add the mapping k -> b. */
-  def add(k: States, b: Boolean): Unit = {
+  def add(k: States, b: Boolean): Unit = synchronized{
     if(count >= threshold){ resize(); add(k, b) }
     else{
       val h = mkHash(k); val i = find(k, h)

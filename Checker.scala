@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
   * @param aShapes the shapes of abstractions.
   * @param cShapes the shapes of concretizations. */
 class Checker(system: SystemP.System){
-  SystemP.System.setSystem(system) // set system in package, for showEvent
+  // SystemP.System.setSystem(system) // set system in package, for showEvent
 
   /** The abstract views. */
   protected var sysAbsViews: ViewSet = null
@@ -107,7 +107,7 @@ class Checker(system: SystemP.System){
     if(debugging) StateArray.checkDistinct(cv.components)
     for((pre, e, post, outsidePid) <- system.transitions(cv)){
       if(showTransitions)
-        println(s"$pre -${system.showEvent(e)}-> $post ["+
+        println(s"$pre -${showEvent(e)}-> $post ["+
           (if(outsidePid != null) State.showProcessId(outsidePid) else "")+
           "]")
       assert(pre.components(0) == cv.principal)
@@ -142,7 +142,7 @@ class Checker(system: SystemP.System){
     pre: Concretization, e: EventInt, post: Concretization, 
     outsidePid: ProcessIdentity) = {
     if(verbose) 
-      println(s"processTransition:\n  $pre -${system.showEvent(e)}-> $post"+
+      println(s"processTransition:\n  $pre -${showEvent(e)}-> $post"+
         s" ($outsidePid)")
     val pids0 = pre.components(0).processIdentities
     val princ1 = post.components(0)
@@ -157,7 +157,7 @@ class Checker(system: SystemP.System){
         !isDistinguished(p._2) && !otherIds.contains(p) && !pids0.contains(p))
     if(verbose) println(s"newPids = "+newPids.mkString(","))
     assert(newPids.length <= 1,    // simplifying assumption
-      s"$pre -${system.showEvent(e)}-> $post:\n"+
+      s"$pre -${showEvent(e)}-> $post:\n"+
         s"otherIds = ${otherIds.mkString(", ")}; "+
         s"newPids = ${newPids.mkString(", ")}")
     // The following assertion (outsidePid in newPids) captures an assumption

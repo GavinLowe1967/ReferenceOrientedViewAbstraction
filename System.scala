@@ -30,7 +30,7 @@ class System(fname: String) {
 
   /** Convert event represented by e to the String corresponding to the
     * script. */
-  def showEvent(e: EventInt) = fdrSession.eventToString(e)
+  // def showEvent(e: EventInt) = fdrSession.eventToString(e)
 
   // Set the number of visible events.  The visible events are numbered in
   // [3..fdrSession.numEvents+3), so we initialise arrays indexed by events to
@@ -84,7 +84,6 @@ class System(fname: String) {
   /** The size of each indexing subtype, by component family number. */
   private val indexingTypeSizes = 
     familyTypeNames.map(fdrSession.getTypeValues(_).length).toArray
-  // println("indexingTypeSizes = "+indexingTypeSizes.mkString(", "))
   // IMPROVE: this repeats work in Components
 
   /** Alphabet of components: componentAlphaBitMaps(e) is true if e is in the
@@ -101,16 +100,6 @@ class System(fname: String) {
 
   /** Names of servers. */
   def serverNames = servers.serverNames
-
-  /** Bit map for server alphabets: serverAlphaBitMap(e) is true if e is in the
-    * servers' alphabet. */ 
-  // private val serverAlphaBitMap = servers.alphaBitMap
-
-  //var threeWaySyncFound = false
-  // Boolean array giving three-way syncs.  threeWaySyncs(f1)(f2) is true for
-  // f1 >= f2 if there is a three-way synchronisation between families f1 and
-  // f2.
-  //var threeWaySyncs: Array[Array[Boolean]] = null
 
   private def init() = {
     // Create the mapping from control states to types of parameters
@@ -134,23 +123,6 @@ class System(fname: String) {
       s"${cptEventMap.length}; $numEvents")
     assert(serverAlphaMap.length == eventsSize, 
            s"${serverAlphaMap.length}; $numEvents; ${showEvent(numEvents+2)}")
-    //var e = 3
-    //threeWaySyncs = Array.tabulate(numFamilies)(f => new Array[Boolean](f+1))
-/*
-    while(e < eventsSize){
-      if(cptEventMap(e).length == 2 && serverAlphaMap(e)){
-        val family1 = cptEventMap(e)(0)._1; val family2 = cptEventMap(e)(1)._1
-        if(false)
-          println("Three-way synchronisation on event "+showEvent(e)+"\n"+
-                    "families "+family1+" and "+family2)
-        threeWaySyncFound = true
-        threeWaySyncs(family1 max family2)(family1 min family2) = true
-      }
-      e += 1
-    } // end of while
- */
-    // for(f1 <- 0 until numFamilies; f2 <- 0 to f1; if threeWaySyncs(f1)(f2))
-    //   println(s"Three-way synchronisation involving families $f2 and $f1")
 
     for(oi <- file.omitInfos) processOmitInfo(oi)
 
@@ -169,7 +141,6 @@ class System(fname: String) {
     // Map over parameter indices, giving the type identifier if the parameter
     // is from a distinguished type, otherwise -1.
     val indexingTypes = params.map{ case (p,t) => familyTypeNames.indexOf(t) }
-    //println(s"indexingTypes = $indexingTypes")
     // Number of such parameters
     val numDistinguished = indexingTypes.count(_ >= 0)
 
@@ -193,12 +164,10 @@ class System(fname: String) {
       }
       j += 1
     }
-    //println(s"includeBitMap = "+includeBitMap.mkString(", "))
 
     // The values in the types of the parameters
     val typeValues: List[List[String]] = 
       params.map{ case(p,t) => fdrSession.getTypeValues/*setStringToList*/(t) }
-    //println(s"typeValues = $typeValues")
     // All values for the distinguished types
     val distVals: List[List[Option[String]]] = 
       cp(typeValues, indexingTypes.map(_ >= 0))
@@ -220,13 +189,9 @@ class System(fname: String) {
       }
       else distinctParamNames ::= None
     }
-    //println(s"distinctParamNames = $distinctParamNames")
-    //println(s"distinctParams = $distinctParams")
 
-    //println(distVals.mkString("\n"))
     // All values for the non-distinguished types
     val nonDistVals = cp(typeValues, indexingTypes.map(_ < 0))
-    //println(nonDistVals.mkString("\n"))
 
     // Get the control state and parameters corresponding to processName with
     // parameters the merger of nd and dv.
@@ -249,11 +214,9 @@ class System(fname: String) {
         // distinctParams (syntactic parameters).
         val pi = ids.map(p => distinctParams.indexOf(p))
         assert(pi.forall(_ >= 0))
-        //println(s"pi = "+pi.mkString(", "))
         // And the other way
         val piInv = distinctParams.map(p => ids.indexOf(p))
         assert(piInv.forall(_ >= 0))
-        //println(s"piInv = "+piInv.mkString(", "))
 
         // Bit map showing which referenced parameters of this state will be
         // included: the ith of a State component corresponds to the pi(i)'th
@@ -269,7 +232,7 @@ class System(fname: String) {
         State.setIncludeInfo(cs, thisBitMap)
 
         // Check all others agree.  This is very slow
-        if(false && debugging){
+        if(false){
           print("Checking consistency\n")
           for(dv <- distVals){
             val (cs1,pids) = getProcInfo(nd, dv); assert(cs1 == cs)
@@ -283,10 +246,9 @@ class System(fname: String) {
               }
               j += 1
             }
-            // print(".")
           }
           println()
-        } // end of if(debugging)
+        } // end of if(false)
       }
       else println(s"Control state $cs not reachable")
     }
@@ -609,11 +571,11 @@ class System(fname: String) {
 object System{
 
   /** The System being checked.  Set by Checker. */
-  private var system: System = null
+  //private var system: System = null
 
-  def setSystem(sys: System) = system = sys
+  //def setSystem(sys: System) = system = sys
 
   /** Show event e. */
-  def showEvent(e: EventInt) = system.showEvent(e)
+  // def showEvent(e: EventInt) = system.showEvent(e)
 
 }

@@ -36,7 +36,8 @@ trait MyHashSet[A]{
 
 // ==================================================================
 
-/** A basic implementation of a hash map, using open addressing. */
+/** A basic implementation of a hash map, using open addressing and
+  * synchronized blocks. */
 class BasicHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
     extends MyHashSet[A]{
 
@@ -68,7 +69,7 @@ class BasicHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
   }  
 
   /** Add x to this set. */
-  def add(x: A): Boolean = {
+  def add(x: A): Boolean = synchronized{
     val i = find(x)
     if(keys(i) == null){
       if(count >= threshold){ resize(); return add(x) }
@@ -92,7 +93,7 @@ class BasicHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
   }
 
   /** An iterator over the values in the set. */
-  def iterator = new Iterator[A]{
+  def iterator = new Iterator[A]{ 
     /** The index of the next value to return. */
     private var ix = 0
 
@@ -107,16 +108,16 @@ class BasicHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
   } // end of iterator
 
   /** Does this set contain x? */
-  def contains(x: A): Boolean = { val i = find(x); keys(i) != null }
+  def contains(x: A): Boolean = synchronized{ val i = find(x); keys(i) != null }
 
   /** Get the element of this that is equal (==) to x. 
     * Pre: such an element exists; and this operation is not concurrent with
     * any add operation. */
-  def get(x: A): A = { val i = find(x); keys(i) }
+  def get(x: A): A = synchronized{ val i = find(x); keys(i) }
 
-  def size: Long = count
+  def size: Long = synchronized{ count }
 
-  def clear = {
+  def clear = synchronized{
     keys = new Array[A](initSize); count = 0; 
     n = initSize; mask = n-1; threshold = initSize * ThresholdRatio
   }
@@ -125,7 +126,7 @@ class BasicHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
 //==================================================================
 
 /** An implementation of MyHashSet using open addressing that also stores the
-  * hashes. */
+  * hashes.  Not thread safe. */
 class OpenHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
     extends MyHashSet[A]{
 
@@ -568,7 +569,7 @@ class LockFreeReadHashSet[A : scala.reflect.ClassTag](
 
   /** An iterator over the elements of this.
     * Not thread safe. */
-  def iterator: Iterator[A] =  new Iterator[A]{
+  def iterator: Iterator[A] =  new Iterator[A]{ 
     /** Shard index, shard, and index of the next element. */
     private var sh = 0; private var shard = getShard(sh); private var i = 0
 

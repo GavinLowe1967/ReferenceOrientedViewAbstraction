@@ -127,7 +127,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     val mis = theStore.getOrElseUpdate(cv, new MissingInfoSet)
     if(!mis.add(missingInfo)){
       missingInfo.setNotAdded; missingInfo.log(NotStored(storeName(theStore)))
-    } // mis += missingInfo
+    } 
   }
 
   /** Add MissingInfo(nv, missing, missingCommon) to the stores. 
@@ -137,7 +137,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     missingCommon: List[MissingCommon], nv: ComponentView,
     pre: Concretization, oldCpts: Array[State], cv: ComponentView,
     e: EventInt, post: Concretization, newCpts: Array[State])
-      : Unit = {
+      : Unit = synchronized{
     if(ComponentView0.highlight(nv))
       println(s"\nEffectOnStore.add($nv);\n missingCommon = $missingCommon;\n"+
         s"missing = "+missing.mkString("List(", ",\n    ", ")")+
@@ -185,7 +185,8 @@ class SimpleEffectOnStore extends EffectOnStore{
 
   /** Try to complete values in the store, based on the addition of cv, and with
     * views as the ViewSet.  Return the Views that can now be added.  */
-  def complete(cv: ComponentView, views: ViewSet): List[ComponentView] = {
+  def complete(cv: ComponentView, views: ViewSet)
+      : List[ComponentView] = synchronized{
     var result = List[ComponentView]()
     // Add mi.newView to result if not already there
     @inline def maybeAdd(mi: MissingInfo) = {

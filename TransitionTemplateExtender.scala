@@ -61,7 +61,7 @@ class TransitionTemplateExtender(
     template: TransitionTemplate, outsideSt: State, outsidePosts: Array[State],
     cv: ComponentView, buffer: Buffer)
   = {
-    Profiler.count("extendTransitionTemplateBy")
+    // Profiler.count("extendTransitionTemplateBy")
     if(false && verbose) 
       println(s"extendTransitionTemplateBy($template, $outsideSt)")
     val referencingViews = extendability.isExtendable(template.pre, outsideSt)
@@ -102,7 +102,7 @@ class TransitionTemplateExtender(
     //     servers(0).cs == 32 && servers(1).cs == 33 }  &&
     //      post.components(0).cs == 26  && post.components(1).cs == 10
     if(false) println(s"instantiateTransitionTemplateBy:\n  $template\n  $cv")
-    Profiler.count("instantiateTransitionTemplateBy")
+    // Profiler.count("instantiateTransitionTemplateBy")
     require(template.pre.servers == cv.servers)
     // All states outsideSt that rename a state of cv to give a state with
     // identity newPid, and such that the renaming of cv is consistent with

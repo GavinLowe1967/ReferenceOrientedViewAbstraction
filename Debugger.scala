@@ -44,7 +44,7 @@ class Debugger(
       if(!befores(0).matches(abss(0))) 
         println(pad0+Sqle+"\n"+rPad("0: ")+befores(0))
       for(i <- 0 until plies){
-        println(pad0+"-"+system.showEvent(events(i))+"->\n"+pad+afters(i))
+        println(pad0+"-"+showEvent(events(i))+"->\n"+pad+afters(i))
         if(i+1 < befores.length && afters(i) != befores(i+1)){
           if(! afters(i).matches(abss(i+1))) 
             println(pad0+Sqge+"\n"+pad+abss(i+1))
@@ -141,7 +141,7 @@ class Debugger(
           e.printStackTrace()
           println("pre = $pre\n"+pre.toComponentView+
             "\nabss =\n"+abss.mkString("\n")+
-            "\nevents =\n"+events.map(system.showEvent).mkString("\n")+
+            "\nevents =\n"+events.map(showEvent).mkString("\n")+
             "\nbefores =\n"+befores.mkString("\n")+
             "\nafters =\n"+afters.mkString("\n")
           )

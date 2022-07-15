@@ -12,6 +12,9 @@ class ConsistentStateFinder(system: SystemP.System){
    * |- checkCompatible
    */
 
+    // val highlight = servers.servers(0).cs == 32 && servers.servers(1).cs == 33 &&
+    //   preCpts(0).cs == 19 && preCpts(1).cs == 10
+
   /** Get all renamings of cv that: (1) include a component with identity pid;
     * (2) agree with pre on the states of all common components; and (3) can
     * perform e with pre.principal if e >= 0.
@@ -24,19 +27,17 @@ class ConsistentStateFinder(system: SystemP.System){
     val (f,id) = pid; val servers = pre.servers; require(cv.servers == servers)
     require(!pre.hasPid(f,id))
     val preCpts = pre.components; val cpts = cv.components
-    // val highlight = servers.servers(0).cs == 32 && servers.servers(1).cs == 33 &&
-    //   preCpts(0).cs == 19 && preCpts(1).cs == 10
-    if(false) println(s"consistentStates($pre, $pid, $cv")
-
     val serverRefs = servers.idsBitMap(f)(id)  // do servers reference pid?
     val (fp, idp) = preCpts(0).componentProcessIdentity// id of principal of pre
+    var i = 0
     // Find all components of cv that can be renamed to a state of pid
     // that can perform e.  Note that it's not enough to consider just the
     // principal: if several views are required for compatibility, the one
     // that is found on the latest ply might not have the relevant state as
     // principal.
-    for(i <- 0 until cpts.length){ 
-      val st1 = cpts(i)
+    // for(i <- 0 until cpts.length){ 
+    while(i < cpts.length){
+      val st1 = cpts(i); i += 1
       // Try to make st1 the component that gets renamed.  Need st1 of family
       // f, and its identity either equal to id, or neither of those
       // identities in the server identities (so the renaming doesn't change
@@ -47,33 +48,42 @@ class ConsistentStateFinder(system: SystemP.System){
         // servers) so that: (1) its identity maps to id; (2) other parameters
         // are injectively mapped either to a parameter in pre.components,
         // but not the servers; or the next fresh parameter.
-        val maps = 
-          try{ getMaps(st1, pid, servers, preCpts) }
+        val renamedStates = 
+          try{ getRenamedStates(st1, pid, servers, preCpts) }
           catch{ case UnrepresentableException(renamedState) => 
             println("Not enough identities in script to make\n"+
               s"$pre and\n$cv consistent.\n"+
               s"Renaming of $st1 gives ${renamedState.toString0}")
             sys.exit()
           }
-        for((map, renamedState) <- maps){
-          // assert(renamedState.representableInScript) 
-          val nexts = (
-            if(e >= 0) system.nextsAfter(renamedState, e, fp, idp)
-            else Array(renamedState) )
-          // @inline def isNew = !buffer.exists{case (st1,nxts1) => 
-          //   st1 == renamedState && nxts1.sameElements(nexts)}
-          if(nexts.nonEmpty && 
-            !buffer.exists{case (st1,nxts1) =>
-              st1 == renamedState && nxts1.sameElements(nexts)}){
-            // Note: following duplicates later work
-            // if(checkCompatible(map, renamedState, cpts, i, preCpts,otherArgs))
-            buffer += ((renamedState, nexts))
-          }
-        } // end of for(map <- maps)
+        var j = 0
+        while(j < renamedStates.length){
+          val renamedState = renamedStates(j); j += 1
+          processRenamedState(renamedState, e, fp, idp, buffer)
+        } // end of inner while
       }
-    } // end of for(i <- ...)
+    } // end of outer while
     buffer
   } // end of consistentStates
+
+  /** Find the next states from renamedState after e, if >=0, and add to
+    * buffer. */
+  private def processRenamedState(
+    renamedState: State, e: EventInt, fp: Family, idp: Identity, 
+    buffer: ArrayBuffer[(State, Array[State])])
+  = {
+    // assert(renamedState.representableInScript)
+    val nexts = 
+      if(e >= 0) system.nextsAfter(renamedState, e, fp, idp)
+      else Array(renamedState) 
+    if(nexts.nonEmpty &&
+      !buffer.exists{case (st1,nxts1) =>
+        st1 == renamedState && nxts1.sameElements(nexts)}){
+      // Note: following duplicates later work
+      // if(checkCompatible(map, renamedState, cpts, i, preCpts,otherArgs))
+      buffer += ((renamedState, nexts))
+    }
+  }
 
   /** Exception showing renamedState is not representable using values in the
     * script. */
@@ -82,28 +92,26 @@ class ConsistentStateFinder(system: SystemP.System){
 
   /** Part of the result of getMaps.  Each tuple represents a map, and the
     * renamed states. */
-  private type RenamingTuples = Array[(RemappingMap, State)]
+  //private type RenamingTuples = Array[(RemappingMap, State)]
 
   /** Cache of previous results of getMaps. */
   private val mapCache = 
     new HashMap[(State, ProcessIdentity, ServerStates, List[State]), 
-      (RenamingTuples, OtherArgMap)]
+      Array[State]]
 
   /** Calculate all ways of remapping st (consistent with the servers) so
     * that: (1) its identity maps to pid; (2) other parameters are injectively
     * mapped either to a parameter in preCpts, but not the servers; or the
     * next fresh parameter.  
-    * @return (1) an Array of (RemappingMap, State) pairs, giving the map and 
-    * remapped state; and (2) an OtherArgMap corresponding to servers with pid
-    * removed ** no longer ** .  
+    * @return an Array of remapped states.  
     * @throw  UnrepresentableException if a renamed state is not representable 
     * in the script. */
-  private def getMaps(st: State, pid: ProcessIdentity,
+  private def getRenamedStates(st: State, pid: ProcessIdentity,
     servers: ServerStates, preCpts: Array[State])
-      : RenamingTuples = {
+      : Array[State] = {
     val preCptsL = preCpts.toList
     mapCache.get(st, pid, servers, preCptsL) match{
-      case Some(tuple) => tuple._1
+      case Some(renamedStates) => renamedStates
       case None =>     // Profiler.count("getMaps: new") ~1.5%
         val (f,id) = pid; val map0 = servers.remappingMap
         val (otherArgs, nextArg) = Remapper.createMaps1(servers, preCpts)
@@ -111,16 +119,16 @@ class ConsistentStateFinder(system: SystemP.System){
         nextArg(f) = nextArg(f) max (id+1)
         val maps = Combiner.remapToId(map0, otherArgs, nextArg, st, id)
         // Create corresponding renamed States, and pair with maps
-        val mapStates = new RenamingTuples(maps.length); var i = 0
+        val renamedStates = new Array[State](maps.length); var i = 0
         while(i < maps.length){
           val map = maps(i)
           val renamedState = Remapper.applyRemappingToState(map, st)
           if(!renamedState.representableInScript)
             throw UnrepresentableException(renamedState)
-          mapStates(i) = (map, renamedState); i += 1
+          renamedStates(i) = renamedState; i += 1
         }
-        mapCache += (st, pid, servers, preCptsL) -> (mapStates, otherArgs)
-        mapStates
+        mapCache += (st, pid, servers, preCptsL) -> renamedStates
+        renamedStates
     }
   }
 
