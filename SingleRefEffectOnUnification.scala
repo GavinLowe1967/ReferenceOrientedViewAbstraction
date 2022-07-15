@@ -7,7 +7,6 @@ import scala.collection.mutable.{ArrayBuffer}
 // FIXME: there's a lot of repeated code between here and EffectOnUnification
 
 class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
-
   /* Relationship of main functions.
    * apply
    * |--Unification.allUnifs
@@ -50,17 +49,12 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   // A representation of map |> post.servers
   import ServersReducedMap.ReducedMap 
 
-  type CombineResult1 = 
-    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
-
-  /** The part of the result corresponding to secondary induced transitions.
-    * The Int field is the index of the component in pre/post that gains
-    * access to cv.principal. */
-  type CombineResult2 = ArrayBuffer[(Array[State], UnificationList, Int)]
+  // Types of the result
+  import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo}
 
   /** Variables in which we build up the result. */
-  private val result = new CombineResult1
-  private val result2 = new CombineResult2
+  private val result = new InducedInfo
+  private val result2 = new SecondaryInducedInfo // CombineResult2
 
   /** The object responsible for extending result-defining mappings. */
   val remappingExtender = new RemappingExtender(trans,cv)
@@ -87,7 +81,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   // =======================================================
 
   /** The main function. */
-  def apply(): (CombineResult1, CombineResult2) = {
+  def apply(): (InducedInfo, SecondaryInducedInfo) = {
     // val map0 = cv.getRemappingMap // 
     // Profiler.count("SREOU.apply")
     if(highlight) println(s"SREOU.apply($trans,\n  $cv)")
@@ -430,4 +424,19 @@ object SingleRefEffectOnUnification{
     * creating a new ArrayBuffer.  It's fine for this to be shared between
     * threads. */
   private val EmptyArrayBuffer = new ArrayBuffer[RemappingMap]()
+
+  // A representation of map |> post.servers
+  import ServersReducedMap.ReducedMap 
+
+  import Unification.UnificationList // = List[(Int,Int)]
+  // Contains (i,j) if cpts(i) is unified with preCpts(j)
+
+  /** The part of the result relating to primary induced transitions. */
+  type InducedInfo = 
+    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
+
+  /** The part of the result corresponding to secondary induced transitions.
+    * The Int field is the index of the component in pre/post that gains
+    * access to cv.principal. */
+  type SecondaryInducedInfo = ArrayBuffer[(Array[State], UnificationList, Int)]
 }

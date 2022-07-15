@@ -8,21 +8,23 @@ import scala.collection.mutable.{ArrayBuffer}
 /** A utility object, encapsulating the effectOn and completeDelayed
   * functions.  These describe the effect that one transition has on another
   * View. */
-class EffectOn(views: ViewSet, system: SystemP.System){
+object EffectOn{
+  /** The current set of views.  Set by init. */
+  private var views: ViewSet = null
+
+  /** The system.  Set by init. */
+  private var system: SystemP.System = null
+
+  def init(views: ViewSet, system: SystemP.System) = {
+    this.views = views; this.system = system
+  }
+
   /* Overview of main functions.
-   * 
-   * apply
-   * |--getCrossReferences
-   * |--EffectOnUnification.apply
-   * |--processInducedInfo
-   * |  |--checkCompatibleMissing
-   * |  |--missingCrossRefs
    * 
    * completeDelayed
    * |--EffectOnStore.complete
    * |--tryAddNewView 
    */
-// IMPROVE: factor out apply into separate class?
 
   /** A mapping showing which component views might be added later.
     * Abstractly it stores tuples (missing, missingCommon, nv) such that:
@@ -42,16 +44,98 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     * Tuples are added to the store in apply when a transition is prevented
     * because relevant views are not yet in the store.  completeDelayed
     * subsequently tries to complete the transitions.  */
-  private val effectOnStore: EffectOnStore = new SimpleEffectOnStore
+  private var effectOnStore: EffectOnStore =  new SimpleEffectOnStore
 
   import Unification.UnificationList //  = List[(Int,Int)]
 
   import ServersReducedMap.ReducedMap 
 
-  type InducedInfos = 
-    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
+  private def highlight(cv: ComponentView) = 
+    false &&
+    ComponentView0.highlightServers(cv.servers) && 
+      //  44(T2,N5,N6) or 45(T2,N5,N6)
+      ComponentView0.highlightPrinc(cv.components(0)) && {
+        val second = cv.components(1)
+        // 16|17(N6,_,N4,N2)
+        (second.cs == 17 || second.cs == 16) &&
+        second.ids(0) == 5 && second.ids(2) == 3 && second.ids(3) == 1
+      }
 
-  def doHighlight(trans: Transition, cv: ComponentView) = 
+  /** If cv completes a delayed transition in effectOnStore, then complete it. */
+  def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
+  = {
+    if(highlight(cv)) println(s"completeDelayed($cv)")
+    for(nv <- effectOnStore.complete(cv, views)){
+      if(showTransitions || ComponentView0.highlight(nv)) 
+        println(s"Adding $nv\n from completeDelayed($cv)")
+      tryAddView(nv, nextNewViews)
+    }
+  }
+
+  /** Add mi.nextNewViews to nextNewViews. */
+  @inline private 
+  def tryAddView(nv: ComponentView, nextNewViews: MyHashSet[ComponentView]) = {
+    // require(mi.done); val nv = mi.newView
+    if(nextNewViews.add(nv)){
+      if(showTransitions || ComponentView0.highlight(nv)){
+        val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
+        println(s"Adding via completeDelayed \n"+
+          s"$pre\n  --> $post induces \n"+
+          EffectOnStore.showInduced(cv, cpts, post.servers, newComponents, nv))
+          // s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
+          // s"  --> ${View.show(post.servers, newComponents)} == $nv")
+      }
+      if(!nv.representableInScript){
+        val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
+        println("Not enough identities in script to combine transition\n"+
+          s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+        sys.exit()
+      }
+    } // end of outer if
+  }
+
+  def sanityCheck = effectOnStore.sanityCheck(views)
+
+  def report = effectOnStore.report
+
+  /** Perform a memory profile of this. */
+  def memoryProfile = {
+    import ox.gavin.profiling.MemoryProfiler.traverse
+    effectOnStore.report; println()
+    effectOnStore.memoryProfile
+    traverse("effectOn", this, maxPrint = 1)
+  }
+}
+
+// ==================================================================
+
+/** Object to calculate the effect of the transition t on cv.  Create extra
+    * views caused by the way the transition changes cv, and add them to
+    * nextNewViews. */
+class EffectOn(
+  trans: Transition, cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
+{
+  /* Overview of main function.
+   * 
+   * apply
+   * |--getCrossReferences
+   * |--EffectOnUnification.apply
+   * |--processInducedInfo
+   * |  |--checkCompatibleMissing
+   * |  |--missingCrossRefs
+   */
+
+  import Unification.UnificationList //  = List[(Int,Int)]
+
+  import ServersReducedMap.ReducedMap 
+
+  import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo}
+  // InducedInfos = 
+  //   ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
+  // SecondaryInducedInfo = ArrayBuffer[(Array[State], UnificationList, Int)]
+
+  private val highlight = 
+    false &&
     Transition.highlight(trans) && {
       val princ = cv.components(0); // 44(T2,N2,N3)
       princ.cs == 44 && princ.ids.sameElements(Array(1,1,2))
@@ -60,22 +144,30 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       second.cs == 16 && second.ids.sameElements(Array(1,2,3,4))
     }
 
+  if(highlight) println(s"\nEffectOn($trans,\n  $cv)")
+
+  private val pre = trans.pre; private val post = trans.post
+  private val postCpts = post.components;
+
+  require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
+
+  /** What does cpt get mapped to given unifications unifs? */
+  private def getNewPrinc(cpt: State, unifs: UnificationList): State = {
+    var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
+    if(us.isEmpty) cpt else postCpts(us.head._2)
+  }
+  
+  import EffectOn.views
+
   /** The effect of the transition t on cv.  Create extra views caused by the
     * way the transition changes cv, and add them to nextNewViews. */
-  def apply(trans: Transition, cv: ComponentView, 
-    nextNewViews: MyHashSet[ComponentView])
-  : Unit = {
-    val highlight = doHighlight(trans, cv)
-    if(highlight) println(s"\nEffectOn.apply($trans,\n  $cv)")
+  def apply() : Unit = {
     // Early bail-out if servers don't change, no chance of unification with
     // components that change state, and no chance of secondary induced
     // transitions.  This captures over about 25% of cases with lazySet.csp,
     // bound 44; nearly all other cases have servers that change state.
     if(trans.mightGiveSufficientUnifs(cv)){
       if(highlight) println("mightGiveSufficientUnifs")
-      val pre = trans.pre; val post = trans.post
-      require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
-      val postCpts = post.components; 
       // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList,
       // ReducedMap)] is a set of tuples (pi, pi(cv.cpts), unifs, reducedMap)
       // where pi is a unification function corresponding to
@@ -83,78 +175,62 @@ class EffectOn(views: ViewSet, system: SystemP.System){
       // Int) is similar for secondary induced transitions, where the final
       // component is the index of preCpts/postCpts that gains a reference to
       // cv.principal.
-      val (inducedInfo, secondaryInduced)
-          : (InducedInfos, ArrayBuffer[(Array[State], UnificationList, Int)]) =
+      val (inducedInfo, secondaryInduced): (InducedInfo, SecondaryInducedInfo) =
         if(singleRef) new SingleRefEffectOnUnification(trans,cv)()
         else EffectOnUnification.combine(pre, post, cv)
-      if(highlight) println("inducedInfo.length == "+inducedInfo.length)
+      //if(highlight) println("inducedInfo.length == "+inducedInfo.length)
+      processInduced(inducedInfo)
+      processSecondaryInduced(secondaryInduced)
+    }
+  }
 
-      /* What does cpt get mapped to given unifications unifs? */
-      @noinline def getNewPrinc(cpt: State, unifs: UnificationList): State = {
-        var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
-        if(us.isEmpty) cpt else postCpts(us.head._2)
-      }
-      // Process inducedInfo
-      var index = 0
-      while(index < inducedInfo.length){
-        val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
-        val hl = highlight && map(0).sameElements(Array(0,4,5,2,3)) &&
-          map(1).sameElements(Array(0,2,3))
-        if(hl)
-          println(s"unifs = $unifs\ncpts = "+StateArray.show(cpts)+
-          "\nmap = "+Remapper.show(map))
-        // Following no longer true
-        // if(singleRef) assert((reducedMapInfo != null) == unifs.isEmpty,
-        //   s"unifs = $unifs; reducedMapInfo = "+
-        //     (if(reducedMapInfo == null) "null" else reducedMapInfo.mkString(", ")))
-        // IMPROVE: understand why there are repetitions; it might be
-        // RemappingExtender.allExtensions.  For lazySet bound 44, it's 8,905
-        // Test if this value appears again later.
-        /*    if(false) for(i <- index until inducedInfo.length){
-         val (map1,cpts1,unifs1,reducedMapInfo1) = inducedInfo(i)
-         if(cpts1.sameElements(cpts) && unifs1 == unifs){
-         if(newEffectOn) Profiler.count("Induced repetition")
-         else assert(false,
-         s"pre = $pre\npost = $post\ncv = $cv\n"+
-         "map = "+Remapper.show(map)+"\nmap1 = "+Remapper.show(map1)+
-         "\ncpts = "+StateArray.show(cpts)+s"\nunifs = $unifs" )
-         }
-         }  */
-        Profiler.count("EffectOn step "+unifs.isEmpty)
-        // The components needed for condition (b).
-        val crossRefs: List[Array[State]] =
-          if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
-          else List()
+  /** Process the information about primary induced transitions. */
+  @inline private def processInduced(inducedInfo: InducedInfo) = {
+    var index = 0
+    while(index < inducedInfo.length){
+      val (map, cpts, unifs, reducedMapInfo) = inducedInfo(index); index += 1
+      // val hl = highlight && map(0).sameElements(Array(0,4,5,2,3)) &&
+      //   map(1).sameElements(Array(0,2,3))
+      // if(hl)
+      //   println(s"unifs = $unifs\ncpts = "+StateArray.show(cpts)+
+      //     "\nmap = "+Remapper.show(map))
+      Profiler.count("EffectOn step "+unifs.isEmpty)
+      // The components needed for condition (b).
+      val crossRefs: List[Array[State]] =
+        if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
+        else List()
 // IMPROVE.  Turning off optimisation
-        if(unifs.nonEmpty || reducedMapInfo == null ||
-          !cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)){
-          val newPrinc = getNewPrinc(cpts(0), unifs)
-          var newComponentsList =
-            StateArray.makePostComponents(newPrinc, postCpts, cpts)
-          if(hl || false && highlight) 
-            println("newComponentList: "+newComponentsList.map(StateArray.show))
-          processInducedInfo(trans, cv, nextNewViews,
-            map, cpts, unifs, reducedMapInfo, true, crossRefs, newComponentsList)
-        }
-        else if(hl) println(
-          s"*** reducedMapInfo = ${reducedMapInfo.mkString(",")}; "+
-          cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)+
-          "; crossRefs = "+crossRefs.map(StateArray.show).mkString("; "))
-      } // end of while loop
-
-    // Process secondaryInduced
-      index = 0
-      while(index < secondaryInduced.length){
-        val (cpts, unifs, k) = secondaryInduced(index); index += 1
-        Profiler.count("SecondaryInduced")
-        val crossRefs: List[Array[State]] =
-          if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
-          else List()
+      if(unifs.nonEmpty || reducedMapInfo == null ||
+        !cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)){
         val newPrinc = getNewPrinc(cpts(0), unifs)
-        val newComponentsList = List(Array(postCpts(k), newPrinc))
-        processInducedInfo(trans, cv, nextNewViews,
-          null, cpts, unifs, null, false, crossRefs, newComponentsList)
+        var newComponentsList =
+          StateArray.makePostComponents(newPrinc, postCpts, cpts)
+        // if(hl || false && highlight)
+        //   println("newComponentList: "+newComponentsList.map(StateArray.show))
+        processInducedInfo(
+          map, cpts, unifs, reducedMapInfo, true, crossRefs, newComponentsList)
       }
+      // else if(hl) println(
+      //   s"*** reducedMapInfo = ${reducedMapInfo.mkString(",")}; "+
+      //     cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)+
+      //     "; crossRefs = "+crossRefs.map(StateArray.show).mkString("; "))
+    } // end of while loop
+  }
+
+  /** Process the information about secondary induced transitions. */
+  @inline private 
+  def processSecondaryInduced(secondaryInduced: SecondaryInducedInfo)  = {
+    var index = 0
+    while(index < secondaryInduced.length){
+      val (cpts, unifs, k) = secondaryInduced(index); index += 1
+      Profiler.count("SecondaryInduced")
+      val crossRefs: List[Array[State]] =
+        if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
+        else List()
+      val newPrinc = getNewPrinc(cpts(0), unifs)
+      val newComponentsList = List(Array(postCpts(k), newPrinc))
+      processInducedInfo(
+        null, cpts, unifs, null, false, crossRefs, newComponentsList)
     }
   }
 
@@ -170,16 +246,15 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     * @param reducedMap a representation of map |> post.servers. */
   @inline private 
   def processInducedInfo(
-    trans: Transition, cv: ComponentView, nextNewViews: MyHashSet[ComponentView], 
     map: RemappingMap, cpts: Array[State], unifs: UnificationList, 
     reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
     newComponentsList: List[Array[State]])
       : Unit = {
     Profiler.count(s"processInducedInfo $isPrimary")
-    val pre = trans.pre; val e = trans.e; val post = trans.post
+    //val pre = trans.pre; val e = trans.e; val post = trans.post
     // Consider only with T2, T3 unmapped
-    val highlight = doHighlight(trans, cv) &&
-      map(0).sameElements(Array(0,4,5,2,3)) && map(1).sameElements(Array(0,2,3))
+    // val highlight = doHighlight(trans, cv) &&
+    //   map(0).sameElements(Array(0,4,5,2,3)) && map(1).sameElements(Array(0,2,3))
     // StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     if(highlight) println("processInducedInfo: "+unifs+"; "+Remapper.show(map))
 
@@ -246,7 +321,7 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           Profiler.count("addedViewCount")
           if(showTransitions || ComponentView0.highlight(nv)) 
             showTransition(newComponents, nv)
-          nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents)
+          nv.setCreationInfoIndirect(pre, cpts, cv, trans.e, post, newComponents)
           recordInduced() 
           // Following superceded by recordInduced
           // if(false && singleRef && isPrimary && unifs.isEmpty){
@@ -264,13 +339,13 @@ class EffectOn(views: ViewSet, system: SystemP.System){
           // Note: we create nv eagerly, even if missing is non-empty: this
           // might not be the most efficient approach.  Note also that the
           // missingCommons may be shared.
-          effectOnStore.add(missing, missingCommons, nv, 
-            pre, cpts, cv, e, post, newComponents)
+          EffectOn.effectOnStore.add(missing, missingCommons, nv, 
+            pre, cpts, cv, trans.e, post, newComponents)
           assert(missing.isEmpty || !views.contains(missing.head))
           // Profiler.count(s"EffectOn add to store-$isPrimary-${unifs.nonEmpty}"+
           //   s"-${pre.servers==post.servers}-${missing.nonEmpty}-"+
           //  missingCommons.nonEmpty)
-          nv.setCreationInfoIndirect(pre, cpts, cv, e, post, newComponents)
+          nv.setCreationInfoIndirect(pre, cpts, cv, trans.e, post, newComponents)
 // IMPROVE: do we need to check isPrimary here? 
           if(isPrimary && unifs.isEmpty && missingCommons.isEmpty){
             val ok = cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
@@ -325,6 +400,8 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     missingCommons
   }
 
+
+
   /** Get a representation of the cross references between cpts1 and cpts2,
     * needed for condition (b). */
   @inline private def getCrossRefs(
@@ -334,80 +411,5 @@ class EffectOn(views: ViewSet, system: SystemP.System){
     StateArray.crossRefs(cpts1, cpts2).map(Remapper.remapComponents(servers,_))
   }
 
-/*
-  /** Missing cross references, if singleRef.  For each reference from a
-    * component c1 of cpts2 to a component c2 of cpts2, or vice versa, test if
-    * sysAbsViews contains the view servers || c1 || c2.  Return all such
-    * missing views.  (cpts1 corresponds to cv.components; cpts2 corresponds
-    * to pre.components). */
-  @inline private def missingCrossRefs(
-    servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
-      : List[ComponentView] = {
-    assert(singleRef)
-    var missing = List[ComponentView]() // missing necessary Views
-    for(cptsx <- StateArray.crossRefs(cpts1, cpts2)){
-      val cvx = Remapper.mkComponentView(servers, cptsx)
-      if(!views.contains(cvx)) missing ::= cvx
-    }
-    if(verbose && missing.nonEmpty) 
-      println(s"missingCrossRefs(${StateArray.show(cpts1)}, "+
-        s"${StateArray.show(cpts2)}):\n  $missing")
-    missing
-  }
- */
 
-  def highlight(cv: ComponentView) =
-    ComponentView0.highlightServers(cv.servers) && 
-      //  44(T2,N5,N6) or 45(T2,N5,N6)
-      ComponentView0.highlightPrinc(cv.components(0)) && {
-        val second = cv.components(1)
-        // 16|17(N6,_,N4,N2)
-        (second.cs == 17 || second.cs == 16) &&
-        second.ids(0) == 5 && second.ids(2) == 3 && second.ids(3) == 1
-      }
-
-  /** If cv completes a delayed transition in effectOnStore, then complete it. */
-  def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
-  = {
-    if(highlight(cv)) println(s"completeDelayed($cv)")
-    for(nv <- effectOnStore.complete(cv, views)){
-      if(showTransitions || ComponentView0.highlight(nv)) 
-        println(s"Adding $nv\n from completeDelayed($cv)")
-      tryAddView(nv, nextNewViews)
-    }
-  }
-
-  /** Add mi.nextNewViews to nextNewViews. */
-  @inline private 
-  def tryAddView(nv: ComponentView, nextNewViews: MyHashSet[ComponentView]) = {
-    // require(mi.done); val nv = mi.newView
-    if(nextNewViews.add(nv)){
-      if(showTransitions || ComponentView0.highlight(nv)){
-        val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
-        println(s"Adding via completeDelayed \n"+
-          s"$pre\n  --> $post induces \n"+
-          EffectOnStore.showInduced(cv, cpts, post.servers, newComponents, nv))
-          // s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-          // s"  --> ${View.show(post.servers, newComponents)} == $nv")
-      }
-      if(!nv.representableInScript){
-        val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
-        println("Not enough identities in script to combine transition\n"+
-          s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
-        sys.exit()
-      }
-    } // end of outer if
-  }
-
-  def sanityCheck = effectOnStore.sanityCheck(views)
-
-  def report = effectOnStore.report
-
-  /** Perform a memory profile of this. */
-  def memoryProfile = {
-    import ox.gavin.profiling.MemoryProfiler.traverse
-    effectOnStore.report; println()
-    effectOnStore.memoryProfile
-    traverse("effectOn", this, maxPrint = 1)
-  }
 }

@@ -108,15 +108,7 @@ $(DIR)/SystemP/System.class: $(DIR)/FDRTransitionMap.class		\
 
 $(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.class
 
-# # Helper modules for Checker.
-
-$(DIR)/CompatibleWithCache.class: $(DIR)/BasicHashMap.class
-
-$(DIR)/Debugger.class: $(DIR)/SystemP/System.class
-
-$(EXTENDERP)/Extendability.class: $(DIR)/Unification.class $(DIR)/CompatibleWithCache.class
-
-$(EXTENDERP)/ExtendabilityTest.class: $(DIR)/TestStates.class $(EXTENDERP)/Extendability.class 
+# # EffectOn and helper modules
 
 $(DIR)/MissingCommon.class: $(DIR)/Unification.class $(DIR)/ViewSet.class
 
@@ -129,14 +121,24 @@ $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 $(DIR)/EffectOn.class: $(DIR)/EffectOnStore.class				\
   $(DIR)/EffectOnUnification.class $(DIR)/SingleRefEffectOnUnification.class
 
+# Extending of transition templates
+
+$(DIR)/CompatibleWithCache.class: $(DIR)/BasicHashMap.class
+
+$(EXTENDERP)/Extendability.class: $(DIR)/Unification.class $(COMBINERP)/Combiner.class  $(DIR)/CompatibleWithCache.class
+
 $(DIR)/ConsistentStateFinder.class: $(DIR)/SystemP/System.class	\
   $(COMBINERP)/Combiner.class
+
+$(EXTENDERP)/ExtendabilityTest.class: $(DIR)/TestStates.class $(EXTENDERP)/Extendability.class 
 
 $(DIR)/TransitionTemplateExtender.class: $(DIR)/Transition.class	\
   $(EXTENDERP)/Extendability.class $(DIR)/TransitionTemplateSet.class	\
   $(DIR)/ConsistentStateFinder.class
 
 # # Checker and main program
+
+$(DIR)/Debugger.class: $(DIR)/SystemP/System.class
 
 $(DIR)/Checker.class: $(DIR)/TransitionSet.class		\
   $(DIR)/NewTransitionSet.class $(DIR)/Unification.class	\

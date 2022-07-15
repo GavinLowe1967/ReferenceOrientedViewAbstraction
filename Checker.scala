@@ -31,7 +31,9 @@ class Checker(system: SystemP.System){
 
   /** Utility object encapsulating the effectOn and completeDelayed
   * functions. */
-  private val effectOn: EffectOn = new EffectOn(sysAbsViews, system)
+  //private val effectOn: EffectOn = new EffectOn(sysAbsViews, system)
+
+  EffectOn.init(sysAbsViews, system)
 
   val Million = 1000000
 
@@ -123,7 +125,7 @@ class Checker(system: SystemP.System){
     // Effect of previous transition templates
     addTransitions(
       transitionTemplateExtender.effectOfPreviousTransitionTemplates(cv) )
-    if(singleRef) effectOn.completeDelayed(cv, nextNewViews)
+    if(singleRef) EffectOn.completeDelayed(cv, nextNewViews)
     false
   } 
 
@@ -201,7 +203,9 @@ class Checker(system: SystemP.System){
     val iter = 
       if(UseNewViewSet) sysAbsViews.iterator(t)
       else sysAbsViews.iterator(t.preServers)
-    while(iter.hasNext){ val cv = iter.next(); effectOn(t, cv, nextNewViews) }
+    while(iter.hasNext){ 
+      val cv = iter.next(); new EffectOn(t, cv, nextNewViews)() 
+    }
   }
 
   /** The effect of previously found extended transitions on the view cv. */
@@ -226,7 +230,7 @@ class Checker(system: SystemP.System){
           cv.containsDoneInduced(t.post.servers),
         s"t = $t;\n cv = $cv\n"+cv.containsDoneInduced(t.post.servers))
  */
-      effectOn(t, cv, nextNewViews)
+      new EffectOn(t, cv, nextNewViews)()
     }
   }
 
@@ -311,9 +315,9 @@ class Checker(system: SystemP.System){
     } // end of main loop
 
     println("\nSTEP "+ply+"\n")
-    if(singleRef && doSanityCheck && bound == Int.MaxValue) effectOn.sanityCheck
+    if(singleRef && doSanityCheck && bound == Int.MaxValue) EffectOn.sanityCheck
     // Following is expensive: IMPROVE: enable via switch
-    if(singleRef && reportEffectOn) effectOn.report
+    if(singleRef && reportEffectOn) EffectOn.report
     if(showViews) println(sysAbsViews)
     //if(false) println(sysAbsViews.summarise)
     println("#abstractions = "+printLong(sysAbsViews.size))
@@ -355,7 +359,7 @@ class Checker(system: SystemP.System){
     else println("Omitting system\n") 
 
     //traverse("effectOn", effectOn, maxPrint = 5, maxPrintArray = 8); println
-    effectOn.memoryProfile; println()
+    EffectOn.memoryProfile; println()
 
     traverse("checker", this, maxPrint = 0); println()
   }

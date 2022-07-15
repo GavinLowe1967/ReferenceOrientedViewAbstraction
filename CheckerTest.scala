@@ -14,11 +14,13 @@ class CheckerTest(system: SystemP.System) extends Checker(system){
 
   /** Test of effectOn. */
   private def effectOnTest = {
-    val effectOnO = new EffectOn(sysAbsViews, system)
+    // val effectOnO = new EffectOn(sysAbsViews, system)
+    EffectOn.init(sysAbsViews, system)
 
     def effectOn(pre: Concretization, e: EventInt, post: Concretization, 
-        cv: ComponentView) =
-      effectOnO(new Transition(pre, e, post), cv, nextNewViews)
+        cv: ComponentView) = {
+      val ef = new EffectOn(new Transition(pre, e, post), cv, nextNewViews)()
+    }
 
     def mkCV(servers: ServerStates, princ: State, others: Array[State]) = {
       val cv = new ComponentView(servers, princ, others); /*cv.ply = 0;*/ cv
