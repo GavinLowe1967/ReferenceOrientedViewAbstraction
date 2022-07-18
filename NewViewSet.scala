@@ -45,7 +45,7 @@ class NewViewSet extends ViewSet{
 
   /** Get the view in this corresponding to v.  Pre: there is one. */
   def get(v: ComponentView): ComponentView = {
-    println("NewViewSet.get")
+    // println("NewViewSet.get")
     val ab = serversPrincipalBased((v.servers, v.principal))
     // Search through ab.  This is only done when debugging, so we can put up
     // with the inefficiency.

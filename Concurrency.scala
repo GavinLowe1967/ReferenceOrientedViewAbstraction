@@ -1,10 +1,11 @@
 package ViewAbstraction
 
-import java.util.concurrent.Semaphore
+// import java.util.concurrent.Semaphore
 
 /** Various concurrency primitives. */
 object Concurrency{
 
+/*
   /** A barrier synchronisation using semaphores.
     * Based on Bernard's re-implementation of my implementation. */
   class Barrier(n: Int){
@@ -58,6 +59,7 @@ object Concurrency{
       }while(!done)
     }
   }
+ */
 
   // Parallelism helpers
 

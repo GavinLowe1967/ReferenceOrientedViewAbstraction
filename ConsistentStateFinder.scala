@@ -66,6 +66,7 @@ class ConsistentStateFinder(system: SystemP.System){
     buffer
   } // end of consistentStates
 
+
   /** Find the next states from renamedState after e, if >=0, and add to
     * buffer. */
   private def processRenamedState(

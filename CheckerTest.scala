@@ -2,7 +2,8 @@ package ViewAbstraction
 
 import scala.collection.mutable.{ArrayBuffer,HashSet}
 
-class CheckerTest(system: SystemP.System) extends Checker(system){
+class CheckerTest(system: SystemP.System, numWorkers: Int)
+    extends Checker(system, numWorkers){
   import TestStates._
 
   def reset() = { 

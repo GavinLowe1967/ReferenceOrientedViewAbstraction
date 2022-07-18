@@ -17,7 +17,7 @@ object VA{
     singleRef = singleRefX; // newEffectOn = newEffectOnX
     system = new SystemP.System(fname); println("Created system")
     // Create and run the checker
-    checker = new Checker(system); checker(bound = bound)
+    checker = new Checker(system, numWorkers); checker(bound = bound)
     doMemoryProfile
   }
 
@@ -59,6 +59,7 @@ object VA{
   }
 
   var bound = Int.MaxValue // bound on check
+  var numWorkers = 1
   var testing = false // Are we running the unit tests?
   var memoryProfile = false // Are we doing memory profiling?
 
@@ -67,7 +68,7 @@ object VA{
     val start = java.lang.System.nanoTime
     system = new SystemP.System(fname)
     // Create and run the checker
-    checker = new Checker(system)
+    checker = new Checker(system, numWorkers)
     print("Compiled for "); printTime(java.lang.System.nanoTime-start)
     checker(bound = bound)
     checker.numViews
@@ -184,7 +185,7 @@ object VA{
         RemapperP.RemapperTest.test; CombinerP.CombinerTest.test
         SystemP.SystemTest.test(system); 
         new ExtendabilityP.ExtendabilityTest(system).test
-        new CheckerTest(system).test
+        new CheckerTest(system, numWorkers).test
         RemappingExtenderTest()
         SingleRefEffectOnUnificationTest()
       }

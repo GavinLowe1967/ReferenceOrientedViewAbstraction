@@ -130,7 +130,8 @@ $(EXTENDERP)/Extendability.class: $(DIR)/Unification.class $(COMBINERP)/Combiner
 $(DIR)/ConsistentStateFinder.class: $(DIR)/SystemP/System.class	\
   $(COMBINERP)/Combiner.class
 
-$(EXTENDERP)/ExtendabilityTest.class: $(DIR)/TestStates.class $(EXTENDERP)/Extendability.class 
+$(EXTENDERP)/ExtendabilityTest.class: $(DIR)/TestStates.class	\
+  $(EXTENDERP)/Extendability.class
 
 $(DIR)/TransitionTemplateExtender.class: $(DIR)/Transition.class	\
   $(EXTENDERP)/Extendability.class $(DIR)/TransitionTemplateSet.class	\
@@ -143,7 +144,8 @@ $(DIR)/Debugger.class: $(DIR)/SystemP/System.class
 $(DIR)/Checker.class: $(DIR)/TransitionSet.class		\
   $(DIR)/NewTransitionSet.class $(DIR)/Unification.class	\
   $(DIR)/Debugger.class $(DIR)/EffectOn.class			\
-  $(DIR)/TransitionTemplateExtender.class
+  $(DIR)/TransitionTemplateExtender.class $(DIR)/Barrier.class	\
+  $(DIR)/Concurrency.class
 
 $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 

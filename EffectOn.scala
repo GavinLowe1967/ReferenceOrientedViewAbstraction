@@ -130,7 +130,7 @@ class EffectOn(
   import ServersReducedMap.ReducedMap 
 
   import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo}
-  // InducedInfos = 
+  // InducedInfo = 
   //   ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
   // SecondaryInducedInfo = ArrayBuffer[(Array[State], UnificationList, Int)]
 
@@ -400,8 +400,6 @@ class EffectOn(
     missingCommons
   }
 
-
-
   /** Get a representation of the cross references between cpts1 and cpts2,
     * needed for condition (b). */
   @inline private def getCrossRefs(
@@ -410,6 +408,4 @@ class EffectOn(
     assert(singleRef)
     StateArray.crossRefs(cpts1, cpts2).map(Remapper.remapComponents(servers,_))
   }
-
-
 }

@@ -2,91 +2,62 @@ package ViewAbstraction
 
 import ox.gavin.profiling.Profiler
 import ViewAbstraction.RemapperP.Remapper
-// import ViewAbstraction.CombinerP.Combiner
-// import ViewAbstraction.ExtendabilityP.Extendability
 import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap}
 import java.util.concurrent.atomic.{AtomicLong,AtomicInteger,AtomicBoolean}
 
 /** A checker for the view abstraction algorithm, applied to system.
-  * @param aShapes the shapes of abstractions.
-  * @param cShapes the shapes of concretizations. */
-class Checker(system: SystemP.System){
-  // SystemP.System.setSystem(system) // set system in package, for showEvent
-
-  /** The abstract views. */
-  protected var sysAbsViews: ViewSet = null
-  // Note: reset by CheckerTest
+  * @param numWorkers the number of concurrent workers to run. */
+class Checker(system: SystemP.System, numWorkers: Int){
 
   // Get the initial views, and initialise the view set. 
-  val (sav, initViews) = system.initViews; sysAbsViews = sav
+  private val (sav, initViews) = system.initViews 
   println("initViews = "+initViews.mkString("; "))
 
-  // Note: in various places, we iterate over sysAbsViews.  We should avoid
-  // adding new views to the set while that is going on.
-
-  def numViews = sysAbsViews.size
+  /** The abstract views. */
+  protected var sysAbsViews: ViewSet = sav 
+  // Note: reset by CheckerTest
 
   /** The new views to be considered on the next ply. */
   protected var nextNewViews: MyHashSet[ComponentView] = null
 
-  /** Utility object encapsulating the effectOn and completeDelayed
-  * functions. */
-  //private val effectOn: EffectOn = new EffectOn(sysAbsViews, system)
-
-  EffectOn.init(sysAbsViews, system)
-
-  val Million = 1000000
-
-  private var done = new AtomicBoolean(false); 
-  // protected var ply = 1
-
-  /* A Transition is a tuple (pre, e, post): (Concretization, EventInt,
-   * Concretization), representing the transition pre -e-> post.  The pre
-   * state extends a View by adding all relevant components: components that
-   * synchronise on the transition, and any components to which the principal
-   * component obtains a reference.*/
-
+  /* The transitions found so far. */
   private val transitions = new NewTransitionSet
 
   /** Transitions found on this ply.  Transitions are initially added to
     * newTransitions, but transferred to transitions at the end of the ply. */
   private var newTransitions: BasicHashSet[Transition] = null
 
-  //import TransitionTemplateSet.TransitionTemplate
-  // = (Concretization, Concretization, ProcessIdentity, EventInt, Boolean)
-
-  /* A TransitionTemplate (pre, post, id, e, include): (Concretization,
-   * Concretization, ProcessIdentity, EventInt, Boolean) represents an
-   * extended transition pre U st -e-> post U st' for every state st and st'
-   * such that (1) st and st' have identity id; (2) st is compatible with pre;
-   * (3) if include then st -e-> st', otherwise st = st'.  */
-
   /** The transition templates found on previous plies.  Abstractly, a set of
     * TransitionTemplates. */
   private val transitionTemplates: TransitionTemplateSet = 
     new ServerBasedTransitionTemplateSet
-
-  /** Utility object for extending transition templates. */
-  private var transitionTemplateExtender = 
-    new TransitionTemplateExtender(transitionTemplates, system, sysAbsViews)
 
   /** Transition templates found on this ply.  Transition templates are
     * initially added to newTransitionTemplates, but transferred to
     * transitionsTemplates at the end of the ply. */
   private var newTransitionTemplates: MyHashSet[TransitionTemplate] = null
 
+  /* Note: in various places, we iterate over sysAbsViews, transitions and
+   * transitionTemplates.  We avoid adding new elements to these sets while
+   * that is going on.  Instead, elements are added to nextNewViews,
+   * newTransitions and newTransitionTemplates, and added to the main sets at
+   * the end of each ply. */
+
+  def numViews = sysAbsViews.size
+
+  /* Initialise utility object encapsulating the effectOn and completeDelayed
+   * functions. */
+  EffectOn.init(sysAbsViews, system)
+
+  /** Utility object for extending transition templates. */
+  private val transitionTemplateExtender = 
+    new TransitionTemplateExtender(transitionTemplates, system, sysAbsViews)
+
   var addTransitionCount = 0L
 
   /** Add trans to the set of transitions, and induce new transitions on
     * existing views. */
   private def addTransition(trans: Transition): Unit = {
-    // val highlight = 
-    //   ComponentView0.highlightServers(pre.servers) && 
-    //     pre.servers.servers(5).cs == 152 &&
-    //     ComponentView0.highlightServers(post.servers) &&
-    //     post.servers.servers(5).cs == 155 &&
-    //     pre.components(0).cs == 128 && pre.components(1).cs == 26
-    // if(highlight) println(s"\naddTransition($newTrans)")
     addTransitionCount += 1
     if(!transitions.contains(trans)){
       if(newTransitions.add(trans)) effectOnOthers(trans)
@@ -96,7 +67,6 @@ class Checker(system: SystemP.System){
 
   @inline private def addTransitions(buffer: ArrayBuffer[Transition]) =
     for(trans <- buffer) addTransition(trans)
-
 
   // ========= Processing a single view
 
@@ -180,7 +150,7 @@ class Checker(system: SystemP.System){
       // Store transition template
       val newTransTemp =
         new TransitionTemplate(pre, post, newPid, e, outsidePid != null)
-      assert(!transitionTemplates.contains(newTransTemp)) // IMPROVE
+      if(debugging) assert(!transitionTemplates.contains(newTransTemp)) 
       newTransitionTemplates.add(newTransTemp)
       // Instantiate the template based on previous views
       addTransitions(
@@ -195,11 +165,6 @@ class Checker(system: SystemP.System){
     * contains at least one process that changes state, then update as per
     * this transition. */
   private def effectOnOthers(t: Transition) = if(t.pre != t.post){
-    // if(false) println(s"effectOnOthers $t")
-    // val highlight = 
-    //   ComponentView0.highlightServers(t.preServers) && 
-    //     t.pre.components(0).cs == 26 && t.preServers.servers(5).cs == 152
-    // if(highlight) println(s"effectOnOthers($t)")
     val iter = 
       if(UseNewViewSet) sysAbsViews.iterator(t)
       else sysAbsViews.iterator(t.preServers)
@@ -210,16 +175,6 @@ class Checker(system: SystemP.System){
 
   /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
-    // val highlight = 
-    //   ComponentView0.highlightServers(cv.servers) && 
-    //     cv.servers.servers(5).cs == 152 && {
-    //     val princ = cv.components(0);
-    //     (princ.cs == 45 || princ.cs == 90 || princ.cs == 91) 
-    //   } && {
-    //     val second = cv.components(1);
-    //     second.cs == 11 && second.ids(1) == 4 && second.ids(2) == 5
-    //   }
-    // if(highlight) println(s"\neffectOfPreviousTransitions($cv)")
     val iter = transitions.iterator(cv)//.toArray
     while(iter.hasNext){ 
       val t = iter.next()
@@ -236,131 +191,145 @@ class Checker(system: SystemP.System){
 
   // ========= Main function
 
-  /** Run the checker. 
-    * @param bound the number of plys to explore (with negative values meaning 
-    * effectively infinite).  */
-  def apply(bound: Int = Int.MaxValue)  = {
-    var newViews: Array[ComponentView] = initViews
+  /** The views to be expanded on the current ply. */
+  private var newViews: Array[ComponentView] = initViews
 
-    while(!done.get && ply <= bound){
-      println("\nSTEP "+ply) 
-      println("#abstractions = "+printLong(sysAbsViews.size))
-      // println(s"#transitionsX = ${printLong(transitionsX.size)}")
-      println(s"#transitions = ${printLong(transitions.size)}")
-      println(s"#transition templates = ${printLong(transitionTemplates.size)}")
-      println("#new active abstract views = "+printInt(newViews.size))
-      nextNewViews = new BasicHashSet[ComponentView]
-      newTransitions = new BasicHashSet[Transition]
-      newTransitionTemplates = new BasicHashSet[TransitionTemplate]
-      var i = 0
+  /** Is the check complete? */
+  private var done = new AtomicBoolean(false)
 
-      // Process all views from newViews.
-      while(i < newViews.length && !done.get){
-        if(process(newViews(i))){
-          done.set(true)
-          val debugger = new Debugger(system, sysAbsViews, initViews)
-          debugger(newViews(i))
-          ??? // This should be unreachable.
-        }
-        i += 1
-        if(i%500 == 0){ print("."); if(i%5000 == 0) print(i) }
+  /** Print information, and update variables for the start of the next ply. */
+  private def startOfPly() = {
+    println("\nSTEP "+ply)
+    println("#abstractions = "+printLong(sysAbsViews.size))
+    println(s"#transitions = ${printLong(transitions.size)}")
+    println(s"#transition templates = ${printLong(transitionTemplates.size)}")
+    println("#new active abstract views = "+printInt(newViews.size))
+    nextNewViews = new BasicHashSet[ComponentView]
+    newTransitions = new BasicHashSet[Transition]
+    newTransitionTemplates = new BasicHashSet[TransitionTemplate]
+  }
+
+  private def endOfPly() = {
+    // Add views and transitions found on this ply into the main set.
+    println(s"\nCopying: nextNewViews, ${nextNewViews.size}; "+
+      s"newTransitions, ${newTransitions.size}; "+
+      s"newTransitionTemplates, ${newTransitionTemplates.size}")
+    val newViewsAB = new ArrayBuffer[ComponentView]
+
+    /* Add v to sysAbsViews and newViewsAB if new.  Return true if so. */
+    def addView(v: ComponentView): Boolean = {
+      if(sysAbsViews.add(v)){
+        assert(v.representableInScript); newViewsAB += v; true
       }
+      else false
+    } // end of addView
 
-      // Add views and transitions found on this ply into the main set.
-      println(s"\nCopying: nextNewViews, ${nextNewViews.size}; "+
-        s"newTransitions, ${newTransitions.size}; "+
-        s"newTransitionTemplates, ${newTransitionTemplates.size}")
-      val newViewsAB = new ArrayBuffer[ComponentView]
-      /* Add v to sysAbsViews and newViewsAB if new.  Return true if so. */
-      def addView(v: ComponentView): Boolean = {
-        if(sysAbsViews.add(v)){ 
-          assert(v.representableInScript); newViewsAB += v; true 
-        } 
-        else false
-      } // end of addView
-      // Now transitions
-      for(t <- newTransitions.iterator){
-        assert(transitions.add(t))
-        for(v0 <- t.post.toComponentView){
-          val v = Remapper.remapComponentView(v0)
-          if(addView(v)){
-            v.setCreationInfo(t.pre, t.e, t.post) 
-            if(showTransitions /* || ComponentView0.highlight(v) */) 
-              println(s"${t.toString}\ngives $v")
-          }
+    // Store transitions
+    for(t <- newTransitions.iterator){
+      assert(transitions.add(t))
+      for(v0 <- t.post.toComponentView){
+        val v = Remapper.remapComponentView(v0)
+        if(addView(v)){
+          v.setCreationInfo(t.pre, t.e, t.post)
+          if(showTransitions) println(s"${t.toString}\ngives $v")
         }
       }
-      // Store transition templates
-      for(template <- newTransitionTemplates.iterator)
-        transitionTemplates.add(template)
-      // Store new views
-      for(v <- nextNewViews.iterator){
-        addView(v)
-        // if(showTransitions){
-        //   println(s"adding $v from nextNewViews")
-        //   if(findTarget(v)){
-        //     println("***")
-        //     val (pre, cpts, cv, post, newComponents) = v.getCreationIngredients
-        //     println(s"Adding  $cv -> $v\n"+
-        //       s"$pre --> $post\n"+
-        //       s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-        //       s"  --> ${View.show(post.servers, newComponents)} == $v")
-        //   }
-        // }
-      }
-      ply += 1; newViews = newViewsAB.toArray; 
-      if(showEachPly)
-        println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
-      if(newViews.isEmpty) done.set(true)
-    } // end of main loop
+    }
+    // Store transition templates
+    for(template <- newTransitionTemplates.iterator)
+      transitionTemplates.add(template)
+    // Store new views
+    for(v <- nextNewViews.iterator) addView(v)
+    // And update for next ply
+    ply += 1; newViews = newViewsAB.toArray; nextIndex.set(0)
+    if(showEachPly)
+      println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
+    if(newViews.isEmpty) done.set(true)
+  }
 
+  /** Output at end of check. */
+  private def endOfCheck(bound: Int) = {
     println("\nSTEP "+ply+"\n")
+    // Following are expensive and verbose so normally disabled
     if(singleRef && doSanityCheck && bound == Int.MaxValue) EffectOn.sanityCheck
-    // Following is expensive: IMPROVE: enable via switch
     if(singleRef && reportEffectOn) EffectOn.report
     if(showViews) println(sysAbsViews)
-    //if(false) println(sysAbsViews.summarise)
+    // Summary 
     println("#abstractions = "+printLong(sysAbsViews.size))
-    // println(s"#transitionsX = ${printLong(transitionsX.size)}")
     println(s"#transitions = ${printLong(transitions.size)}")
     println(s"#transition templates = ${printLong(transitionTemplates.size)}")
     println(s"#ServerStates = ${ServerStates.count}")
     println(s"#States = ${MyStateMap.stateCount}")
-    
     // println(s"effectOnStore size = "+effectOnStore.size)
   }
 
-  import ox.gavin.profiling.MemoryProfiler.traverse  
+  /** Index of next view in the current ply. */
+  private val nextIndex = new AtomicInteger(0)
+
+  /** Run the checker. 
+    * @param bound the number of plys to explore (with negative values meaning 
+    * effectively infinite).  */
+  def apply(bound: Int = Int.MaxValue) = {
+    // Barrier for coordinating workers. 
+    val barrier = new Barrier(numWorkers)
+
+    /* A worker with identity me.  Worker 0 coordinates. */
+    def worker(me: Int) = {
+      while(!done.get && ply <= bound){
+        // Worker 0 resets for the next ply; the others wait.
+        if(me == 0) startOfPly()
+        barrier.sync(me)
+        var donePly = false
+
+        // Process all views from newViews.
+        while(!donePly && !done.get){
+          val i = nextIndex.getAndIncrement()
+          if(i < newViews.length){
+            if(process(newViews(i))){
+              if(!done.getAndSet(true)){
+                val debugger = new Debugger(system, sysAbsViews, initViews)
+                debugger(newViews(i))
+                assert(false, "Unreachable") // This should be unreachable.
+              }
+              else{ } // Another thread found error
+            }
+          }
+          else donePly = true
+          // i += 1
+          if(i%500 == 0){ print("."); if(i%5000 == 0) print(i) }
+        }
+
+        // Wait for other workers to finish; then worker 0 resets for next ply.
+        barrier.sync(me)
+        if(me == 0) endOfPly()
+      } // end of main loop
+    } // end of worker
+
+    // Run numWorker workers
+    Concurrency.runIndexedSystem(numWorkers, worker)
+
+    endOfCheck(bound)
+  } 
+
 
   /** Perform a memory profile of this. */
   def memoryProfile = {
+    import ox.gavin.profiling.MemoryProfiler.traverse
     println("Memory profile"); println()
-
     println("# states = "+MyStateMap.stateCount)
     traverse("MyStateMap", MyStateMap, maxPrint = 0); println()
-
     traverse("ServerStates", ServerStates, maxPrint = 0); println()
-
     traverse("first view", sysAbsViews.iterator.next(), maxPrint = 0); println()
-
     traverse("sysAbsViews", sysAbsViews, maxPrint = 0); println()
-
     traverse("transitions", transitions, maxPrint = 0); println()
-
     traverse("transitionTemplates", transitionTemplates, maxPrint = 0); println()
-
     // traverse("extendability", extendability, maxPrint = 0); println()
     traverse("transitionTemplateExtender", transitionTemplateExtender, 
       maxPrint = 0)
     println()
-
-    if(true){
-      traverse("system", system, maxPrint = 0); println() }
+    if(true){ traverse("system", system, maxPrint = 0); println() }
     else println("Omitting system\n") 
-
-    //traverse("effectOn", effectOn, maxPrint = 5, maxPrintArray = 8); println
     EffectOn.memoryProfile; println()
-
     traverse("checker", this, maxPrint = 0); println()
   }
 }
