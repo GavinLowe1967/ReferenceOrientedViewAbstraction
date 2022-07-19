@@ -274,6 +274,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     * @param bound the number of plys to explore (with negative values meaning 
     * effectively infinite).  */
   def apply(bound: Int = Int.MaxValue) = {
+    ply = 0
     // Barrier for coordinating workers. 
     val barrier = new Barrier(numWorkers)
 

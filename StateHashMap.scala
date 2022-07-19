@@ -115,13 +115,6 @@ class InitialisationStateHashMap(initLength: Int = 4096)
     extends StateHashMap(initLength){
   // println("InitialisationStateHashMap")
 
-  /** Are we still compiling?  If so, States should be created with isNew = 
-    * true. */
-  private var isNew = true
-
-  /** Record that compilation is over. */
-  def doneCompiling = { println("Done compiling"); isNew = false }
-
   /** The indexes: null here. */
   protected var indexes: Array[StateIndex] = null
 
@@ -134,7 +127,7 @@ class InitialisationStateHashMap(initLength: Int = 4096)
     if(oldSt == null){
       // assert(hashes(i) == 0 && states(i) == null)
       hashes(i) = h; controlStates(i) = cs; identities(i) = ids
-      val newState = new State(family, cs, ids, isNew); states(i) = newState
+      val newState = new State(family, cs, ids); states(i) = newState
       count += 1; newState
     }
     else{
@@ -145,11 +138,10 @@ class InitialisationStateHashMap(initLength: Int = 4096)
 
   // The following two methods aren't needed during initialisation. 
 
-  def getOrAddByIndex(family: Int, cs: ControlState, ids: Array[Identity]) = ???
-   // getOrAddWithIndex(family, cs, ids, isNew)._2
+  // def getOrAddByIndex(family: Int, cs: ControlState, ids: Array[Identity]) = ???
 
-  /** The state in position ix of the global array. */
-  def get(ix: Int) : State = ???
+  // /** The state in position ix of the global array. */
+  // def get(ix: Int) : State = ???
 
   /** An iterator over the states. */
   def iterator = new Iterator[State]{

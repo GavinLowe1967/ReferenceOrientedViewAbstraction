@@ -152,6 +152,10 @@ package object ViewAbstraction{
 
   // ------------------------------------------- Global variables
 
+  /** Are we currently compiling?  This is used to control checks when a new
+    * State is created. */
+  var compiling = true
+
   /** Current ply of the search. */
   var ply = 1
 

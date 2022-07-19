@@ -453,13 +453,13 @@ object Remapper{
     MyStateMap(st.family, st.cs, remappedParams)
   }
 
-  /** Remap state st, returning its index; also update map and nextArg. */
-  @inline private 
-  def remapStateToIndex(map: RemappingMap, nextArg: NextArgMap, st: State)
-      : StateIndex = {
-    val remappedParams = remapParams(map, nextArg, st)
-    MyStateMap.getByIndex(st.family, st.cs, remappedParams)
-  }
+  // /** Remap state st, returning its index; also update map and nextArg. */
+  // @inline private 
+  // def remapStateToIndex(map: RemappingMap, nextArg: NextArgMap, st: State)
+  //     : StateIndex = {
+  //   val remappedParams = remapParams(map, nextArg, st)
+  //   MyStateMap.getByIndex(st.family, st.cs, remappedParams)
+  // }
 
   /** Normalise st, returning the normalised version and the remapping map to
     * produce it. */

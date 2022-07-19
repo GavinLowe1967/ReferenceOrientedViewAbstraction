@@ -15,7 +15,7 @@ class InsufficientIdentitiesException extends Exception
   * in which case checking the type sizes are big enough is not necessary. 
   */
 class State(val family: Family, val cs: ControlState, 
-            val ids: Array[Identity], isNew: Boolean = false){
+            val ids: Array[Identity]){
   /** The number of parameters of this. */
   def length = ids.length
 
@@ -142,7 +142,7 @@ class State(val family: Family, val cs: ControlState,
     * script?  I.e. is every identity less than the size of the corresponding
     * type? */
   val representableInScript = 
-    isNew || (0 until ids.length).forall(i => ids(i) < typeSizes(typeMap(i)))
+    compiling || (0 until ids.length).forall(i => ids(i) < typeSizes(typeMap(i)))
 
   /** Add each identity (f,id) of this, from index `from` upwards, that is not
     * an identity of serversIds to bitmap. */

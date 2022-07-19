@@ -27,6 +27,7 @@ class System(fname: String) {
 
   // Store in package object
   eventPrinter = fdrSession
+  compiling = true
 
   /** Convert event represented by e to the String corresponding to the
     * script. */
@@ -127,6 +128,9 @@ class System(fname: String) {
     for(oi <- file.omitInfos) processOmitInfo(oi)
 
     fdr.libraryExit()
+    // println(s"minCS = ${State.minCS}, numCS = ${State.numCS}")
+    MyStateMap.renewStateStore // (State.numCS, State.minCS)
+    compiling = false // global variable
   }
 
   init()

@@ -11,7 +11,7 @@ object TestStates{
     val csMap = new scala.collection.mutable.HashMap[Int,Int] 
     val states = MyStateMap.toArray
     for(i <- 0 until states.length){
-      val st = states(i)
+      val st = states(i); assert(st != null)
       csMap.get(st.cs) match{
         case Some(n) =>
           assert(st.length == n, s"Found state $st; expected length $n")
