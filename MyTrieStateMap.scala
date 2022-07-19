@@ -4,9 +4,6 @@ package ViewAbstraction
   * @param numCS the number of control states. */
 // Not currently used
 class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
-
-  assert(false)
-
   /** A Trie for each control state, offset by minCS. */
   private var tries = new Array[Trie](numCS)
 
@@ -63,7 +60,7 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
 
   /** Array holding all states found so far.  Note: each state should be placed
     * in this array before being added to the trie. */
-  @volatile private var allStates = new /*AtomicReference*/Array[State](1024)
+  @volatile private var allStates = new Array[State](1024)
   
   /** The number of States stored in allStates. */
   private var allStatesCount = 0
@@ -78,7 +75,7 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
   @inline private 
   def addToArray(st: State): StateIndex = allStatesLock.synchronized{
     if(allStatesCount+1 == allStates.length){ // resize
-      val newAllStates = new /*AtomicReference*/Array[State](2*allStates.length)
+      val newAllStates = new Array[State](2*allStates.length)
       for(i <- 1 to allStatesCount) newAllStates(i) = allStates(i)
         // newAllStates.set(i, allStates.get(i))
       allStates = newAllStates

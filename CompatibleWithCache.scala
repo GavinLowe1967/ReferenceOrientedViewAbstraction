@@ -94,8 +94,12 @@ class ResultCache(initSize: Int = 16){
     if(count >= threshold){ resize(); add(k, b) }
     else{
       val h = mkHash(k); val i = find(k, h)
-      assert(keys(i) == null) // FIXME: will fail with concurrency
-      keys(i) = k; data(i) = b; hashes(i) = h; count += 1
+      if(keys(i) == null){
+        keys(i) = k; data(i) = b; hashes(i) = h; count += 1
+      }
+      else  // Another thread has filled this slot in the same way.
+        assert(keys(i).sameElements(k) && data(i) == b, 
+          s"keys(i) = ${keys(i)}; k = $k; data(i) = ${data(i)}; b = $b" )
     }
   }
 

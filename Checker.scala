@@ -197,16 +197,21 @@ class Checker(system: SystemP.System, numWorkers: Int){
   /** Is the check complete? */
   private var done = new AtomicBoolean(false)
 
-  /** Print information, and update variables for the start of the next ply. */
-  private def startOfPly() = {
-    println("\nSTEP "+ply)
-    println("#abstractions = "+printLong(sysAbsViews.size))
-    println(s"#transitions = ${printLong(transitions.size)}")
-    println(s"#transition templates = ${printLong(transitionTemplates.size)}")
-    println("#new active abstract views = "+printInt(newViews.size))
-    nextNewViews = new BasicHashSet[ComponentView]
-    newTransitions = new BasicHashSet[Transition]
-    newTransitionTemplates = new BasicHashSet[TransitionTemplate]
+  /** Print information, and update variables for the start of the next ply.  In
+    * particular, set done if all threads should terminate. */
+  private def startOfPly(bound: Int) = {
+    ply += 1
+    if(newViews.isEmpty || ply > bound) done.set(true)
+    else{
+      println("\nSTEP "+ply)
+      println("#abstractions = "+printLong(sysAbsViews.size))
+      println(s"#transitions = ${printLong(transitions.size)}")
+      println(s"#transition templates = ${printLong(transitionTemplates.size)}")
+      println("#new active abstract views = "+printInt(newViews.size))
+      nextNewViews = new BasicHashSet[ComponentView]
+      newTransitions = new BasicHashSet[Transition]
+      newTransitionTemplates = new BasicHashSet[TransitionTemplate]
+    }
   }
 
   private def endOfPly() = {
@@ -241,15 +246,14 @@ class Checker(system: SystemP.System, numWorkers: Int){
     // Store new views
     for(v <- nextNewViews.iterator) addView(v)
     // And update for next ply
-    ply += 1; newViews = newViewsAB.toArray; nextIndex.set(0)
+    newViews = newViewsAB.toArray; nextIndex.set(0)
     if(showEachPly)
       println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
-    if(newViews.isEmpty) done.set(true)
   }
 
   /** Output at end of check. */
   private def endOfCheck(bound: Int) = {
-    println("\nSTEP "+ply+"\n")
+    // println("\nSTEP "+ply+"\n")
     // Following are expensive and verbose so normally disabled
     if(singleRef && doSanityCheck && bound == Int.MaxValue) EffectOn.sanityCheck
     if(singleRef && reportEffectOn) EffectOn.report
@@ -275,33 +279,38 @@ class Checker(system: SystemP.System, numWorkers: Int){
 
     /* A worker with identity me.  Worker 0 coordinates. */
     def worker(me: Int) = {
-      while(!done.get && ply <= bound){
+      var myDone = false
+      while(!myDone){
         // Worker 0 resets for the next ply; the others wait.
-        if(me == 0) startOfPly()
+        if(me == 0) startOfPly(bound)
         barrier.sync(me)
-        var donePly = false
+        if(!done.get){
+          var donePly = done.get // if done, we exit loop
 
-        // Process all views from newViews.
-        while(!donePly && !done.get){
-          val i = nextIndex.getAndIncrement()
-          if(i < newViews.length){
-            if(process(newViews(i))){
-              if(!done.getAndSet(true)){
-                val debugger = new Debugger(system, sysAbsViews, initViews)
-                debugger(newViews(i))
-                assert(false, "Unreachable") // This should be unreachable.
+          // Process all views from newViews.
+          while(!donePly && !done.get){
+            val i = nextIndex.getAndIncrement()
+            if(i < newViews.length){
+              if(process(newViews(i))){
+                if(!done.getAndSet(true)){
+                  val debugger = new Debugger(system, sysAbsViews, initViews)
+                  debugger(newViews(i))
+                  // When the user is done, the debugger exits the whole system.
+                  sys.error("Unreachable") // This should be unreachable.
+                }
+                else{ } // Another thread found error
               }
-              else{ } // Another thread found error
             }
-          }
-          else donePly = true
-          // i += 1
-          if(i%500 == 0){ print("."); if(i%5000 == 0) print(i) }
-        }
+            else donePly = true
+            // i += 1
+            if(i%500 == 0){ print("."); if(i%5000 == 0) print(i) }
+          } // end of inner while
 
-        // Wait for other workers to finish; then worker 0 resets for next ply.
-        barrier.sync(me)
-        if(me == 0) endOfPly()
+          // Wait for other workers to finish; then worker 0 resets for next ply.
+          barrier.sync(me)
+          if(me == 0) endOfPly()
+        } // end of if(!done.get)
+        else myDone = true
       } // end of main loop
     } // end of worker
 

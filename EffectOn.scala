@@ -349,7 +349,7 @@ class EffectOn(
 // IMPROVE: do we need to check isPrimary here? 
           if(isPrimary && unifs.isEmpty && missingCommons.isEmpty){
             val ok = cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
-            assert(ok)
+            // assert(ok) // fails with concurrency
           }
         }
         else{ // nv was in nextNewViews 

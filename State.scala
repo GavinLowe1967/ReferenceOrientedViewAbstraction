@@ -40,11 +40,8 @@ class State(val family: Family, val cs: ControlState,
   private var pIds: Array[ProcessIdentity] = null
 
   /** The process identities. */
-  def processIdentities: Array[ProcessIdentity] = {
-    if(pIds == null) synchronized{
-      if(pIds == null)
-        pIds = Array.tabulate(ids.length)(i => (typeMap(i), ids(i)))
-    }
+  def processIdentities: Array[ProcessIdentity] = synchronized{
+    if(pIds == null) pIds = Array.tabulate(ids.length)(i => (typeMap(i), ids(i)))
     pIds
   }
 
@@ -52,17 +49,16 @@ class State(val family: Family, val cs: ControlState,
   private var paramsBitMap: BitMap = null
 
   /** Initialise paramsBitMap.  Needs typeMap to be initialised. */
-  @inline private def initParamsBitMap = 
-    if(paramsBitMap == null) synchronized{
-      if(paramsBitMap == null){
-        paramsBitMap = newBitMap; var i = 0
-        while(i < length){
-          val id = ids(i)
-          if(!isDistinguished(id)) paramsBitMap(typeMap(i))(id) = true
-          i += 1
-        }
+  @inline private def initParamsBitMap = synchronized{
+    if(paramsBitMap == null){
+      paramsBitMap = newBitMap; var i = 0
+      while(i < length){
+        val id = ids(i)
+        if(!isDistinguished(id)) paramsBitMap(typeMap(i))(id) = true
+        i += 1
       }
     }
+  }
 
   /** Does this have a reference to (t,id)?  Pre: this is not its identity. */
   @inline def hasRef(t: Family, id: Identity) = {
@@ -85,11 +81,9 @@ class State(val family: Family, val cs: ControlState,
   private var includeInfoSet = false
 
   /** Should the ith parameter of this be used for creating views? */
-  @inline def includeParam(i: Int) = {
-    if(!includeInfoSet) synchronized{
-      if(!includeInfoSet){
-        includeInfo = State.getIncludeInfo(cs); includeInfoSet = true
-      }
+  @inline def includeParam(i: Int) = synchronized{
+    if(!includeInfoSet){
+      includeInfo = State.getIncludeInfo(cs); includeInfoSet = true
     }
     includeInfo == null || includeInfo(i)
   }
@@ -100,16 +94,14 @@ class State(val family: Family, val cs: ControlState,
 
   /** Does this state have a parameter (f,id) that is not an omitted
     * reference?  */
-  def hasIncludedParam(f: Family, id: Identity) = {
-    if(includedParamBitMap == null) synchronized{ 
-      if(includedParamBitMap == null){
-        includedParamBitMap =
-          // FIXME: the +2 is a hack
-          Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)))
-        for(i <- 0 until length)
-          if(!isDistinguished(ids(i)) && includeParam(i))
-            includedParamBitMap(typeMap(i))(ids(i)) = true
-      }
+  def hasIncludedParam(f: Family, id: Identity) = synchronized{ 
+    if(includedParamBitMap == null){
+      includedParamBitMap =
+        // FIXME: the +2 is a hack
+        Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)))
+      for(i <- 0 until length)
+        if(!isDistinguished(ids(i)) && includeParam(i))
+          includedParamBitMap(typeMap(i))(ids(i)) = true
     }
     includedParamBitMap(f)(id)
   }
@@ -118,14 +110,12 @@ class State(val family: Family, val cs: ControlState,
   private var paramsBound: Array[Int] = null 
 
   /** A bound on the values of each type. */
-  def getParamsBound: Array[Int] = {
-    if(paramsBound == null) synchronized{
-      if(paramsBound == null){
-        paramsBound = new Array[Int](numTypes); var i = 0
-        while(i < length){
-          val id = ids(i); val t = typeMap(i); i += 1
-          paramsBound(t) = paramsBound(t) max (id+1)
-        }
+  def getParamsBound: Array[Int] = synchronized{
+    if(paramsBound == null){
+      paramsBound = new Array[Int](numTypes); var i = 0
+      while(i < length){
+        val id = ids(i); val t = typeMap(i); i += 1
+        paramsBound(t) = paramsBound(t) max (id+1)
       }
     }
     paramsBound

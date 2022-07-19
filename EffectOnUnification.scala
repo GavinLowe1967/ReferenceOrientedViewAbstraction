@@ -42,7 +42,7 @@ class EffectOnUnification(
   private val (cvpf, cvpid) = cv.principal.componentProcessIdentity
 
   // IMPROVE
-  val highlight = false &&
+  private val highlight = false &&
     preCpts.length == 2 && preCpts(0).cs == 15 && preCpts(1).cs == 7 &&
       cpts(0).cs == 8 && cpts(0).ids(0) == 1
     // pre.servers.servers(1).cs == 100 && post.servers.servers(5).cs == 113 &&
@@ -51,11 +51,12 @@ class EffectOnUnification(
     //   preCpts.sameElements(cv.components)
 
   /** Identities of components of pre. */
-  val preIds = 
+  private val preIds = 
     Array.tabulate(preCpts.length)(i => preCpts(i).componentProcessIdentity)
 
   /** Identities of components of cv. */
-  val cvIds = Array.tabulate(cpts.length)(i => cpts(i).componentProcessIdentity)
+  private val cvIds =
+    Array.tabulate(cpts.length)(i => cpts(i).componentProcessIdentity)
 
   /** Identities of components of pre that match the family of cv.principal. */
   private val preMatchingIds = {
@@ -69,7 +70,7 @@ class EffectOnUnification(
   /** For each parameter x of states, the list of positions (component number,
     * parameter number) where x appears.  size gives the number of parameters
     * of each type. */
-  def mkPositionMap(size: Array[Int], states: Array[State])
+  private def mkPositionMap(size: Array[Int], states: Array[State])
       : Array[Array[List[(Int,Int)]]] = {
     val pMap = Array.tabulate(numTypes)( t => 
       Array.fill(size(t))(List[(Int,Int)]()) )
@@ -77,7 +78,12 @@ class EffectOnUnification(
       val pids = states(i).processIdentities
       for(j <- 0 until pids.length){
         val (t,x) = pids(j)
-        if(!isDistinguished(x)) pMap(t)(x) ::= (i,j)
+        if(!isDistinguished(x)){
+          assert(0 <= t && t < pMap.size, s"t = $t")
+          assert(0 <= x && x < pMap(t).size, 
+            s"x = $x; pMap(t).size = ${pMap(t).size}; pre = $pre")
+          pMap(t)(x) ::= (i,j)
+        }
       }
     }
     pMap
@@ -86,7 +92,7 @@ class EffectOnUnification(
   /** For each parameter x of preCpts, the list of positions (component number,
     * parameter number) where x appears.  IMPROVE: maybe this should be stored
     * in pre.  */
-  val prePositionMap: Array[Array[List[(Int,Int)]]] = 
+  private val prePositionMap: Array[Array[List[(Int,Int)]]] = 
     mkPositionMap(pre.getParamsBound, preCpts)
   // IMPROVE
   //for(t <- 0 until numTypes; pairs <- prePositionMap(t))
@@ -95,7 +101,7 @@ class EffectOnUnification(
   /** For each parameter x of cv, the list of positions (component number,
     * parameter number) where x appears.  IMPROVE: maybe this should be stored
     * in cv.  */
-  val cvPositionMap: Array[Array[List[(Int,Int)]]] = 
+  private val cvPositionMap: Array[Array[List[(Int,Int)]]] = 
     mkPositionMap(cv.getParamsBound, cpts)
 
   /** In the case of singleRef, secondary components of the transition that

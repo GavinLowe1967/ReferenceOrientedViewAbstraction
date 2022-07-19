@@ -3,6 +3,9 @@ package ViewAbstraction
 import scala.collection.mutable.{HashMap,HashSet,ArrayBuffer}
 import ox.gavin.profiling.Profiler
 
+/* Note: all classes in this file assume that `add` is not called concurrently
+ * with any other operation. */
+
 /** An implementation of ViewSet allowing efficient iteration. */
 class NewViewSet extends ViewSet{
   /** A set containing all the views. */
@@ -161,7 +164,7 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
   /** For each postServers, indices ofOtherTypes corresponding to views v s.t. v
     * might not satisfy containsDoneInduced(postServers).  Indexed by
     * postServers.index.  Values of null or beyond the end of the array
-    * correspond to all indices. */
+    * correspond to all indices.  Protected */
   private var ofOtherTypesByPostServers = new Array[IndexSet](0) 
 
   /** All views in ofOtherTypes, indexed by the control states of the
@@ -171,7 +174,7 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
 
   /** Get the element of ofOtherTypesByPostServers corresponding to
     * postServersIndex, initialising it if needs be. */
-  private def getIndexSet(postServersIndex: Int): IndexSet = {
+  private def getIndexSet(postServersIndex: Int): IndexSet = synchronized{
     if(postServersIndex >= ofOtherTypesByPostServers.length){ // extend array
       val oldOOTBPS = ofOtherTypesByPostServers; val oldLen = oldOOTBPS.length
       ofOtherTypesByPostServers = new Array[IndexSet](postServersIndex+1)
@@ -253,7 +256,6 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
     /** Index into ab at stage 3. */
     private var j = 0
 
-
     /** Have we produced an induced view with v and postServers? */
     @inline def cdi(v: ComponentView) = 
       v.containsDoneInducedByIndex(postServersIndex)
@@ -317,14 +319,14 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
     * It aims not to hold too many others. */
   class IndexSet(postServersIndex: Int){
     /** The amount of space available for indices. */
-    var spaces = 4
+    private var spaces = 4
 
     /** The indices themselves. */
-    var indices = new Array[Int](spaces)
+    private var indices = new Array[Int](spaces)
 
     /** Count of the number of indices held.  The indices are in
       * indices[0..n). */
-    var n = 0
+    private var n = 0
 
     /** Should index ix be included? */
     @inline private def include(ix: Int) =
@@ -352,21 +354,37 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
     }
 
     /** Resize indices to size newSpaces. */
-    @inline def resizeTo(newSpaces: Int) = {
+    @inline private def resizeTo(newSpaces: Int) = {
       val oldSpaces = spaces; spaces = newSpaces
       val oldIndices = indices; indices = new Array[Int](spaces)
       var j = 0
       while(j < n){ indices(j) = oldIndices(j); j += 1 }
     }
 
+    /* We lock this object while there is a current iterator. */
+
+    /** Is this object locked? */
+    private var locked = false
+
+    /** Lock this object. */
+    private def lock() = synchronized{ while(locked) wait(); locked = true }
+
+    /** Unlock this object. */ 
+    private def unlock() = synchronized{ locked = false; notify() }
+
+    /** Produce an iterator.  No call to add should happen while the iterator is
+      * being used.  The implementation ensures that two iterators are not
+      * used concurrently. */
+    def iterator = { lock(); mkIterator }
+
     /** Produce an iterator.  No call to add should happen while the iterator is
       * being used.  And two iterators should not be used concurrently. */
-    def iterator = new Iterator[Int]{
+    private def mkIterator = new Iterator[Int]{
       /** Index into indices of the next value to return. */
-      var i = 0
+      private var i = 0
 
       /** The index of the next empty slot in indices.   */
-      var nextFree = 0
+      private var nextFree = 0
 
       /* While we iterate, we also purge indices that shouldn't be included.  The
        * set currently represents indices[0..nextFree) ++ indices[i..n).
@@ -387,16 +405,18 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
             // Profiler.count("NewViewSet.downsize")
             resizeTo(3*n/2 max 4) 
           }
+          unlock() // release the enclosing object
           false 
         }
 
       def next() = { 
+        assert(locked) // IMPROVE
         val res = indices(i)
         // Copy this index into the initial segment.  If nextFree = i, this is
         // a no-op.
         indices(nextFree) = res; nextFree += 1; i += 1; advance; res
       }
-    }
+    } // end of Iterator
 
   } // end of IndexSet
 

@@ -138,6 +138,7 @@ object VA{
   def main(args: Array[String]) = {
     // Parse arguments
     var i = 0; var fname = ""; var timing = false; var testSuite = false
+    var reps = 1
 
     while(i < args.length) args(i) match{
       case "--profile" => profiling = true; interval = args(i+1).toInt; i += 2
@@ -162,13 +163,16 @@ object VA{
       case "--reportEffectOn" => reportEffectOn = true; i += 1
       // case "--newEffectOn" => newEffectOn = true; i += 1
       case "--memoryProfile" => memoryProfile = true; i += 1
-      case "-p" => numThreads = args(i+1).toInt; i += 2
+      case "--numWorkers" => numWorkers = args(i+1).toInt; i += 2
+      case "--reps" => reps = args(i+1).toInt; i += 2
       case fn => 
         if(fn(0) == '-'){ println(s"Command not recognised: $fn"); sys.exit() }
         else{ fname = fn; i += 1 }
     }
     assert(fname.nonEmpty || testing || testSuite, "no filename specified")
     println("numThreads = "+numThreads)
+    println("numWorkers = "+numWorkers)
+    // IMPROVE: we don't want both numWorkers and numThreads
 
     // Initialise Profiler. 
     ox.gavin.profiling.Profiler.setWorkers(numThreads)
@@ -189,7 +193,10 @@ object VA{
         RemappingExtenderTest()
         SingleRefEffectOnUnificationTest()
       }
-      else if(testSuite){ assert(fname.isEmpty); runTestSuite() }
+      else if(testSuite){ 
+        assert(fname.isEmpty)
+        for(_ <- 0 until reps) runTestSuite()
+      }
       else if(profiling || profilingFlat || profilingBoth) profiler(run(fname)) 
       else run(fname)
       val elapsed0 = (java.lang.System.nanoTime - start) // in ns
