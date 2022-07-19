@@ -98,18 +98,6 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
     // assert(newState.cs == cs && newState.ids.sameElements(ids)) 
   }  
 
-  // @inline 
-  // def getOrAddWithIndex(family: Int, cs: ControlState, ids: Array[Identity])
-  //     : (State, StateIndex) = {
-  //   val ix = getOrMaybeAdd(family, cs, ids, null); (allStates(ix), ix)
-  //   // assert(newState.cs == cs && newState.ids.sameElements(ids)) 
-  // }
-
-  // def getOrAddByIndex(family: Int, cs: ControlState, ids: Array[Identity])
-  //     : StateIndex = {
-  //   val st = getOrMaybeAdd(family, cs, ids, null)
-  //   assert(st != 0); st
-  // }
 
   /** offSets(cs-minCS)(index) holds the number of distinguished values in the
     * type of the parameter index of cs. */
@@ -228,7 +216,6 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
       }
     } // end of outer else
   }
-
 
   /** Add st to this. */
   def add(st: State) = getOrMaybeAdd(st.family, st.cs, st.ids, st)

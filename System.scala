@@ -128,8 +128,7 @@ class System(fname: String) {
     for(oi <- file.omitInfos) processOmitInfo(oi)
 
     fdr.libraryExit()
-    // println(s"minCS = ${State.minCS}, numCS = ${State.numCS}")
-    MyStateMap.renewStateStore // (State.numCS, State.minCS)
+    MyStateMap.renewStateStore // switch to trie-based state store
     compiling = false // global variable
   }
 

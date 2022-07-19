@@ -21,20 +21,6 @@ trait StateMap{
   /** An iterator over all the states. */
   def iterator: Iterator[State]
 
-  /** Get the State corresponding to (family, cs, ids), or create one if there
-    * is no such.  Also return the index in the global array where the state
-    * is stored (not during compilation).
-    * @param isNew is this being done during compilation?  If so, the ids 
-    * are bound to be values from the script. */
-  // @inline 
-  // def getOrAddByIndex(family: Int, cs: ControlState, ids: Array[Identity])
-  //     : StateIndex 
-
-  /** Add st to the store, or get the equivalent one if it exists. */
-  // @inline def add(st: State): State
-
-  // /** The state in position ix of the global array. */
-  // def get(ix: Int) : State
 }
 
 

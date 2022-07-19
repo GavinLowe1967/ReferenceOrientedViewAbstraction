@@ -39,7 +39,7 @@ class MissingInfo(
 
   /* Overview of main functions.
    * updateMissingCommon     (called from EffectOnStore)
-   * |--(MissingCommon.)updateMissingCommon
+   * |--(MissingCommon.)updateWithNewMatch
    * |--advanceMC
    *    |--(MissingCommon.)updateMissingViews
    *    |--updateMissingViews

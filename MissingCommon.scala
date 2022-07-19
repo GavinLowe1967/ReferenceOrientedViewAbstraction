@@ -204,27 +204,6 @@ class MissingCommon(
   /* Note: we avoid creating duplicates of MissingCommon objects, so we can use
    * object equality. */
 
-/*
-  /** Equality test.  The constraint this represents is logically captured by
-    * its initial parameters, so we use equality of parameters as the notion
-    * of equality. */
-// IMPROVE: we avoid creating duplicates, so we could use reference equality
-  override def equals(that: Any) = that match{
-    case mc: MissingCommon => 
-      mc.hashCode == hashCode && // optimisation
-      mc.servers == servers && mc.cpts1.sameElements(cpts1) &&
-      mc.cpts2.sameElements(cpts2) && mc.pid == pid
-    case null => false
-  }
-
-  /** Hash code, based on the same principle as equality. */
-  override val hashCode = {
-    @inline def f(x:Int, y: Int) = x*97+y
-    f(f(f(f(servers.hashCode, StateArray.mkHash(cpts1)), 
-      StateArray.mkHash(cpts2)), pid._1), pid._2)
-  }
- */
-
   /** Ordering on MissingCommon values.  Return a value x s.t.: x < 0 if this <
     * that; x == 0 when this == that; x > 0 when this > that. */
   def compare(that: MissingCommon) = {
@@ -276,9 +255,6 @@ object MissingCommon{
    * |--updateMissingCandidates  (also called from companion updateWithNewMatch)
    *   |--Unification.remapToJoin
    *   |--getMissingCandidates
-   * 
-   * Profiling, 2021/10/22, ~10% of total Checker time is spent within
-   * makeMissingCommon.
    */
 
   /** The states of some components. */
@@ -478,22 +454,6 @@ object MissingCommon{
     sub &&= (i1 == mc1.length); sup &&= (i2 == mc2.length)
     if(sub){ if(sup) Eq else Sub } else if(sup) Sup else Inc
   }
-
-  // @inline private 
-  // def compare(mc1: MissingComponents, mc2: MissingComponents): Int = {
-  //   var c1 = mc1; var c2 = mc2; var sub = true; var sup = true
-  //   // Inv sub is true if elements of mc1 seen so far are all in mc2; sup is
-  //   // true if elements of mc2 seen so far are all in mc1.  Still need to
-  //   // compare c1 and c2.
-  //   while(c1.nonEmpty && c2.nonEmpty && (sub || sup)){
-  //     val comp = StateArray.compare(c1.head, c2.head) //c1.head.compare(c2.head)
-  //     if(comp < 0){ sub = false; c1 = c1.tail } // c1.head not in mc2
-  //     else if(comp == 0){ c1 = c1.tail; c2 = c2.tail }
-  //     else{ sup = false; c2 = c2.tail } // c2.head is not in mc1
-  //   }
-  //   sub &&= c1.isEmpty; sup &&= c2.isEmpty
-  //   if(sub){ if(sup) Eq else Sub } else if(sup) Sup else Inc
-  // }
 
   // Events for log 
   trait MCEvent

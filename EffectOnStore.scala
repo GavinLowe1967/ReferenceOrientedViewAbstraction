@@ -63,6 +63,8 @@ object EffectOnStore{
 /** A simple implementation of EffectOnStore.  The name "simple" is a
   * misnomer.  */
 class SimpleEffectOnStore extends EffectOnStore{
+  assert(singleRef)
+
   /* Overview of main functions.
    * 
    * add
@@ -184,7 +186,8 @@ class SimpleEffectOnStore extends EffectOnStore{
   import MissingCommon.ViewBuffer
 
   /** Try to complete values in the store, based on the addition of cv, and with
-    * views as the ViewSet.  Return the Views that can now be added.  */
+    * views as the current ViewSet (i.e. from earlier plies).  Return the
+    * Views that can now be added.  */
   def complete(cv: ComponentView, views: ViewSet)
       : List[ComponentView] = synchronized{
     var result = List[ComponentView]()
@@ -197,7 +200,6 @@ class SimpleEffectOnStore extends EffectOnStore{
           mi.pre, mi.oldCpts, mi.cv, mi.e, mi.post, mi.newCpts)
         result ::= newView
       }
-        // nv.asComponentView
       else Profiler.count("maybeAdd repeat")
     }
 
@@ -226,7 +228,6 @@ class SimpleEffectOnStore extends EffectOnStore{
       case Some(mis) => 
         val newMis = new MissingInfoSet // those to retain
         for(mi <- mis){
-          //val hl = ComponentView.highlight(mi.newView)
           if(mi.mcDone) assert(mi.done || mi.transferred) 
           else if(views.contains(mi.newView)) mi.markNewViewFound
           else{

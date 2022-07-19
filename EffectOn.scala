@@ -44,7 +44,8 @@ object EffectOn{
     * Tuples are added to the store in apply when a transition is prevented
     * because relevant views are not yet in the store.  completeDelayed
     * subsequently tries to complete the transitions.  */
-  private var effectOnStore: EffectOnStore =  new SimpleEffectOnStore
+  private var effectOnStore: EffectOnStore = 
+    if(singleRef) new SimpleEffectOnStore else null
 
   import Unification.UnificationList //  = List[(Int,Int)]
 

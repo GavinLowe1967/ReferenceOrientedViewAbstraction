@@ -136,13 +136,6 @@ class InitialisationStateHashMap(initLength: Int = 4096)
     }
   }  
 
-  // The following two methods aren't needed during initialisation. 
-
-  // def getOrAddByIndex(family: Int, cs: ControlState, ids: Array[Identity]) = ???
-
-  // /** The state in position ix of the global array. */
-  // def get(ix: Int) : State = ???
-
   /** An iterator over the states. */
   def iterator = new Iterator[State]{
     /** Index of the next element. */
@@ -160,16 +153,6 @@ class InitialisationStateHashMap(initLength: Int = 4096)
     def next() = { val result = states(i); i += 1; advance; result }    
   } // end of iterator
 
-  /** Create an Array holding all the states.  Not currently used. */
-  def toArray: Array[State] = {
-    // build up result in ab
-    val ab = new scala.collection.mutable.ArrayBuffer[State]; var i = 0
-    while(i < n){
-      while(i < n && hashes(i) == 0) i += 1
-      if(i < n){ ab += states(i); i += 1 }
-    }
-    ab.toArray
-  }
 
 }
 

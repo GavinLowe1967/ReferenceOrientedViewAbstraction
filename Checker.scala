@@ -304,7 +304,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
             }
             else donePly = true
             // i += 1
-            if(i%500 == 0){ print("."); if(i%5000 == 0) print(i) }
+            if(i%1000 == 0){ print("."); if(i%10000 == 0) print(i) }
           } // end of inner while
 
           // Wait for other workers to finish; then worker 0 resets for next ply.
