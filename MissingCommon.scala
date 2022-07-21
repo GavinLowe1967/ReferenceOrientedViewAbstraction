@@ -20,9 +20,12 @@ class MissingCommon(
    * |--removeViews
    * 
    * updateWithNewMatch      (called from MissingInfo)
-   * |--MissingCommon.updateMissingCandidates
+   * |--updateMissingCandidates
+   *    |--Unification.remapToJoin
+   *    |--getMissingCandidates
+   *       |--add
    * 
-   * add                    (called from MissingCommon.updateMissingCandidates
+   * done, missingHeads, matches, sanityCheck, compare, size
    */
 
   private val princ1 = cpts1(0)
@@ -55,7 +58,7 @@ class MissingCommon(
   private var isDone = false
 
   /** Is this constraint satisfied? */
-  @inline def done = isDone
+  @inline def done = synchronized{ isDone }
 
   // Log for debugging
 
@@ -74,20 +77,20 @@ class MissingCommon(
   /** The heads of the missing candidates.  The corresponding MissingInfo should
     * be registered against these in
     * EffectOnStore.mcMissingCandidatesStore. */
-  def missingHeads: List[Cpts] =  missingCandidates.map(_(0))
+  def missingHeads: List[Cpts] = synchronized{ missingCandidates.map(_(0)) }
 
-  import MissingCommon.ViewBuffer // = ArrayBuffer[Array[State]]
+  import MissingCommon.CptsBuffer // = ArrayBuffer[Array[State]]
 
   /** Remove the maximum prefix of mc consisting of elements of views.  If any
     * is empty, record that this is done; otherwise add the next view to
     * toRegister. */
   @inline private 
-  def removeViews(mc: MissingComponents, views: ViewSet, toRegister: ViewBuffer)
+  def removeViews(mc: MissingComponents, views: ViewSet, toRegister: CptsBuffer)
       : MissingComponents = {
     // For simplicity, we convert to a List, and back to an Array at the end.
     // This could be improved.
     var mc1 = mc.toList
-    while(mc1.nonEmpty && views.contains(servers, mc1.head))  mc1 = mc1.tail
+    while(mc1.nonEmpty && views.contains(servers, mc1.head)) mc1 = mc1.tail
     if(mc1.isEmpty) setDone    // This is now satisfied
     else toRegister += mc1.head
     // log(UpdateMC(mc, mc1))
@@ -98,10 +101,10 @@ class MissingCommon(
     * the front of each.  If any is now empty, then mark this as satisfied.
     * Return views against which this should now be registered, or null if
     * done. */
-  def updateMissingViews(views: ViewSet): ViewBuffer = {
-    if(done){ assert(missingCandidates.isEmpty);  null } 
+  def updateMissingViews(views: ViewSet): CptsBuffer = synchronized{
+    if(done){ assert(missingCandidates.isEmpty); null } 
     else{
-      val toRegister = new ViewBuffer
+      val toRegister = new CptsBuffer
       assert(missingCandidates.nonEmpty)
       val newMC = missingCandidates.map(mc => removeViews(mc, views, toRegister))
       if(done){ assert(missingCandidates.isEmpty);  null }
@@ -116,19 +119,110 @@ class MissingCommon(
 
   /** Is cv a possible match to clause (1), i.e. does it match servers ||
     * cpts1(0) || c? */
-  @inline def matches(cv: ComponentView) = 
+  @inline def matches(cv: ComponentView) = synchronized{
     cv.servers == servers && cv.components(0) == princ1
+  }
   // IMPROVE: can we also ensure that cv.components(1).processIdentity == pid?
 
-  /** Update this based on using cv to instantiate servers || princ1 || c.  Add
-    * to vb those Views against which this needs to be registered, namely
-    * missingHeads. */
-  def updateWithNewMatch(cv: ComponentView, views: ViewSet, vb: ViewBuffer) = {
-    assert(!done)
-    require(matches(cv)); val cpt1 = cv.components(1) 
-    if(cpt1.hasPID(pid))
-      if(MissingCommon.updateMissingCandidates(this, cpt1, views, vb))
-        setDone
+  /** Update this based on using cv to instantiate servers || princ1 || c.  
+    * @return a CptsBuffer containing those Views against which this needs to
+    * be registered, namely missingHeads; or null if this is done. */
+  def updateWithNewMatch(cv: ComponentView, views: ViewSet)
+      : CptsBuffer = synchronized{
+    require(matches(cv))
+    if(!done){
+      val cpt1 = cv.components(1)
+      val vb = new CptsBuffer
+      if(cpt1.hasPID(pid)){
+        if(updateMissingCandidates(cpt1, views, vb)){ setDone; null }
+        else vb
+      }
+      else vb
+    }
+    else null
+  }
+
+  /** Update missingCandidates to include lists of missing components
+    * corresponding to instantiating c with a renaming of cpt1.  Add to vb the
+    * views that this needs to be registered against in the EffectOnStore,
+    * namely missingHeads.
+    * 
+    * Pre: views contains a view servers || cpts1(0) || cpt1 to
+    * instantiate clause (1) of this.
+    * 
+    * @return true if this is now complete. */
+  @inline private 
+  def updateMissingCandidates(cpt1: State, views: ViewSet, vb: CptsBuffer)
+      : Boolean = {
+    require(!done && cpt1.hasPID(pid))
+    if(isNewUMCState(cpt1)){
+      // All relevant renamings of cpt1: identity on params of servers and
+      // princ1, but otherwise either to other params of cpts2 or to fresh
+      // values.
+// FIXME: also rename to other params of cpts1?
+      val renames = Unification.remapToJoin(servers, princ1, cpts2, cpt1)
+      var i = 0; var found = false
+      while(i < renames.length && !found){
+        val c = renames(i); i += 1
+        if(true || isNewUMCRenamedState(c)){ // IMPROVE
+          val missing = getMissingCandidates(c, views)
+          // val missing = MissingCommon.getMissingCandidates(this, c, views)
+          if(missing.isEmpty) found = true
+          else{
+            // Note we have to register the corresponding MissingInfo against
+            // missing.head, whether or not the add succeeded, because this
+            // might be shared between MissingInfos.
+            add(missing); vb += missing.head 
+          }
+        }
+      } // end of while loop
+      found
+    }
+    else{ 
+      // This update has previously been done, but we might need to
+      // re-register the MissingInfo object, because of sharing.  The
+      // following might be a bit pessimistic.  IMPROVE: store the relevant
+      // values from one instance to reuse in the next.
+      for(cpts <- missingHeads) if(!views.contains(servers, cpts)) vb += cpts 
+      false
+    }
+  }
+
+  /** Find the missing components that (with servers) are necessary to complete
+    * this for a particular candidate state c.  Return a list containing each
+    * of the following that is not currently in views: (1) cpts2(0) || c; and
+    * (2) if c has a reference to a secondary component c2 of cpts1 or cpts2,
+    * then c || c2 (renamed).  The list is sorted (wrt
+    * StateArray.lessThan).  */
+  @inline private 
+  def getMissingCandidates(c: State, views: ViewSet): MissingComponents = {
+    var missing = List[Array[State]]() // missing necessary views
+    //val servers = mc.servers; val cpts1 = mc.cpts1; val cpts2 = mc.cpts2
+    // Add cptsx, if servers || cptsx is not in views
+    @inline def maybeAdd(cptsx: Array[State]) = { 
+      val renamedCpts = Remapper.remapComponents(servers, cptsx)
+      if(!views.contains(servers, renamedCpts) && 
+          !missing.exists(_.sameElements(renamedCpts)))
+        missing ::= renamedCpts
+      // IMPROVE: insert so as to maintain sorted order. 
+    }
+
+    maybeAdd(Array(cpts2(0), c))
+    // If c has a reference to a secondary component c2 of cpts2 or cpts1,
+    // then the View servers || c || c2 is necessary.  This avoids a false
+    // error with lockFreeQueue.csp.
+    var j = 1
+    while(j < c.length){
+      if(c.includeParam(j)){
+        val pid2 = c.processIdentities(j)
+        val c2 = StateArray.find(pid2, cpts2)
+        if(c2 != null) maybeAdd(Array(c, c2))
+        val c1 = StateArray.find(pid2, cpts1)
+        if(c1 != null) maybeAdd(Array(c, c1))
+      }
+      j += 1
+    }
+    missing.toArray.sortWith(StateArray.lessThan)
   }
 
   /** States for which MissingCommon.updateMissingCandidates has been executed
@@ -163,6 +257,8 @@ class MissingCommon(
     var newMC = List[MissingComponents]()
     var found = false // true if missingCandidates includes a subset of mCpts
     for(mCpts1 <- missingCandidates){
+      // Note: mCpts is local; this is locked; so neither of following
+      // parameters can be mutated by a concurrent thread.
       val cmp = MissingCommon.compare(mCpts1, mCpts)
       if(cmp != Sup) newMC::= mCpts1 // mCpts1 can't be replaced by mCpts
       found ||= cmp == Sub || cmp == Eq // mCpts can't be replaced by mCpts1
@@ -207,6 +303,7 @@ class MissingCommon(
   /** Ordering on MissingCommon values.  Return a value x s.t.: x < 0 if this <
     * that; x == 0 when this == that; x > 0 when this > that. */
   def compare(that: MissingCommon) = {
+    // Note: refers only to parameters, so locking not necessary.
     /* The following makes comparison more efficient, but makes the ordering
      * nondeterministic (varying from one run to another), and so makes the
      * final sizes of the stores nondeterministic.
@@ -252,17 +349,16 @@ object MissingCommon{
   /* Overview of main functions.
    * 
    * makeMissingCommon          (called from EffectOn)
-   * |--updateMissingCandidates  (also called from companion updateWithNewMatch)
-   *   |--Unification.remapToJoin
-   *   |--getMissingCandidates
+   * |--getOrInit
+   * |--(companion).updateMissingCandidates 
    */
 
   /** The states of some components. */
   type Cpts = Array[State]
 
-  /** A buffer for storing Views, against which a MissingInfo should be
-    * registered in the EffectOnStore. */
-  type ViewBuffer = ArrayBuffer[Cpts]
+  /** A buffer for storing Cpts, against which a MissingInfo should be
+    * registered in the EffectOnStore (with appropriate servers). */
+  type CptsBuffer = ArrayBuffer[Cpts]
 
   /** Each value cands of type MissingComponents represents that if
     * (servers,cpts) is added to the ViewSet for each cpts in cands, then this
@@ -320,14 +416,17 @@ object MissingCommon{
   def makeMissingCommon(
     servers: ServerStates, cpts1: Cpts, cpts2: Cpts, 
     pid: ProcessIdentity, views: ViewSet)
-      : MissingCommon = {
+      : MissingCommon = synchronized{
+// IMPROVE: we wrap this in a synchronized block, to protect allMCs; but I
+// suspect we can do better.  Need to ensure the MissingCommon is fully
+// initiailised before it becomes visible.
     Profiler.count("makeMissingCommon")
     assert(singleRef)
     assert(cpts2.length == 2, StateArray.show(cpts2))
     val (mc, isNew) = getOrInit(servers, cpts1, cpts2, pid)
     if(isNew){ 
       // Initialise mc, based on views
-      val ab = new ViewBuffer
+      val ab = new CptsBuffer
       val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
       // Search for elements of views of the form servers || princ1 || c where c
       // has identity pid
@@ -335,7 +434,8 @@ object MissingCommon{
       while(iter.hasNext && !found){
         val cv = iter.next(); val cpts = cv.components; 
         assert(cpts.length == 2, cv); val cpt1 = cpts(1)
-        if(cpt1.hasPID(pid)) found = updateMissingCandidates(mc, cpt1, views, ab)
+        if(cpt1.hasPID(pid)) 
+          found = mc.updateMissingCandidates(cpt1, views, ab)
       }
       if(found){ mc.setDone; null } else mc 
       // Note: we don't need to do anything with ab here, as mc.allcandidates
@@ -344,101 +444,13 @@ object MissingCommon{
     else if(mc.done) null else mc 
   }
 
-  /** Update mc.missingCandidates to include lists of missing components
-    * corresponding to instantiating c with a renaming of cpt1.  Add to vb the
-    * views that mc needs to be registered against in the EffectOnStore,
-    * namely mc.missingHeads.
-    * 
-    * Pre: views contains a view mc.servers || mc.cpts1(0) || cpt1 to
-    * instantiate clause (1) of mc.
-    * 
-    * @return true if mc is now complete. */
-  @inline private 
-  def updateMissingCandidates(
-    mc: MissingCommon, cpt1: State, views: ViewSet, vb: ViewBuffer)
-      : Boolean = {
-    assert(!mc.done)
-    require(cpt1.hasPID(mc.pid))
-    if(mc.isNewUMCState(cpt1)){
-      // All relevant renamings of cpt1: identity on params of servers and
-      // princ1, but otherwise either to other params of cpts2 or to fresh
-      // values.
-// FIXME: also rename to other params of cpts1?
-      val renames = 
-        Unification.remapToJoin(mc.servers, mc.princ1, mc.cpts2, cpt1)
-      var i = 0; var found = false
-      while(i < renames.length && !found){
-        val c = renames(i); i += 1
-        if(true || mc.isNewUMCRenamedState(c)){ // IMPROVE
-          val missing = getMissingCandidates(mc, c, views)
-          if(missing.isEmpty) found = true
-          else{
-            // Note we have to register the corresponding MissingInfo against
-            // missing.head, whether or not the add succeeded, because this
-            // might be shared between MissingInfos.
-            mc.add(missing); vb += missing.head 
-          }
-        }
-      } // end of while loop
-      found
-    }
-    else{ 
-      // This update has previously been done, but we might need to
-      // re-register the MissingInfo object, because of sharing.  The
-      // following might be a bit pessimistic.  IMPROVE: store the relevant
-      // values from one instance to reuse in the next.
-      for(cpts <- mc.missingHeads){
-        if(!views.contains(mc.servers, cpts)) vb += cpts 
-      }
-      false
-    }
-  }
-
-  /** Find the missing components that (with servers) are necessary to complete
-    * mc for a particular candidate state c.  Return a list containing each of
-    * the following that is not currently in views: (1) mc.cpts2(0) || c; and
-    * (2) if c has a reference to a secondary component c2 of mc.cpts1 or
-    * mc.cpts2, then c || c2 (renamed).  The list is sorted (wrt
-    * StateArray.lessThan).  */
-  @inline private 
-  def getMissingCandidates(mc: MissingCommon, c: State, views: ViewSet)
-      : MissingComponents = {
-    var missing = List[Array[State]]() // missing necessary views
-    val servers = mc.servers; val cpts1 = mc.cpts1; val cpts2 = mc.cpts2
-    // Add cptsx, if servers || cptsx is not in views
-    @inline def maybeAdd(cptsx: Array[State]) = { 
-      val renamedCpts = Remapper.remapComponents(servers, cptsx)
-      if(!views.contains(servers, renamedCpts) && 
-          !missing.exists(_.sameElements(renamedCpts)))
-        missing ::= renamedCpts
-      // IMPROVE: insert so as to maintain sorted order. 
-    }
-
-    maybeAdd(Array(cpts2(0), c))
-    // If c has a reference to a secondary component c2 of cpts2 or cpts1,
-    // then the View servers || c || c2 is necessary.  This avoids a false
-    // error with lockFreeQueue.csp.
-    var j = 1
-    while(j < c.length){
-      if(c.includeParam(j)){
-        val pid2 = c.processIdentities(j)
-        val c2 = StateArray.find(pid2, cpts2)
-        if(c2 != null) maybeAdd(Array(c, c2))
-        val c1 = StateArray.find(pid2, cpts1)
-        if(c1 != null) maybeAdd(Array(c, c1))
-      }
-      j += 1
-    }
-    missing.toArray.sortWith(StateArray.lessThan)
-  }
-
   // Possible returns from compare
   private val Eq = 0; private val Sub = 1; 
   private val Sup = 2; private val Inc = 4
 
   /** Compare mc1 and mc2.  Return Eq is equal, Sub if mc1 is proper subset, Sup
     * if mc1 is a proper superset, and Inc if they are incomparable.  Pre:
-    * both are sorted.  */
+    * both are sorted.  Requires that neither is mutated concurrently. */
   @inline private 
   def compare(mc1: MissingComponents, mc2: MissingComponents): Int = {
     var i1 = 0; var i2 = 0; var sub = true; var sup = true

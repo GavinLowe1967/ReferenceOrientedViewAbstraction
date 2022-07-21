@@ -114,7 +114,8 @@ $(DIR)/MissingCommon.class: $(DIR)/Unification.class $(DIR)/ViewSet.class
 
 $(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
 
-$(DIR)/EffectOnStore.class: $(DIR)/MissingInfo.class
+# $(DIR)/EffectOnStore.class: $(DIR)/MissingInfo.class EffectOnStore.scala
+# 	fsc -cp $(CP):/home/gavin/Work/NewViewAbstraction/scala-parallel-collections_2.13-0.2.0.jar EffectOnStore.scala
 
 $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 

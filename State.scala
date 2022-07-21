@@ -34,7 +34,10 @@ class State(val family: Family, val cs: ControlState,
   @inline def typeMap: Array[Type] = State.stateTypeMap(cs)
   // Note: can't be set at the point of object creation.
 
-  def processIdentity(i: Int): ProcessIdentity = (typeMap(i), ids(i))
+  def processIdentity(i: Int): ProcessIdentity = {
+    // assert(i < typeMap.length && i < length, s"$i ${typeMap.length} $length")
+    (typeMap(i), ids(i))
+  }
 
   /** The process identities corresponding to ids. */
   private var pIds: Array[ProcessIdentity] = null
@@ -385,7 +388,7 @@ object State{
   // private var indexMapTemplate: Array[Array[Int]] = null
 
   /** Reset for a new check */
-  def reset = {} // indexMapTemplate = null
+  def reset = { minCS = Int.MaxValue; numCS = -1 } // indexMapTemplate = null
 
   /** A map, implemented as an array, giving the index of identities within
     * states, or -1 if an index does not appear. */ 

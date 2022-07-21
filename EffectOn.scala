@@ -47,6 +47,8 @@ object EffectOn{
   private var effectOnStore: EffectOnStore = 
     if(singleRef) new SimpleEffectOnStore else null
 
+  def reset = { effectOnStore = if(singleRef) new SimpleEffectOnStore else null }
+
   import Unification.UnificationList //  = List[(Int,Int)]
 
   import ServersReducedMap.ReducedMap 

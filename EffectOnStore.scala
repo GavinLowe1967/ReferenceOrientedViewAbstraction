@@ -28,7 +28,7 @@ trait EffectOnStore{
 
   /** Try to complete values in the store, based on the addition of cv, and with
     * views as the ViewSet.  Return the Views that can now be added.  */
-  def complete(cv: ComponentView, views: ViewSet): List[ComponentView]
+  def complete(cv: ComponentView, views: ViewSet): ArrayBuffer[ComponentView]
 
   /** Sanity check performed at the end of a run. */
   def sanityCheck(views: ViewSet): Unit
@@ -82,6 +82,8 @@ class SimpleEffectOnStore extends EffectOnStore{
     * result of finding a new ComponentView. */
   type Store = HashMap[ReducedComponentView, MissingInfoSet]
 
+  type ViewBuffer = ArrayBuffer[ComponentView]
+
   /** Information about those mi: MissingInfo in the abstract set such that
     * !mi.mcDone (i.e. not all MissingCommon in mi.missingCommon are done).
     * If mc is the first element of mi.missingCommon that is not done, then
@@ -109,6 +111,10 @@ class SimpleEffectOnStore extends EffectOnStore{
   private val candidateForMCStore = 
     new HashMap[(ServerStates, State), MissingInfoSet]
 
+  /* Operations on each of the above HashMaps is protected by a synchronized
+   * block on that HashMap.  Operations on each MissingInfoSet is protected by
+   * a synchronized block on that MissingInfoSet. */
+
 /* IMPROVE: periodically purge the stores of MissingInfos that are done or for
  * which the newView has been found, and purge mcNotDoneStore and
  * candidateForMSCStore of MissingInfos that are mcDone. */
@@ -122,13 +128,13 @@ class SimpleEffectOnStore extends EffectOnStore{
     else{ assert(theStore == mcDoneStore); "mcDoneStore" }
 
   /** Add missingInfo to theStore(cv), if not already there. */
-  @inline private 
-  def addToStore(theStore: Store, cv: ReducedComponentView, 
-    missingInfo: MissingInfo)
+  @inline private def addToStore(
+    theStore: Store, cv: ReducedComponentView, missingInfo: MissingInfo)
   = {
-    val mis = theStore.getOrElseUpdate(cv, new MissingInfoSet)
-    if(!mis.add(missingInfo)){
-      missingInfo.setNotAdded; missingInfo.log(NotStored(storeName(theStore)))
+    val mis =
+      theStore.synchronized{ theStore.getOrElseUpdate(cv, new MissingInfoSet) }
+    if(! mis.synchronized{ mis.add(missingInfo) }){
+      missingInfo.setNotAdded; //missingInfo.log(NotStored(storeName(theStore)))
     } 
   }
 
@@ -139,13 +145,16 @@ class SimpleEffectOnStore extends EffectOnStore{
     missingCommon: List[MissingCommon], nv: ComponentView,
     pre: Concretization, oldCpts: Array[State], cv: ComponentView,
     e: EventInt, post: Concretization, newCpts: Array[State])
-      : Unit = synchronized{
-    if(ComponentView0.highlight(nv))
-      println(s"\nEffectOnStore.add($nv);\n missingCommon = $missingCommon;\n"+
-        s"missing = "+missing.mkString("List(", ",\n    ", ")")+
-        s"\nFrom\n$pre ->\n  $post induces\n"+
-        EffectOnStore.showInduced(cv, oldCpts, post.servers, newCpts, nv))
+      : Unit = {
+    // if(ComponentView0.highlight(nv))
+    //   println(s"\nEffectOnStore.add($nv);\n missingCommon = $missingCommon;\n"+
+    //     s"missing = "+missing.mkString("List(", ",\n    ", ")")+
+    //     s"\nFrom\n$pre ->\n  $post induces\n"+
+    //     EffectOnStore.showInduced(cv, oldCpts, post.servers, newCpts, nv))
     Profiler.count("EffectOnStore.add")
+    // I think the following holds regardless of concurrent threads: each mc
+    // is created based on earlier plies; and any update will be based just on
+    // the previous ply.
     for(mc <- missingCommon) assert(!mc.done)
     val mcArray = missingCommon.toArray
     val nv1 = new ReducedComponentView(nv.servers, nv.components)
@@ -153,7 +162,7 @@ class SimpleEffectOnStore extends EffectOnStore{
       pre, oldCpts, cv, e, post, newCpts)
     if(missingCommon.isEmpty){
       assert(missing.nonEmpty)
-      missingInfo.log(McDoneStore(missingInfo.missingHead))
+      // missingInfo.log(McDoneStore(missingInfo.missingHead))
       missingInfo.transferred = true
       addToStore(mcDoneStore, missingInfo.missingHead, missingInfo)
     }
@@ -163,59 +172,175 @@ class SimpleEffectOnStore extends EffectOnStore{
       // Note: mcArray may be in a different order from missingCommon.
       for(cpts <- mc0.missingHeads){ 
         val cv = new ReducedComponentView(mc0.servers, cpts)
-        missingInfo.log(McNotDoneStore(cv))
+        // missingInfo.log(McNotDoneStore(cv))
         addToStore(mcNotDoneStore, cv, missingInfo)
       }
       // Add entries to candidateForMCStore.  IMPROVE: register just against
       // mcArray(0)
       for(mc <- missingCommon){
         val princ1 = mc.cpts1(0); val key = (mc.servers, princ1)
-        val mis = candidateForMCStore.getOrElseUpdate(key, new MissingInfoSet)
-        missingInfo.log(CandidateForMC(mc.servers,princ1))
-        if(!mis.add(missingInfo)){
+        val mis = candidateForMCStore.synchronized{ 
+          candidateForMCStore.getOrElseUpdate(key, new MissingInfoSet) 
+        }
+        // missingInfo.log(CandidateForMC(mc.servers,princ1))
+        if(! mis.synchronized{ mis.add(missingInfo) }){
           missingInfo.setNotAdded; 
-          missingInfo.log(NotStored("candidateForMCStore -- add"))
-        }// mis += missingInfo
+          // missingInfo.log(NotStored("candidateForMCStore -- add"))
+        }
       }
     }
   }
-  /* Profiling, 2021/09/15 on lazySet.csp with bound 36: of 247M calls to add,
-   * there were 70M successful adds to one of the maps, and 228M unsuccessful
-   * adds. */
 
-  import MissingCommon.ViewBuffer
+  import MissingCommon.CptsBuffer
+
+  /* Helper functions for complete. */
+
+  /** Add mi.newView to result if not already there. */
+  @inline private  def maybeAdd(mi: MissingInfo, buff: ViewBuffer) = {
+    val nv = mi.newView
+    if(!buff.contains(nv)){
+      val newView = ComponentView.fromReducedComponentView(nv)
+      newView.setCreationInfoIndirect(
+        mi.pre, mi.oldCpts, mi.cv, mi.e, mi.post, mi.newCpts)
+      buff += newView
+    }
+    else Profiler.count("maybeAdd repeat")
+  }
+
+  /** Update based upon the MissingCommon entries in mi being all completed.
+    * Pre: the missingViews in mi have been updated (via mi.advanceMC).  If
+    * now done, then add the newView to buff; otherwise add to mcDoneStore. */
+  @inline private 
+  def mcDone(mi: MissingInfo, views: ViewSet, buff: ViewBuffer) = {
+    require(mi.mcDone); require(mi.missingViewsUpdated(views))
+    if(mi.done) maybeAdd(mi, buff)
+    else{
+      // mi.log(McDoneStore(mi.missingHead))
+      mi.transferred = true
+      addToStore(mcDoneStore, mi.missingHead, mi)
+      // IMPROVE: remove elsewhere
+    }
+  }
+
+  /* The various phases of complete.  In each phase, we also purge all
+   * MissingInfos for which the newView has been found, or are done.  In the
+   * first two cases, we also purge those whose MissingCommon are done. */
+
+  /** For each relevant entry in candidateForMCStore, try to match the
+    *  MissingCommon entries against cv. */
+  @inline private def completeCandidateForMC(
+      cv: ComponentView, views: ViewSet, result: ViewBuffer): Unit = {
+    val key = (cv.servers, cv.principal)
+    candidateForMCStore.synchronized{ candidateForMCStore.get(key) } match{
+      case Some(mis) => 
+        val newMis = new MissingInfoSet // those to retain
+        mis.synchronized{
+          for(mi <- mis) mi.synchronized{
+            if(mi.mcDone) assert(mi.done || mi.transferred)
+            else if(views.contains(mi.newView)) mi.markNewViewFound
+            else{
+              val vb: CptsBuffer = mi.updateMissingCommon(cv, views)
+              if(vb == null){
+                if(mi.done) maybeAdd(mi, result)
+                else{ assert(mi.mcDone); mcDone(mi, views, result) }
+              }
+              else{
+                // Register mi against each view in vb, and retain
+                for(cpts <- vb){
+                  val rcv = new ReducedComponentView(cv.servers, cpts)
+                  // assert(!views.contains(cv1))
+                  // mi.log(McNotDoneStore(rcv))
+                  addToStore(mcNotDoneStore, rcv, mi)
+                }
+                // mi.log(CandidateForMC(cv.servers, cv.principal))
+                if(!newMis.add(mi)){
+                  mi.setNotAdded; mi.log(NotStored("candidateForMCStore"))
+                }
+              }
+            }
+          } // end of mi.synchronized / for loop
+        } // end of mis.synchronized
+
+        // Update candidateForMCStore if this mapping hasn't changed.
+        var ok = true
+        candidateForMCStore.synchronized{
+          if(candidateForMCStore.get(key) == Some(mis)){
+            if(newMis.nonEmpty) candidateForMCStore += key -> newMis
+            else candidateForMCStore.remove(key)
+          }
+          else ok = false // the relevant mapping changed, so retry
+        }
+        if(!ok){
+          println("completeCandidateForMC retrying")
+          completeCandidateForMC(cv, views, result)
+        }
+
+      case None => {}
+    }
+  }
+
+  /** Remove cv from the missingViews of the MissingCommon of each entry in
+    * mcNotDoneStore. */
+  @inline private def completeMcNotDone(
+      cv: ComponentView, views: ViewSet, result: ViewBuffer) = {
+    mcNotDoneStore.synchronized{ mcNotDoneStore.remove(cv) } match{
+      case Some(mis) =>
+        // remove old entry
+        // mcNotDoneStore.synchronized{ mcNotDoneStore.remove(cv) } 
+        mis.synchronized{
+          for(mi <- mis) mi.synchronized{
+            if(mi.mcDone) assert(mi.done || mi.transferred)
+            else if(views.contains(mi.newView)) mi.markNewViewFound
+            else{
+              val vb = mi.updateMissingViewsOfMissingCommon(views)
+              if(vb == null){
+                if(mi.done) maybeAdd(mi, result)
+                else{ assert(mi.mcDone); mcDone(mi, views, result) }
+              }
+              else for(cpts <- vb){
+                val rcv = new ReducedComponentView(cv.servers, cpts)
+                // mi.log(McNotDoneStore(rcv))
+                addToStore(mcNotDoneStore, rcv, mi)
+              }
+            }
+          } // end of mi.synchronized and for loop
+        } // end of mis.synchronized
+
+      case None => {}
+    }
+  }
+
+  /** Remove cv from each entry in mcDoneStore. */
+  @inline private 
+  def completeMcDone(cv: ComponentView, views: ViewSet, result: ViewBuffer) = {
+    mcDoneStore.synchronized{ mcDoneStore.remove(cv) } match{
+      case Some(mis) =>
+        //mcDoneStore.synchronized{ mcDoneStore.remove(cv) } // remove old entry
+        mis.synchronized{
+          for(mi <- mis) mi.synchronized{
+            if(!mi.done){
+              if(views.contains(mi.newView)) mi.markNewViewFound
+              else{
+                mi.updateMissingViewsBy(cv, views)
+                if(mi.done) maybeAdd(mi, result)
+                else{
+                  // mi.log(McDoneStore(mi.missingHead))
+                  addToStore(mcDoneStore, mi.missingHead, mi)
+                }
+              }
+            }
+          } // end of mi.synchronized, for loop
+        } // end of mis.synchronized
+
+      case None => {}
+    }
+  }
 
   /** Try to complete values in the store, based on the addition of cv, and with
     * views as the current ViewSet (i.e. from earlier plies).  Return the
     * Views that can now be added.  */
-  def complete(cv: ComponentView, views: ViewSet)
-      : List[ComponentView] = synchronized{
-    var result = List[ComponentView]()
-    // Add mi.newView to result if not already there
-    @inline def maybeAdd(mi: MissingInfo) = {
-      val nv = mi.newView
-      if(!result.contains(nv)){
-        val newView = ComponentView.fromReducedComponentView(nv) 
-        newView.setCreationInfoIndirect(
-          mi.pre, mi.oldCpts, mi.cv, mi.e, mi.post, mi.newCpts)
-        result ::= newView
-      }
-      else Profiler.count("maybeAdd repeat")
-    }
-
-    // Update based upon the MissingCommon entries in mi being all completed.
-    // Pre: the missingViews in mi have been updated (via mi.advanceMC).  If
-    // now done, then add the newView to result; otherwise add to mcDoneStore.
-    @inline def mcDone(mi: MissingInfo) = {
-      require(mi.mcDone); require(mi.missingViewsUpdated(views))
-      if(mi.done) maybeAdd(mi) 
-      else{
-        mi.log(McDoneStore(mi.missingHead))
-        mi.transferred = true
-        addToStore(mcDoneStore, mi.missingHead, mi)
-// IMPROVE: remove elsewhere
-      }
-    }
+  def complete(cv: ComponentView, views: ViewSet): ViewBuffer = {
+    var result = new ViewBuffer
 
     // In each phase below, we also purge all MissingInfos for which the
     // newView has been found, or are done.  In the first two cases, we also
@@ -223,80 +348,21 @@ class SimpleEffectOnStore extends EffectOnStore{
 
     // For each relevant entry in candidateForMCStore, try to match the
     // MissingCommon entries against cv.
-    val key = (cv.servers, cv.principal)
-    candidateForMCStore.get(key) match{
-      case Some(mis) => 
-        val newMis = new MissingInfoSet // those to retain
-        for(mi <- mis){
-          if(mi.mcDone) assert(mi.done || mi.transferred) 
-          else if(views.contains(mi.newView)) mi.markNewViewFound
-          else{
-            val vb: ViewBuffer = mi.updateMissingCommon(cv, views)
-            if(mi.done) maybeAdd(mi)
-            else if(mi.mcDone) mcDone(mi)
-            else{
-              // Register mi against each view in vb, and retain
-              for(cpts <- vb){
-                val rcv = new ReducedComponentView(cv.servers, cpts)
-                // assert(!views.contains(cv1))
-                mi.log(McNotDoneStore(rcv))
-                addToStore(mcNotDoneStore, rcv, mi)
-              }
-              mi.log(CandidateForMC(cv.servers, cv.principal))
-              if(!newMis.add(mi)){
-                mi.setNotAdded; mi.log(NotStored("candidateForMCStore"))
-              }
-            }
-          }
-        } // end of for loop
-        if(newMis.nonEmpty) candidateForMCStore += key -> newMis
-        else candidateForMCStore.remove(key)
-      case None => {}
-    }
+    completeCandidateForMC(cv, views, result)
 
     // Remove cv from the missingViews of the MissingCommon of each entry in
     // mcNotDoneStore.
-    mcNotDoneStore.get(cv) match{
-      case Some(mis) =>
-        mcNotDoneStore.remove(cv) // remove old entry
-        for(mi <- mis){
-          if(mi.mcDone) assert(mi.done || mi.transferred)
-          else if(views.contains(mi.newView)) mi.markNewViewFound
-          else{
-            val ab = mi.updateMissingViewsOfMissingCommon(views)
-            if(mi.done) maybeAdd(mi)
-            else if(mi.mcDone) mcDone(mi)
-            else for(cpts <- ab){
-              val rcv = new ReducedComponentView(cv.servers, cpts)
-              mi.log(McNotDoneStore(rcv))
-              addToStore(mcNotDoneStore, rcv, mi)
-            }
-          }
-        } // end of for loop
-      case None => {}
-    }
+    completeMcNotDone(cv, views, result)
 
     // Remove cv from each entry in mcDoneStore.  
-    mcDoneStore.get(cv) match{
-      case Some(mis) =>
-        mcDoneStore.remove(cv) // remove old entry
-        for(mi <- mis; if !mi.done){
-          if(views.contains(mi.newView)) mi.markNewViewFound
-          else{
-            mi.updateMissingViewsBy(cv, views)
-            if(mi.done) maybeAdd(mi)
-            else{
-              mi.log(McDoneStore(mi.missingHead))
-              addToStore(mcDoneStore, mi.missingHead, mi)
-            }
-          }
-        } // end of for loop
-      case None => {}
-    }
+    completeMcDone(cv, views, result)
 
     result
   }
 
+  // import scala.collection.parallel.mutable.ParHashSet
+
+  // val xxx = mcNotDoneStore.par
 
   /** Perform sanity check.  Every stored MissingInfo should be up to date,
     * unless it has maybe been superseded by an equivalent object.  */
@@ -317,7 +383,7 @@ class SimpleEffectOnStore extends EffectOnStore{
           println(s"\ncv = $cv. "+ // views.contains(cv)+"; "+
             views.contains(mi.newView))
           println(s"\nmi = $mi")
-          println("log = "+mi.theLog.reverse.mkString("\n"))
+          // println("log = "+mi.theLog.reverse.mkString("\n"))
           sys.exit()
         }
       }

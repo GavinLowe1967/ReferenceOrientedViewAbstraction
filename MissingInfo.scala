@@ -3,7 +3,6 @@ import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
 import scala.collection.mutable.{ArrayBuffer,HashSet}
 
-
 /** Information capturing when newView might be added to the ViewSet: once all
   * of missingViews have been added, and all the obligations represented by
   * missingCommon have been satisfied. 
@@ -50,10 +49,13 @@ class MissingInfo(
    * 
    * updateMissingViewsBy    (called from EffectOnStore)
    * |--updateMissingViews
+   * 
+   * done, mcDone, missingHead, markNewViewFound, missingViewsUpdated, 
+   * setNotAdded, sanity1, sanityCheck, equals, hashCode, size
    */
 
   /** For debugging. */
-  val highlight = ComponentView0.highlight(newView)
+  // private val highlight = ComponentView0.highlight(newView)
 
   require(missingCommon.forall(!_.done))
   require(missingViews.forall(_ != null))
@@ -64,7 +66,7 @@ class MissingInfo(
   /* missingViews may contain null values: duplicates are replaced by null in
    * the above sort. */
 
-  import MissingCommon.ViewBuffer // ArrayBuffer[ComponentView]
+  import MissingCommon.CptsBuffer // ArrayBuffer[ComponentView]
 
   assert(missingCommon.length <= 2, 
     "missingCommon.length = "+missingCommon.length)
@@ -84,7 +86,7 @@ class MissingInfo(
   import MissingInfo.LogEntry
 
   /** Log used for debugging. */
-  var theLog = List[LogEntry]()
+  // var theLog = List[LogEntry]()
 
   /** Log for debugging purposes.  Currently turned off. */
   def log(item: LogEntry) = {} // theLog ::= item
@@ -94,31 +96,31 @@ class MissingInfo(
     require(missingCommon(i).done); missingCommon(i) = null 
   }
 
-  @inline private def logAdvanceMC = 
-    log(MissingInfo.AdvanceMC(missingCommon.length-mcIndex))
+  // @inline private def logAdvanceMC = 
+  //   log(MissingInfo.AdvanceMC(missingCommon.length-mcIndex))
 
   /** Advance to the next MissingCommon value (if any).  Otherwise, update the 
     * missingViews.
-    * @return a ViewBuffer containing views against which this should now be 
+    * @return a CptsBuffer containing views against which this should now be 
     * registered, or null if all MissingCommon are done. */
   @inline private 
-  def advanceMC(views: ViewSet): ViewBuffer = {
+  def advanceMC(views: ViewSet): CptsBuffer = {
     // Deal with case that all MissingCommon are done.  We also update
     // missingViews in case a prefix of them is done.
     @inline def allMCDone() = { rehashMC(); updateMissingViews(views); null }
 
     require(missingCommon(mcIndex) == null)
-    mcIndex += 1; logAdvanceMC
+    mcIndex += 1; // logAdvanceMC
     if(mcIndex < missingCommon.length){ // consider next 
       assert(mcIndex == 1 && missingCommon.length == 2)
       val mc = missingCommon(mcIndex)
       if(mc == null){ // this one is also done
-        mcIndex += 1; logAdvanceMC; allMCDone(); 
+        mcIndex += 1; /*logAdvanceMC;*/ allMCDone(); 
       } 
       else{
         val vb = mc.updateMissingViews(views)
-        if(mc.done){  // and now this is done
-          mcNull(mcIndex); mcIndex += 1; logAdvanceMC; allMCDone(); 
+        if(vb == null){  // and now this is done
+          assert(mc.done); mcNull(mcIndex); mcIndex += 1; allMCDone(); 
         }
         else{ rehashMC(); vb }
       }
@@ -127,7 +129,7 @@ class MissingInfo(
   }
 
   /** Are all the missingCommon entries done? */
-  @inline def mcDone = mcIndex == missingCommon.length
+  @inline def mcDone = synchronized{ mcIndex == missingCommon.length }
 
   /** Index of first non-null missingView.  Once all MissingCommon are complete,
     * this will be registered against missingViews(mvIndex) in
@@ -136,88 +138,77 @@ class MissingInfo(
 
   /** The first missing view, against which this should be registered once all
     * the MissingCommon are done. */
-  def missingHead = missingViews(mvIndex)
+  def missingHead = synchronized{ missingViews(mvIndex) }
 
   /** Has newView been found already? */
   private var newViewFound = false
 
   /** Record that newView has already been seen, so this is redundant. */
-  def markNewViewFound = {
-    log(MissingInfo.MarkNewViewFound)
-    if(highlight) println(s"markNewViewFound:\n$this")
+  def markNewViewFound = synchronized{
+    // log(MissingInfo.MarkNewViewFound)
+    // if(highlight) println(s"markNewViewFound:\n$this")
     newViewFound = true
   }
 
   /** Is this complete? */
-  @inline def done = mcDone && mvIndex == missingViews.length || newViewFound
+  @inline def done = 
+    synchronized{ mcDone && mvIndex == missingViews.length || newViewFound }
 
   /** Has this been put into the mcDoneStore? */
-  var transferred = false
+  @volatile var transferred = false
 
   /** Update the MissingCommon entries in this, based on cv being a possible
     * match to the first clause of the obligation.  cv is expected to be a
     * possible match to the next element of missingCommon.  If all
     * missingCommon are done, also update missingViews.
-    * @return a ViewBuffer containing all views that this needs to be registered
+    * @return a CptsBuffer containing all views that this needs to be registered
     * against in the store if not all MissingCommon are done. */
-  def updateMissingCommon(cv: ComponentView, views: ViewSet): ViewBuffer = {
-// IMPROVE
-    if(highlight){ println(s"updateMissingCommon:\n$this"); assert(false) } 
+  def updateMissingCommon(cv: ComponentView, views: ViewSet)
+      : CptsBuffer = synchronized{
     val mc = missingCommon(mcIndex); assert(mc != null && mc.matches(cv))
-    if(mc.done){
-      mcNull(mcIndex); advanceMC(views)
+    val vb = mc.updateWithNewMatch(cv, views)
+    if(vb == null){
+      // Advance to the next MissingCommon (if any), and return views to
+      // register against
+      assert(mc.done); mcNull(mcIndex); advanceMC(views)
     }
-    else{
-      val vb = new ViewBuffer
-      mc.updateWithNewMatch(cv, views, vb)
-      if(mc.done){
-        // Advance to the next MissingCommon (if any), and return views to
-        // register against
-        mcNull(mcIndex); advanceMC(views)
-      }
-      else vb
-    }
+    else vb
   }
 
   /** Update the missing views in the MissingCommon fields of this.
     * @return the views against which this should now be registered, or
     * null if all the missingCommon entries are satisfied.  If all
     * missingCommon are done, also update missingViews. */ 
-  def updateMissingViewsOfMissingCommon(views: ViewSet): ViewBuffer = {
-// IMPROVE
-    if(highlight){ 
-      println(s"updateMissingViewsOfMissingCommon:\n$this"); assert(false) }
+  def updateMissingViewsOfMissingCommon(views: ViewSet)
+      : CptsBuffer = synchronized{
     val mc = missingCommon(mcIndex)
-    val vb: ViewBuffer = mc.updateMissingViews(views)
-    if(mc.done){ mcNull(mcIndex); advanceMC(views) }
+    val vb: CptsBuffer = mc.updateMissingViews(views)
+    if(vb == null){ assert(mc.done); mcNull(mcIndex); advanceMC(views) }
     else vb
   }
 
   /** Update missingViews and mvIndex based upon views.  This is called either
     * when all MissingCommon are first complete (from advanceMC), or from
-    * missingCommonViewsBy, to advance over subsequent missing views in
+    * updateMissingViewsBy, to advance over subsequent missing views in
     * views.  */
   private def updateMissingViews(views: ViewSet) = {
     require(mcDone)
-    if(highlight) println(s"updateMissingViews on\n$this")
     while(mvIndex < missingViews.length && 
       (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))){
       missingViews(mvIndex) = null; mvIndex += 1
     }
-    if(highlight) 
-      println(s"now missingViews = "+
-        missingViews.mkString("<", ",\n", ">")+s"\ndone = $done")
     rehashMV()
   }
 
   /** Check that missingViews is up-to-date with views.  Used in assertions. */
-  def missingViewsUpdated(views: ViewSet): Boolean = 
+  def missingViewsUpdated(views: ViewSet): Boolean = synchronized{
     mvIndex == missingViews.length || !views.contains(missingViews(mvIndex))
+  }
 
   /** Update missingViews and mvIndex based on the addition of cv.  cv is
     * expected to match the next missing view. */
-  def updateMissingViewsBy(cv: ComponentView, views: ViewSet): Unit = {
-    if(highlight) println(s"updateMissingViewsBy($cv) on\n$this")
+  def updateMissingViewsBy(cv: ComponentView, views: ViewSet) = synchronized{
+// FIXME: the assertion looks like a TOCTTOU
     require(mcDone && mvIndex < missingViews.length && 
       missingViews(mvIndex) == cv,
       s"mvIndex = $mvIndex, cv = $cv, missingViews = \n"+
@@ -233,7 +224,7 @@ class MissingInfo(
     * the expected invariant might not hold: missingCommon values in this may
     * still retain a view that is in the current view set.  This affects the
     * check in sanityCheck below. */
-  def setNotAdded = notAdded = true
+  def setNotAdded = synchronized{ notAdded = true }
 
   /** Check that we have nulled-out all done MissingCommons. */
   def sanity1 = missingCommon.forall(mc => mc == null || !mc.done)
@@ -253,8 +244,8 @@ class MissingInfo(
       assert(missingCommon.forall(_ == null))
       if(flag || !notAdded) //  IMPROVE: do we need this guard? 
         assert(!views.contains(missingHead),  // Check (1)
-          s"$this\nstill contains $missingHead.\n"+
-            theLog.reverse.mkString("\n"))
+          s"$this\nstill contains $missingHead.\n")
+         // theLog.reverse.mkString("\n"))
       else Profiler.count("missingInfo sanity check skipped")
     }
     else{ 
@@ -278,16 +269,20 @@ class MissingInfo(
       s"notAdded = $notAdded"
 
   /** Equality: same newView, missingViews and missingCommon (up to equality,
-    * ignoring nulls. */
-  override def equals(that: Any) = that match{ 
-    case mi: MissingInfo => 
-      mi.newView == newView && 
-      MissingInfo.equalExceptNull(mi.missingViews, missingViews) &&
-      MissingInfo.equalExceptNull(mi.missingCommon, missingCommon)
+    * ignoring nulls). */
+// FIXME: is locking of that useful/necessary here?  I think this is used only
+// when building sets of MissingInfos.  
+  override def equals(that: Any) = synchronized{ 
+    that match{
+      case mi: MissingInfo =>
+        mi.newView == newView &&
+        MissingInfo.equalExceptNull(mi.missingViews, missingViews) &&
+        MissingInfo.equalExceptNull(mi.missingCommon, missingCommon)
+    }
   }
 
   /** The hash code for this. */
-  override def hashCode = mcHash ^ mvHash
+  override def hashCode = synchronized{ mcHash ^ mvHash }
 
   /** Hash of newView and missingCommon. */
   private var mcHash = -1
