@@ -82,7 +82,7 @@ class Components(
 
   // Set global variable: the type identifiers of the indexing types,
   // by component family.
-  indexingTypes = fdrTypeIds.map(ti => transMapBuilder.fdrTypeToType(ti))
+  indexingTypes = fdrTypeIds.map(ti => fdrEvents.fdrTypeToType(ti))
   println("indexingTypes = "+indexingTypes.mkString(", "))
 
   // Set global variable: the names of types. 

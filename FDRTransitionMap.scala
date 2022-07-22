@@ -7,97 +7,7 @@ import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer}
 /** Class that builds transition systems, based on FDR.
   * @param fdrSession the FDR session object
   * @param superTypeNames the names of distinguished supertypes.  */
-class FDRTransitionMap(
-  fdrSession: FDRSession, fdrEvents: FDREvents, superTypeNames: Array[String])
-{
-
-  // ========= Information about types
-
-  /* The various maps related to types (idRemaps, theNameMap, theTypeMap) are
-   * initialised via calls to fdrTypeToType for each type, from Components.
-   * This is before the transition systems themselves are created. */
-
-  // assert(familyTypeNames.distinct.length == numTypes &&  
-  //          superTypeNames.length == familyTypeNames.length)
-  
-  /** A map for a particular supertype, mapping, for each element x of that
-    * supertype, the representation of x inside FDR to the representation used
-    * here; elements of the subtype map onto an initial segment of the
-    * naturals, and other (distinguished) values map onto negative ints. */
-  private type IdRemap = Map[Int, Int]
-
-  /** A map giving an IdRemap for each type, indexed by the representation of
-    * the types inside FDR. */
-  private val idRemaps = Map[Long, IdRemap]() 
-
-  /** A map for a particular type, mapping from the representation used here to
-    * the name from the script. */
-  private type NameMap = Map[Identity, String]
-
-  /** A map giving a NameMap for each type. */
-  private val theNameMap = Map[Type, NameMap]()
-
-  /** Get the NameMap.  Called after the transition system is built. */
-  def getNameMap = theNameMap
-
-  /** Map from the Longs used to represent types in FDR to the Ints used here.  
-    * The latter are in the range [0..numTypes). 
-    * 
-    * The entry for type t is built by typeMap, the first time a parameter of
-    * this type is encountered. */
-  private val theTypeMap = Map[Long, Int]()
-
-  /** Given the Long used to represent a type within FDR, return the
-    * corresponding Int used here.  Also, if this is the first time we've seen
-    * this type, calculate and store information about the type, updating
-    * theTypeMap, fdrTypeIds, idRemaps and typeSizes.  */
-  private def typeMap(t: Long): Type = theTypeMap.get(t) match{
-    case Some(i) => i
-    case None =>
-      // This is the first time we've encountered this type
-      val superTypeName = fdrSession.typeName(t)
-      val i = superTypeNames.indexOf(superTypeName); assert(i >= 0)
-      println(superTypeName+"\t"+t+"\t"+i)
-      theTypeMap += t -> i 
-      val (idRemap, nameMap, typeSize) =
-        buildIdRemap(familyTypeNames(i), superTypeName)
-      idRemaps += t -> idRemap; theNameMap += i -> nameMap;
-      assert(typeSize <= MaxTypeSize, s"Type $superTypeName has too many values")
-      typeSizes(i) = typeSize; superTypeSizes(i) = idRemap.size
-      distinguishedSizes(i) = superTypeSizes(i) - typeSize
-      println("Supertype size = "+idRemap.size)
-      println("Distinguished values = "+distinguishedSizes(i))
-      i
-  }
-
-  def fdrTypeToType(t: Long): Type = typeMap(t)
-
-  /** Build information about type typeName, with supertype superType. 
-    * @return a triple: (1) an IdRemap, mapping the representation of each 
-    * value inside FDR to the value used here; (2) a map from the values used
-    * here to the names in the script; (3) the number of elements of the type
-    * (excluding distinguished values of the supertype).*/
-  private def buildIdRemap(typeName: String, superType: String)
-      : (IdRemap, NameMap, Int) = {
-    val idRemap = Map[Int, Int]() // the result
-    val nameMap = Map[Int, String]() // map from values used here to script names
-    // Values in the type and supertype
-    val superTypeVals = fdrSession.getTypeValues(superType)
-    val typeValues = fdrSession.getTypeValues(typeName)
-    // Next ints to use for ids and distinguished values
-    var nextId = 0; var nextDistinguished = -1
-
-    // Build the mapping for each value of superType in turn.
-    for(st <- superTypeVals){
-      val id = fdrSession.symmetryValue(st) // Int representing st inside FDR
-      if(typeValues.contains(st)){ idRemap += id -> nextId; nextId += 1 }
-      else{ idRemap += id -> nextDistinguished; nextDistinguished -= 1 }
-      nameMap += idRemap(id) -> st
-      println(s"$id: $st -> ${idRemap(id)}")
-    }
-
-    (idRemap, nameMap, nextId)
-  }
+class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
 
   // ========= Build the transition systems.
 
@@ -142,9 +52,9 @@ class FDRTransitionMap(
     val ids = /*State.getIdentityArray*/new Array[Identity](args1.length); 
     var i = 0
     for((t,x) <- args1){ 
-      try{ ids(i) = idRemaps(t)(x); i += 1 }
+      try{ ids(i) = fdrEvents.getIdRemap(t)(x); i += 1 }
       catch{ case e: NoSuchElementException =>
-        println(s"Not found ($t,$x)"); println(idRemaps(t))
+        println(s"Not found ($t,$x)"); println(fdrEvents.getIdRemap(t))
         sys.exit()
       }
       // There is sometimes an exception here, but I don't understand why. 
@@ -157,7 +67,8 @@ class FDRTransitionMap(
                  args1.mkString("<", ",", ">"))
       }
       case None => 
-        val types: Array[Type] = args1.map{ case (t,x) => typeMap(t) }.toArray
+        val types: Array[Type] = 
+          args1.map{ case (t,x) => fdrEvents.fdrTypeToType(t) }.toArray
         // println(s"$cs -> ${types.mkString("<", ",", ">")}")
         stateTypeMap0 += cs -> types
     }
@@ -416,7 +327,8 @@ class FDRTransitionMap(
     val variableVals = machine.variableValues(node).asScala.toList
     val args0: List[(Long, Int)] =
       variableVals.map(vv => (vv.getType.longValue, vv.getValue.intValue))
-    val pids = args0.map{ case (t,x) => (fdrTypeToType(t), idRemaps(t)(x)) }
+    val pids = args0.map{ case (t,x) => 
+      (fdrEvents.fdrTypeToType(t), fdrEvents.getIdRemap(t)(x)) }
     (cs, pids)
   }
 

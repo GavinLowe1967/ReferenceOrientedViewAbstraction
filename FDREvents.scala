@@ -4,15 +4,18 @@ import scala.collection.mutable.{ArrayBuffer,Map}
 import java.util.concurrent.atomic.AtomicInteger
 
 /** An object representing the events in a particular FDR session. */
-class FDREvents(fdrSession: FDRSession) extends EventPrinter{
-
+class FDREvents(fdrSession: FDRSession, superTypeNames: Array[String])
+    extends EventPrinter{
+  /* Main public functions:
+   * Events: initEvents, eventToString, eventToInt, numEvents
+   * Types: getIdRemap, getNameMap, fdrTypeToType
+   */
 
   /** Map giving the String for each event number. */
   private val eventStringMap = Map[Int, String]()
 
   /** Given internal representation of event, get corresponding String. */
   def eventToString(n: Int): String = eventStringMap(n)
-
 
   /** Map giving the event number for a String representing an event. */
   private val stringEventMap = Map[String, Int]()
@@ -26,6 +29,8 @@ class FDREvents(fdrSession: FDRSession) extends EventPrinter{
         println("eventToInt: Event not found: "+st); sys.exit()
     }
 
+  /** Number of visible events. */
+  def numEvents = fdrSession.eval("card(Events)").toInt
 
   /** Initialise eventStringMap and stringEventMap.
     * @param eventsSize the number of events (including tau and tick) plus one.
@@ -33,7 +38,8 @@ class FDREvents(fdrSession: FDRSession) extends EventPrinter{
   def initEvents(eventsSize: Int) = {
     println("Initialising events.")
     // Something like following is necessary or else uncompileEvent barfs.
-    fdrSession.evalProc("let P_ = error -> STOP within P_[[ error <- e_ | e_ <- Events ]]")
+    val p = "let P_ = error -> STOP within P_[[ error <- e_ | e_ <- Events ]]"
+    fdrSession.evalProc(p)
     println(s"Logging events ($eventsSize events).")
     assert(eventStringMap.isEmpty && stringEventMap.isEmpty)
     val eventIndex = new AtomicInteger(1) // Next event to handle
@@ -46,7 +52,7 @@ class FDREvents(fdrSession: FDRSession) extends EventPrinter{
       var myIndex = eventIndex.getAndAdd(ChunkSize)
       while(myIndex < eventsSize){
         for(e <- myIndex until (myIndex+ChunkSize min eventsSize)){
-          val st = fdrSession.uncompileEvent(e) // session.uncompileEvent(e).toString() // sequential bottleneck
+          val st = fdrSession.uncompileEvent(e) // sequential bottleneck
           myEs += e; mySts += st; if(e%5000 == 0) print(".")
         }
         myIndex = eventIndex.getAndAdd(ChunkSize)
@@ -64,6 +70,94 @@ class FDREvents(fdrSession: FDRSession) extends EventPrinter{
     println()
   } 
 
+  // ========= Information about types
+
+  /* The various maps related to types (idRemaps, theNameMap, theTypeMap) are
+   * initialised via calls to fdrTypeToType for each type, from Components.
+   * This is before the transition systems themselves are created. */
+
+  /** A map for a particular supertype, mapping, for each element x of that
+    * supertype, the representation of x inside FDR to the representation used
+    * here; elements of the subtype map onto an initial segment of the
+    * naturals, and other (distinguished) values map onto negative ints. */
+  private type IdRemap = Map[Int, Int]
+
+  /** A map giving an IdRemap for each type, indexed by the representation of
+    * the types inside FDR. */
+  private val idRemaps = Map[Long, IdRemap]() 
+
+  /** An IdRemap for the type corresponding to t in FDR; for each element x of
+    * that type, it maps the representation of x inside FDR to the
+    * representation used here. */
+  def getIdRemap(t: Long): IdRemap = idRemaps(t)
+
+  /** A map for a particular type, mapping from the representation used here to
+    * the name from the script. */
+  private type NameMap = Map[Identity, String]
+
+  /** A map giving a NameMap for each type. */
+  private val theNameMap = Map[Type, NameMap]()
+
+  /** The NameMap, mapping from the representation used here to the name from
+    * the script.  Called after the transition system is built. */
+  def getNameMap = theNameMap
+
+  /** Map from the Longs used to represent types in FDR to the Ints used here.  
+    * The latter are in the range [0..numTypes). 
+    * 
+    * The entry for type t is built by typeMap, the first time a parameter of
+    * this type is encountered. */
+  private val theTypeMap = Map[Long, Int]()
+
+  /** Build information about type typeName, with supertype superType. 
+    * @return a triple: (1) an IdRemap, mapping the representation of each 
+    * value inside FDR to the value used here; (2) a map from the values used
+    * here to the names in the script; (3) the number of elements of the type
+    * (excluding distinguished values of the supertype).*/
+  private def buildIdRemap(typeName: String, superType: String)
+      : (IdRemap, NameMap, Int) = {
+    val idRemap = Map[Int, Int]() // the result
+    val nameMap = Map[Int, String]() // map from values used here to script names
+    // Values in the type and supertype
+    val superTypeVals = fdrSession.getTypeValues(superType)
+    val typeValues = fdrSession.getTypeValues(typeName)
+    // Next ints to use for ids and distinguished values
+    var nextId = 0; var nextDistinguished = -1
+
+    // Build the mapping for each value of superType in turn.
+    for(st <- superTypeVals){
+      val id = fdrSession.symmetryValue(st) // Int representing st inside FDR
+      if(typeValues.contains(st)){ idRemap += id -> nextId; nextId += 1 }
+      else{ idRemap += id -> nextDistinguished; nextDistinguished -= 1 }
+      nameMap += idRemap(id) -> st
+      println(s"$id: $st -> ${idRemap(id)}")
+    }
+
+    (idRemap, nameMap, nextId)
+  }
+
+  /** Given the Long used to represent a type within FDR, return the
+    * corresponding Int used here.  Also, if this is the first time we've seen
+    * this type, calculate and store information about the type, updating
+    * theTypeMap, fdrTypeIds, idRemaps and typeSizes.  */
+  def fdrTypeToType(t: Long): Type = theTypeMap.get(t) match{
+    case Some(i) => i
+    case None =>
+      // This is the first time we've encountered this type
+      val superTypeName = fdrSession.typeName(t)
+      val i = superTypeNames.indexOf(superTypeName); assert(i >= 0)
+      println(superTypeName+"\t"+t+"\t"+i)
+      theTypeMap += t -> i 
+      val (idRemap, nameMap, typeSize) =
+        buildIdRemap(familyTypeNames(i), superTypeName)
+      idRemaps += t -> idRemap; theNameMap += i -> nameMap;
+      assert(typeSize <= MaxTypeSize, s"Type $superTypeName has too many values")
+      typeSizes(i) = typeSize; superTypeSizes(i) = idRemap.size
+      distinguishedSizes(i) = superTypeSizes(i) - typeSize
+      println("Supertype size = "+idRemap.size)
+      println("Distinguished values = "+distinguishedSizes(i))
+      i
+  }
 
 
 }

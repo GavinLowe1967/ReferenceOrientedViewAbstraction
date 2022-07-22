@@ -257,7 +257,7 @@ package object ViewAbstraction{
 
   /** The number of visible events.  Standard visible events are numbered
     * [3..numEvents+3). */
-  var numEvents = -1
+  // var numEvents = -1
 
   /** The size to initialise arrays of events.  Normal events are numbered in
     * [3..eventsSize).  Set in System.scala. */

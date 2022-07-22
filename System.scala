@@ -25,24 +25,6 @@ class System(fname: String) {
   /** Object encapsulating the FDR session. */
   protected[SystemP] val fdrSession = new FDRSession(fname)
 
-  /** Object storing the events. */
-  protected[SystemP] val fdrEvents = new FDREvents(fdrSession)
-
-  // Store in package object
-  eventPrinter = fdrEvents
-  compiling = true
-
-  /** Convert event represented by e to the String corresponding to the
-    * script. */
-  // def showEvent(e: EventInt) = fdrSession.eventToString(e)
-
-  // Set the number of visible events.  The visible events are numbered in
-  // [3..fdrSession.numEvents+3), so we initialise arrays indexed by events to
-  // size fdrSession.numEvents+3.
-  numEvents = fdrSession.numEvents
-  eventsSize = numEvents+3
-
-  fdrEvents.initEvents(eventsSize)
 
   /** Names of symmetric subtypes, indexed by component family number. */
   familyTypeNames = file.identityTypes.toArray
@@ -57,13 +39,31 @@ class System(fname: String) {
   private val superTypeNames: Array[String] =
     familyTypeNames.map(fdrSession.getSuperType(_))
 
+  /** Object storing the events. */
+  protected[SystemP] val fdrEvents = new FDREvents(fdrSession, superTypeNames)
+
+  // Store in package object
+  eventPrinter = fdrEvents
+  compiling = true
+
+  /** Convert event represented by e to the String corresponding to the
+    * script. */
+  // def showEvent(e: EventInt) = fdrSession.eventToString(e)
+
+  // Set the number of visible events.  The visible events are numbered in
+  // [3..fdrSession.numEvents+3), so we initialise arrays indexed by events to
+  // size fdrSession.numEvents+3.
+  private val numEvents = fdrEvents.numEvents
+  eventsSize = numEvents+3
+
+  fdrEvents.initEvents(eventsSize)
+
   /** The internal representation of each type inside FDR. */
   private val fdrTypeIds =
     Array.tabulate(numFamilies)(i => fdrSession.getTypeInt(familyTypeNames(i))) 
 
   /** Builder of transition systems. */
-  private val transMapBuilder =
-    new FDRTransitionMap(fdrSession, fdrEvents, superTypeNames)
+  private val transMapBuilder = new FDRTransitionMap(fdrSession, fdrEvents)
 
   println("Creating components")
 
@@ -113,7 +113,7 @@ class System(fname: String) {
     // synchronise with.
     components.categoriseTrans(servers.alphaBitMap)
 
-    scriptNames = transMapBuilder.getNameMap
+    scriptNames = fdrEvents.getNameMap
 
     val cptEventMap: Array[List[ProcessIdentity]] = 
       components.getEventMap
