@@ -47,3 +47,27 @@ class Barrier(n: Int){
     if(child2 < n) signals(child2).signalDown
   }
 }
+
+// ==================================================================
+
+/** A barrier synchronisation to be used by `n` threads.  The barrier assumes
+  * that no thread calls on one round before all threads have exited on the
+  * previous round.  This will be true if there are two synchronisations on
+  * different barriers in each round. */
+class WeakBarrier(n: Int){
+
+  /** Is the current round over? */
+  private var done = false
+
+  /** Number of waiting threads. */
+  private var waiting = 0
+
+  /** Perform a barrier synchronisation. */
+  def sync = synchronized{
+    if(waiting < n-1){
+      done = false; waiting += 1
+      while(!done) wait()
+    }
+    else{ waiting = 0; done = true; notifyAll() }
+  }
+}

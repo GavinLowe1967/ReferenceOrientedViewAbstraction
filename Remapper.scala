@@ -492,8 +492,8 @@ object Remapper{
   /** Remap ss to normal form.  Also return resulting RemappingMap and
     * NextArgMap. */
   @inline private def remapServerStates(ss: ServerStates)
-      : (ServerStates, RemappingMap, NextArgMap) = synchronized{
-    remapSSCache.get(ss) match{ // Try to retrieve from cache. 
+      : (ServerStates, RemappingMap, NextArgMap) = {
+    synchronized{ remapSSCache.get(ss) } match{ // Try to retrieve from cache. 
       case Some((ss1, map, nextArgs)) => 
         // Profiler.count("remapServerStates found")
         (ss1, cloneMap(map), nextArgs.clone)
@@ -501,8 +501,11 @@ object Remapper{
         // Profiler.count("remapServerStates new")
         val map = newRemappingMap; var nextArg = newNextArgMap
         val servers = ServerStates(remapStates(map, nextArg, ss.servers))
-        remapSSCache += ss -> ((servers, cloneMap(map), nextArg.clone))
+        val newTuple = ((servers, cloneMap(map), nextArg.clone))
+        synchronized { remapSSCache += ss -> newTuple }
         (servers, map, nextArg)
+        // Note: it doesn't matter if two concurrent threads write to the same
+        // ss, above, as they will write equivalent values.
     }
   }
 

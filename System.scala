@@ -127,7 +127,7 @@ class System(fname: String) {
 
     for(oi <- file.omitInfos) processOmitInfo(oi)
 
-    fdr.libraryExit()
+    fdr.libraryExit(); fdrSession.delete
     MyStateMap.renewStateStore // switch to trie-based state store
     compiling = false // global variable
   }

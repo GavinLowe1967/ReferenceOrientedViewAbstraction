@@ -252,6 +252,6 @@ class FDRSession(fname: String) extends EventPrinter{
   } 
 
   /** Delete the underlying session, to free up memory. */
-  // def delete = session.delete
+  def delete = session.delete
 
 }

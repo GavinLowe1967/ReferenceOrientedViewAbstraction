@@ -271,7 +271,7 @@ class SimpleEffectOnStore extends EffectOnStore{
           else ok = false // the relevant mapping changed, so retry
         }
         if(!ok){
-          println("completeCandidateForMC retrying")
+          Profiler.count("completeCandidateForMC retry") // a few times per MState
           completeCandidateForMC(cv, views, result)
         }
 

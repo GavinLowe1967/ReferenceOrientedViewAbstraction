@@ -16,6 +16,9 @@ class Extendability(views: ViewSet){
    * |- findReferencingView
    */
 
+  /** The type of keys in the cache. */
+  private type Key = (Concretization, State)
+
   /** A cache of results of previous calls to isExtendable.  If a value isn't in
     * the mapping, then that indicates that compatibleWith previously gave
     * only false.  A result of (k,rv) with k >= 0 indicates that
@@ -23,7 +26,15 @@ class Extendability(views: ViewSet){
     * true for all relevant j in [0..k), and rv[0..k) gives the corresponding
     * referencing views.  Protected by synchronized blocks. */
   private val isExtendableCache = 
-    new HashMap[(Concretization, State), (Int, Array[ComponentView])] 
+    new HashMap[Key, (Int, Array[ComponentView])] 
+
+  /** Get the value in the cache for key, or (-1,null) if absent. */
+  private def getExtendabilityCache(key: Key) = 
+    synchronized{ isExtendableCache.getOrElse(key, (-1, null)) }
+
+  /** Add key -> res to the cache. */
+  private def setExtendabilityCache(key: Key, res: (Int, Array[ComponentView])) =
+    synchronized{ isExtendableCache += key -> res }
 
   /** Is pre extendable by state st, given the current set of views?  (1) Is
     * there an existing view with st as principal component, and agreeing with
@@ -41,8 +52,7 @@ class Extendability(views: ViewSet){
     // for(v <- pre.toComponentView) require(views.contains(v))
     // require(pre.components.forall(
     //   _.componentProcessIdentity != st.componentProcessIdentity))
-    val (k, rv) = 
-      synchronized{ isExtendableCache.getOrElse((pre, st), (-1, null)) }
+    val key = (pre,st); val (k, rv) = getExtendabilityCache(key)
     if(verbose) println("isExtendableCache: "+k)
 
     // Does SysAbsViews contain a view consistent with pre and with a
@@ -65,9 +75,10 @@ class Extendability(views: ViewSet){
         }
         j += 1
       }
-      synchronized{ 
-        isExtendableCache += (pre,st) -> (if(found) j else j-1, referencingViews)
-      }
+      setExtendabilityCache(key, (if(found) j else j-1, referencingViews))
+      // synchronized{ 
+      //   isExtendableCache += (pre,st) -> (if(found) j else j-1, referencingViews)
+      // }
       if(found) referencingViews else null
     }
     else null

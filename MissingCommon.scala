@@ -368,9 +368,25 @@ object MissingCommon{
     * sorted (wrt StateArray.lessThan).  */
   type MissingComponents = Array[Cpts]
 
-  /** All the MissingCommon we have created.  */
-  private var allMCs = 
-    new HashMap[(ServerStates, List[State], ProcessIdentity), MissingCommon]
+  /** Type of keys for stored MissingCommons. */
+  private type Key = (ServerStates, List[State], ProcessIdentity)
+
+  /** All the MissingCommon we have created.  Protected by a synchronized block
+    * on itself.*/
+  private var allMCs = new HashMap[Key, MissingCommon]
+
+  /** Get the MissingCommon associated with key. */
+  private def getMC(key: Key) = allMCs.synchronized{ allMCs.get(key) }
+
+  /** Store mc against key, unless there is already an associated value.  Return
+    * the resulting stored value. */
+  private def setOrGet(key: Key, mc: MissingCommon) = allMCs.synchronized{
+    allMCs.getOrElseUpdate(key, mc)
+    // allMCs.get(key) match{
+    //   case Some(mc1) => mc1
+    //   case None => allMCs += key -> mc; mc
+    // }
+  }
 
   /** Perform a memory profile of this. */
   def memoryProfile = {
@@ -383,20 +399,20 @@ object MissingCommon{
     traverse("MissingCommon", this, maxPrint = 1); println()
   }
 
-  /** Get a MissingCommon corresponding to servers, cpts1, cpts2, pid: either
-    * retrieving a previous such object, or creating a new one.  The
-    * MissingCommon is paired with a Boolean that indicates if it is new. */
-  @inline private def getOrInit(
-    servers: ServerStates, cpts1: Cpts, cpts2: Cpts, pid: ProcessIdentity)
-      : (MissingCommon, Boolean) = { 
-    val key = (servers, cpts1.toList++cpts2.toList, pid)
-    allMCs.get(key) match{
-      case Some(mc) => Profiler.count("old MissingCommon"); (mc, false)
-      case None => 
-        val mc = new MissingCommon(servers, cpts1, cpts2, pid)
-        Profiler.count("new MissingCommon"); allMCs += key -> mc; (mc, true)
-    }
-  }
+  // /** Get a MissingCommon corresponding to servers, cpts1, cpts2, pid: either
+  //   * retrieving a previous such object, or creating a new one.  The
+  //   * MissingCommon is paired with a Boolean that indicates if it is new. */
+  // @inline private def getOrInit(
+  //   servers: ServerStates, cpts1: Cpts, cpts2: Cpts, pid: ProcessIdentity)
+  //     : (MissingCommon, Boolean) = { 
+  //   val key = (servers, cpts1.toList++cpts2.toList, pid)
+  //   allMCs.get(key) match{
+  //     case Some(mc) => Profiler.count("old MissingCommon"); (mc, false)
+  //     case None => 
+  //       val mc = new MissingCommon(servers, cpts1, cpts2, pid)
+  //       Profiler.count("new MissingCommon"); allMCs += key -> mc; (mc, true)
+  //   }
+  // }
 
   /** Reset ready for a new check. */
   def reset = 
@@ -416,33 +432,64 @@ object MissingCommon{
   def makeMissingCommon(
     servers: ServerStates, cpts1: Cpts, cpts2: Cpts, 
     pid: ProcessIdentity, views: ViewSet)
-      : MissingCommon = synchronized{
-// IMPROVE: we wrap this in a synchronized block, to protect allMCs; but I
-// suspect we can do better.  Need to ensure the MissingCommon is fully
-// initiailised before it becomes visible.
-    Profiler.count("makeMissingCommon")
-    assert(singleRef)
-    assert(cpts2.length == 2, StateArray.show(cpts2))
-    val (mc, isNew) = getOrInit(servers, cpts1, cpts2, pid)
-    if(isNew){ 
-      // Initialise mc, based on views
-      val ab = new CptsBuffer
-      val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
-      // Search for elements of views of the form servers || princ1 || c where c
-      // has identity pid
-      val iter = views.iterator(servers, princ1)
-      while(iter.hasNext && !found){
-        val cv = iter.next(); val cpts = cv.components; 
-        assert(cpts.length == 2, cv); val cpt1 = cpts(1)
-        if(cpt1.hasPID(pid)) 
-          found = mc.updateMissingCandidates(cpt1, views, ab)
-      }
-      if(found){ mc.setDone; null } else mc 
-      // Note: we don't need to do anything with ab here, as mc.allcandidates
-      // will store the same Views.  IMPROVE?
+      : MissingCommon = {
+    require(singleRef && cpts2.length == 2, StateArray.show(cpts2))
+    val key = (servers, cpts1.toList++cpts2.toList, pid)
+    getMC(key) match{
+      case Some(mc) => 
+        Profiler.count("old MissingCommon")
+        if(mc.done) null else mc 
+      case None => 
+        val mc = new MissingCommon(servers, cpts1, cpts2, pid)
+        Profiler.count("new MissingCommon")
+        val ab = new CptsBuffer
+        val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
+        // Search for elements of views of the form servers || princ1 || c
+        // where c has identity pid
+        val iter = views.iterator(servers, princ1)
+        while(iter.hasNext && !found){
+          val cv = iter.next(); val cpts = cv.components;
+          assert(cpts.length == 2, cv); val cpt1 = cpts(1)
+          if(cpt1.hasPID(pid))
+            found = mc.updateMissingCandidates(cpt1, views, ab)
+        }
+        if(found) mc.setDone
+        // Store mc if no other thread has done likewise in the meantime
+        val mc2 = setOrGet(key, mc)
+        if(!(mc2 eq mc)){
+          println("Creation of MissingCommon duplicated.");
+          Profiler.count("duplicate MissingCommon")
+        }
+        if(mc2.done) null else mc2
     }
-    else if(mc.done) null else mc 
   }
+
+// // IMPROVE: we wrap this in a synchronized block, to protect allMCs; but I
+// // suspect we can do better.  Need to ensure the MissingCommon is fully
+// // initiailised before it becomes visible.
+//     Profiler.count("makeMissingCommon")
+//     assert(singleRef)
+//     assert(cpts2.length == 2, StateArray.show(cpts2))
+//     val (mc, isNew) = getOrInit(servers, cpts1, cpts2, pid)
+//     if(isNew){ 
+//       // Initialise mc, based on views
+//       val ab = new CptsBuffer
+//       val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
+//       // Search for elements of views of the form servers || princ1 || c where c
+//       // has identity pid
+//       val iter = views.iterator(servers, princ1)
+//       while(iter.hasNext && !found){
+//         val cv = iter.next(); val cpts = cv.components; 
+//         assert(cpts.length == 2, cv); val cpt1 = cpts(1)
+//         if(cpt1.hasPID(pid)) 
+//           found = mc.updateMissingCandidates(cpt1, views, ab)
+//       }
+//       if(found){ mc.setDone; null } else mc 
+//       // Note: we don't need to do anything with ab here, as mc.allcandidates
+//       // will store the same Views.  IMPROVE?
+//     }
+//     else if(mc.done) null else mc 
+//   }
 
   // Possible returns from compare
   private val Eq = 0; private val Sub = 1; 
