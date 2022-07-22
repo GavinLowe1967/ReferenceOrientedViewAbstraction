@@ -25,8 +25,11 @@ class System(fname: String) {
   /** Object encapsulating the FDR session. */
   protected[SystemP] val fdrSession = new FDRSession(fname)
 
+  /** Object storing the events. */
+  protected[SystemP] val fdrEvents = new FDREvents(fdrSession)
+
   // Store in package object
-  eventPrinter = fdrSession
+  eventPrinter = fdrEvents
   compiling = true
 
   /** Convert event represented by e to the String corresponding to the
@@ -39,7 +42,7 @@ class System(fname: String) {
   numEvents = fdrSession.numEvents
   eventsSize = numEvents+3
 
-  fdrSession.initEvents(eventsSize)
+  fdrEvents.initEvents(eventsSize)
 
   /** Names of symmetric subtypes, indexed by component family number. */
   familyTypeNames = file.identityTypes.toArray
@@ -60,7 +63,7 @@ class System(fname: String) {
 
   /** Builder of transition systems. */
   private val transMapBuilder =
-    new FDRTransitionMap(fdrSession, superTypeNames)
+    new FDRTransitionMap(fdrSession, fdrEvents, superTypeNames)
 
   println("Creating components")
 
@@ -72,7 +75,7 @@ class System(fname: String) {
 
   /** Model of the replicated components. */
   private val components = new Components(
-    fdrSession, transMapBuilder, fdrTypeIds,
+    fdrSession, fdrEvents, transMapBuilder, fdrTypeIds,
     familyNames, file.componentAlphabets.toArray, 
     file.componentRenames.toArray, actives)
 
@@ -96,7 +99,7 @@ class System(fname: String) {
 
   /** Model of the servers. */
   val servers =
-    new Servers(file, fdrSession, transMapBuilder,
+    new Servers(file, fdrSession, fdrEvents, transMapBuilder,
                 components.getEventMap, indexingTypeSizes)
 
   /** Names of servers. */
@@ -282,7 +285,7 @@ class System(fname: String) {
   }
 
   /** Representation of the event error. */
-  val Error = fdrSession.eventToInt("error")
+  val Error = fdrEvents.eventToInt("error")
 
   /** Finaliser.  Should be called on exit. */
   def finalise = fdr.libraryExit()

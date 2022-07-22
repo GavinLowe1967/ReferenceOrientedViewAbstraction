@@ -44,8 +44,10 @@ $(DIR)/ServerStates.class: $(DIR)/State.class $(DIR)/MyHashMap.class
 
 $(DIR)/FDRSession.class: $(DIR)/Concurrency.class
 
+$(DIR)/FDREvents.class:  $(DIR)/Concurrency.class $(DIR)/FDRSession.class
+
 $(DIR)/FDRTransitionMap.class: $(DIR)/State.class $(DIR)/CSPFileParser.class	\
-   $(DIR)/FDRSession.class $(DIR)/MyStateMap.class				\
+   $(DIR)/FDREvents.class $(DIR)/MyStateMap.class				\
    $(DIR)/RemapperP/Remapper.class
 
 # Views, etc.

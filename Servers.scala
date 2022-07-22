@@ -13,7 +13,7 @@ import scala.math.Ordering.Implicits._
   * @param idSizes array giving the number elements of each distinguished
   * subtype. */
 class Servers(
-  file: CSPFileParser, fdrSession: FDRSession,
+  file: CSPFileParser, fdrSession: FDRSession, fdrEvents: FDREvents,
   transMapBuilder: FDRTransitionMap, componentEventMap: Array[List[Parameter]],
   idSizes: Array[Int]
 ){
@@ -96,7 +96,7 @@ class Servers(
       val alpha = fdrSession.evalSeqSeqOrSeq( 
         if(usesRenaming) s"third4_(${entry(i)})" else s"second3_(${entry(i)})",
         st => st)
-      for(st <- alpha) alphas(i) += fdrSession.eventToInt(st)
+      for(st <- alpha) alphas(i) += fdrEvents.eventToInt(st)
       println()
     }
     println()
@@ -231,7 +231,7 @@ class Servers(
       val e = es.min // next event to consider
       if(e != Int.MaxValue){
         var serverIndices = eventMap(e) // indices of servers that synch on e
-        assert(e != Tau && serverIndices.nonEmpty, fdrSession.eventToString(e))
+        assert(e != Tau && serverIndices.nonEmpty, fdrEvents.eventToString(e))
         // Calculate (in cptDsts) states after e, for each server in
         // serverIndices
         val cptDsts = new Array[List[State]](numServers)

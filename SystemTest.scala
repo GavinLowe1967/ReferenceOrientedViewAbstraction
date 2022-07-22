@@ -141,7 +141,7 @@ object SystemTest{
       val conc = 
         new Concretization(servers2, Array(initNodeSt(T0,N0), aNode(N0,N1)))
       val cv1 = new ComponentView(servers2, initNode(N1), Array())
-      val e = system.fdrSession.eventToInt("initNode.T0.N2.A.N0")
+      val e = system.fdrEvents.eventToInt("initNode.T0.N2.A.N0")
       val buff = csf.consistentStates(conc, (0,N2), e, cv1)
       // println("buff = "+buff.mkString("\n")+"XXX")
       println(buff.map{ case (n,nexts) => 

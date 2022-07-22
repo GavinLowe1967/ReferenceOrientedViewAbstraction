@@ -12,7 +12,8 @@ import scala.collection.mutable.{Map,Set,ArrayBuffer}
   * @param alphaNames the name of the alphabet for each type components process.
   */
 class Components(
-  fdrSession: FDRSession, transMapBuilder: FDRTransitionMap,
+  fdrSession: FDRSession, fdrEvents: FDREvents, 
+  transMapBuilder: FDRTransitionMap,
   fdrTypeIds: Array[Long], processNames: Array[String], 
   alphaNames: Array[String], renames: Array[Option[String]], 
   actives: Array[Boolean]
@@ -132,7 +133,7 @@ class Components(
         // fdrSession.setStringToList(alphaSt)
         fdrSession.evalSeqSeqOrSeq(alphaSt, st => st) 
       // Convert to EventInts, and store
-      val eventIntList = alphaList.map(fdrSession.eventToInt(_))
+      val eventIntList = alphaList.map(fdrEvents.eventToInt(_))
       alphas(f)(i) = eventIntList.toSet
       allEvents ++= eventIntList // alphas(f)(i)
       println(s"(${alphaList.length} events).  Done.")

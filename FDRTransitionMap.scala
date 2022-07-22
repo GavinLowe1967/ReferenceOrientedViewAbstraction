@@ -8,7 +8,7 @@ import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer}
   * @param fdrSession the FDR session object
   * @param superTypeNames the names of distinguished supertypes.  */
 class FDRTransitionMap(
-  fdrSession: FDRSession, superTypeNames: Array[String])
+  fdrSession: FDRSession, fdrEvents: FDREvents, superTypeNames: Array[String])
 {
 
   // ========= Information about types
@@ -205,7 +205,7 @@ class FDRTransitionMap(
           val dstState = nodeToState(machine, dst, family, id, typeId)
           trans += ((e, dstState))
           if(verbose)
-            println(st.toString00+" -"+fdrSession.eventToString(e)+"-> "+
+            println(st.toString00+" -"+fdrEvents.eventToString(e)+"-> "+
                       dstState.toString00)
           // assert(dstState._1 >= 0)
           if(!seen.contains(dstState)){
@@ -314,8 +314,8 @@ class FDRTransitionMap(
         // I believe the following should work, because the alphabets have
         // been created prior to this, so all the events should have been
         // initialised.
-        val e1 = fdrSession.eventToInt(eventsList(2*i))
-        val e2 = fdrSession.eventToInt(eventsList(2*i+1))
+        val e1 = fdrEvents.eventToInt(eventsList(2*i))
+        val e2 = fdrEvents.eventToInt(eventsList(2*i+1))
         map.synchronized{
           map.get(e1) match{
             case Some(es) => map += e1 -> (e2::es)
