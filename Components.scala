@@ -131,7 +131,8 @@ class Components(
       print(s"Building $alphaSt ...")
       // Corresponding list of event names
       val eventIntList = (
-        if(i == 0){
+// IMPROVE: renaming turned off
+        if(true || i == 0){
           val alphaList: Array[String] =
             fdrSession.evalSeqSeqOrSeq(alphaSt, st => st)
           // Convert to EventInts; store in eventIntList0
@@ -184,18 +185,21 @@ class Components(
       //val transMap0 = Map[State, List[(EventInt, State)]]()
 
       for(i <- indices(pt)){
-        // Build raw state machines for ith component.
+        // Build raw state machines for ith component.  t is name from script.
+        // id is representation inside FDR.  
         val t = idTypes(pt)(i); val id = fdrSession.symmetryValue(t)
         val procName = processNames(pt)+"("+t+")"
         print("Building "+procName+"...")
         // Note: FDR performs its part of evalProc sequentially, so there's
         // little to be gained by trying to do the following concurrently.
         val machine = fdrSession.evalProc(procName)
+        // val machine = if(i == 0) fdrSession.evalProc(procName) else null
         // Build transition map
         val seen = Set[State]() // states seen so far
         val transMap0 = Map[State, List[(EventInt, State)]]()
         inits(pt)(i) = transMapBuilder.augmentTransMap(
           transMap0, seen, machine, pt, id, fdrTypeIds(pt))
+        assert(inits(pt)(i).componentProcessIdentity == (pt, i))
 
         // Now convert into more convenient form, copying into transMap, giving
         // a map from states to parallel ArrayBuffers, giving possible events
@@ -206,7 +210,7 @@ class Components(
         val renamingMap = transMapBuilder.mkRenamingMap(renames(pt), t)
 
         // IMPROVE: use parallel here
-        for(s <- seen){
+        for(s <- seen; if s.hasPID(pt,i)){
           // Transitions still to consider
           var transList: List[(EventInt, State)] = 
             if(renamingMap == null) transMap0(s)

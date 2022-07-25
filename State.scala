@@ -200,7 +200,7 @@ class State(val family: Family, val cs: ControlState,
   def toStringX(types: Array[Type]) = {
     val paramsString = (0 until ids.length).map{ j =>
       scriptNames(types(j))(ids(j)) }
-    cs.toString+paramsString.mkString("(", ",", ")") // [$family]
+    cs.toString+paramsString.mkString("(", ",", ")") 
   }
 
   /** Convert this to a String.  If this uses a parameter not in the script, it

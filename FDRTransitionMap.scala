@@ -2,7 +2,7 @@ package ViewAbstraction
 
 import uk.ac.ox.cs.fdr.{Option => _, _} // hide fdr.Option
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer,HashMap}
+import scala.collection.mutable.{Map,Queue,Set,ArrayBuffer,HashMap}
 import RemapperP.Remapper
 
 /** Class that builds transition systems, based on FDR.
@@ -16,6 +16,8 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
   // to a different form.  Can this be improved?
 
   import FDRTransitionMap.{TransList,RenamingMap}
+  // type TransList = List[(EventInt, State)]        
+  // type RenamingMap = Map[EventInt,List[EventInt]] (represents FDR renaming)
 
   /** A map representing a transition system.  Given a destination src, the map
     * returns the transitions from src. */ 
@@ -26,6 +28,17 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
 
   /** String representing st, using stateTypeMap0 for the types. */
   @inline private def show(st: State) = st.toStringX(stateTypeMap0(st.cs))
+
+  @inline private def remapTransitions(trans: TransList, map: RemappingMap)
+      : TransList = {
+    val (froms, tos) = Remapper.getFromsTos(map)
+    // println("froms = "+froms.mkString(",")+ "; tos = "+tos.mkString(","))
+    val remappedTrans = trans.map{ case (e,dst) =>
+      (fdrEvents.remapEvent(e, froms, tos),
+        Remapper.applyMap(dst, map, stateTypeMap0(dst.cs)))
+    }
+    remappedTrans
+  }
 
   /** Convert a Node into a State, using the node's state group as the
     * ControlState, and the node's variable values as the Identities,
@@ -40,7 +53,7 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
     (machine: Machine, node: Node, family: Int, id: Int, typeId: Long)
       : State = {
     val variableVals = machine.variableValues(node).asScala.toList
-    // Types and values for each variable map.
+    // Types and values for each variable map (FDR rep).
     val args0: List[(Long, Int)] =
       variableVals.map(vv => (vv.getType.longValue, vv.getValue.intValue))
     // Add in id if relevant
@@ -93,61 +106,89 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
     family: Int, id: Int, typeId: Long, verbose: Boolean = false)
       : State = {
     val root = machine.rootNode
+    println("Got root node.")
     val rootState = nodeToState(machine, root, family, id, typeId)
     if(!seen.contains(rootState)){
-      // We'll perform a depth-first search.  stack will store Nodes, and the
-      // corresponding State values, that have to be expanded.
-      val stack = new Stack[(Node, State)]
-// FIXME: I think we want BFS for the remapping strategy
-      stack.push((root, rootState)); seen += rootState
+      // We'll perform a breadth-first search.  queue will store Nodes, and
+      // the corresponding State values, that have to be expanded.  When we
+      // create the transitions of a State, we also create that of its normal
+      // form.  We try to create the transitions of a State from those of its
+      // normal form, if possible.  In some cases the Node will be null, but
+      // in that case we'll be able to create the transitions from those of
+      // the normal form of the State.
+      val queue = new Queue[(Node, State)]
+      queue.enqueue((root, rootState)); seen += rootState
 
-      while(stack.nonEmpty){
-        val (node, st) = stack.pop()
-        // Map to normal form
+      while(queue.nonEmpty){
+        val (node, st) = queue.dequeue()
+        // println("Building "+show(st))
         val types = stateTypeMap0(st.cs)
-        def show1(st1: State) = { 
-          require(st1.cs == st.cs); st1.toStringX(types)
-        }
+        def show1(st1: State) = {require(st1.cs == st.cs); st1.toStringX(types)}
+        // Map to normal form
         val (normSt, map) = Remapper.normaliseState(st, types)
-        println(show1(st)+" normalised to "+show1(normSt)+
-          " via "+Remapper.show(map))
+        // println("\n"+show1(st)+" normalised to "+show1(normSt)+
+        //   " via "+Remapper.show(map))
 
-        // TODO: if st1 in dom transMap, remap from there.
-
-        // Build up transitions from node in trans
-        var trans = ArrayBuffer[(Int, State)]()
-        var lastE = -1
-        for(t <- machine.transitions(node).iterator.asScala) {
-          val e = t.event.toInt 
-          assert(lastE <= e); lastE = e // check events non-decreasing
-          val dst = t.destination
-          val dstState = nodeToState(machine, dst, family, id, typeId)
-          trans += ((e, dstState))
-          if(normSt != st || verbose)
-            println(show1(st)+" -"+showEvent(e)+"-> "+show(dstState))
-          if(!seen.contains(dstState)){
-            stack.push((dst, dstState)); seen += dstState
+        // See if we have transitions for normal form
+        transMap.get(normSt) match{
+          case Some(trans) => if(normSt != st){
+            // Remap transitions trans of normSt
+            // println(s"Trying to produce transitions for "+show1(st)+
+            //   " from "+show1(normSt))
+            val inverse = Remapper.inverse(map)
+            assert(Remapper.applyMap(normSt, inverse, types) == st)
+            val remappedTrans = remapTransitions(trans, inverse)
+            // val (froms, tos) = Remapper.getFromsTos(inverse)
+            // // println("Inverse mapping: "+Remapper.show(inverse))
+            // // println("froms = "+froms.mkString(",")+
+            // //   "; tos = "+tos.mkString(","))
+            // val remappedTrans = trans.map{ case (e,dst) =>
+            //   (fdrEvents.remapEvent(e, froms, tos),
+            //     Remapper.applyMap(dst, inverse, stateTypeMap0(dst.cs)))
+            // }
+            for((e1,dst1) <- remappedTrans){
+              // println(show1(st)+s" -${showEvent(e1)}-> "+show(dst1))
+              if(seen.add(dst1)) queue.enqueue((null,dst1))
+            }
+            // Store against st
+            transMap += st -> remappedTrans.sortBy(_._1).toList
           }
-        } // end of for loop
-        val transList = trans.toList; transMap += st -> transList
 
-        // TODO: map transList under inverse of map, and store against st
-        if(normSt != st){
-          val inverse = Remapper.inverse(map)
-          val (froms, tos) = Remapper.getFromsTos(inverse)
-          println("Inverse mapping: "+Remapper.show(inverse))
-          println("froms = "+froms.mkString(",")+
-            "; tos = "+tos.mkString(","))
-          assert(Remapper.applyMap(normSt, inverse, types) == st)
-          val remappedTrans = trans.map{ case (e,dst) =>
-            (fdrEvents.remapEvent(e, tos, froms),
-              Remapper.applyMap(dst, inverse, stateTypeMap0(dst.cs)))
-          }
-          for((e1,dst1) <- remappedTrans)
-            println(show1(normSt)+s" -${showEvent(e1)}-> "+show(dst1))
+          case _ =>
+            // Build up transitions from node in trans
+            var trans = ArrayBuffer[(Int, State)]()
+            var lastE = -1
+            for(t <- machine.transitions(node).iterator.asScala) {
+              val e = t.event.toInt
+              assert(lastE <= e); lastE = e // check events non-decreasing
+              val dst = t.destination
+              val dstState = nodeToState(machine, dst, family, id, typeId)
+              trans += ((e, dstState))
+              if(false && normSt != st || verbose)
+                println(show1(st)+" -"+showEvent(e)+"-> "+show(dstState))
+              if(seen.add(dstState)) queue.enqueue((dst, dstState))
+            } // end of for loop
+            transMap += st -> trans.toList
 
-          // TODO: sort by event, and store
-        }
+            // map transList under map, and store against normSt
+            if(normSt != st){
+              seen.add(normSt)
+              val remappedTrans = remapTransitions(trans.toList, map)
+              // val (froms, tos) = Remapper.getFromsTos(map)
+              // // println("froms = "+froms.mkString(",")+
+              // //   "; tos = "+tos.mkString(","))
+              // val remappedTrans = trans.map{ case (e,dst) =>
+              //   (fdrEvents.remapEvent(e, froms, tos),
+              //     Remapper.applyMap(dst, map, stateTypeMap0(dst.cs)))
+              // }
+              for((e1,dst1) <- remappedTrans){
+                // println(show1(normSt)+s" -${showEvent(e1)}-> "+show(dst1))
+                if(seen.add(dst1)) queue.enqueue((null,dst1))
+              }
+              // Store against normSt
+              transMap += normSt -> remappedTrans.sortBy(_._1).toList
+            }
+        } // end of match
       }
     }
     else println(s"$rootState already seen")

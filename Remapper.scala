@@ -124,31 +124,34 @@ object Remapper{
     bitmap
   }
 
-  /** A total inverse of map.  */
+  /** A total inverse of a total map.  */
   def inverse(map: RemappingMap): RemappingMap = {
+    require(isInjective(map))
     // If x -> y in map, then we include y -> x in the result.  We also
     // include a bijection from (dom map - ran map) to (ran map - dom map),
     // and the identity over all values not in (dom map U ran map).  Start
     // with the total identity.
-    val result = Array.tabulate(numTypes)(t => 
-      Array.tabulate(sizeForRemapping(t))(i => i))
+    val result = 
+      Array.tabulate(numTypes)(t => new Array[Int](map(t).length))
+        // Array.tabulate(sizeForRemapping(t))(i => i))
     for(t <- 0 until numTypes){
       // For each x -> y of type t in map, add y -> x, and record the domain
       // and range.
-      var dom = List[Identity](); var ran = List[Identity]()
-      for( x <- 0 until map(t).size){
-        val y = map(t)(x)
-        if(y >= 0){ result(t)(y) = x; dom ::= x; ran ::= y }
+      // var dom = List[Identity](); var ran = List[Identity]()
+      for(x <- 0 until map(t).size){
+        val y = map(t)(x); require(y >= 0); result(t)(y) = x; 
+        // dom ::= x; ran ::= y }
       }
       // Add bijection from dmr to rdm
-      var dmr = dom.diff(ran); var rdm = ran.diff(dom)
-      assert(dmr.length == rdm.length)
-      while(dmr.nonEmpty){
-        val x = dmr.head; val y = rdm.head; dmr = dmr.tail; rdm = rdm.tail
-        assert(result(t)(x) == x, show(map)+"\n"+s"$t $dom $ran $x");
-        result(t)(x) = y
-      }
+      // var dmr = dom.diff(ran); var rdm = ran.diff(dom)
+      // assert(dmr.length == rdm.length && dmr.isEmpty)
+      // while(dmr.nonEmpty){
+      //   val x = dmr.head; val y = rdm.head; dmr = dmr.tail; rdm = rdm.tail
+      //   assert(result(t)(x) == x, show(map)+"\n"+s"$t $dom $ran $x");
+      //   result(t)(x) = y
+      // }
     }
+    assert(isInjective(result), show(map)+"\n"+show(result))
     result
   }
 
@@ -156,8 +159,10 @@ object Remapper{
     * holding what they get remapped to (in the same order). */
   def getFromsTos(map: RemappingMap): (Array[Parameter], Array[Parameter]) = {
     var froms = List[Parameter](); var tos = List[Parameter]()
-    for(t <- 0 until numTypes; id <- 0 until map(t).length)
-      if(map(t)(id) != id){ froms ::= ((t, id)); tos ::= ((t, map(t)(id))) }
+    for(t <- 0 until numTypes; id <- 0 until map(t).length){
+      val id1 = map(t)(id)
+      if(id1 >= 0 && id1 != id){ froms ::= ((t, id)); tos ::= ((t, id1)) }
+    }
     (froms.toArray, tos.toArray)
   }
 
@@ -502,8 +507,8 @@ object Remapper{
   //   MyStateMap.getByIndex(st.family, st.cs, remappedParams)
   // }
 
-  /** Normalise st, returning the normalised version, and the remapping map
-    * to produce it.
+  /** Normalise st, returning the normalised version, and the total remapping
+    * map used to produce it.  
     * @param types an array giving the types of the parameters. Note that we
     * can't use remapState here, because State.stateTypeMap hasn't been
     * initialised.  */
@@ -511,12 +516,36 @@ object Remapper{
     val map = newRemappingMap; val nextArg = newNextArgMap
     val ids = st.ids; val len = ids.length; assert(types.length == len)
     val remappedParams = new Array[Identity](len); var index = 0
+    // The domain and range of the parameters so far
+    val dom, ran = Array.fill(numTypes)(List[Identity]())
     while(index < len){
       val t = types(index); val id = ids(index)
+      val newInMap = id >= 0 && map(t)(id) < 0 // map gets extended below
       remappedParams(index) = remapArg(map, nextArg, t, id)
+      if(newInMap){ 
+        val newId = remappedParams(index); assert(map(t)(id) == newId)
+        dom(t) ::= id; ran(t) ::= newId 
+      }
       index += 1
     }
     val st1 = MyStateMap(st.family, st.cs, remappedParams)
+
+    // Extend to have same domain and range
+    for(t <- 0 until numTypes){
+      // Add bijection from rdm to dmr
+      var dmr = dom(t).diff(ran(t)); var rdm = ran(t).diff(dom(t))
+      assert(dmr.length == rdm.length)
+      while(dmr.nonEmpty){
+        val x = dmr.head; val y = rdm.head; dmr = dmr.tail; rdm = rdm.tail
+        assert(map(t)(y) < 0, show(map)+"\n"+s"$t ${dom(t)} ${ran(t)} $x");
+        map(t)(y) = x
+      }
+      // Remap remainder under identity
+      for(id <- 0 until map(t).length) if(map(t)(id) < 0) map(t)(id) = id
+    }
+
+    assert(isInjective(map))
+
     (st1, map)
   }
 
