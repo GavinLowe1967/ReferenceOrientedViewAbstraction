@@ -40,7 +40,7 @@ class System(fname: String) {
     familyTypeNames.map(fdrSession.getSuperType(_))
 
   /** Object storing the events. */
-  protected[SystemP] val fdrEvents = new FDREvents(fdrSession, superTypeNames)
+  val fdrEvents = new FDREvents(fdrSession, superTypeNames)
 
   // Store in package object
   eventPrinter = fdrEvents
@@ -57,6 +57,8 @@ class System(fname: String) {
   eventsSize = numEvents+3
 
   fdrEvents.initEvents(eventsSize)
+
+  scriptNames = fdrEvents.getNameMap
 
   /** The internal representation of each type inside FDR. */
   private val fdrTypeIds =
@@ -113,7 +115,7 @@ class System(fname: String) {
     // synchronise with.
     components.categoriseTrans(servers.alphaBitMap)
 
-    scriptNames = fdrEvents.getNameMap
+    //scriptNames = fdrEvents.getNameMap
 
     val cptEventMap: Array[List[ProcessIdentity]] = 
       components.getEventMap

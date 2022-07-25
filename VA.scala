@@ -184,7 +184,8 @@ object VA{
         assert(fname.isEmpty)
         singleRef = false // tests assume this
         system = new SystemP.System("CSP/test-file.csp")
-        TestStates.report
+        // TestStates.report
+        new CompileTest(system.fdrEvents).test
         UnificationTest.test
         RemapperP.RemapperTest.test; CombinerP.CombinerTest.test
         SystemP.SystemTest.test(system); 

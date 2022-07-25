@@ -2,25 +2,30 @@ package ViewAbstraction
 
 import uk.ac.ox.cs.fdr.{Option => _, _} // hide fdr.Option
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer}
+import scala.collection.mutable.{Map,Stack,Set,ArrayBuffer,HashMap}
+import RemapperP.Remapper
 
 /** Class that builds transition systems, based on FDR.
   * @param fdrSession the FDR session object
   * @param superTypeNames the names of distinguished supertypes.  */
-class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
+class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
 
   // ========= Build the transition systems.
 
   // IMPROVE: we create the transition function in one form, then transform it
   // to a different form.  Can this be improved?
 
+  import FDRTransitionMap.{TransList,RenamingMap}
+
   /** A map representing a transition system.  Given a destination src, the map
-    * returns a list of events e and states dst such that src -e-> dst.  This
-    * list is sorted by events. */ 
-  type TransMap = Map[State, List[(Int, State)]]
+    * returns the transitions from src. */ 
+  type TransMap = Map[State, TransList]
 
   /** A map giving the types of the parameters of each state. */
   private val stateTypeMap0 = Map[ControlState, Array[Type]]()
+
+  /** String representing st, using stateTypeMap0 for the types. */
+  @inline private def show(st: State) = st.toStringX(stateTypeMap0(st.cs))
 
   /** Convert a Node into a State, using the node's state group as the
     * ControlState, and the node's variable values as the Identities,
@@ -41,23 +46,18 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
     // Add in id if relevant
     // FIXME: this goes wrong if args0.head happens to equal id, by "chance".
     val args1 =
-      if(id >= 0){
-        if(args0.isEmpty || args0.head != (typeId, id)){
-          println("adding identity"); (typeId, id)::args0 
-        }
-        else args0
+      if(id >= 0 && (args0.isEmpty || args0.head != (typeId, id))){
+        println("adding identity"); (typeId, id)::args0
       }
       else args0
     val cs = machine.stateGroup(node).toInt 
-    val ids = /*State.getIdentityArray*/new Array[Identity](args1.length); 
-    var i = 0
+    val ids = new Array[Identity](args1.length); var i = 0
     for((t,x) <- args1){ 
       try{ ids(i) = fdrEvents.getIdRemap(t)(x); i += 1 }
       catch{ case e: NoSuchElementException =>
         println(s"Not found ($t,$x)"); println(fdrEvents.getIdRemap(t))
         sys.exit()
-      }
-      // There is sometimes an exception here, but I don't understand why. 
+      } // There is sometimes an exception here, but I don't understand why. 
     }
     stateTypeMap0.get(cs) match{
       case Some(ts) => { 
@@ -69,14 +69,10 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
       case None => 
         val types: Array[Type] = 
           args1.map{ case (t,x) => fdrEvents.fdrTypeToType(t) }.toArray
-        // println(s"$cs -> ${types.mkString("<", ",", ">")}")
         stateTypeMap0 += cs -> types
     }
-    MyStateMap(family, cs, ids) // potentially recycles ids
+    MyStateMap(family, cs, ids)
   }
-
-  // Flag to cause transitions to be printed
-  private val verbose = false
 
   /* Note: to make the following thread-safe, it is necessary to (1) protect
    * stateTypeMap0 in nodeToState; (2) protect transMap and seen within
@@ -102,10 +98,22 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
       // We'll perform a depth-first search.  stack will store Nodes, and the
       // corresponding State values, that have to be expanded.
       val stack = new Stack[(Node, State)]
+// FIXME: I think we want BFS for the remapping strategy
       stack.push((root, rootState)); seen += rootState
 
       while(stack.nonEmpty){
         val (node, st) = stack.pop()
+        // Map to normal form
+        val types = stateTypeMap0(st.cs)
+        def show1(st1: State) = { 
+          require(st1.cs == st.cs); st1.toStringX(types)
+        }
+        val (normSt, map) = Remapper.normaliseState(st, types)
+        println(show1(st)+" normalised to "+show1(normSt)+
+          " via "+Remapper.show(map))
+
+        // TODO: if st1 in dom transMap, remap from there.
+
         // Build up transitions from node in trans
         var trans = ArrayBuffer[(Int, State)]()
         var lastE = -1
@@ -115,67 +123,72 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
           val dst = t.destination
           val dstState = nodeToState(machine, dst, family, id, typeId)
           trans += ((e, dstState))
-          if(verbose)
-            println(st.toString00+" -"+fdrEvents.eventToString(e)+"-> "+
-                      dstState.toString00)
-          // assert(dstState._1 >= 0)
+          if(normSt != st || verbose)
+            println(show1(st)+" -"+showEvent(e)+"-> "+show(dstState))
           if(!seen.contains(dstState)){
             stack.push((dst, dstState)); seen += dstState
           }
         } // end of for loop
-        transMap += st -> trans.toList
+        val transList = trans.toList; transMap += st -> transList
+
+        // TODO: map transList under inverse of map, and store against st
+        if(normSt != st){
+          val inverse = Remapper.inverse(map)
+          val (froms, tos) = Remapper.getFromsTos(inverse)
+          println("Inverse mapping: "+Remapper.show(inverse))
+          println("froms = "+froms.mkString(",")+
+            "; tos = "+tos.mkString(","))
+          assert(Remapper.applyMap(normSt, inverse, types) == st)
+          val remappedTrans = trans.map{ case (e,dst) =>
+            (fdrEvents.remapEvent(e, tos, froms),
+              Remapper.applyMap(dst, inverse, stateTypeMap0(dst.cs)))
+          }
+          for((e1,dst1) <- remappedTrans)
+            println(show1(normSt)+s" -${showEvent(e1)}-> "+show(dst1))
+
+          // TODO: sort by event, and store
+        }
       }
     }
     else println(s"$rootState already seen")
     rootState
   }
 
-  /** New version of augmentTransMap that tries to produce transitions by
-    * renaming those previously found for symmetrically bisimilar states. */
-  def newAugmentTransMap(
-    transMap: TransMap, seen: Set[State], machine: Machine,
-    family: Int, id: Int, typeId: Long, verbose: Boolean = false)
-      : State = {
-    val root = machine.rootNode
-    val rootState = nodeToState(machine, root, family, id, typeId)
-    // We'll perform a depth-first search.  stack will store Nodes, and the
-    // corresponding State values, that have to be expanded.
-    val stack = new Stack[(Node, State)]
-    stack.push((root, rootState)); seen += rootState
-// Does seen contain states done or just those that we've sen?
+//   /** New version of augmentTransMap that tries to produce transitions by
+//     * renaming those previously found for symmetrically bisimilar states. */
+//   def newAugmentTransMap(
+//     transMap: TransMap, seen: Set[State], machine: Machine,
+//     family: Int, id: Int, typeId: Long, verbose: Boolean = false)
+//       : State = {
+//     val root = machine.rootNode
+//     val rootState = nodeToState(machine, root, family, id, typeId)
+//     // We'll perform a depth-first search.  stack will store Nodes, and the
+//     // corresponding State values, that have to be expanded.
+//     val stack = new Stack[(Node, State)]
+//     stack.push((root, rootState)); seen += rootState
+// // Does seen contain states done or just those that we've sen?
 
-    while(stack.nonEmpty){
-      val (node, st) = stack.pop()
-      val (st1,map) = RemapperP.Remapper.normaliseState(st)
-      // Get transitions of st1, either recalling them or producing them
-      val trans1 = transMap.get(st1) match{
-        case None => 
-          // Create transitions for st1, store and return
-          ???
-        case Some(trans2) => trans2
-      }
-      // produce transitions for st by remapping st1 by the inverse of map
+//     while(stack.nonEmpty){
+//       val (node, st) = stack.pop()
+//       val (st1,map) = RemapperP.Remapper.normaliseState(st)
+//       // Get transitions of st1, either recalling them or producing them
+//       val trans1 = transMap.get(st1) match{
+//         case None => 
+//           // Create transitions for st1, store and return
+//           ???
+//         case Some(trans2) => trans2
+//       }
+//       // produce transitions for st by remapping st1 by the inverse of map
 
-    }
-    rootState
-  }
-
-  /** String defining take and drop functions. */
-  private val takeDropString =
-    "let take(xs_, n_) = "+
-      "if n_ == 0 or null(xs_) then <> else <head(xs_)>^take(tail(xs_), n_-1) "+
-      "within let drop(xs_, n_) = "+
-      "if n_ == 0 or null(xs_) then xs_ else drop(tail(xs_), n_-1) within "
-
-  private val Chunk = 500
+//     }
+//     rootState
+//   }
 
   /* Code to build a renaming map from a list of pairs of events
    * (<(Event,Event)>), or a list of lists of pairs of events
    * (<<(Event,Event)>>) inside FDR.  We flatten into a single list of events,
    * e.g. < e1_, e2_ | (e1_,e2_) <- pairsList >.  This allows us to get away
    * with a single call into the FDR API, and seems the most efficient way. */
-
-  type RenamingMap = Map[EventInt,List[EventInt]]
 
   private def unpair(name: String) = s"< e1_, e2_ | (e1_,e2_) <- ($name) >"
 
@@ -188,9 +201,7 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
         print("Making renaming map...")
         val eventsList: Array[String] =
           fdrSession.evalSeqSeqOrSeq(renameName, unpair)
-        val map = renamingMapFromEventList(eventsList)
-        println(".  Done")
-        map
+        println(".  Done"); renamingMapFromEventList(eventsList)
 
       case None => null
     }
@@ -202,10 +213,7 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
         val eventsList: Array[String] =
           fdrSession.applyFunctionOrMap(fdrSession.evalSeqSeqOrSeq(_, unpair), 
                                         func, arg)
-          // fdrSession.evalSeqSeqOrSeq(s"$func($arg)", unpair)
-        val map = renamingMapFromEventList(eventsList)
-        println(".  Done")
-        map
+        println(".  Done"); renamingMapFromEventList(eventsList)
 
       case None => null
     }
@@ -218,36 +226,18 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
     assert(eventsList.length%2 == 0)
     if(eventsList.isEmpty){ println("Empty renaming map"); null }
     else{
-      // IMPROVE: consider using thread-safe map here
-      // IMPROVE: use parallel here
-      val map = new scala.collection.mutable.HashMap[EventInt,List[EventInt]]
+      val map = new HashMap[EventInt,List[EventInt]]
       for(i <- (0 until eventsList.length/2)){
-        // I believe the following should work, because the alphabets have
-        // been created prior to this, so all the events should have been
-        // initialised.
         val e1 = fdrEvents.eventToInt(eventsList(2*i))
         val e2 = fdrEvents.eventToInt(eventsList(2*i+1))
-        map.synchronized{
-          map.get(e1) match{
-            case Some(es) => map += e1 -> (e2::es)
-            case None => map += e1 -> List(e2)
-          }
+        map.get(e1) match{
+          case Some(es) => map += e1 -> (e2::es)
+          case None => map += e1 -> List(e2)
         }
       }
       map
     }
   }
-
-  /** Rename transitions according to renamingMap. */
-  def renameTransList(transList: List[(EventInt, State)], 
-                      renamingMap: RenamingMap)
-      : List[(EventInt, State)] = 
-    transList.flatMap{ case(e,s1) =>
-      renamingMap.get(e) match{
-        case Some(es) => es.map(e2 => (e2,s1))
-        case None => List((e,s1))
-      }
-    }.sortBy(_._1)
 
   /** Build a transition map corresponding to name.
     * @param alpha the alphabet of this process in the system; transitions 
@@ -280,7 +270,7 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
       var transList: List[(EventInt, State)] = transMap(s)
       if(renamingMap != null)
         // Rename every event according to renamingMap, and re-sort
-        transList = renameTransList(transList, renamingMap)
+        transList = FDRTransitionMap.renameTransList(transList, renamingMap)
 
       val es = new ArrayBuffer[EventInt]
       val nexts = new ArrayBuffer[List[State]]
@@ -308,14 +298,13 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
     * should be called after the transition maps of the components and servers
     * have been created. */
   def createStateTypeMap = {
-    val maxCS = stateTypeMap0.keysIterator.max
+    val maxCS = getMaxCS // stateTypeMap0.keysIterator.max
     // following two variables in package
     val minCS = stateTypeMap0.keysIterator.min
     println("minCS = "+minCS+"; maxCS = "+maxCS)
     val stateTypeMapArray = new Array[Array[Type]](maxCS-minCS+1)
     for((cs,ts) <- stateTypeMap0.iterator) stateTypeMapArray(cs-minCS) = ts
     State.setStateTypeMap(stateTypeMapArray, minCS)
-    // MyStateMap.doneCompiling
   }
 
   /** Given a string representing a process, get its control state and the
@@ -334,3 +323,35 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents)
 
 
 }
+
+// ==========================================================================
+
+object FDRTransitionMap{
+  /** List of transitions from a given state st: pairs (e, st') such that 
+    * st -e-> st'.  This
+    * list is sorted by events.*/
+  type TransList = List[(EventInt, State)]
+
+  type RenamingMap = Map[EventInt,List[EventInt]]
+
+  /** Rename transitions according to renamingMap. */
+  def renameTransList(transList: TransList, renamingMap: RenamingMap)
+      : TransList = 
+    transList.flatMap{ case(e,s1) =>
+      renamingMap.get(e) match{
+        case Some(es) => es.map(e2 => (e2,s1))
+        case None => List((e,s1))
+      }
+    }.sortBy(_._1)
+}
+
+
+
+  // /** String defining take and drop functions. */
+  // private val takeDropString =
+  //   "let take(xs_, n_) = "+
+  //     "if n_ == 0 or null(xs_) then <> else <head(xs_)>^take(tail(xs_), n_-1) "+
+  //     "within let drop(xs_, n_) = "+
+  //     "if n_ == 0 or null(xs_) then xs_ else drop(tail(xs_), n_-1) within "
+
+  // private val Chunk = 500

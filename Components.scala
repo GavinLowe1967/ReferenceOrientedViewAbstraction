@@ -123,20 +123,32 @@ class Components(
         new Array[scala.collection.immutable.Set[EventInt]](idSizes(f)))
     // All events 
     val allEvents = scala.collection.mutable.Set[EventInt]()
-    // IMPROVE: can the following be done in parallel? 
+    // Following will hold alphabet of component 0
+    var eventIntList0: Array[Int] = null
     for(f <- 0 until numFamilies; i <- indices(f)){
       // String representing name of alphabet of this process
       val alphaSt = alphaNames(f)+"("+idTypes(f)(i)+")"
       print(s"Building $alphaSt ...")
       // Corresponding list of event names
-      val alphaList: Array[String] = 
-        // fdrSession.setStringToList(alphaSt)
-        fdrSession.evalSeqSeqOrSeq(alphaSt, st => st) 
-      // Convert to EventInts, and store
-      val eventIntList = alphaList.map(fdrEvents.eventToInt(_))
+      val eventIntList = (
+        if(i == 0){
+          val alphaList: Array[String] =
+            fdrSession.evalSeqSeqOrSeq(alphaSt, st => st)
+          // Convert to EventInts; store in eventIntList0
+          eventIntList0 = alphaList.map(fdrEvents.eventToInt(_))
+          eventIntList0
+        }
+        else{
+          // Create events by renaming those for component 0
+          val froms = Array((f,0), (f,i)); val tos = Array((f,i), (f,0))
+          eventIntList0.map(e => fdrEvents.remapEvent(e,froms,tos))
+        }
+      )
+      // println(eventIntList.map(fdrEvents.eventToString).mkString(", "))
+      // Now store
       alphas(f)(i) = eventIntList.toSet
       allEvents ++= eventIntList // alphas(f)(i)
-      println(s"(${alphaList.length} events).  Done.")
+      println(s"(${eventIntList.length} events).  Done.")
     }
 
     // eventMap, maps each event e to the list of identities of processes that
@@ -198,7 +210,7 @@ class Components(
           // Transitions still to consider
           var transList: List[(EventInt, State)] = 
             if(renamingMap == null) transMap0(s)
-            else transMapBuilder.renameTransList(transMap0(s), renamingMap)
+            else FDRTransitionMap.renameTransList(transMap0(s), renamingMap)
           // println(s"transList = "+transList.map{ case (e,post) =>
           //   s"${s.toString00} -$e${showEvent(e)}-> ${post.toString00}" })
           // Result for this state.

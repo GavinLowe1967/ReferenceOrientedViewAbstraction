@@ -26,11 +26,15 @@ object Remapper{
   /** Show a remapping map. */
   def show(map: RemappingMap) = map.map(_.mkString("[",",","]")).mkString("; ") 
 
+  /** The size for the remapping map for type t.  */
+// FIXME: the "*2" below is arbitrary, and probably insufficient in some cases. 
+  @inline private def sizeForRemapping(t: Type) = 2*typeSizes(t)+2
+
+
   /** Template from which to create RemappingMap. */
   private val remappingMapTemplate =
-// FIXME: the "*2" below is arbitrary, and probably insufficient in some cases.
 // Maybe chose the map's size on a case-by-case basis.
-    Array.tabulate(numTypes)(t => Array.fill(2*typeSizes(t)+2)(-1))
+    Array.tabulate(numTypes)(t => Array.fill(sizeForRemapping(t))(-1))
 
   /** Produce a (deep) clone of map. */
   @inline def cloneMap(map: RemappingMap): RemappingMap = {
@@ -118,6 +122,43 @@ object Remapper{
       val id = map(t)(i); if(id >= 0) bitmap(t)(id) = true
     }
     bitmap
+  }
+
+  /** A total inverse of map.  */
+  def inverse(map: RemappingMap): RemappingMap = {
+    // If x -> y in map, then we include y -> x in the result.  We also
+    // include a bijection from (dom map - ran map) to (ran map - dom map),
+    // and the identity over all values not in (dom map U ran map).  Start
+    // with the total identity.
+    val result = Array.tabulate(numTypes)(t => 
+      Array.tabulate(sizeForRemapping(t))(i => i))
+    for(t <- 0 until numTypes){
+      // For each x -> y of type t in map, add y -> x, and record the domain
+      // and range.
+      var dom = List[Identity](); var ran = List[Identity]()
+      for( x <- 0 until map(t).size){
+        val y = map(t)(x)
+        if(y >= 0){ result(t)(y) = x; dom ::= x; ran ::= y }
+      }
+      // Add bijection from dmr to rdm
+      var dmr = dom.diff(ran); var rdm = ran.diff(dom)
+      assert(dmr.length == rdm.length)
+      while(dmr.nonEmpty){
+        val x = dmr.head; val y = rdm.head; dmr = dmr.tail; rdm = rdm.tail
+        assert(result(t)(x) == x, show(map)+"\n"+s"$t $dom $ran $x");
+        result(t)(x) = y
+      }
+    }
+    result
+  }
+
+  /** An array holding the Parameters renamed to a new value, and an array
+    * holding what they get remapped to (in the same order). */
+  def getFromsTos(map: RemappingMap): (Array[Parameter], Array[Parameter]) = {
+    var froms = List[Parameter](); var tos = List[Parameter]()
+    for(t <- 0 until numTypes; id <- 0 until map(t).length)
+      if(map(t)(id) != id){ froms ::= ((t, id)); tos ::= ((t, map(t)(id))) }
+    (froms.toArray, tos.toArray)
   }
 
   import ServersReducedMap.ReducedMap // = Array[Long]
@@ -461,11 +502,32 @@ object Remapper{
   //   MyStateMap.getByIndex(st.family, st.cs, remappedParams)
   // }
 
-  /** Normalise st, returning the normalised version and the remapping map to
-    * produce it. */
-  @inline def normaliseState(st: State): (State, RemappingMap) = {
-    val map = newRemappingMap; val st1 = remapState(map, newNextArgMap, st)
+  /** Normalise st, returning the normalised version, and the remapping map
+    * to produce it.
+    * @param types an array giving the types of the parameters. Note that we
+    * can't use remapState here, because State.stateTypeMap hasn't been
+    * initialised.  */
+  def normaliseState(st: State, types: Array[Type]): (State, RemappingMap) = {
+    val map = newRemappingMap; val nextArg = newNextArgMap
+    val ids = st.ids; val len = ids.length; assert(types.length == len)
+    val remappedParams = new Array[Identity](len); var index = 0
+    while(index < len){
+      val t = types(index); val id = ids(index)
+      remappedParams(index) = remapArg(map, nextArg, t, id)
+      index += 1
+    }
+    val st1 = MyStateMap(st.family, st.cs, remappedParams)
     (st1, map)
+  }
+
+  /** Apply map to st; types gives the types. */
+  def applyMap(st: State, map: RemappingMap, types: Array[Type]): State = {
+    val ids = st.ids; val len = ids.length
+    val remappedIds = new Array[Identity](len)
+    for(i <- 0 until len){
+      val id = ids(i); remappedIds(i) = if(id >= 0) map(types(i))(id) else id
+    }
+    MyStateMap(st.family, st.cs, remappedIds)
   }
 
   // ------ Remapping List[State] or  Views

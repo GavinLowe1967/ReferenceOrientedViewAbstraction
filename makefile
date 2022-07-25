@@ -157,7 +157,8 @@ $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 TESTS = $(DIR)/RemapperP/RemapperTest.class $(COMBINERP)/CombinerTest.class	\
 $(DIR)/SystemP/SystemTest.class $(DIR)/CheckerTest.class			\
 $(EXTENDERP)/ExtendabilityTest.class $(DIR)/UnificationTest.class		\
-$(DIR)/SingleRefEffectOnUnificationTest.class $(DIR)/RemappingExtenderTest.class
+$(DIR)/SingleRefEffectOnUnificationTest.class					\
+$(DIR)/RemappingExtenderTest.class $(DIR)/CompileTest.class
 
 $(DIR)/VA.class:  $(DIR)/Checker.class $(TESTS)
 

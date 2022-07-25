@@ -196,6 +196,13 @@ class State(val family: Family, val cs: ControlState,
     cs.toString+paramsString.mkString("(", ",", ")") // [$family]
   }
 
+  /** Convert this to a String, where types gives the types of parameters. */
+  def toStringX(types: Array[Type]) = {
+    val paramsString = (0 until ids.length).map{ j =>
+      scriptNames(types(j))(ids(j)) }
+    cs.toString+paramsString.mkString("(", ",", ")") // [$family]
+  }
+
   /** Convert this to a String.  If this uses a parameter not in the script, it
     * is represented by its raw (type, value) representation. */
   def toString0 = {

@@ -75,10 +75,38 @@ class Servers(
     if(usesRenaming) s"nth_(${file.serversRenameName}, $i)"
     else s"nth_(${file.serversName}, $i)"
 
+  /** The alphabets of the servers.  Initialised in initAlphas. */
+  private val alphas: Array[Set[EventInt]] = Array.fill(numServers)(Set[Int]())
+
+  // private def getAlphabet(e: String) = println(fdrSession.eval(e))
+
+  private def initAlphas() = {
+    // Build alphabet for each server
+    print("Creating alphabets")
+    for(i <- 0 until numServers){
+      print(s"Building alphabet for server $i: ${serverNames(i)}...")
+      val term = 
+        if(usesRenaming) s"third4_(${entry(i)})" else s"second3_(${entry(i)})"
+      // getAlphabet(term)
+      val alpha = fdrSession.evalSeqSeqOrSeq(term, st => st)
+      for(st <- alpha) alphas(i) += fdrEvents.eventToInt(st)
+      println()
+    }
+    println()
+    // Build map (as array) from events to the list of synchronising servers.
+    eventMap = Array.tabulate(eventsSize)( // (maxEvent+1)( 
+      e => (0 until numServers).filter(alphas(_).contains(e)).toArray)
+    // Build bitmap showing which events are in alphabet of any server
+    alphaBitMap = new Array[Boolean](eventsSize)
+    for(i <- 0 until numServers; e <- alphas(i)){
+      alphaBitMap(e) = true
+      if(activeServer(i)) activeServerEvent(e) = true
+    }
+  }
+
   /** Build transition system for servers. */
   private def init() = {
     println("Creating servers")
-    val indices = (0 until numServers).toList
     for(i <- 0 until numServers){
       serverNames(i) = fdrSession.eval(
         if(usesRenaming) s"first4_(${entry(i)})" else s"first3_(${entry(i)})" ) 
@@ -89,29 +117,10 @@ class Servers(
       println(serverNames(i)+": "+(if(activeServer(i)) "active" else "passive"))
     }
     // Build alphabet for each server
-    print("Creating alphabets")
-    val alphas: Array[Set[EventInt]] = Array.fill(numServers)(Set[Int]())
-    for(i <- indices){
-      print(s"Building alphabet for server $i: ${serverNames(i)}...")
-      val alpha = fdrSession.evalSeqSeqOrSeq( 
-        if(usesRenaming) s"third4_(${entry(i)})" else s"second3_(${entry(i)})",
-        st => st)
-      for(st <- alpha) alphas(i) += fdrEvents.eventToInt(st)
-      println()
-    }
-    println()
-    // Build map (as array) from events to the list of synchronising servers.
-    eventMap = Array.tabulate(eventsSize)( // (maxEvent+1)( 
-      e => indices.filter(alphas(_).contains(e)).toArray)
-    // Build bitmap showing which events are in alphabet of any server
-    alphaBitMap = new Array[Boolean](eventsSize)
-    for(i <- 0 until numServers; e <- alphas(i)){
-      alphaBitMap(e) = true
-      if(activeServer(i)) activeServerEvent(e) = true
-    }
+    initAlphas()
     // Build transitions
     val initStates: Array[State] = new Array[State](numServers)
-    for(i <- indices){
+    for(i <- 0 until numServers){
       val sName = serverNames(i)
       print(s"Building serverTransMap for server $i: $sName")
       val oRenamingString = 

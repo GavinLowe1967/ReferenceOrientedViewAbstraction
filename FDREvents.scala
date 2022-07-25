@@ -102,39 +102,20 @@ class FDREvents(fdrSession: FDRSession, superTypeNames: Array[String])
     * the script.  Called after the transition system is built. */
   def getNameMap = theNameMap
 
+  /** Mapping from non-distinguished value names to their corresponding
+    * representation. */
+  private val fromNameMap = Map[String, Parameter]()
+
+  /** The internal representation of the non-distinguished value with name
+    * `st`. */
+  def fromName(st: String): Parameter = fromNameMap(st)
+
   /** Map from the Longs used to represent types in FDR to the Ints used here.  
     * The latter are in the range [0..numTypes). 
     * 
     * The entry for type t is built by typeMap, the first time a parameter of
     * this type is encountered. */
   private val theTypeMap = Map[Long, Int]()
-
-  /** Build information about type typeName, with supertype superType. 
-    * @return a triple: (1) an IdRemap, mapping the representation of each 
-    * value inside FDR to the value used here; (2) a map from the values used
-    * here to the names in the script; (3) the number of elements of the type
-    * (excluding distinguished values of the supertype).*/
-  private def buildIdRemap(typeName: String, superType: String)
-      : (IdRemap, NameMap, Int) = {
-    val idRemap = Map[Int, Int]() // the result
-    val nameMap = Map[Int, String]() // map from values used here to script names
-    // Values in the type and supertype
-    val superTypeVals = fdrSession.getTypeValues(superType)
-    val typeValues = fdrSession.getTypeValues(typeName)
-    // Next ints to use for ids and distinguished values
-    var nextId = 0; var nextDistinguished = -1
-
-    // Build the mapping for each value of superType in turn.
-    for(st <- superTypeVals){
-      val id = fdrSession.symmetryValue(st) // Int representing st inside FDR
-      if(typeValues.contains(st)){ idRemap += id -> nextId; nextId += 1 }
-      else{ idRemap += id -> nextDistinguished; nextDistinguished -= 1 }
-      nameMap += idRemap(id) -> st
-      println(s"$id: $st -> ${idRemap(id)}")
-    }
-
-    (idRemap, nameMap, nextId)
-  }
 
   /** Given the Long used to represent a type within FDR, return the
     * corresponding Int used here.  Also, if this is the first time we've seen
@@ -146,10 +127,28 @@ class FDREvents(fdrSession: FDRSession, superTypeNames: Array[String])
       // This is the first time we've encountered this type
       val superTypeName = fdrSession.typeName(t)
       val i = superTypeNames.indexOf(superTypeName); assert(i >= 0)
-      println(superTypeName+"\t"+t+"\t"+i)
+      val typeName = familyTypeNames(i)
+      println(s"$superTypeName: $t; $i; $typeName")
       theTypeMap += t -> i 
-      val (idRemap, nameMap, typeSize) =
-        buildIdRemap(familyTypeNames(i), superTypeName)
+      val idRemap = Map[Int, Int]() // FDR reps => values used here
+      val nameMap = Map[Int, String]() // values used here => script names
+      // Values in the type and supertype
+      val superTypeVals = fdrSession.getTypeValues(superTypeName)
+      val typeValues = fdrSession.getTypeValues(typeName)
+      // Next ints to use for ids and distinguished values
+      var nextId = 0; var nextDistinguished = -1
+      // Build the mapping for each value of superType in turn.
+      for(st <- superTypeVals){
+        val id = fdrSession.symmetryValue(st) // Int representing st inside FDR
+        if(typeValues.contains(st)){ 
+          // println(s"$st => ($i, $nextId)")
+          idRemap += id -> nextId; fromNameMap += st -> (i,nextId); nextId += 1 
+        }
+        else{ idRemap += id -> nextDistinguished; nextDistinguished -= 1 }
+        nameMap += idRemap(id) -> st
+        println(s"$id: $st -> ${idRemap(id)}")
+      }
+      val typeSize = nextId // # non-distinguished values
       idRemaps += t -> idRemap; theNameMap += i -> nameMap;
       assert(typeSize <= MaxTypeSize, s"Type $superTypeName has too many values")
       typeSizes(i) = typeSize; superTypeSizes(i) = idRemap.size
@@ -159,5 +158,36 @@ class FDREvents(fdrSession: FDRSession, superTypeNames: Array[String])
       i
   }
 
+  /** Characters that can be separators between fields in an event. */
+  private val Separators = ".(){},<>|=> ".toArray
+
+  /** Is c a separator between fields in an event? */
+  private def isSeparator(c: Char) = Separators.contains(c)
+
+  /** Remap e, replacing every field in froms with the corresponding field in
+    * tos. */
+  def remapEvent(e: EventInt, froms: Array[Parameter], tos: Array[Parameter])
+      : EventInt = {
+    // Convert arguments to string form
+    val fromsLength = froms.length; require(tos.length == fromsLength)
+    val eString = eventToString(e)
+    val fromStrings = froms.map{ case (t,id) => theNameMap(t)(id) }
+    val toStrings = tos.map{ case (t,id) => theNameMap(t)(id) }
+    // Parse e, splitting at Separators
+    val builder = new scala.collection.mutable.StringBuilder()
+    var i = 0; val len = eString.length
+    while(i < len){
+      // get next field
+      var j = i; while(j < len && !isSeparator(eString(j))) j += 1
+      val thisField = eString.substring(i,j); var k = 0 
+      // search for thisField in fromStrings
+      while(k < fromsLength && fromStrings(k) != thisField) k += 1
+      if(k < fromsLength) builder ++= toStrings(k) else builder ++= thisField 
+      // Get the separators
+      i = j; while(j < len && isSeparator(eString(j))) j += 1
+      val seps = eString.substring(i,j); builder ++= seps; i = j
+    }
+    eventToInt(builder.toString)
+  }
 
 }
