@@ -131,8 +131,7 @@ class Components(
       print(s"Building $alphaSt ...")
       // Corresponding list of event names
       val eventIntList = (
-// IMPROVE: renaming turned off
-        if(true || i == 0){
+        if(i == 0){
           val alphaList: Array[String] =
             fdrSession.evalSeqSeqOrSeq(alphaSt, st => st)
           // Convert to EventInts; store in eventIntList0
@@ -238,18 +237,20 @@ class Components(
     for((s,trans) <- transMap0){
       val (f,i) = s.componentProcessIdentity; assert(f == pt)
       val renamingMap = renamingMaps(i)
-/*
       var transList: List[(EventInt, State)] =
         if(renamingMap == null) trans
         else FDRTransitionMap.renameTransList(trans, renamingMap)
       val (transListEvent, transListNexts) = transformTrans(transList)
- */
-/*
+      transMap.synchronized{ transMap(s) = (transListEvent, transListNexts) }
+    } // end of for 
+  }
+
+/*    // This seems slower
       val (transListEvent, transListNexts) = 
         if(renamingMap == null) transformTrans(trans)
         else FDRTransitionMap.renameTransList1(trans, renamingMap)
  */
-
+/*
       // Apply renamingMap to get transitions
       var transList: List[(EventInt, State)] =
         if(renamingMap == null) trans
@@ -269,10 +270,7 @@ class Components(
           transListEvent += e; transListNexts += matches // .map(_._2)
         }
       }
- 
-      transMap.synchronized{ transMap(s) = (transListEvent, transListNexts) }
-    } // end of for 
-  }
+ */
 
   /** Transform trans to form for storing. */
   @inline private def transformTrans(trans: TransList)

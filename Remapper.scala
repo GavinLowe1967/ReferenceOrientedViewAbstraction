@@ -30,7 +30,6 @@ object Remapper{
 // FIXME: the "*2" below is arbitrary, and probably insufficient in some cases. 
   @inline private def sizeForRemapping(t: Type) = 2*typeSizes(t)+2
 
-
   /** Template from which to create RemappingMap. */
   private val remappingMapTemplate =
 // Maybe chose the map's size on a case-by-case basis.
@@ -127,29 +126,13 @@ object Remapper{
   /** A total inverse of a total map.  */
   def inverse(map: RemappingMap): RemappingMap = {
     require(isInjective(map))
-    // If x -> y in map, then we include y -> x in the result.  We also
-    // include a bijection from (dom map - ran map) to (ran map - dom map),
-    // and the identity over all values not in (dom map U ran map).  Start
-    // with the total identity.
-    val result = 
-      Array.tabulate(numTypes)(t => new Array[Int](map(t).length))
-        // Array.tabulate(sizeForRemapping(t))(i => i))
+    // If x -> y in map, then we include y -> x in the result. 
+    val result = Array.tabulate(numTypes)(t => new Array[Int](map(t).length))
     for(t <- 0 until numTypes){
-      // For each x -> y of type t in map, add y -> x, and record the domain
-      // and range.
-      // var dom = List[Identity](); var ran = List[Identity]()
+      // For each x -> y of type t in map, add y -> x
       for(x <- 0 until map(t).size){
-        val y = map(t)(x); require(y >= 0); result(t)(y) = x; 
-        // dom ::= x; ran ::= y }
+        val y = map(t)(x); require(y >= 0); result(t)(y) = x
       }
-      // Add bijection from dmr to rdm
-      // var dmr = dom.diff(ran); var rdm = ran.diff(dom)
-      // assert(dmr.length == rdm.length && dmr.isEmpty)
-      // while(dmr.nonEmpty){
-      //   val x = dmr.head; val y = rdm.head; dmr = dmr.tail; rdm = rdm.tail
-      //   assert(result(t)(x) == x, show(map)+"\n"+s"$t $dom $ran $x");
-      //   result(t)(x) = y
-      // }
     }
     assert(isInjective(result), show(map)+"\n"+show(result))
     result
@@ -481,7 +464,6 @@ object Remapper{
   @inline private 
   def remapParams(map: RemappingMap, nextArg: NextArgMap, st: State)
       : Array[Identity] = {
-    assert(st != null) // IMPROVE
     val cs = st.cs; val ids = st.ids; val len = ids.length; var index = 0
     val remappedParams = new Array[Identity](len) // State.getIdentityArray(len) 
     val tArray = State.stateTypeMap(cs) // array giving types of ids
@@ -603,7 +585,7 @@ object Remapper{
   // =================== Remapping views
 
   /** Remap a ComponentView. */
-  @inline def remapComponentView(v: ComponentView): ComponentView = {
+  @inline def remapView(v: ComponentView): ComponentView = {
     val (servers1, map, nextArg) = remapServerStates(v.servers)
     val components1 = remapStates(map, nextArg, v.components)
     new ComponentView(servers1, components1) // principal1, others1)
@@ -622,11 +604,8 @@ object Remapper{
     assert(components.forall(_ != null)) // IMPROVE
     val (servers1, map, nextArg) = remapServerStates(servers)
     val components1 = remapStates(map, nextArg, components)
-    new ComponentView(servers1, components1) // principal1, others1)
+    new ComponentView(servers1, components1)
   }
-
-  def remapView(cv: ComponentView) = remapComponentView(cv)
-  // IMPROVE
 
   /** Apply map to cpt. 
     * Pre: map is defined on all parameters of cpt. */

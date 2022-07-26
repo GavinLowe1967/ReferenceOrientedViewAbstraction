@@ -371,12 +371,17 @@ object MissingCommon{
   /** Type of keys for stored MissingCommons. */
   private type Key = (ServerStates, List[State], ProcessIdentity)
 
+  /** The type of the store of all MissingCommon we have created. */
+  //type MissingCommonStore = MyLockFreeReadHashMap[Key, MissingCommon]
+  type MissingCommonStore = ShardedHashMap[Key, MissingCommon]
+
   /** All the MissingCommon we have created.  Protected by a synchronized block
     * on itself.*/
-  private var allMCs = new MyLockFreeReadHashMap /*new HashMap*/[Key, MissingCommon]
+  private var allMCs = new MissingCommonStore 
 
   /** Get the MissingCommon associated with key. */
-  private def getMC(key: Key) = allMCs.get(key) // allMCs.synchronized{ allMCs.get(key) }
+  @inline private def getMC(key: Key) = allMCs.get(key)
+  // allMCs.synchronized{ allMCs.get(key) }
 
   /** Store mc against key, unless there is already an associated value.  Return
     * the resulting stored value. */
@@ -388,7 +393,7 @@ object MissingCommon{
   def memoryProfile = {
     import ox.gavin.profiling.MemoryProfiler.traverse
     println("MissingCommon.allMCs size = "+allMCs.size)
-/*
+/* IMPROVE: needs take on map
     for(mc <- allMCs.take(3)){
       traverse("missingCommon", mc, maxPrint = 2); println()
     }
@@ -414,7 +419,7 @@ object MissingCommon{
 
   /** Reset ready for a new check. */
   def reset = 
-    allMCs = new MyLockFreeReadHashMap[Key, MissingCommon]
+    allMCs = new MissingCommonStore // MyLockFreeReadHashMap[Key, MissingCommon]
 
   /** A MissingCommon object, corresponding to servers, cpts1, cpts2 and pid, or
     * null if the obligation is already satisfied.

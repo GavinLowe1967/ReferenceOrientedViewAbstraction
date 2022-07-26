@@ -26,15 +26,16 @@ class Extendability(views: ViewSet){
     * true for all relevant j in [0..k), and rv[0..k) gives the corresponding
     * referencing views.  Protected by synchronized blocks. */
   private val isExtendableCache = 
-    new HashMap[Key, (Int, Array[ComponentView])] 
+    new ShardedHashMap[Key, (Int, Array[ComponentView])] 
+    // new HashMap[Key, (Int, Array[ComponentView])] 
 
   /** Get the value in the cache for key, or (-1,null) if absent. */
   private def getExtendabilityCache(key: Key) = 
-    synchronized{ isExtendableCache.getOrElse(key, (-1, null)) }
+    /*synchronized*/{ isExtendableCache.getOrElse(key, (-1, null)) }
 
   /** Add key -> res to the cache. */
   private def setExtendabilityCache(key: Key, res: (Int, Array[ComponentView])) =
-    synchronized{ isExtendableCache += key -> res }
+    /*synchronized*/{ isExtendableCache += key -> res }
 
   /** Is pre extendable by state st, given the current set of views?  (1) Is
     * there an existing view with st as principal component, and agreeing with

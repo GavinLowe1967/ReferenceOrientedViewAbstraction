@@ -135,7 +135,7 @@ class Debugger(
       // println(s"$pre -${system.showEvent(e)}-> $post ]= $v")
       befores += pre; events += e; afters += post
 // IMPROVE: is the "head" below what we want?
-      val v1 = RemapperP.Remapper.remapComponentView(pre.toComponentView.head)
+      val v1 = RemapperP.Remapper.remapView(pre.toComponentView.head)
       try{ v = sysAbsViews.get/*Representative*/(v1) }catch{
         case e: java.lang.AssertionError =>
           e.printStackTrace()

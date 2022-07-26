@@ -266,7 +266,7 @@ class MissingInfo(
     s"MissingInfo(newView = $newView,\n"+
       s"missingViews = ${missingViews.mkString("<",",",">")},\n"+
       "missingCommon = "+missingCommon.mkString("<",",\n  ",">")+")\n"+
-      s"notAdded = $notAdded"
+      s"notAdded = $notAdded; mcDone = $mcDone; done = $done"
 
   /** Equality: same newView, missingViews and missingCommon (up to equality,
     * ignoring nulls). */

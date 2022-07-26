@@ -80,7 +80,8 @@ class SimpleEffectOnStore extends EffectOnStore{
 
   /** A type of stores, giving the MissingInfos that might need updating as the
     * result of finding a new ComponentView. */
-  type Store = HashMap[ReducedComponentView, MissingInfoSet]
+  //type Store = HashMap[ReducedComponentView, MissingInfoSet]
+  type Store = ShardedHashMap[ReducedComponentView, MissingInfoSet]
 
   type ViewBuffer = ArrayBuffer[ComponentView]
 
@@ -92,7 +93,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     * mcNotDoneStore might also hold some MissingInfos that are mcDone,
     * because they were found to be mcDone in the first phase of complete
     * (from candidateForMCStore). */
-  private val mcNotDoneStore = new Store
+  private val mcNotDoneStore = new  Store
 
   /** Information about those mi: MissingInfo in the abstract set such that
     * mi.mcDone (i.e. all MissingCommon in mi.missingCommon are done).  For
@@ -132,11 +133,20 @@ class SimpleEffectOnStore extends EffectOnStore{
     theStore: Store, cv: ReducedComponentView, missingInfo: MissingInfo)
   = {
     val mis =
-      theStore.synchronized{ theStore.getOrElseUpdate(cv, new MissingInfoSet) }
+      /*theStore.synchronized*/{ theStore.getOrElseUpdate(cv, new MissingInfoSet) }
     if(! mis.synchronized{ mis.add(missingInfo) }){
       missingInfo.setNotAdded; //missingInfo.log(NotStored(storeName(theStore)))
     } 
   }
+  // /** Add missingInfo to theStore(cv), if not already there. */
+  // @inline private def addToStore(
+  //   theStore: Store1, cv: ReducedComponentView, missingInfo: MissingInfo)
+  // = {
+  //   val mis = theStore.getOrElseUpdate(cv, new MissingInfoSet) 
+  //   if(! mis.synchronized{ mis.add(missingInfo) }){
+  //     missingInfo.setNotAdded; //missingInfo.log(NotStored(storeName(theStore)))
+  //   } 
+  // }
 
   /** Add MissingInfo(nv, missing, missingCommon) to the stores. 
     * This corresponds to transition pre -e-> post inducing
@@ -263,6 +273,17 @@ class SimpleEffectOnStore extends EffectOnStore{
 
         // Update candidateForMCStore if this mapping hasn't changed.
         var ok = true
+        if(newMis.nonEmpty) candidateForMCStore.synchronized{
+          if(candidateForMCStore.get(key) == Some(mis))
+            candidateForMCStore += key -> newMis
+          else ok = false
+        }
+        else candidateForMCStore.synchronized{ 
+          if(candidateForMCStore.get(key) == Some(mis))
+            candidateForMCStore.remove(key)
+          else ok = false
+        }
+        /*
         candidateForMCStore.synchronized{
           if(candidateForMCStore.get(key) == Some(mis)){
             if(newMis.nonEmpty) candidateForMCStore += key -> newMis
@@ -270,6 +291,7 @@ class SimpleEffectOnStore extends EffectOnStore{
           }
           else ok = false // the relevant mapping changed, so retry
         }
+         */
         if(!ok){
           Profiler.count("completeCandidateForMC retry") // a few times per MState
           completeCandidateForMC(cv, views, result)
@@ -283,7 +305,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     * mcNotDoneStore. */
   @inline private def completeMcNotDone(
       cv: ComponentView, views: ViewSet, result: ViewBuffer) = {
-    mcNotDoneStore.synchronized{ mcNotDoneStore.remove(cv) } match{
+    /*mcNotDoneStore.synchronized*/{ mcNotDoneStore.remove(cv) } match{
       case Some(mis) =>
         // remove old entry
         // mcNotDoneStore.synchronized{ mcNotDoneStore.remove(cv) } 
@@ -313,9 +335,8 @@ class SimpleEffectOnStore extends EffectOnStore{
   /** Remove cv from each entry in mcDoneStore. */
   @inline private 
   def completeMcDone(cv: ComponentView, views: ViewSet, result: ViewBuffer) = {
-    mcDoneStore.synchronized{ mcDoneStore.remove(cv) } match{
+    /*mcDoneStore.synchronized*/{ mcDoneStore.remove(cv) } match{
       case Some(mis) =>
-        //mcDoneStore.synchronized{ mcDoneStore.remove(cv) } // remove old entry
         mis.synchronized{
           for(mi <- mis) mi.synchronized{
             if(!mi.done){
@@ -360,10 +381,6 @@ class SimpleEffectOnStore extends EffectOnStore{
     result
   }
 
-  // import scala.collection.parallel.mutable.ParHashSet
-
-  // val xxx = mcNotDoneStore.par
-
   /** Perform sanity check.  Every stored MissingInfo should be up to date,
     * unless it has maybe been superseded by an equivalent object.  */
   def sanityCheck(views: ViewSet) = {
@@ -375,7 +392,7 @@ class SimpleEffectOnStore extends EffectOnStore{
 
     doCheck(mcDoneStore.valuesIterator, true)
     // Catch in following for debugging
-    for((cv,mis) <- mcNotDoneStore; mi <- mis; if !mi.done){
+    for((cv,mis) <- mcNotDoneStore.iterator; mi <- mis; if !mi.done){
       try{  mi.sanityCheck(views, false) }
       catch{ 
         case e: java.lang.AssertionError => {

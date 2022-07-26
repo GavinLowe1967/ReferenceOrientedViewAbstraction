@@ -233,7 +233,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     for(t <- newTransitions.iterator){
       assert(transitions.add(t))
       for(v0 <- t.post.toComponentView){
-        val v = Remapper.remapComponentView(v0)
+        val v = Remapper.remapView(v0)
         if(addView(v)){
           v.setCreationInfo(t.pre, t.e, t.post)
           if(showTransitions) println(s"${t.toString}\ngives $v")
