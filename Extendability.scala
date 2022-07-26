@@ -24,7 +24,7 @@ class Extendability(views: ViewSet){
     * only false.  A result of (k,rv) with k >= 0 indicates that
     * compatibleWith gave true, that calls to containsReferencingView gave
     * true for all relevant j in [0..k), and rv[0..k) gives the corresponding
-    * referencing views.  Protected by synchronized blocks. */
+    * referencing views.  */
   private val isExtendableCache = 
     new ShardedHashMap[Key, (Int, Array[ComponentView])] 
     // new HashMap[Key, (Int, Array[ComponentView])] 

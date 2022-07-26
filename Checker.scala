@@ -216,9 +216,6 @@ class Checker(system: SystemP.System, numWorkers: Int){
 
   private def endOfPly() = {
     // Add views and transitions found on this ply into the main set.
-    println(s"\nCopying: nextNewViews, ${nextNewViews.size}; "+
-      s"newTransitions, ${newTransitions.size}; "+
-      s"newTransitionTemplates, ${newTransitionTemplates.size}")
     val newViewsAB = new ArrayBuffer[ComponentView]
 
     /* Add v to sysAbsViews and newViewsAB if new.  Return true if so. */
@@ -230,6 +227,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     } // end of addView
 
     // Store transitions
+    print(s"\nCopying: newTransitions, ${newTransitions.size}; ")
     for(t <- newTransitions.iterator){
       assert(transitions.add(t))
       for(v0 <- t.post.toComponentView){
@@ -240,11 +238,16 @@ class Checker(system: SystemP.System, numWorkers: Int){
         }
       }
     }
+
     // Store transition templates
+    print(s"newTransitionTemplates, ${newTransitionTemplates.size}; ")
     for(template <- newTransitionTemplates.iterator)
       transitionTemplates.add(template)
+
     // Store new views
+    println(s"nextNewViews, ${nextNewViews.size}.")
     for(v <- nextNewViews.iterator) addView(v)
+
     // And update for next ply
     newViews = newViewsAB.toArray; nextIndex.set(0)
     if(showEachPly)
@@ -277,7 +280,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     ply = 0
     // Barrier for coordinating workers. 
     val barrier = new Barrier(numWorkers)
-    // val barrier1, barrier2 = new WeakBarrier(numWorkers)
+    val barrier1 = new WeakBarrier(numWorkers)
 
     /* A worker with identity me.  Worker 0 coordinates. */
     def worker(me: Int) = {
@@ -285,7 +288,8 @@ class Checker(system: SystemP.System, numWorkers: Int){
       while(!myDone){
         // Worker 0 resets for the next ply; the others wait.
         if(me == 0) startOfPly(bound)
-        barrier.sync(me) // barrier1.sync//(me)
+        // barrier.sync(me) // 
+        barrier1.sync//(me)
         if(!done.get){
           var donePly = done.get // if done, we exit loop
 
@@ -310,7 +314,8 @@ class Checker(system: SystemP.System, numWorkers: Int){
           } // end of inner while
 
           // Wait for other workers to finish; then worker 0 resets for next ply.
-          barrier.sync(me) // barrier2.sync//(me)
+          barrier.sync(me)
+          // barrier1.sync
           if(me == 0) endOfPly()
         } // end of if(!done.get)
         else myDone = true

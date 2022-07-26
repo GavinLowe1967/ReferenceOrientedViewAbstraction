@@ -93,7 +93,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     * mcNotDoneStore might also hold some MissingInfos that are mcDone,
     * because they were found to be mcDone in the first phase of complete
     * (from candidateForMCStore). */
-  private val mcNotDoneStore = new  Store
+  private val mcNotDoneStore = new Store
 
   /** Information about those mi: MissingInfo in the abstract set such that
     * mi.mcDone (i.e. all MissingCommon in mi.missingCommon are done).  For

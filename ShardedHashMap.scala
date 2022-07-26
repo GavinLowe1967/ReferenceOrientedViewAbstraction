@@ -137,7 +137,7 @@ class ShardedHashMap[A: scala.reflect.ClassTag, B: scala.reflect.ClassTag](
   }
 
   /** Get the value associated with a; or default if there is no such value. */
-  def getOrElse(a: A, default: => B) = {
+  def getOrElse(a: A, default: => B): B = {
     val h = hashOf(a); val sh = shardFor(h)
     locks(sh).synchronized{
       val i = find(sh, a, h)
@@ -164,7 +164,23 @@ class ShardedHashMap[A: scala.reflect.ClassTag, B: scala.reflect.ClassTag](
     }
   }
 
+  /** Add pair._1 -> pair._2 to the map. */
   def += (pair: (A, B)) = add(pair._1, pair._2)
+
+  /** If a -> expB is in the map, then update so a -> newB.  Return true if
+    * successful. */
+  def compareAndSet(a: A, expB: B, newB: => B): Boolean = {
+    val h = hashOf(a); val sh = shardFor(h)
+    locks(sh).synchronized{
+      if(usedSlots(sh) >= thresholds(sh)) resize(sh)
+      // Find empty slot or slot containing x
+      val i = find(sh, a, h)
+      if(hashes(sh)(i) == h && elements(sh)(i) == expB){
+        elements(sh)(i) = newB; true 
+      } 
+      else false
+    }
+  }
 
   /** Resize shard sh of the hash table. */
   @inline private def resize(sh: Int) = {
@@ -209,6 +225,21 @@ class ShardedHashMap[A: scala.reflect.ClassTag, B: scala.reflect.ClassTag](
         counts(sh) -= 1; Some(b)
       }
       else{ assert(hashes(sh)(i) == 0); None }
+    }
+  }
+
+  /** If a -> b is in the map then remove it.  Return true if successful. */
+  def removeIfEquals(a: A, b: B): Boolean = {
+    val h = hashOf(a); val sh = shardFor(h)
+    locks(sh).synchronized{
+      val i = find(sh, a, h)
+      if(hashes(sh)(i) == h && elements(sh)(i) == b){
+        assert(keys(sh)(i) == a)
+        // Note: clearing key and elements might allow garbage collection
+        hashes(sh)(i) = Deleted; keys(sh)(i) = null.asInstanceOf[A]
+        elements(sh)(i) = null.asInstanceOf[B]; counts(sh) -= 1; true
+      }
+      else{ assert(hashes(sh)(i) == 0 || keys(sh)(i) == a); false }
     }
   }
 

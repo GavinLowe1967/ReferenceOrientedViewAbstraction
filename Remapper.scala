@@ -560,12 +560,22 @@ object Remapper{
 
   /** Cache used in remapServerStates. */
   private val remapSSCache = 
-    new HashMap[ServerStates, (ServerStates, RemappingMap, NextArgMap)]
+    new ShardedHashMap[ServerStates, (ServerStates, RemappingMap, NextArgMap)]
 
   /** Remap ss to normal form.  Also return resulting RemappingMap and
     * NextArgMap. */
   @inline private def remapServerStates(ss: ServerStates)
       : (ServerStates, RemappingMap, NextArgMap) = {
+    def mkTuple: (ServerStates, RemappingMap, NextArgMap) = {
+      val map = newRemappingMap; var nextArg = newNextArgMap
+      val servers = ServerStates(remapStates(map, nextArg, ss.servers))
+      (servers, map, nextArg)
+    }
+    val (servers, map, nextArgs) = 
+      /*synchronized*/{ remapSSCache.getOrElseUpdate(ss, mkTuple) }
+    (servers, cloneMap(map), nextArgs.clone)
+  }
+/*
     synchronized{ remapSSCache.get(ss) } match{ // Try to retrieve from cache. 
       case Some((ss1, map, nextArgs)) => 
         // Profiler.count("remapServerStates found")
@@ -581,6 +591,9 @@ object Remapper{
         // ss, above, as they will write equivalent values.
     }
   }
+ */
+
+  
 
   // =================== Remapping views
 
