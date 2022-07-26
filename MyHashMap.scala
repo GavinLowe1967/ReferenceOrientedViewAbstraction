@@ -264,4 +264,11 @@ class MyLockFreeReadHashMap
     var i = myState.find(a, h); myState.values(i)
     // assert(b != null, "MyHashMap: key not found: "+a); b
   }
+
+  /** Optionally get the value associated with a. */
+  def get(a: A): Option[B] = {
+    val h = hashOf(a); var myState = state // volatile read: subscribe
+    var i = myState.find(a, h); val res = myState.values(i)
+    if(res == null) None else Some(res)
+  }
 }

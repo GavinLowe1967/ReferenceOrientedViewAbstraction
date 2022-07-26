@@ -373,28 +373,26 @@ object MissingCommon{
 
   /** All the MissingCommon we have created.  Protected by a synchronized block
     * on itself.*/
-  private var allMCs = new HashMap[Key, MissingCommon]
+  private var allMCs = new MyLockFreeReadHashMap /*new HashMap*/[Key, MissingCommon]
 
   /** Get the MissingCommon associated with key. */
-  private def getMC(key: Key) = allMCs.synchronized{ allMCs.get(key) }
+  private def getMC(key: Key) = allMCs.get(key) // allMCs.synchronized{ allMCs.get(key) }
 
   /** Store mc against key, unless there is already an associated value.  Return
     * the resulting stored value. */
-  private def setOrGet(key: Key, mc: MissingCommon) = allMCs.synchronized{
+  private def setOrGet(key: Key, mc: MissingCommon) = /*allMCs.synchronized*/{
     allMCs.getOrElseUpdate(key, mc)
-    // allMCs.get(key) match{
-    //   case Some(mc1) => mc1
-    //   case None => allMCs += key -> mc; mc
-    // }
   }
 
   /** Perform a memory profile of this. */
   def memoryProfile = {
     import ox.gavin.profiling.MemoryProfiler.traverse
     println("MissingCommon.allMCs size = "+allMCs.size)
+/*
     for(mc <- allMCs.take(3)){
       traverse("missingCommon", mc, maxPrint = 2); println()
     }
+ */
     traverse("allMCs", allMCs, maxPrint = 1); println()
     traverse("MissingCommon", this, maxPrint = 1); println()
   }
@@ -416,8 +414,7 @@ object MissingCommon{
 
   /** Reset ready for a new check. */
   def reset = 
-    allMCs = 
-      new HashMap[(ServerStates, List[State], ProcessIdentity), MissingCommon]
+    allMCs = new MyLockFreeReadHashMap[Key, MissingCommon]
 
   /** A MissingCommon object, corresponding to servers, cpts1, cpts2 and pid, or
     * null if the obligation is already satisfied.

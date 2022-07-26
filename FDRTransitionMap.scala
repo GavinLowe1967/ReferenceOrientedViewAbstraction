@@ -29,6 +29,7 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
   /** String representing st, using stateTypeMap0 for the types. */
   @inline private def show(st: State) = st.toStringX(stateTypeMap0(st.cs))
 
+  /** Remap the transitions in trans according to map. */
   @inline private def remapTransitions(trans: TransList, map: RemappingMap)
       : TransList = {
     val (froms, tos) = Remapper.getFromsTos(map)
@@ -37,7 +38,7 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
       (fdrEvents.remapEvent(e, froms, tos),
         Remapper.applyMap(dst, map, stateTypeMap0(dst.cs)))
     }
-    remappedTrans
+    remappedTrans.sortBy(_._1).toList
   }
 
   /** Convert a Node into a State, using the node's state group as the
@@ -103,11 +104,12 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
     * @return the root state as a State. */
   def augmentTransMap(
     transMap: TransMap, seen: Set[State], machine: Machine,
-    family: Int, id: Int, typeId: Long, verbose: Boolean = false)
+    family: Int, id: Int, typeId: Long)
       : State = {
     val root = machine.rootNode
-    println("Got root node.")
+    print(".  Got root node.  ")
     val rootState = nodeToState(machine, root, family, id, typeId)
+
     if(!seen.contains(rootState)){
       // We'll perform a breadth-first search.  queue will store Nodes, and
       // the corresponding State values, that have to be expanded.  When we
@@ -138,23 +140,15 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
             val inverse = Remapper.inverse(map)
             assert(Remapper.applyMap(normSt, inverse, types) == st)
             val remappedTrans = remapTransitions(trans, inverse)
-            // val (froms, tos) = Remapper.getFromsTos(inverse)
-            // // println("Inverse mapping: "+Remapper.show(inverse))
-            // // println("froms = "+froms.mkString(",")+
-            // //   "; tos = "+tos.mkString(","))
-            // val remappedTrans = trans.map{ case (e,dst) =>
-            //   (fdrEvents.remapEvent(e, froms, tos),
-            //     Remapper.applyMap(dst, inverse, stateTypeMap0(dst.cs)))
-            // }
             for((e1,dst1) <- remappedTrans){
               // println(show1(st)+s" -${showEvent(e1)}-> "+show(dst1))
               if(seen.add(dst1)) queue.enqueue((null,dst1))
             }
             // Store against st
-            transMap += st -> remappedTrans.sortBy(_._1).toList
+            transMap += st -> remappedTrans
           }
 
-          case _ =>
+          case None =>
             // Build up transitions from node in trans
             var trans = ArrayBuffer[(Int, State)]()
             var lastE = -1
@@ -164,34 +158,63 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
               val dst = t.destination
               val dstState = nodeToState(machine, dst, family, id, typeId)
               trans += ((e, dstState))
-              if(false && normSt != st || verbose)
-                println(show1(st)+" -"+showEvent(e)+"-> "+show(dstState))
+              // if(false && normSt != st || verbose)
+              //   println(show1(st)+" -"+showEvent(e)+"-> "+show(dstState))
               if(seen.add(dstState)) queue.enqueue((dst, dstState))
             } // end of for loop
-            transMap += st -> trans.toList
+            val transList = trans.toList; transMap += st -> transList
 
             // map transList under map, and store against normSt
             if(normSt != st){
               seen.add(normSt)
-              val remappedTrans = remapTransitions(trans.toList, map)
-              // val (froms, tos) = Remapper.getFromsTos(map)
-              // // println("froms = "+froms.mkString(",")+
-              // //   "; tos = "+tos.mkString(","))
-              // val remappedTrans = trans.map{ case (e,dst) =>
-              //   (fdrEvents.remapEvent(e, froms, tos),
-              //     Remapper.applyMap(dst, map, stateTypeMap0(dst.cs)))
-              // }
+              val remappedTrans = remapTransitions(transList, map)
               for((e1,dst1) <- remappedTrans){
                 // println(show1(normSt)+s" -${showEvent(e1)}-> "+show(dst1))
                 if(seen.add(dst1)) queue.enqueue((null,dst1))
               }
               // Store against normSt
-              transMap += normSt -> remappedTrans.sortBy(_._1).toList
+              transMap += normSt -> remappedTrans // .sortBy(_._1).toList
             }
         } // end of match
       }
     }
     else println(s"$rootState already seen")
+    rootState
+  }
+
+  /** Augment transMap by building the transitions corresponding to state0 with
+    *  its identity renamed to id.  Pre: state0 is in normal form, and
+    *  transMap already contains transitons for all states reachable from
+    *  nfState.  */
+  def augmentByRenaming(
+    transMap: TransMap, seen: Set[State], state0: State, id: Identity)
+      : State = {
+    // This is effectively a specialised instance of augmentTransMap, making
+    // use of the precondition.
+    val (f, nfId) = state0.componentProcessIdentity; assert(nfId == 0)
+    val map = Remapper.newRemappingMap; map(f)(nfId) = id; map(f)(id) = nfId
+    val types = stateTypeMap0(state0.cs)
+    val rootState = Remapper.applyMap(state0, map, types)
+    // println(s"augmentByRenaming($id): "+rootState.toStringX(types))
+    val queue = new Queue[State]; queue.enqueue(rootState); seen += rootState
+
+    while(queue.nonEmpty){
+      val st = queue.dequeue(); val types = stateTypeMap0(st.cs)
+      // Map to normal form
+      val (normSt, map) = Remapper.normaliseState(st, types)
+      val trans = transMap(normSt) // Must succeed by precondition
+      // Remap transitions trans of normSt
+      val inverse = Remapper.inverse(map)
+      assert(Remapper.applyMap(normSt, inverse, types) == st)
+      val remappedTrans = remapTransitions(trans, inverse)
+      for((e1,dst1) <- remappedTrans){
+        // println(show1(st)+s" -${showEvent(e1)}-> "+show(dst1))
+        if(seen.add(dst1)) queue.enqueue(dst1)
+      }
+      // Store against st
+      transMap += st -> remappedTrans 
+    }
+
     rootState
   }
 
@@ -377,16 +400,56 @@ object FDRTransitionMap{
 
   /** Rename transitions according to renamingMap. */
   def renameTransList(transList: TransList, renamingMap: RenamingMap)
-      : TransList = 
-    transList.flatMap{ case(e,s1) =>
+      : TransList = {
+    val ab = new ArrayBuffer[(EventInt, State)]; var tl = transList
+    while(tl.nonEmpty){
+      val (e,s1) = tl.head; tl = tl.tail
       renamingMap.get(e) match{
-        case Some(es) => es.map(e2 => (e2,s1))
-        case None => List((e,s1))
+        case Some(es) => // add (e2,s1) for each e2 in es
+          var es1 = es
+          while(es1.nonEmpty){ 
+            val e2 = es1.head; es1 = es1.tail; ab += ((e2,s1))
+          }
+        case None => ab += ((e,s1))
       }
-    }.sortBy(_._1)
-}
+    }
+    ab.sortBy(_._1).toList
+  }
 
-
+  /** Rename transitions according to renamingMap, and transform result to form
+    * for storing transitions. */
+  def renameTransList1(transList: TransList, renamingMap: RenamingMap)
+      : (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = {
+    // We place transitions in buckets, according to their event
+    val buckets = new Array[List[State]](eventsSize) // [Array.fill(eventsSize)(List[State]())
+    var tl = transList
+    while(tl.nonEmpty){
+      val (e,s1) = tl.head; tl = tl.tail
+      renamingMap.get(e) match{
+        case Some(es) => // add s1 for each e2 in es
+          var es1 = es
+          while(es1.nonEmpty){ 
+            val e2 = es1.head; es1 = es1.tail; 
+            if(buckets(e2) == null) buckets(e2) = List(s1) 
+            else buckets(e2) ::= s1
+          }
+        case None => 
+          if(buckets(e) == null) buckets(e) = List(s1) else buckets(e) ::= s1
+      }
+    }
+    // Concatenate the buckets
+    val transListEvent = new ArrayBuffer[EventInt]
+    val transListNexts = new ArrayBuffer[List[State]]
+    var e = 0
+    while(e < eventsSize){
+      if(buckets(e) != null){ 
+        transListEvent += e; transListNexts += buckets(e) 
+      }
+      e += 1
+    }
+    (transListEvent, transListNexts)
+  }
+ 
 
   // /** String defining take and drop functions. */
   // private val takeDropString =
@@ -396,3 +459,5 @@ object FDRTransitionMap{
   //     "if n_ == 0 or null(xs_) then xs_ else drop(tail(xs_), n_-1) within "
 
   // private val Chunk = 500
+
+}

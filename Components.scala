@@ -176,66 +176,120 @@ class Components(
     //passiveCptsOfEvent = eventMap.map(_.filter{ case(f,_) => !actives(f) })
   }
 
+  import FDRTransitionMap.TransList // List[(EventInt, State)]
+
   /** Initialise model of the transition systems: inits and transMap. */
   private def initTransitions() = {
     // Build transitions
     for(pt <- 0 until numFamilies){
       println("Building transitions for type "+processNames(pt))
-      //val seen = Set[State]() // states seen so far
-      //val transMap0 = Map[State, List[(EventInt, State)]]()
+      val seen = Set[State]() // states seen so far
+      val transMap0 = Map[State, TransList]()
+      // The renaming maps to be applied to each component
+      val renamingMaps = new Array[FDRTransitionMap.RenamingMap](idSizes(pt))
+      var root0: State = null // will hold root of component 0
 
-      for(i <- indices(pt)){
+      for(i <- 0 until idSizes(pt)){
         // Build raw state machines for ith component.  t is name from script.
         // id is representation inside FDR.  
         val t = idTypes(pt)(i); val id = fdrSession.symmetryValue(t)
         val procName = processNames(pt)+"("+t+")"
         print("Building "+procName+"...")
-        // Note: FDR performs its part of evalProc sequentially, so there's
-        // little to be gained by trying to do the following concurrently.
-        val machine = fdrSession.evalProc(procName)
-        // val machine = if(i == 0) fdrSession.evalProc(procName) else null
-        // Build transition map
-        val seen = Set[State]() // states seen so far
-        val transMap0 = Map[State, List[(EventInt, State)]]()
-        inits(pt)(i) = transMapBuilder.augmentTransMap(
-          transMap0, seen, machine, pt, id, fdrTypeIds(pt))
+        if(i == 0){
+          // Note: FDR performs its part of evalProc sequentially, so there's
+          // little to be gained by trying to do the following concurrently.
+          val machine = fdrSession.evalProc(procName)
+          // val machine = if(i == 0) fdrSession.evalProc(procName) else null
+          // Build transition map
+          //val seen = Set[State]() // states seen so far
+          //val transMap0 = Map[State, List[(EventInt, State)]]()
+          root0 = transMapBuilder.augmentTransMap(
+            transMap0, seen, machine, pt, id, fdrTypeIds(pt))
+          inits(pt)(i) = root0
+          println(s"${seen.size} states.")
+        }
+        else{
+          inits(pt)(i) = 
+            transMapBuilder.augmentByRenaming(transMap0, seen, root0, i)
+          println(".")
+        }
+ 
         assert(inits(pt)(i).componentProcessIdentity == (pt, i))
 
-        // Now convert into more convenient form, copying into transMap, giving
-        // a map from states to parallel ArrayBuffers, giving possible events
-        // and next states.
-        println(s".  ${seen.size} states.")
-        // val oRenamingName = renames(pt).map(_+s"($t)")
-        // val renamingMap = transMapBuilder.mkRenamingMap(oRenamingName)
-        val renamingMap = transMapBuilder.mkRenamingMap(renames(pt), t)
-
-        // IMPROVE: use parallel here
-        for(s <- seen; if s.hasPID(pt,i)){
-          // Transitions still to consider
-          var transList: List[(EventInt, State)] = 
-            if(renamingMap == null) transMap0(s)
-            else FDRTransitionMap.renameTransList(transMap0(s), renamingMap)
-          // println(s"transList = "+transList.map{ case (e,post) =>
-          //   s"${s.toString00} -$e${showEvent(e)}-> ${post.toString00}" })
-          // Result for this state.
-          val transListEvent = new ArrayBuffer[EventInt]
-          val transListNexts = new ArrayBuffer[List[State]]
-          for(e <- 0 until eventsSize /*numEvents */){
-            assert(transList.isEmpty || transList.head._1 >= e)
-            val (matches, rest) = transList.span(_._1 == e)
-            transList = rest
-            if(matches.nonEmpty){
-              transListEvent += e; transListNexts += matches.map(_._2)
-              // for(post <- matches.map(_._2)) 
-              //   println(s"${s.toString00} -${showEvent(e)}-> ${post.toString00}")
-            }
-          }
-          assert(transList.isEmpty)
-          transMap.synchronized{ transMap(s) = (transListEvent, transListNexts) }
-        } // end of for(s <- seen.par)
-      } // end of for (i <- indices(pt)
+        renamingMaps(i) = transMapBuilder.mkRenamingMap(renames(pt), t)
+      }
+       
+      // Now apply renaming, and convert into more convenient form, copying
+      // into transMap, giving a map from states to parallel ArrayBuffers,
+      // giving possible events and next states.
+      applyRenamings(pt, transMap0, renamingMaps)
     } // end of for(pt <- ...)
   } // end of initTransitions
+
+  /** Rename transitions.  For each st -> trans in transMap0, rename the
+    * transitions in trans according to renamingMaps(id) where id is the
+    * identity of st.  Each state should be from family pf.  Convert into more
+    * efficient form, and store in transMap.  */
+  private def applyRenamings(
+    pt: Family, transMap0: Map[State, TransList], 
+    renamingMaps: Array[FDRTransitionMap.RenamingMap])
+  = {
+    println("Applying renamings")
+    for((s,trans) <- transMap0){
+      val (f,i) = s.componentProcessIdentity; assert(f == pt)
+      val renamingMap = renamingMaps(i)
+/*
+      var transList: List[(EventInt, State)] =
+        if(renamingMap == null) trans
+        else FDRTransitionMap.renameTransList(trans, renamingMap)
+      val (transListEvent, transListNexts) = transformTrans(transList)
+ */
+/*
+      val (transListEvent, transListNexts) = 
+        if(renamingMap == null) transformTrans(trans)
+        else FDRTransitionMap.renameTransList1(trans, renamingMap)
+ */
+
+      // Apply renamingMap to get transitions
+      var transList: List[(EventInt, State)] =
+        if(renamingMap == null) trans
+        else FDRTransitionMap.renameTransList(trans, renamingMap)
+      // Convert format to give result for this state.
+      val transListEvent = new ArrayBuffer[EventInt]
+      val transListNexts = new ArrayBuffer[List[State]]
+      var e = -1
+      while(transList.nonEmpty){
+        val e1 = transList.head._1; assert(e1 > e); e = e1
+        // val (matches, rest) = transList.span(_._1 == e); transList = rest
+        var matches = List[State]()
+        while(transList.nonEmpty && transList.head._1 == e){
+          matches ::= transList.head._2; transList = transList.tail
+        }
+        if(matches.nonEmpty){
+          transListEvent += e; transListNexts += matches // .map(_._2)
+        }
+      }
+ 
+      transMap.synchronized{ transMap(s) = (transListEvent, transListNexts) }
+    } // end of for 
+  }
+
+  /** Transform trans to form for storing. */
+  @inline private def transformTrans(trans: TransList)
+      : (ArrayBuffer[EventInt], ArrayBuffer[List[State]]) = {
+    val transListEvent = new ArrayBuffer[EventInt]
+    val transListNexts = new ArrayBuffer[List[State]]
+    var transList = trans; var e = -1
+    while(transList.nonEmpty){
+      val e1 = transList.head._1; assert(e1 > e); e = e1
+      var matches = List[State]()
+      while(transList.nonEmpty && transList.head._1 == e){
+        matches ::= transList.head._2; transList = transList.tail
+      }
+      if(matches.nonEmpty){ transListEvent += e; transListNexts += matches }
+    }
+    (transListEvent, transListNexts)
+  }
 
   // Do the initialisation. 
   init()
@@ -359,19 +413,23 @@ class Components(
       // items with null
       val transComponent1, transServerComponent1 = 
         Array.tabulate(numFamilies)(f => new Array[Trans1](idSizes(f)))
-      for(f <- 0 until numFamilies; i <- 0 until idSizes(f)){
-        val (es,nexts) = transComponent(f)(i)
-        if(es.nonEmpty){ 
-          es += Sentinel; transComponent1(f)(i) = (es.toArray, nexts.toArray)
-        }
-        else transComponent1(f)(i) = null
-        val (es1,nexts1) = transServerComponent(f)(i)
-        if(es1.nonEmpty){
-          es1 += Sentinel;
-          transServerComponent1(f)(i) = (es1.toArray, nexts1.toArray)
-        }
-        else transServerComponent1(f)(i) = null
-      }
+      for(f <- 0 until numFamilies){ // ; i <- 0 until idSizes(f)
+        var i = 0
+        while(i < idSizes(f)){
+          val (es,nexts) = transComponent(f)(i)
+          if(es.nonEmpty){
+            es += Sentinel; transComponent1(f)(i) = (es.toArray, nexts.toArray)
+          }
+          else transComponent1(f)(i) = null
+          val (es1,nexts1) = transServerComponent(f)(i)
+          if(es1.nonEmpty){
+            es1 += Sentinel;
+            transServerComponent1(f)(i) = (es1.toArray, nexts1.toArray)
+          }
+          else transServerComponent1(f)(i) = null
+          i += 1
+        } // end of while (iteration over i)
+      } // end of for(f <- ...) 
       // Create and store ComponentTransitions object
       val trans1 = new ComponentTransitions(
         eventsServer.toArray, nextsServer.toArray, 

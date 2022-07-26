@@ -302,7 +302,9 @@ class Checker(system: SystemP.System, numWorkers: Int){
                 }
                 else{ } // Another thread found error
               }
-              if(i%2000 == 0){ print("."); if(i%20000 == 0) print(i) }
+              if(i > 0 && i%5000 == 0){ 
+                print("."); if(i%50000 == 0) print(s"${i/1000}K") 
+              }
             }
             else donePly = true
           } // end of inner while
