@@ -80,7 +80,6 @@ class SimpleEffectOnStore extends EffectOnStore{
 
   /** A type of stores, giving the MissingInfos that might need updating as the
     * result of finding a new ComponentView. */
-  //type Store = HashMap[ReducedComponentView, MissingInfoSet]
   type Store = ShardedHashMap[ReducedComponentView, MissingInfoSet]
 
   type ViewBuffer = ArrayBuffer[ComponentView]
@@ -112,9 +111,8 @@ class SimpleEffectOnStore extends EffectOnStore{
   private val candidateForMCStore = 
     new ShardedHashMap[(ServerStates, State), MissingInfoSet]
 
-  /* Operations on each of the above HashMaps is protected by a synchronized
-   * block on that HashMap.  Operations on each MissingInfoSet is protected by
-   * a synchronized block on that MissingInfoSet. */
+  /* Operations on each MissingInfoSet is protected by a synchronized block on
+   * that MissingInfoSet. */
 
 /* IMPROVE: periodically purge the stores of MissingInfos that are done or for
  * which the newView has been found, and purge mcNotDoneStore and
@@ -132,21 +130,11 @@ class SimpleEffectOnStore extends EffectOnStore{
   @inline private def addToStore(
     theStore: Store, cv: ReducedComponentView, missingInfo: MissingInfo)
   = {
-    val mis =
-      /*theStore.synchronized*/{ theStore.getOrElseUpdate(cv, new MissingInfoSet) }
+    val mis = theStore.getOrElseUpdate(cv, new MissingInfoSet) 
     if(! mis.synchronized{ mis.add(missingInfo) }){
       missingInfo.setNotAdded; //missingInfo.log(NotStored(storeName(theStore)))
     } 
   }
-  // /** Add missingInfo to theStore(cv), if not already there. */
-  // @inline private def addToStore(
-  //   theStore: Store1, cv: ReducedComponentView, missingInfo: MissingInfo)
-  // = {
-  //   val mis = theStore.getOrElseUpdate(cv, new MissingInfoSet) 
-  //   if(! mis.synchronized{ mis.add(missingInfo) }){
-  //     missingInfo.setNotAdded; //missingInfo.log(NotStored(storeName(theStore)))
-  //   } 
-  // }
 
   /** Add MissingInfo(nv, missing, missingCommon) to the stores. 
     * This corresponds to transition pre -e-> post inducing
@@ -156,11 +144,6 @@ class SimpleEffectOnStore extends EffectOnStore{
     pre: Concretization, oldCpts: Array[State], cv: ComponentView,
     e: EventInt, post: Concretization, newCpts: Array[State])
       : Unit = {
-    // if(ComponentView0.highlight(nv))
-    //   println(s"\nEffectOnStore.add($nv);\n missingCommon = $missingCommon;\n"+
-    //     s"missing = "+missing.mkString("List(", ",\n    ", ")")+
-    //     s"\nFrom\n$pre ->\n  $post induces\n"+
-    //     EffectOnStore.showInduced(cv, oldCpts, post.servers, newCpts, nv))
     Profiler.count("EffectOnStore.add")
     // I think the following holds regardless of concurrent threads: each mc
     // is created based on earlier plies; and any update will be based just on
@@ -189,9 +172,7 @@ class SimpleEffectOnStore extends EffectOnStore{
       // mcArray(0)
       for(mc <- missingCommon){
         val princ1 = mc.cpts1(0); val key = (mc.servers, princ1)
-        val mis = /*candidateForMCStore.synchronized*/{ 
-          candidateForMCStore.getOrElseUpdate(key, new MissingInfoSet) 
-        }
+        val mis = candidateForMCStore.getOrElseUpdate(key, new MissingInfoSet) 
         // missingInfo.log(CandidateForMC(mc.servers,princ1))
         if(! mis.synchronized{ mis.add(missingInfo) }){
           missingInfo.setNotAdded; 
@@ -241,7 +222,7 @@ class SimpleEffectOnStore extends EffectOnStore{
   @inline private def completeCandidateForMC(
       cv: ComponentView, views: ViewSet, result: ViewBuffer): Unit = {
     val key = (cv.servers, cv.principal)
-    /*candidateForMCStore.synchronized*/ candidateForMCStore.get(key)  match{
+    candidateForMCStore.get(key) match{
       case Some(mis) => 
         val newMis = new MissingInfoSet // those to retain
         mis.synchronized{
@@ -272,31 +253,11 @@ class SimpleEffectOnStore extends EffectOnStore{
         } // end of mis.synchronized
 
         // Update candidateForMCStore if this mapping hasn't changed.
-        var ok = true
-        if(newMis.nonEmpty) 
-          ok = candidateForMCStore.compareAndSet(key, mis, newMis)
-          /* candidateForMCStore.synchronized{
-          if(candidateForMCStore.get(key) == Some(mis))
-            candidateForMCStore += key -> newMis
-          else ok = false
-        } */
-        else ok = candidateForMCStore.removeIfEquals(key, mis)
-          /* candidateForMCStore.synchronized{
-          if(candidateForMCStore.get(key) == Some(mis))
-            candidateForMCStore.remove(key)
-          else ok = false
-        } */
-        /*
-        candidateForMCStore.synchronized{
-          if(candidateForMCStore.get(key) == Some(mis)){
-            if(newMis.nonEmpty) candidateForMCStore += key -> newMis
-            else candidateForMCStore.remove(key)
-          }
-          else ok = false // the relevant mapping changed, so retry
-        }
-         */
+        val ok = 
+          if(newMis.nonEmpty) candidateForMCStore.compareAndSet(key, mis, newMis)
+          else candidateForMCStore.removeIfEquals(key, mis)
         if(!ok){
-          Profiler.count("completeCandidateForMC retry") // a few times per MState
+          Profiler.count("completeCandidateForMC retry")// a few times per MState
           completeCandidateForMC(cv, views, result)
         }
 
@@ -308,10 +269,8 @@ class SimpleEffectOnStore extends EffectOnStore{
     * mcNotDoneStore. */
   @inline private def completeMcNotDone(
       cv: ComponentView, views: ViewSet, result: ViewBuffer) = {
-    /*mcNotDoneStore.synchronized*/{ mcNotDoneStore.remove(cv) } match{
+    mcNotDoneStore.remove(cv) match{
       case Some(mis) =>
-        // remove old entry
-        // mcNotDoneStore.synchronized{ mcNotDoneStore.remove(cv) } 
         mis.synchronized{
           for(mi <- mis) mi.synchronized{
             if(mi.mcDone) assert(mi.done || mi.transferred)
@@ -338,7 +297,7 @@ class SimpleEffectOnStore extends EffectOnStore{
   /** Remove cv from each entry in mcDoneStore. */
   @inline private 
   def completeMcDone(cv: ComponentView, views: ViewSet, result: ViewBuffer) = {
-    /*mcDoneStore.synchronized*/{ mcDoneStore.remove(cv) } match{
+    mcDoneStore.remove(cv) match{
       case Some(mis) =>
         mis.synchronized{
           for(mi <- mis) mi.synchronized{

@@ -75,6 +75,20 @@ class Checker(system: SystemP.System, numWorkers: Int){
     * @return true if a concrete transition on error is generated. 
     */
   private def process(cv: ComponentView): Boolean = { 
+    if(processViewTransitions(cv)) return true
+    // Effect of previous transitions on this view
+    effectOfPreviousTransitions(cv)
+    // Effect of previous transition templates
+    addTransitions(
+      transitionTemplateExtender.effectOfPreviousTransitionTemplates(cv) )
+    if(singleRef) EffectOn.completeDelayed(cv, nextNewViews)
+    false
+  } 
+
+  /** Process the view transitions from cv.  
+    * @return true if a concrete transition on error is generated. 
+    */
+  @inline private def processViewTransitions(cv: ComponentView): Boolean = {
     if(verbose) println(s"\n**** Processing $cv")
     if(debugging) StateArray.checkDistinct(cv.components)
     for((pre, e, post, outsidePid) <- system.transitions(cv)){
@@ -90,14 +104,8 @@ class Checker(system: SystemP.System, numWorkers: Int){
           assert(e == system.Error); return true
       }
     } // end of for((pre, e, post, outsidePids) <- trans)
-    // Effect of previous transitions on this view
-    effectOfPreviousTransitions(cv)
-    // Effect of previous transition templates
-    addTransitions(
-      transitionTemplateExtender.effectOfPreviousTransitionTemplates(cv) )
-    if(singleRef) EffectOn.completeDelayed(cv, nextNewViews)
     false
-  } 
+  }
 
   // ========= Processing a transition from a view.
 
@@ -189,6 +197,13 @@ class Checker(system: SystemP.System, numWorkers: Int){
     }
   }
 
+  // Extending transition templates
+
+  /** Try instantiating previous transition templates with view. */
+  @inline private def instantiateTransitiontemplates(view: ComponentView) =
+    addTransitions(
+      transitionTemplateExtender.effectOfPreviousTransitionTemplates(view) )
+
   // ========= Main function
 
   /** The views to be expanded on the current ply. */
@@ -254,6 +269,16 @@ class Checker(system: SystemP.System, numWorkers: Int){
       println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
   }
 
+  @inline private def tryDebug(view: ComponentView) = {
+    if(!done.getAndSet(true)){
+      val debugger = new Debugger(system, sysAbsViews, initViews)
+      debugger(view)
+      // When the user is done, the debugger exits the whole system.
+      sys.error("Unreachable") // This should be unreachable.
+    }
+    else{ } // Another thread found error
+  }
+
   /** Output at end of check. */
   private def endOfCheck(bound: Int) = {
     // println("\nSTEP "+ply+"\n")
@@ -280,7 +305,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     ply = 0
     // Barrier for coordinating workers. 
     val barrier = new Barrier(numWorkers)
-    // val barrier1 = new WeakBarrier(numWorkers)
+    val barrier1 = new WeakBarrier(numWorkers)
 
     /* A worker with identity me.  Worker 0 coordinates. */
     def worker(me: Int) = {
@@ -288,11 +313,39 @@ class Checker(system: SystemP.System, numWorkers: Int){
       while(!myDone){
         // Worker 0 resets for the next ply; the others wait.
         if(me == 0) startOfPly(bound)
-        barrier.sync(me) // 
-        // barrier1.sync//(me)
+        // barrier.sync(me) // 
+        barrier1.sync//(me)
         if(!done.get){
           var donePly = done.get // if done, we exit loop
-
+          // We need to perform four operations on each view in newViews.
+          // Each operation will constitute a single task.  Each task
+          // corresponds to a number i in [0..4*length), with i/length
+          // indicating the operation, and i%length indicating the view.
+// IMPROVE: if !singleRef, only need 3*length
+          val length = newViews.length
+          while(!donePly && !done.get){
+            val i = nextIndex.getAndIncrement()
+            if(i < 4*length){
+              val opIx = i/length; 
+              val viewIx = i%length; val view = newViews(viewIx)
+              if(viewIx > 0 && viewIx%5000 == 0){ 
+                print("."); if(viewIx%50000 == 0) print(s"${viewIx/1000}K") 
+              }
+              if(viewIx == 0) print(s"[$opIx]")
+              opIx match{
+                case 3 => // Process view transitions
+                  if(processViewTransitions(view)) tryDebug(view)
+                case 0 => // Effect of previous transitions on this view
+                  effectOfPreviousTransitions(view)
+                case 1 =>    // Effect of previous transition templates
+                  instantiateTransitiontemplates(view)
+                case 2 => 
+                  if(singleRef) EffectOn.completeDelayed(view, nextNewViews)
+              } // end of match
+            }
+            else donePly = true
+          }
+/*
           // Process all views from newViews.
           while(!donePly && !done.get){
             val i = nextIndex.getAndIncrement()
@@ -311,7 +364,8 @@ class Checker(system: SystemP.System, numWorkers: Int){
               }
             }
             else donePly = true
-          } // end of inner while
+ */
+ //         } // end of inner while
 
           // Wait for other workers to finish; then worker 0 resets for next ply.
           barrier.sync(me)
