@@ -394,7 +394,6 @@ import java.util.concurrent.atomic.AtomicIntegerArray
   * @param shards the number of shards
   * @param initLength the initial length of each shard. 
   * @param MaxLoad the maximum load factor before resizing.  */
-
 class LockFreeReadHashSet[A : scala.reflect.ClassTag](
   shards: Int = LockFreeReadHashSet.DefaultShards,
   initLength: Int = 32,

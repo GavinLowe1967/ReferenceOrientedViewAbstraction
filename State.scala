@@ -40,10 +40,18 @@ class State(val family: Family, val cs: ControlState,
   }
 
   /** The process identities corresponding to ids. */
-  private var pIds: Array[ProcessIdentity] = null
+  @volatile private var pIds: Array[ProcessIdentity] = null
 
   /** The process identities. */
-  def processIdentities: Array[ProcessIdentity] = synchronized{
+  def processIdentities: Array[ProcessIdentity] = if(true){ // IMPROVE
+    if(pIds == null){ // volatile read: subscribe
+      val newPids = Array.tabulate(ids.length)(i => (typeMap(i), ids(i)))
+      synchronized{ if(pIds == null) pIds = newPids } // volatile write: publish
+      // I don't think the "synchronized" is needed: equivalent arrays suffice
+    }
+    pIds
+  }
+  else synchronized{
     if(pIds == null) pIds = Array.tabulate(ids.length)(i => (typeMap(i), ids(i)))
     pIds
   }

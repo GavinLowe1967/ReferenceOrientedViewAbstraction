@@ -17,7 +17,9 @@ class Checker(system: SystemP.System, numWorkers: Int){
   protected var sysAbsViews: ViewSet = sav 
   // Note: reset by CheckerTest
 
-  protected type NewViewSet = LockFreeReadHashSet[ComponentView]
+  protected type NewViewSet = // BasicHashSet[ComponentView] 
+    MyShardedHashSet[ComponentView]
+  /*BasicHashSet LockFreeReadHashSet*/
 
   /** The new views to be considered on the next ply. */
   protected var nextNewViews: NewViewSet = null

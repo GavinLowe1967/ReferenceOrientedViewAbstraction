@@ -8,7 +8,7 @@ import ViewAbstraction.BasicHashMap
 class CompatibleWithCache{
   import CompatibleWithCache.{Key,Cache}
 
-  private val compatibleWithCache = new HashMap[Key, Cache]
+  private val compatibleWithCache = new ShardedHashMap[Key, Cache]
 
   /** Get the Cache associated with Key. */
   def get(key: Key): Cache = synchronized{ 

@@ -40,9 +40,9 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
   /** The number of states created. */
   private val stateCount = new java.util.concurrent.atomic.AtomicInteger(0)
 
-  /** The maximum fresh value allowed in any state.  FIXME.  I think the max
-    * number of parameters of the same type in any state will suffice. */
-  private val MaxFresh = 4
+  /** Maximum number of values of a type that might appear in a check but not in
+    * the script.  FIXME: this is a hack. */
+  private val MaxFresh = 5
 
   /** sizeFor(indexForCS(cs))(index) gives the number of values allowed for the
     * parameter at position index in control state cs.  It equals
@@ -126,7 +126,12 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
       val id = ids(index)
       // Second term below is the number of distinguished values of
       // the type of this identity, so gives an offset in each trie
-      id + theOffsets(index)
+      val res = id + theOffsets(index)
+      assert(0 <= res && res < theSizes(index),
+        s"index = $index; id = $id; res = $res; size = ${theSizes(index)}")
+      // If the above fails, it might mean that sizeFor0 isn't giving large
+      // enough values.
+      res
     }
 
     // Index into a trie corresponding to the parameters at positions idsIndex
@@ -195,7 +200,15 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
 
       // Get or create and store State in bottom level Trie
       val sat = trie.asInstanceOf[StateArrayTrie]
-      val index = indexFor(idsIndex)  // assert(index < states.length)
+      val index = indexFor(idsIndex)  
+      assert(index < sat.size, 
+        s"addState = $addState; ids = "+ids.mkString(",")+
+          s"; index = $index; idsIndex = $idsIndex, sizeFor = "+
+          sizeFor(cs, idsIndex)+s"; indexFor0($idsIndex) = "+indexFor0(idsIndex)+
+          s"; theSizes($idsIndex) = "+theSizes(idsIndex)+
+          s"; indexFor0(${idsIndex+1}) = "+indexFor0(idsIndex+1)+
+          s"; theSizes(${idsIndex+1}) = "+theSizes(idsIndex+1)
+      )
       val (st, myIndex) = sat.get(index) 
       // Note: need both checks in following line in case call so sat.get is
       // concurrent with a write (or use sat.synchronized in above line, but
@@ -259,7 +272,7 @@ class MidTrie(size: Int) extends Trie{
 
 /** A leaf of a trie, holding size states as children, and their indexes into
   * the global array. */
-class StateArrayTrie(size: Int) extends Trie{
+class StateArrayTrie(val size: Int) extends Trie{
   val states = new Array[State](size)
   val indexes = new Array[StateIndex](size)
 
