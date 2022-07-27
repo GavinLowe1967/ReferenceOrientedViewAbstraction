@@ -95,7 +95,9 @@ $(DIR)/TransitionTemplateSet.class: $(DIR)/ComponentView.class
 
 $(DIR)/ViewSet.class: $(DIR)/ComponentView.class $(DIR)/MyHashSet.class $(DIR)/Transition.class
 
-$(DIR)/NewViewSet.class: $(DIR)/ViewSet.class 
+$(DIR)/IndexSet.class: $(DIR)/ComponentView.class
+
+$(DIR)/NewViewSet.class: $(DIR)/ViewSet.class $(DIR)/IndexSet.class
 
 # # The system itself
 

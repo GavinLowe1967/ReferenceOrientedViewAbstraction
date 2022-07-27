@@ -17,8 +17,10 @@ class Checker(system: SystemP.System, numWorkers: Int){
   protected var sysAbsViews: ViewSet = sav 
   // Note: reset by CheckerTest
 
+  protected type NewViewSet = LockFreeReadHashSet[ComponentView]
+
   /** The new views to be considered on the next ply. */
-  protected var nextNewViews: MyHashSet[ComponentView] = null
+  protected var nextNewViews: NewViewSet = null
 
   /* The transitions found so far. */
   private val transitions = new NewTransitionSet
@@ -223,7 +225,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
       println(s"#transitions = ${printLong(transitions.size)}")
       println(s"#transition templates = ${printLong(transitionTemplates.size)}")
       println("#new active abstract views = "+printInt(newViews.size))
-      nextNewViews = new BasicHashSet[ComponentView]
+      nextNewViews = new NewViewSet
       newTransitions = new BasicHashSet[Transition]
       newTransitionTemplates = new BasicHashSet[TransitionTemplate]
     }
@@ -328,18 +330,21 @@ class Checker(system: SystemP.System, numWorkers: Int){
             if(i < 4*length){
               val opIx = i/length; 
               val viewIx = i%length; val view = newViews(viewIx)
-              if(viewIx > 0 && viewIx%5000 == 0){ 
-                print("."); if(viewIx%50000 == 0) print(s"${viewIx/1000}K") 
+              if(viewIx > 0 && viewIx%10000 == 0){ 
+                print("."); if(viewIx%100000 == 0) print(s"${viewIx/1000}K") 
               }
               if(viewIx == 0) print(s"[$opIx]")
+              // Note: the order below doesn't matter for correctness, but
+              // seems to make quite a big difference for performance.  Having
+              // effectOfPreviousTransitions not last is much slower.
               opIx match{
-                case 3 => // Process view transitions
+                case 1 => // Process view transitions
                   if(processViewTransitions(view)) tryDebug(view)
-                case 0 => // Effect of previous transitions on this view
+                case 3 => // Effect of previous transitions on this view
                   effectOfPreviousTransitions(view)
-                case 1 =>    // Effect of previous transition templates
+                case 2 =>    // Effect of previous transition templates
                   instantiateTransitiontemplates(view)
-                case 2 => 
+                case 0 => 
                   if(singleRef) EffectOn.completeDelayed(view, nextNewViews)
               } // end of match
             }
