@@ -280,7 +280,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     ply = 0
     // Barrier for coordinating workers. 
     val barrier = new Barrier(numWorkers)
-    val barrier1 = new WeakBarrier(numWorkers)
+    // val barrier1 = new WeakBarrier(numWorkers)
 
     /* A worker with identity me.  Worker 0 coordinates. */
     def worker(me: Int) = {
@@ -288,8 +288,8 @@ class Checker(system: SystemP.System, numWorkers: Int){
       while(!myDone){
         // Worker 0 resets for the next ply; the others wait.
         if(me == 0) startOfPly(bound)
-        // barrier.sync(me) // 
-        barrier1.sync//(me)
+        barrier.sync(me) // 
+        // barrier1.sync//(me)
         if(!done.get){
           var donePly = done.get // if done, we exit loop
 

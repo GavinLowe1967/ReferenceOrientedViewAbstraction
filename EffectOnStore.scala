@@ -110,7 +110,7 @@ class SimpleEffectOnStore extends EffectOnStore{
 // IMPROVE: store only against the first MissingCommon.  This would require
 // MissingInfo.advanceMC calling updateWithNewMatch on the new MissingCommon.
   private val candidateForMCStore = 
-    new HashMap[(ServerStates, State), MissingInfoSet]
+    new ShardedHashMap[(ServerStates, State), MissingInfoSet]
 
   /* Operations on each of the above HashMaps is protected by a synchronized
    * block on that HashMap.  Operations on each MissingInfoSet is protected by
@@ -189,7 +189,7 @@ class SimpleEffectOnStore extends EffectOnStore{
       // mcArray(0)
       for(mc <- missingCommon){
         val princ1 = mc.cpts1(0); val key = (mc.servers, princ1)
-        val mis = candidateForMCStore.synchronized{ 
+        val mis = /*candidateForMCStore.synchronized*/{ 
           candidateForMCStore.getOrElseUpdate(key, new MissingInfoSet) 
         }
         // missingInfo.log(CandidateForMC(mc.servers,princ1))
@@ -241,7 +241,7 @@ class SimpleEffectOnStore extends EffectOnStore{
   @inline private def completeCandidateForMC(
       cv: ComponentView, views: ViewSet, result: ViewBuffer): Unit = {
     val key = (cv.servers, cv.principal)
-    candidateForMCStore.synchronized{ candidateForMCStore.get(key) } match{
+    /*candidateForMCStore.synchronized*/ candidateForMCStore.get(key)  match{
       case Some(mis) => 
         val newMis = new MissingInfoSet // those to retain
         mis.synchronized{
@@ -273,16 +273,19 @@ class SimpleEffectOnStore extends EffectOnStore{
 
         // Update candidateForMCStore if this mapping hasn't changed.
         var ok = true
-        if(newMis.nonEmpty) candidateForMCStore.synchronized{
+        if(newMis.nonEmpty) 
+          ok = candidateForMCStore.compareAndSet(key, mis, newMis)
+          /* candidateForMCStore.synchronized{
           if(candidateForMCStore.get(key) == Some(mis))
             candidateForMCStore += key -> newMis
           else ok = false
-        }
-        else candidateForMCStore.synchronized{ 
+        } */
+        else ok = candidateForMCStore.removeIfEquals(key, mis)
+          /* candidateForMCStore.synchronized{
           if(candidateForMCStore.get(key) == Some(mis))
             candidateForMCStore.remove(key)
           else ok = false
-        }
+        } */
         /*
         candidateForMCStore.synchronized{
           if(candidateForMCStore.get(key) == Some(mis)){
