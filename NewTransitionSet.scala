@@ -8,25 +8,32 @@ import scala.collection.mutable.{HashMap,HashSet,ArrayBuffer}
 /** A set recording the transitions seen so far. */
 class NewTransitionSet{
   /** All the transitions added. */
-  private var underlying = new HashSet[Transition]
+  private var underlying = new MyShardedHashSet[Transition]
 
   /** The transitions, partitioned according to their preServers value. */
-  private val byPreServers = new HashMap[ServerStates, ServersTransitionSet]
+  private val byPreServers = 
+    new ShardedHashMap[ServerStates, ServersTransitionSet]
   // Improve: use array indexed by ServerStates?
 
   /** Add the transition t. */
-  def add(t: Transition): Boolean = synchronized{
+  def add(t: Transition) = {
     if(underlying.add(t)){
       val preServers = t.preServers
+      val ts = //byPreServers.synchronized{
+        byPreServers.getOrElseUpdate(preServers,
+          new ServersTransitionSet(preServers) )
+      //}
+      ts.add(t) // Protected by ts
+ /*
       byPreServers.get(preServers) match{
-        case Some(ts) => /*ts += t*/ ts.add(t)
+        case Some(ts) =>  ts.add(t)
         case None => 
           val ts = new ServersTransitionSet(preServers);  ts.add(t)
           byPreServers += preServers -> ts
       }
-      true
+  */
     }
-    else{ assert(false); false }
+    else{ assert(false) }
   }
 
   /** An iterator over the transitions, producing transitions that might produce
@@ -68,7 +75,7 @@ class ServersTransitionSet(preServers: ServerStates){
    * gives the same value, and that is the abstract value of this set.  */
 
   /** Add the transition t. */
-  def add(t: Transition) = {
+  def add(t: Transition) = synchronized{
     var f = 0
     while(f < numTypes){
       if(singleRef && t.anyAcquiredRefs(f) || t.serverGetsNewId){

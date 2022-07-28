@@ -273,49 +273,41 @@ class Checker(system: SystemP.System, numWorkers: Int){
       transitionTemplates.add(template)
   }
 
-  /** Updates performed at the end of a ply by thread 0. */
-  private def endOfPly() = {
-    // newViewsAB = new ArrayBuffer[ComponentView]
+  /** Collectively, workers copy new views and transitions, at the end of a
+    * ply. */
+  private def endOfPly(me: Int) = {
+    // Worker 0 copies transition templates.
+    if(me == 0){
+      print(s"\nCopying: nextNewViews, ${nextNewViews.size}; ")
+      copyTransitionTemplates()
+    }
 
-    // Store transitions
-    // print(s"newTransitions, ${newTransitions.size}; ")
-    //val transitionShardIteratorProducer = newTransitions.shardIteratorProducer
-    // var iter = transitionShardIteratorProducer.get
-    // while(iter != null){
-    //   for(t <- iter /*newTransitions.iterator*/){
-    //     val ok = transitions.add(t); assert(ok)
-    //     var vs = t.post.toComponentView
-    //     // for(v0 <- vs){
-    //     while(vs.nonEmpty){
-    //       val v0 = vs.head; vs = vs.tail; val v = Remapper.remapView(v0)
-    //       if(addView(v)){
-    //         v.setCreationInfo(t.pre, t.e, t.post)
-    //         if(showTransitions) println(s"${t.toString}\ngives $v")
-    //       }
-    //     }
-    //   } // end of iteration over iter
-    //   iter = transitionShardIteratorProducer.get
-    // }
-
-    // Store transition templates
-    // println(s"newTransitionTemplates, ${newTransitionTemplates.size}. ")
-    // for(template <- newTransitionTemplates.iterator)
-    //   transitionTemplates.add(template)
-
-    // // Store new views
-    // println(s"nextNewViews, ${nextNewViews.size}.")
-    // for(v <- nextNewViews.iterator) addView(v)
-
-    // And update for next ply
-    // newViews = newViewsAB.toArray; nextIndex.set(0)
-    // if(showEachPly)
-    //   println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
+    // Collectively copy views
+    var iter = viewShardIteratorProducer.get
+    while(iter != null){
+      for(v <- iter) addView(v)
+      iter = viewShardIteratorProducer.get
+    }
+    
+    // Collectively copy transitions
+    if(me == 0) println(s"newTransitions, ${newTransitions.size}. ")
+    var transIter = transitionShardIteratorProducer.get
+    while(transIter != null){
+      for(t <- transIter /*newTransitions.iterator*/){
+        transitions.add(t) // ; assert(ok)
+        var vs = t.post.toComponentView
+        while(vs.nonEmpty){
+          val v0 = vs.head; vs = vs.tail; val v = Remapper.remapView(v0)
+          if(addView(v)){
+            v.setCreationInfo(t.pre, t.e, t.post)
+            if(showTransitions) println(s"${t.toString}\ngives $v")
+          }
+        }
+      } // end of iteration over iter
+      transIter = transitionShardIteratorProducer.get
+    }
   }
 
-  // @inline private def copyViews = {
-  //   println(s"nextNewViews, ${nextNewViews.size}.")
-  //   for(v <- nextNewViews.iterator) addView(v)
-  // }
 
   @inline private def tryDebug(view: ComponentView) = {
     if(!done.getAndSet(true)){
@@ -400,36 +392,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
           // Wait for other workers to finish; then worker 0 resets for next ply.
           barrier.sync(me)
           // barrier1.sync
-          // if(me == 0){ endOfPly() }
-          // barrier.sync(me) 
-          if(me == 0){
-            print(s"\nCopying: nextNewViews, ${nextNewViews.size}; ")
-            copyTransitionTemplates()
-          }
-          // Collectively copy views
-          var iter = viewShardIteratorProducer.get
-          while(iter != null){
-            for(v <- iter) addView(v)
-            iter = viewShardIteratorProducer.get
-          }
-          // Collectively copy transitions
-          if(me == 0) println(s"newTransitions, ${newTransitions.size}. ")
-          var transIter = transitionShardIteratorProducer.get
-          while(transIter != null){
-            for(t <- transIter /*newTransitions.iterator*/){
-              val ok = transitions.add(t); assert(ok)
-              var vs = t.post.toComponentView
-              // for(v0 <- vs){
-              while(vs.nonEmpty){
-                val v0 = vs.head; vs = vs.tail; val v = Remapper.remapView(v0)
-                if(addView(v)){
-                  v.setCreationInfo(t.pre, t.e, t.post)
-                  if(showTransitions) println(s"${t.toString}\ngives $v")
-                }
-              }
-            } // end of iteration over iter
-            transIter = transitionShardIteratorProducer.get
-          }
+          endOfPly(me)
           // Sync before next round
           barrier1.sync // (me)
         } // end of if(!done.get)
