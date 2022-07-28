@@ -9,30 +9,32 @@ import ox.gavin.profiling.Profiler
 /** An implementation of ViewSet allowing efficient iteration. */
 class NewViewSet extends ViewSet{
   /** A set containing all the views. */
-  private val allViews = new HashSet[ReducedComponentView]
+  private val allViews = new MyShardedHashSet[ReducedComponentView]
   // IMPROVE: it would be better to use ComponentView here.  But then we
   // couldn't call contains on it with a ReducedComponentView.  We could
   // implement the set directly, like ComponentsSet.
 
   /** For each ServerStates, a representation of all views with those
-    * servers. */
-  private val serversBased = new HashMap[ServerStates, ServerBasedViewSet]
+    * servers.   */
+  private val serversBased = new ShardedHashMap[ServerStates, ServerBasedViewSet]
 
-  /** For each ServerStates and principal state, all corresponding views. */
+  /** For each ServerStates and principal state, all corresponding views.  Each
+    * ArrayBuffer is protected by a synchronized block on itself during
+    * add. */
   private val serversPrincipalBased = 
-    new HashMap[(ServerStates, State), ArrayBuffer[ComponentView]]
+    new ShardedHashMap[(ServerStates, State), ArrayBuffer[ComponentView]]
 
   /** Add sv to this. */
   def add(view: ComponentView) : Boolean = {
     if(allViews.add(view)){
       // add to serversBased
-      val sbSet =
+      val sbSet = 
         serversBased.getOrElseUpdate(view.servers, new ServerBasedViewSet)
-      sbSet.add(view)
+      sbSet.add(view) // sbSet is thread-safe
       // add to serversPrincipalBased
       val ab = serversPrincipalBased.getOrElseUpdate(
-        (view.servers, view.principal), new ArrayBuffer[ComponentView])
-      ab += view
+          (view.servers, view.principal), new ArrayBuffer[ComponentView])
+      ab.synchronized{ ab += view }
       true
     }
     else false
@@ -106,7 +108,7 @@ class ServerBasedViewSet{
     new PrincTypesViewSet(intToBoolArray(i)))
 
   /** Add */
-  def add(view: ComponentView): Unit = {
+  def add(view: ComponentView): Unit = synchronized{
     views += view
     var i = 0
     while(i < numTypeSets){ byAcquiredRefTypes(i).add(view); i += 1 }

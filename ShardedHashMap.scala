@@ -136,6 +136,16 @@ class ShardedHashMap[A: scala.reflect.ClassTag, B: scala.reflect.ClassTag](
     }
   }
 
+  /** Get the value associated with a.  Pre: a is in the mapping. */
+  def apply(a: A): B = {
+    val h = hashOf(a); val sh = shardFor(h)
+    locks(sh).synchronized{
+      val i = find(sh, a, h)
+      assert(hashes(sh)(i) == h && keys(sh)(i) == a, s"Key not found: $a")
+      elements(sh)(i)
+    }
+  }
+
   /** Get the value associated with a; or default if there is no such value. */
   def getOrElse(a: A, default: => B): B = {
     val h = hashOf(a); val sh = shardFor(h)

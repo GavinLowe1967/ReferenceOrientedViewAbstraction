@@ -97,7 +97,7 @@ $(DIR)/ViewSet.class: $(DIR)/ComponentView.class $(DIR)/MyHashSet.class $(DIR)/T
 
 $(DIR)/IndexSet.class: $(DIR)/ComponentView.class
 
-$(DIR)/NewViewSet.class: $(DIR)/ViewSet.class $(DIR)/IndexSet.class
+$(DIR)/NewViewSet.class: $(DIR)/ViewSet.class $(DIR)/IndexSet.class $(DIR)/ShardedHashMap.class
 
 # # The system itself
 

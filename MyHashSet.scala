@@ -329,9 +329,14 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
     }
   }
 
-  /** Does this contain x?
-    *  Pre: this operation is not concurrent to any add operation. */
-  def contains(x: A): Boolean = ???
+  /** Does this contain x? */
+  def contains(x: A): Boolean = {
+    val h = hashOf(x); val sh = shardFor(h)
+    locks(sh).synchronized{
+      val i = find(sh, x, h)
+      elements(sh)(i) == x // IMPROVE: replace with test of hash
+    }
+  }
 
   /** An iterator over the elements of this.
     * Not thread safe. */
@@ -357,6 +362,40 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
     def next() = { val result = elements(sh)(i); advance1; advance; result }
   } // end of iterator
 
+
+  /** An iterator over shard sh.  Not thread-safe. */
+  private def shardIterator(sh: Int) = new Iterator[A]{
+    require(sh < shards)
+    // Index into arrays
+    private var i = 0
+    // Size of this shard
+    private val thisWidth = widths(sh)
+
+    advance()
+
+    @inline private def advance() = 
+      while(i < thisWidth && hashes(sh)(i) == 0) i += 1
+
+    def hasNext = i < thisWidth
+
+    def next() = { val res = elements(sh)(i); i += 1; advance(); res }
+  }
+
+  /** Objects that produce iterators over the different shards.  This is
+    * thread-safe, but each iterator it produces is not. */
+  class ShardIteratorProducer extends ShardedHashSet.ShardIteratorProducerT[A]{
+    private var sh = 0
+
+    /** Get the next iterator, or null if we're done. */
+    def get: Iterator[A] = synchronized{
+      if(sh < shards){ val iter = shardIterator(sh); sh += 1; iter }
+      else null
+    }
+  }
+
+  /** An object that produces Iterator[A]s, each over the next shard. */
+  def shardIteratorProducer = new ShardIteratorProducer
+
   /** Get the element of this that is equal (==) to x. */
   def get(x: A): A = {
     val h = hashOf(x); val sh = shardFor(h)
@@ -379,6 +418,13 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
       }
       else{ /* assert(oldSt == x); */ oldSt }
     }
+  }
+}
+
+object ShardedHashSet{
+  /** Objects that produce iterators over the different shards. */
+  trait ShardIteratorProducerT[A]{
+    def get: Iterator[A]
   }
 }
 

@@ -17,9 +17,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
   protected var sysAbsViews: ViewSet = sav 
   // Note: reset by CheckerTest
 
-  protected type NewViewSet = // BasicHashSet[ComponentView] 
-    MyShardedHashSet[ComponentView]
-  /*BasicHashSet LockFreeReadHashSet*/
+  protected type NewViewSet = MyShardedHashSet[ComponentView]
 
   /** The new views to be considered on the next ply. */
   protected var nextNewViews: NewViewSet = null
@@ -27,9 +25,11 @@ class Checker(system: SystemP.System, numWorkers: Int){
   /* The transitions found so far. */
   private val transitions = new NewTransitionSet
 
+  private type NextTransitionSet = MyShardedHashSet[Transition]
+
   /** Transitions found on this ply.  Transitions are initially added to
     * newTransitions, but transferred to transitions at the end of the ply. */
-  private var newTransitions: BasicHashSet[Transition] = null
+  private var newTransitions: NextTransitionSet = null
 
   /** The transition templates found on previous plies.  Abstractly, a set of
     * TransitionTemplates. */
@@ -216,9 +216,29 @@ class Checker(system: SystemP.System, numWorkers: Int){
   /** Is the check complete? */
   private var done = new AtomicBoolean(false)
 
+  /** Producer for iterators for copying views found on one ply, ready for the
+    * next ply.  Set by worker 0 on each ply. */
+  private var viewShardIteratorProducer: 
+      ShardedHashSet.ShardIteratorProducerT[ComponentView] = null
+
+  private var transitionShardIteratorProducer: 
+      ShardedHashSet.ShardIteratorProducerT[Transition] = null
+
+  /** Buffer that accumulated views found on one ply for the next ply.
+    * Protected by synchronized block IMPROVE*/
+  private var newViewsAB = new ArrayBuffer[ComponentView]
+
   /** Print information, and update variables for the start of the next ply.  In
-    * particular, set done if all threads should terminate. */
+    * particular, set done if all threads should terminate.  Performed by
+    * worker 0.  */
   private def startOfPly(bound: Int) = {
+    if(ply != 0){
+      // Views for workers to work on in this ply. 
+      newViews = newViewsAB.toArray; nextIndex.set(0)
+      if(showEachPly)
+        println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
+    }
+
     ply += 1
     if(newViews.isEmpty || ply > bound) done.set(true)
     else{
@@ -228,50 +248,74 @@ class Checker(system: SystemP.System, numWorkers: Int){
       println(s"#transition templates = ${printLong(transitionTemplates.size)}")
       println("#new active abstract views = "+printInt(newViews.size))
       nextNewViews = new NewViewSet
-      newTransitions = new BasicHashSet[Transition]
+      newTransitions = new NextTransitionSet 
       newTransitionTemplates = new BasicHashSet[TransitionTemplate]
+
+      // Initialise objects ready for end of ply
+      newViewsAB = new ArrayBuffer[ComponentView]
+      viewShardIteratorProducer = nextNewViews.shardIteratorProducer
+      transitionShardIteratorProducer = newTransitions.shardIteratorProducer
     }
   }
 
-  private def endOfPly() = {
-    // Add views and transitions found on this ply into the main set.
-    val newViewsAB = new ArrayBuffer[ComponentView]
-
-    /* Add v to sysAbsViews and newViewsAB if new.  Return true if so. */
-    def addView(v: ComponentView): Boolean = {
-      if(sysAbsViews.add(v)){
-        assert(v.representableInScript); newViewsAB += v; true
-      }
-      else false
-    } // end of addView
-
-    // Store transitions
-    print(s"\nCopying: newTransitions, ${newTransitions.size}; ")
-    for(t <- newTransitions.iterator){
-      assert(transitions.add(t))
-      for(v0 <- t.post.toComponentView){
-        val v = Remapper.remapView(v0)
-        if(addView(v)){
-          v.setCreationInfo(t.pre, t.e, t.post)
-          if(showTransitions) println(s"${t.toString}\ngives $v")
-        }
-      }
+  /** Add v to sysAbsViews and newViewsAB if new.  Return true if so. */
+  private def addView(v: ComponentView): Boolean = {
+    if(sysAbsViews.add(v)){
+      assert(v.representableInScript); synchronized{ newViewsAB += v }; true
+// IMPROVE: remove synchronized block
     }
+    else false
+  } // end of addView
 
-    // Store transition templates
+  private def copyTransitionTemplates() = {
     print(s"newTransitionTemplates, ${newTransitionTemplates.size}; ")
     for(template <- newTransitionTemplates.iterator)
       transitionTemplates.add(template)
+  }
 
-    // Store new views
-    println(s"nextNewViews, ${nextNewViews.size}.")
-    for(v <- nextNewViews.iterator) addView(v)
+  /** Updates performed at the end of a ply by thread 0. */
+  private def endOfPly() = {
+    // newViewsAB = new ArrayBuffer[ComponentView]
+
+    // Store transitions
+    // print(s"newTransitions, ${newTransitions.size}; ")
+    //val transitionShardIteratorProducer = newTransitions.shardIteratorProducer
+    // var iter = transitionShardIteratorProducer.get
+    // while(iter != null){
+    //   for(t <- iter /*newTransitions.iterator*/){
+    //     val ok = transitions.add(t); assert(ok)
+    //     var vs = t.post.toComponentView
+    //     // for(v0 <- vs){
+    //     while(vs.nonEmpty){
+    //       val v0 = vs.head; vs = vs.tail; val v = Remapper.remapView(v0)
+    //       if(addView(v)){
+    //         v.setCreationInfo(t.pre, t.e, t.post)
+    //         if(showTransitions) println(s"${t.toString}\ngives $v")
+    //       }
+    //     }
+    //   } // end of iteration over iter
+    //   iter = transitionShardIteratorProducer.get
+    // }
+
+    // Store transition templates
+    // println(s"newTransitionTemplates, ${newTransitionTemplates.size}. ")
+    // for(template <- newTransitionTemplates.iterator)
+    //   transitionTemplates.add(template)
+
+    // // Store new views
+    // println(s"nextNewViews, ${nextNewViews.size}.")
+    // for(v <- nextNewViews.iterator) addView(v)
 
     // And update for next ply
-    newViews = newViewsAB.toArray; nextIndex.set(0)
-    if(showEachPly)
-      println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
+    // newViews = newViewsAB.toArray; nextIndex.set(0)
+    // if(showEachPly)
+    //   println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
   }
+
+  // @inline private def copyViews = {
+  //   println(s"nextNewViews, ${nextNewViews.size}.")
+  //   for(v <- nextNewViews.iterator) addView(v)
+  // }
 
   @inline private def tryDebug(view: ComponentView) = {
     if(!done.getAndSet(true)){
@@ -317,8 +361,8 @@ class Checker(system: SystemP.System, numWorkers: Int){
       while(!myDone){
         // Worker 0 resets for the next ply; the others wait.
         if(me == 0) startOfPly(bound)
-        // barrier.sync(me) // 
-        barrier1.sync//(me)
+        barrier.sync(me) // 
+        // barrier1.sync//(me)
         if(!done.get){
           var donePly = done.get // if done, we exit loop
           // We need to perform four operations on each view in newViews.
@@ -338,7 +382,8 @@ class Checker(system: SystemP.System, numWorkers: Int){
               if(viewIx == 0) print(s"[$opIx]")
               // Note: the order below doesn't matter for correctness, but
               // seems to make quite a big difference for performance.  Having
-              // effectOfPreviousTransitions not last is much slower.
+              // effectOfPreviousTransitions before processViewTransitions is
+              // much slower.
               opIx match{
                 case 1 => // Process view transitions
                   if(processViewTransitions(view)) tryDebug(view)
@@ -351,7 +396,54 @@ class Checker(system: SystemP.System, numWorkers: Int){
               } // end of match
             }
             else donePly = true
+          } 
+          // Wait for other workers to finish; then worker 0 resets for next ply.
+          barrier.sync(me)
+          // barrier1.sync
+          // if(me == 0){ endOfPly() }
+          // barrier.sync(me) 
+          if(me == 0){
+            print(s"\nCopying: nextNewViews, ${nextNewViews.size}; ")
+            copyTransitionTemplates()
           }
+          // Collectively copy views
+          var iter = viewShardIteratorProducer.get
+          while(iter != null){
+            for(v <- iter) addView(v)
+            iter = viewShardIteratorProducer.get
+          }
+          // Collectively copy transitions
+          if(me == 0) println(s"newTransitions, ${newTransitions.size}. ")
+          var transIter = transitionShardIteratorProducer.get
+          while(transIter != null){
+            for(t <- transIter /*newTransitions.iterator*/){
+              val ok = transitions.add(t); assert(ok)
+              var vs = t.post.toComponentView
+              // for(v0 <- vs){
+              while(vs.nonEmpty){
+                val v0 = vs.head; vs = vs.tail; val v = Remapper.remapView(v0)
+                if(addView(v)){
+                  v.setCreationInfo(t.pre, t.e, t.post)
+                  if(showTransitions) println(s"${t.toString}\ngives $v")
+                }
+              }
+            } // end of iteration over iter
+            transIter = transitionShardIteratorProducer.get
+          }
+          // Sync before next round
+          barrier1.sync // (me)
+        } // end of if(!done.get)
+        else myDone = true
+      } // end of main loop
+    } // end of worker
+
+    // Run numWorker workers
+    Concurrency.runIndexedSystem(numWorkers, worker)
+
+    endOfCheck(bound)
+  } 
+
+
 /*
           // Process all views from newViews.
           while(!donePly && !done.get){
@@ -373,21 +465,6 @@ class Checker(system: SystemP.System, numWorkers: Int){
             else donePly = true
  */
  //         } // end of inner while
-
-          // Wait for other workers to finish; then worker 0 resets for next ply.
-          barrier.sync(me)
-          // barrier1.sync
-          if(me == 0) endOfPly()
-        } // end of if(!done.get)
-        else myDone = true
-      } // end of main loop
-    } // end of worker
-
-    // Run numWorker workers
-    Concurrency.runIndexedSystem(numWorkers, worker)
-
-    endOfCheck(bound)
-  } 
 
 
   /** Perform a memory profile of this. */

@@ -11,7 +11,7 @@ class CompatibleWithCache{
   private val compatibleWithCache = new ShardedHashMap[Key, Cache]
 
   /** Get the Cache associated with Key. */
-  def get(key: Key): Cache = synchronized{ 
+  def get(key: Key): Cache = { 
     compatibleWithCache.getOrElseUpdate(key, new Cache) 
   }
 }

@@ -15,7 +15,7 @@ class NewTransitionSet{
   // Improve: use array indexed by ServerStates?
 
   /** Add the transition t. */
-  def add(t: Transition): Boolean = {
+  def add(t: Transition): Boolean = synchronized{
     if(underlying.add(t)){
       val preServers = t.preServers
       byPreServers.get(preServers) match{
