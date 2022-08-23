@@ -257,10 +257,10 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       else if(i == map(t).length) rec(t+1, 0) // advance
       else if(map(t)(i) >= 0) rec(t, i+1) // advance
       else{
-        val isId = cptIds(t)(i) // .contains((t,i)) // Is this an identity?
+        val isId = cptIds(t)(i)  // Is this an identity?
         // map (t,i) to each element of otherArgs(t)
         var id1 = 0
-        while(id1 < bounds(t)){ // resultRelevantParams(t).length){ // IMPROVE bound?
+        while(id1 < bounds(t)){
           if(resultRelevantParams(t)(id1)){
             // Don't map an identity to an identity
             if(!(isId && preCptIds(t)(id1))){

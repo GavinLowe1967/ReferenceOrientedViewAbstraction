@@ -5,6 +5,8 @@ import ox.gavin.profiling.Profiler
 class ServerStates(val servers: List[State]){
   val index = ServerStates.getNextIndex
 
+  def apply(i: Int) = servers(i)
+
   /* Note: equality is reference equality, because we avoid creating two
    * ServerStates with the same value of servers. */
 

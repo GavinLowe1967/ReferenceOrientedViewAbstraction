@@ -219,11 +219,6 @@ class Transition(
 
 
 object Transition{
-// [137(N1) || 140(T1) || 146(N2) || 147(Null) || 151() || 152()] ||
-//   [128(T2,N3,N2) || 26(N2,T2,N3,N1) || 6(N4)] 
-//   -initNode.T2.N4.A.N3.N2->
-//   [137(N1) || 140(T1) || 146(N2) || 147(Null) || 151() || 155(N4,N3)] || 
-//     [129(T2,N4,N3,N2) || 26(N2,T2,N3,N1) || 9(N4,N3,N2)])
 
   /** Function used when debugging.  The transition that should induce the 
     * missing view. 
@@ -231,19 +226,10 @@ object Transition{
     *   [59(T2,N2,N3,N4) || 14(N4,T2,N2,N3)] -->
     * [137(N1) || 140(T1) || 146(N1) || 147(Null) || 151() || 154(N4,N2,N3)] ||
     *   [60(T2,N2,N3,N4) || 14(N4,T2,N3,N3)]*/
-  def highlight(trans: Transition) = 
-    ComponentView0.highlightServers0(trans.preServers) &&
-      trans.preServers.servers(5).cs == 152 && {
-        val princ = trans.pre.components(0)
-        princ.cs == 59 && princ.ids.sameElements(Array(1,1,2,3))
-      } && {
-        val second = trans.pre.components(1)
-        second.cs == 14 && second.ids.sameElements(Array(3,1,1,2))
-      } && {
-        val postServers = trans.post.servers
-        ComponentView0.highlightServers0(postServers) &&
-        postServers.servers(5).cs == 154 && 
-        postServers.servers(5).ids.sameElements(Array(3,1,2))
-      }
-
+  def highlight(trans: Transition) = {
+    val pre = trans.pre; val preServers = trans.preServers
+    ComponentView0.highlightServers0(preServers) && 
+      preServers(5).cs == 143 && pre.components(0).cs == 94 &&
+      pre.components(1).cs == 14 && pre.components(1).ids(1) == 2
+  }
 }

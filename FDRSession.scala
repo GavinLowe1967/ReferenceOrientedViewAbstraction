@@ -79,6 +79,7 @@ class FDRSession(fname: String){
     // Note: the following also evaluates st, which can be expensive.
     // However, st needs to be evaluated anyway, so there doesn't seem much to
     // be gained by avoiding this.
+    // println("seqSeqStringToList")
     val length = eval(s"length($st)").toInt; print(s"($length chunks.)")
     val result = new ArrayBuffer[String]() // holds result
     // Index into the sequence
@@ -91,6 +92,7 @@ class FDRSession(fname: String){
         val myIndex = nextIndex.getAndIncrement
         if(myIndex < length){
           val thisChunkString = f(s"nth_($st, $myIndex)")
+          // println(thisChunkString)
           print(".")
           val thisChunk =
             session.evaluateIterableExpression(thisChunkString, canceller).
@@ -121,7 +123,8 @@ class FDRSession(fname: String){
   /** If st represents a sequence, evaluate f(st); if st represents a sequence
     * of sequences, evaluate concat(map f xss). */
   def evalSeqSeqOrSeq(st: String, f: String => String): Array[String] = {
-    if(isSeqSeq(st)) seqSeqStringToList(st, f)
+    // println("evalSeqSeqOrSeq")
+    if(isSeqSeq(st))  seqSeqStringToList(st, f) 
     else setStringToList(f(st)).toArray 
   }
 

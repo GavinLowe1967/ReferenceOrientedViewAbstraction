@@ -10,7 +10,11 @@ object UnificationTest
   import RemapperP.Remapper.{show,newRemappingMap}
   // import RemapperP.RemapperTest.{emptyMap,checkMap}
   import Unification.{unify,CombineResult,remapToJoin}
-  import EffectOnUnification.{combine,MatchingTuple}
+  import EffectOnUnification.MatchingTuple
+
+  /** Adapt tests to new interface of EffectOnUinfication. */
+  def combine(pre: Concretization, post: Concretization, view: ComponentView) =
+    EffectOnUnification.combine(new Transition(pre,-1,post), view)
 
   /** Test of unify. */
   private def unifyTest = {
@@ -142,7 +146,7 @@ object UnificationTest
       val cv = new ComponentView(servers0, Array(aNode(N0,N1), cNode(N1,Null)))
       // val cv = new ComponentView(servers0, Array(aNode(N2,N3)))
       // servers0 contains no ids, servers2 contains T0, N0
-      val (buffer,_) = combine(pre, post, cv /*, List()*/) // , true
+      val (buffer,_) = combine(pre, post, cv)
       // println(showBuffer(buffer))
       // Unifying, N0 -> N0, N1 -> N1
       assert(buffer.exists{case (map, states, unifs, _) =>

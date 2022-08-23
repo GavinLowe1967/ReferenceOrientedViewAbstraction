@@ -166,7 +166,7 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
   /** For each postServers, indices ofOtherTypes corresponding to views v s.t. v
     * might not satisfy containsDoneInduced(postServers).  Indexed by
     * postServers.index.  Values of null or beyond the end of the array
-    * correspond to all indices.  Protected */
+    * correspond to all indices.   */
   private var ofOtherTypesByPostServers = new Array[IndexSet](0) 
 
   /** All views in ofOtherTypes, indexed by the control states of the
@@ -185,7 +185,8 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
     }
     val ixSet = ofOtherTypesByPostServers(postServersIndex)
     if(ixSet == null){ // Initialise new IndexSet
-      val newIxSet = new LinkedListIndexSet(postServersIndex, ofOtherTypes); var j = 0
+      val newIxSet = new LinkedListIndexSet(postServersIndex, ofOtherTypes)
+      var j = 0
       while(j < ofOtherTypes.length){ newIxSet.add(j, false); j += 1 }
       ofOtherTypesByPostServers(postServersIndex) = newIxSet; newIxSet
     }

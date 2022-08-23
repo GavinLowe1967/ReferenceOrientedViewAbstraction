@@ -53,21 +53,20 @@ object EffectOn{
 
   import ServersReducedMap.ReducedMap 
 
-  private def highlight(cv: ComponentView) = 
-    false &&
-    ComponentView0.highlightServers(cv.servers) && 
-      //  44(T2,N5,N6) or 45(T2,N5,N6)
-      ComponentView0.highlightPrinc(cv.components(0)) && {
-        val second = cv.components(1)
-        // 16|17(N6,_,N4,N2)
-        (second.cs == 17 || second.cs == 16) &&
-        second.ids(0) == 5 && second.ids(2) == 3 && second.ids(3) == 1
-      }
+  // private def highlight(cv: ComponentView) =
+  //   ComponentView0.highlightServers(cv.servers) && 
+      // //  44(T2,N5,N6) or 45(T2,N5,N6)
+      // ComponentView0.highlightPrinc(cv.components(0)) && {
+      //   val second = cv.components(1)
+      //   // 16|17(N6,_,N4,N2)
+      //   (second.cs == 17 || second.cs == 16) &&
+      //   second.ids(0) == 5 && second.ids(2) == 3 && second.ids(3) == 1
+      // }
 
   /** If cv completes a delayed transition in effectOnStore, then complete it. */
   def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
   = {
-    if(highlight(cv)) println(s"completeDelayed($cv)")
+    // if(highlight(cv)) println(s"completeDelayed($cv)")
     for(nv <- effectOnStore.complete(cv, views)){
       if(showTransitions || ComponentView0.highlight(nv)) 
         println(s"Adding $nv\n from completeDelayed($cv)")
@@ -85,8 +84,6 @@ object EffectOn{
         println(s"Adding via completeDelayed \n"+
           s"$pre\n  --> $post induces \n"+
           EffectOnStore.showInduced(cv, cpts, post.servers, newComponents, nv))
-          // s"  induces $cv == ${View.show(pre.servers, cpts)}\n"+
-          // s"  --> ${View.show(post.servers, newComponents)} == $nv")
       }
       if(!nv.representableInScript){
         val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
@@ -137,20 +134,25 @@ class EffectOn(
   //   ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
   // SecondaryInducedInfo = ArrayBuffer[(Array[State], UnificationList, Int)]
 
-  private val highlight = 
-    false &&
-    Transition.highlight(trans) && {
-      val princ = cv.components(0); // 44(T2,N2,N3)
-      princ.cs == 44 && princ.ids.sameElements(Array(1,1,2))
-    } && {
-      val second = cv.components(1); // 16(N2,T3,N4,N5)
-      second.cs == 16 && second.ids.sameElements(Array(1,2,3,4))
-    }
-
-  if(highlight) println(s"\nEffectOn($trans,\n  $cv)")
+    // false &&
+    // Transition.highlight(trans) && {
+    //   val princ = cv.components(0); // 44(T2,N2,N3)
+    //   princ.cs == 44 && princ.ids.sameElements(Array(1,1,2))
+    // } && {
+    //   val second = cv.components(1); // 16(N2,T3,N4,N5)
+    //   second.cs == 16 && second.ids.sameElements(Array(1,2,3,4))
+    // }
 
   private val pre = trans.pre; private val post = trans.post
   private val postCpts = post.components;
+
+  private val highlight = 
+    Transition.highlight(trans) &&
+    // ComponentView0.highlightServers0(pre.servers) &&
+    //   pre.components(0).cs == 94 && 
+      cv.components(0).cs == 7
+
+  // if(highlight) println(s"\nEffectOn($trans,\n  $cv)")
 
   require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
 
@@ -180,11 +182,13 @@ class EffectOn(
       // cv.principal.
       val (inducedInfo, secondaryInduced): (InducedInfo, SecondaryInducedInfo) =
         if(singleRef) new SingleRefEffectOnUnification(trans,cv)()
-        else EffectOnUnification.combine(pre, post, cv)
+        else EffectOnUnification.combine(trans, cv)
       //if(highlight) println("inducedInfo.length == "+inducedInfo.length)
       processInduced(inducedInfo)
       processSecondaryInduced(secondaryInduced)
     }
+    else if(highlight)
+      println(s"Not sufficient unifs: "+cv.containsDoneInduced(post.servers))
   }
 
   /** Process the information about primary induced transitions. */
@@ -254,12 +258,8 @@ class EffectOn(
     newComponentsList: List[Array[State]])
       : Unit = {
     Profiler.count(s"processInducedInfo $isPrimary")
-    //val pre = trans.pre; val e = trans.e; val post = trans.post
-    // Consider only with T2, T3 unmapped
-    // val highlight = doHighlight(trans, cv) &&
-    //   map(0).sameElements(Array(0,4,5,2,3)) && map(1).sameElements(Array(0,2,3))
     // StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
-    if(highlight) println("processInducedInfo: "+unifs+"; "+Remapper.show(map))
+    //if(highlight) println("processInducedInfo: "+unifs+"; "+Remapper.show(map))
 
     /* Record this induced transition if singleRef and primary, and (1) if
      * newEffectOn, no acquired references, (2) otherwise no unifs. */

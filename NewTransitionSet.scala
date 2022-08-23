@@ -19,21 +19,11 @@ class NewTransitionSet{
   def add(t: Transition) = {
     if(underlying.add(t)){
       val preServers = t.preServers
-      val ts = //byPreServers.synchronized{
-        byPreServers.getOrElseUpdate(preServers,
+      val ts = byPreServers.getOrElseUpdate(preServers,
           new ServersTransitionSet(preServers) )
-      //}
       ts.add(t) // Protected by ts
- /*
-      byPreServers.get(preServers) match{
-        case Some(ts) =>  ts.add(t)
-        case None => 
-          val ts = new ServersTransitionSet(preServers);  ts.add(t)
-          byPreServers += preServers -> ts
-      }
-  */
     }
-    else{ assert(false) }
+    else assert(false, t) // The underlying.add should have worked.
   }
 
   /** An iterator over the transitions, producing transitions that might produce

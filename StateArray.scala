@@ -278,6 +278,12 @@ object StateArray{
     val indexMap = Array.tabulate(numTypes)(t => Array.fill(typeSizes(t))(-1))
     for(ix <- 0 until cpts.length){
       val (t,id) = cpts(ix).componentProcessIdentity
+      if(id >= indexMap(t).length){
+        println(s"Not enough identities in script for "+show(cpts))
+        sys.exit
+      }
+      // assert(id < indexMap(t).length, 
+      //   s"Not enough identities in script for "+show(cpts)) // IMPROVE
       indexMap(t)(id) = ix
     }
     indexMap

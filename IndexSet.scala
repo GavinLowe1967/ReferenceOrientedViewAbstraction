@@ -5,7 +5,8 @@ import scala.collection.mutable.{ArrayBuffer}
 /** A set of indices into an array of ComponentViews for a particular
   * postServersIndex.  The set contains at least all indices i
   * s.t. !ofOtherTypes(i).containsDoneInducedByIndex(postServersIndex).  It
-  * aims not to hold too many others. */
+  * aims not to hold too many others.  More abstractly, it represents the
+  * corresponding set of ComponentViews. */
 abstract class IndexSet(
   postServersIndex: Int, ofOtherTypes: ArrayBuffer[ComponentView]){
 

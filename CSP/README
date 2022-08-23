@@ -32,6 +32,10 @@ lockBasedQueue.csp: involves two synchronisations between thread and watchdog
 on each of enqueueing and dequeueing.  Also artificially keeps the tail
 node in an enqueueing thread's state. 556 abstractions 
 
+lockBasedQueue1.csp: variant where the "setTail" state in Enqueue does not
+hold a reference to the tail node.  This finds a false error (both with and
+without --singleRef).
+
 lockBasedQueueNextOmit.csp: version where Nodes referenced by "next" reference
 are omitted from Views.  Finds error.
 

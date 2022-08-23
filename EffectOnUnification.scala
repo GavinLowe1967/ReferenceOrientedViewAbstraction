@@ -4,10 +4,9 @@ import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
 import scala.collection.mutable.{ArrayBuffer,HashSet}
 
-/** Object responsible for the unification of cv with pre, suitable for
-  * calculating transitions induced by pre -> post upon cv. */
-class EffectOnUnification(
-  pre: Concretization, post: Concretization, cv: ComponentView){
+/** Object responsible for the unification of cv with trans.pre, suitable for
+  * calculating transitions induced by trans upon cv. */
+class EffectOnUnification(trans: Transition,  cv: ComponentView){
   require(!singleRef) // require(!newEffectOn)
 
   import Unification.CombineResult 
@@ -32,6 +31,7 @@ class EffectOnUnification(
 
   /* A few object variables, extracted directly from pre, post and cv, used in
    * several functions. */
+  private val pre = trans.pre; private val post = trans.post
   private val servers = pre.servers
   require(servers == cv.servers && servers.isNormalised)
   private val postServers = post.servers
@@ -239,14 +239,16 @@ class EffectOnUnification(
       sufficientUnif
     }
 
-    if(singleRef){
-      if(unifs.length == cpts.length && unifs.contains((0,0))) false
-// IMPROVE:  case below?
-      else // changedServers || changingUnif
-        if(changedServers) true // unifs.nonEmpty || !cv.containsDoneInduced(postServers)
-      else changingUnif
-    } // end of if(singleRef)
-    else if(changedServers)// {
+    if(trans.serverGetsNewId || changingUnif) true
+    else changedServers && cv.addDoneInduced(postServers)
+
+    // Profiler.count("isSufficientUnif "+res); res
+
+    // Note: it's important to perform the call to addDoneInduced only if the
+    // earlier tests gave false.
+
+/* old version
+    if(changedServers)// {
     //   if(changingUnif) true else cv.addDoneInduced(postServers, unifs)
     // }
       unifs.nonEmpty || cv.addDoneInduced(postServers)
@@ -255,6 +257,7 @@ class EffectOnUnification(
       // If there are two different ways of performing unification with a 
       // component that doesn't change state, this will find just one of them.
     else changingUnif
+ */
   }
 
   /** Create a bit map corresponding to an OtherArgMap and containing all
@@ -610,8 +613,8 @@ if(false){
 // ==================================================================
 
 object EffectOnUnification{
-  def combine(pre: Concretization, post: Concretization, cv: ComponentView) = 
-    new EffectOnUnification(pre, post, cv)()
+  def combine(trans: Transition, cv: ComponentView) = 
+    new EffectOnUnification(trans, cv)()
 
   /** A tuple in a remapping from cpts to preCpts.  Each tuple ((i1,j1),(i2,j2))
     * indicates that parameter j2 of cpts(i2) is mapped to match parameter j1

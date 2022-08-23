@@ -149,10 +149,13 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   @inline private def indexFor(ssIx: Int) = ssIx >> 6 // ssIx / 64
 
   /** Bit mask to extract the bit for a ServerState with index ssIx. */
-  @inline private def maskFor(ssIx: Int) = 1 << (ssIx & 63)
+  @inline private def maskFor(ssIx: Int) = 1L << (ssIx & 63)
 
   /** (With singleRef.) Have we previously stored postServers against this?  */
   def containsDoneInduced(postServers: ServerStates): Boolean = {
+    // if(ComponentView0.highlightMissing(this))
+    //   println(s"$this: containsDoneInduced($postServers); "+
+    //     postServers.index+"; "+indexFor(postServers.index))
     containsDoneInducedByIndex(postServers.index)
   }
 
@@ -169,6 +172,8 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * is the first such. */
   def addDoneInduced(postServers: ServerStates): Boolean = synchronized{
     val ssIx = postServers.index; val ix = indexFor(ssIx)
+    // if(ComponentView0.highlightMissing(this))
+    //   println(s"$this: addDoneInduced($postServers); $ssIx; $ix")
     if(ix >= doneInducedPostServersBM.length){
       // Extend doneInducedPostServersBM
       val newBM = new Array[Long](ix+1)
@@ -380,37 +385,44 @@ object ComponentView0{
   }
 
   /** Function used when debugging.  Should we highlight information about v?
-    * This is the view that is missing. */
-  def highlight(v: ReducedComponentView) = {
+    * 
+    * This is the view that is missing or the pre of the relevant transition. */
+  def highlight(v: ReducedComponentView) = 
+    highlightMissing(v) || highlightPre(v)
+
+
+  // [128(N0) || 130(N0) || 131() || 135(T0) || 141(T1) || _ || 1()] ||
+  // [7(N1,Null)]
+  def highlightMissing(v: ReducedComponentView) = {
     val princ = v.components(0)
-    highlightServers(v.servers) && highlightPrinc(princ) && {
-      val second = v.components(1);      // 16(N5,T3,N4,N2)
-      second.cs == 16 && second.ids.sameElements(Array(4,2,3,1))
-    }
+    highlightServers0(v.servers) &&
+        princ.cs == 7 && princ.ids(0) == 1 && princ.ids(1) == -1
   }
 
-  // The principal that is missing 44(T2,N5,N6)
-  def highlightPrinc(princ: State) = 
-    princ.cs == 44 && princ.ids.sameElements(Array(1,4,5))
+    // [128(N0) || 130(N0) || 131() || 135(T0) || 141(T1) || 143(T1,N1) || 1()] ||
+    // [94(T1,N1,Null,N0) || 14(N0,N2)
+    def highlightPre(v: ReducedComponentView) = {
+      val servers = v.servers; val princ = v.components(0)
+      highlightServers0(servers) && 
+      servers(5).cs == 143 && princ.cs == 94 && 
+        v.components(1).cs == 14 && v.components(1).ids(1) == 2
+    }
 
   /** Common terms in all the servers of views of interest. 
-    * [137(N1) || 140(T1) || 146(N1) || 147(Null) || 151() || _. */
+    * [128(N0) || 130(N0) || 131() || 135(T0) || 141(T1) || _. */
   def highlightServers0(serverStates: ServerStates) = {
     val servers = serverStates.servers
-// IMPROVE
-    false &&
-    servers(0).cs == 137 && servers(1).cs == 140 && servers(2).cs == 146 &&
-    servers(3).cs == 147 && servers(4).cs == 151 && 
-    servers(2).ids(0) == 0 && // 146(N1)
-    servers(3).ids(0) == -1  // 147(Null)
+    false && 
+    servers(0).cs == 128 && servers(1).cs == 130 && servers(1).ids(0) == 0 &&
+    servers(2).cs == 131 && servers(3).cs == 135 && servers(4).cs == 141 &&
+    servers(4).ids(0) == 1
   }
 
   /** The servers for the missing view. */
   def highlightServers(serverStates: ServerStates) = {
+    // [128(N0) || 130(N0) || 131() || 135(T0) || 141(T1) || 142() || 1()]
     val servers = serverStates.servers
-    highlightServers0(serverStates) &&  servers(5).cs == 154 &&
-    servers(5).ids(0) == 1 && servers(5).ids(1) == 2 && servers(5).ids(2) == 3
-    // 154(N2,N3,N4)
+    highlightServers0(serverStates) && servers(5).cs == 142
   }
 
 
