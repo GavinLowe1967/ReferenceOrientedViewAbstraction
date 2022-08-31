@@ -122,7 +122,7 @@ class Servers(
     val initStates: Array[State] = new Array[State](numServers)
     for(i <- 0 until numServers){
       val sName = serverNames(i)
-      print(s"Building serverTransMap for server $i: $sName")
+      print(s"Building server transitions for server $i: $sName")
       val oRenamingString = 
         if(usesRenaming) Some(s"second4_(${entry(i)})") else None
       val (init, map) = 

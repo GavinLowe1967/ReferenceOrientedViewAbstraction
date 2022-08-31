@@ -7,16 +7,15 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
   * of missingViews have been added, and all the obligations represented by
   * missingCommon have been satisfied. 
   * 
-  * This corresponds to transition pre -e-> post inducing
-  * cv == (pre.servers, newCpts) -> (post.servers, newCpts) == newView. */
+  * This corresponds to transition trans inducing
+  * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView. */
 // IMPROVE: can we store these in a more memory-efficient way?  Do we need
 // them all?
 class MissingInfo(
   val newView: ReducedComponentView, 
   private var missingViews: Array[ReducedComponentView], 
-  private var missingCommon: Array[MissingCommon],
-  val pre: Concretization, val oldCpts: Array[State], val cv: ComponentView,
-  val e: EventInt, val post: Concretization, val newCpts: Array[State]
+  private var missingCommon: Array[MissingCommon], trans: Transition,
+  val oldCpts: Array[State], val cv: ComponentView, val newCpts: Array[State]
 ){
   /* missingViews contains component views that are necessary to satisfy this
    * constraint: all must be added to the ViewSet.  This corresponds to
@@ -37,7 +36,7 @@ class MissingInfo(
    * arrays.  */
 
   /* Overview of main functions.
-   * updateMissingCommon     (called from EffectOnStore)
+   * updateMissingCommon     (called from EffectOnStore.comlpeteCandidateForMC)
    * |--(MissingCommon.)updateWithNewMatch
    * |--advanceMC
    *    |--(MissingCommon.)updateMissingViews
@@ -54,8 +53,21 @@ class MissingInfo(
    * setNotAdded, sanity1, sanityCheck, equals, hashCode, size
    */
 
-  /** For debugging. */
-  // private val highlight = ComponentView0.highlight(newView)
+  def pre = trans.pre
+  def post = trans.post
+  def e = trans.e
+
+  /** For debugging. oldCpts = [31(T1,N3,N2,N1) || 10(N3,Null,N2)] */
+  private val highlight = 
+    ComponentView0.highlight(newView) && Transition.highlight(trans) && {
+      val princ = oldCpts(0)
+      princ.cs == 31 && {
+        val second = oldCpts(1)
+        second.cs == 10 && second.ids.sameElements(Array(3,-1,2))
+      }
+    }
+
+  if(highlight) println(s"Created $this")
 
   require(missingCommon.forall(!_.done))
   require(missingViews.forall(_ != null))
@@ -71,7 +83,7 @@ class MissingInfo(
   assert(missingCommon.length <= 2, 
     "missingCommon.length = "+missingCommon.length)
   assert(missingViews.length <= 9, "missingViews.length = "+missingViews.length)
-  // FIXME: latter not true in general
+  // FIXME: latter not true in general.  I don't think the former is, either
 
   /* Initially we try to discharge the obligations represented by missingCommon.
    * mcIndex represents the next MissingCommon to consider; mcDone gives true
@@ -105,6 +117,7 @@ class MissingInfo(
     * registered, or null if all MissingCommon are done. */
   @inline private 
   def advanceMC(views: ViewSet): CptsBuffer = {
+    if(highlight) println("advanceMC")
     // Deal with case that all MissingCommon are done.  We also update
     // missingViews in case a prefix of them is done.
     @inline def allMCDone() = { rehashMC(); updateMissingViews(views); null }
@@ -165,15 +178,47 @@ class MissingInfo(
     * against in the store if not all MissingCommon are done. */
   def updateMissingCommon(cv: ComponentView, views: ViewSet)
       : CptsBuffer = synchronized{
-    val mc = missingCommon(mcIndex); assert(mc != null && mc.matches(cv))
-    val vb = mc.updateWithNewMatch(cv, views)
-    if(vb == null){
-      // Advance to the next MissingCommon (if any), and return views to
-      // register against
-      assert(mc.done); mcNull(mcIndex); advanceMC(views)
+    if(highlight) println(s"\nupdateMissingCommon($cv)")
+    if(false){ 
+      // Note: this tries to apply the match only to the first MissingCommon,
+      // which I think is wrong.
+      val mc = missingCommon(mcIndex); assert(mc != null && mc.matches(cv))
+      val vb = mc.updateWithNewMatch(cv, views)
+      if(vb == null){
+        // Advance to the next MissingCommon (if any), and return views to
+        // register against
+        assert(mc.done); mcNull(mcIndex); advanceMC(views)
+      }
+      else vb
     }
-    else vb
+    else{
+      var vb: CptsBuffer = null // holds result
+      /* Add vb1 to vb. */
+      @inline def addTovb(vb1: CptsBuffer) = 
+        if(vb == null) vb = vb1 else vb ++= vb1
+      for(index <- mcIndex until missingCommon.length){
+        val mc = missingCommon(index) 
+        if(mc != null){
+          assert(mc.matches(cv), s"mc = $mc; cv = $cv")
+          val vb1 = mc.updateWithNewMatch(cv, views)
+          if(vb1 == null){
+            assert(mc.done); mcNull(index)
+            if(index == mcIndex){
+              // Advance to the next MissingCommon (if any), and return views to
+              // register against
+              val vb2 = advanceMC(views); if(vb2 != null) addTovb(vb2)
+            }
+            else rehashMC()
+          } // end of if vb1 == null
+          else addTovb(vb1)
+        }
+      } // end of for
+      vb
+    }
   }
+
+  // Do above for each index in mcIndex until missingCommon.length.  Call
+  // advanceMC only for index = mcIndex.  Concatenate the view buffers.
 
   /** Update the missing views in the MissingCommon fields of this.
     * @return the views against which this should now be registered, or
@@ -181,9 +226,12 @@ class MissingInfo(
     * missingCommon are done, also update missingViews. */ 
   def updateMissingViewsOfMissingCommon(views: ViewSet)
       : CptsBuffer = synchronized{
+    if(highlight) println("updateMissingViewsOfMissingCommon")
     val mc = missingCommon(mcIndex)
     val vb: CptsBuffer = mc.updateMissingViews(views)
-    if(vb == null){ assert(mc.done); mcNull(mcIndex); advanceMC(views) }
+    if(vb == null){ 
+      assert(mc.done); mcNull(mcIndex); advanceMC(views) 
+    }
     else vb
   }
 
@@ -263,10 +311,11 @@ class MissingInfo(
   }
 
   override def toString =
-    s"MissingInfo(newView = $newView,\n"+
-      s"missingViews = ${missingViews.mkString("<",",",">")},\n"+
-      "missingCommon = "+missingCommon.mkString("<",",\n  ",">")+")\n"+
-      s"notAdded = $notAdded; mcDone = $mcDone; done = $done"
+    s"MissingInfo(newView = $newView,\n  cv = $cv,\n  oldCpts = "+
+      StateArray.show(oldCpts)+
+      s"\n  missingViews = ${missingViews.mkString("<",",",">")},\n"+
+      "  missingCommon = "+missingCommon.mkString("<",",\n  ",">")+")\n"+
+      s"  notAdded = $notAdded; mcDone = $mcDone; done = $done"
 
   /** Equality: same newView, missingViews and missingCommon (up to equality,
     * ignoring nulls). */

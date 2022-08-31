@@ -12,9 +12,9 @@ object VA{
   var checker: Checker = null
 
   /** Run a check.  Called by ScalaInstrumentation. */
-  def check(fname: String, bound: Int, singleRefX: Boolean)
+  def check(fname: String, bound: Int, singleRefX: Boolean, numWorkersX: Int)
       : Unit = {
-    singleRef = singleRefX; // newEffectOn = newEffectOnX
+    singleRef = singleRefX; numWorkers = numWorkersX
     system = new SystemP.System(fname); println("Created system")
     // Create and run the checker
     checker = new Checker(system, numWorkers); checker(bound = bound)
@@ -161,6 +161,7 @@ object VA{
       case "--useOldViewSet" => UseNewViewSet = false; i += 1
       case "--doSanityCheck" => doSanityCheck = true; i += 1
       case "--reportEffectOn" => reportEffectOn = true; i += 1
+      // case "--swapEndOfPly" => swappedEndOfPly = true; i += 1
       // case "--newEffectOn" => newEffectOn = true; i += 1
       case "--memoryProfile" => memoryProfile = true; i += 1
       case "--numWorkers" => numWorkers = args(i+1).toInt; i += 2

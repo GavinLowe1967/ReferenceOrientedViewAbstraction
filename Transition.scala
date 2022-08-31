@@ -219,17 +219,32 @@ class Transition(
 
 
 object Transition{
+  /* Functions used when debugging, to highlight the transition that should
+   * induce the missing view. */
+
+  /** The pre-state servers of the relevant transition. 
+    * [107(N0) || 109(N1) || 110() || 114(T0) || 119() || 1()]. */
+  def highlightPreServers(preServers: ServerStates) = 
+    ComponentView0.highlightServers0(preServers) && preServers(4).cs == 119
+
+  /** The pre-state components of the relevant transition
+    * [75(T0,N0,N1,N2) || 14(N0,N1,Null)] */
+  def highlightPreCpts(cpts: Array[State]) = {
+    val princ = cpts(0)
+    princ.cs == 75 && princ.ids.sameElements(Array(0,0,1,2)) && {
+      val second = cpts(1)
+      second.cs == 14 && second.ids.sameElements(Array(0,1,-1))
+    }
+  }
 
   /** Function used when debugging.  The transition that should induce the 
     * missing view. 
-    * [137(N1) || 140(T1) || 146(N1) || 147(Null) || 151() || 152()] ||
-    *   [59(T2,N2,N3,N4) || 14(N4,T2,N2,N3)] -->
-    * [137(N1) || 140(T1) || 146(N1) || 147(Null) || 151() || 154(N4,N2,N3)] ||
-    *   [60(T2,N2,N3,N4) || 14(N4,T2,N3,N3)]*/
+    * [107(N0) || 109(N1) || 110() || 114(T0) || 119() || 1()] ||
+    *    [75(T0,N0,N1,N2) || 14(N0,N1,Null)] -->
+    * [107(N0) || 109(N1) || 110() || 114(T0) || 121(T0,N0,N1) || 1()] ||
+    *    [77(T0,N0,N1,N2) || 14(N0,N2,Null)]*/
   def highlight(trans: Transition) = {
-    val pre = trans.pre; val preServers = trans.preServers
-    ComponentView0.highlightServers0(preServers) && 
-      preServers(5).cs == 143 && pre.components(0).cs == 94 &&
-      pre.components(1).cs == 14 && pre.components(1).ids(1) == 2
+    val pre = trans.pre
+    highlightPreServers(trans.preServers) && highlightPreCpts(pre.components)
   }
 }

@@ -18,13 +18,12 @@ import scala.collection.mutable.{ArrayBuffer,HashMap,HashSet}
 trait EffectOnStore{
 
   /** Add MissingInfo(nv, missing, missingCommon) to the store. 
-    * This corresponds to transition pre -e-> post inducing
+    * This corresponds to transition trans inducing
     * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView.*/
   def add(missing: List[ReducedComponentView], 
     missingCommon: List[MissingCommon],
-    nv: ComponentView,
-    pre: Concretization, oldCpts: Array[State], cv: ComponentView,
-    e: EventInt, post: Concretization, newCpts: Array[State]): Unit
+    nv: ComponentView, trans: Transition, oldCpts: Array[State], 
+    cv: ComponentView, newCpts: Array[State]): Unit
 
   /** Try to complete values in the store, based on the addition of cv, and with
     * views as the ViewSet.  Return the Views that can now be added.  */
@@ -33,7 +32,13 @@ trait EffectOnStore{
   /** Sanity check performed at the end of a run. */
   def sanityCheck(views: ViewSet): Unit
 
-  // def size: (Int, Int)
+  /** Purge values from the stores that are not needed. */
+  def purge(views: ViewSet): Unit
+
+  def purgeMCNotDone(views: ViewSet) : Unit
+
+  /** Prepare for the next purge. */
+  def prepareForPurge: Unit
 
   def report: Unit
 
@@ -105,9 +110,6 @@ class SimpleEffectOnStore extends EffectOnStore{
     * MissingInfo in the abstract set, and for each
     * MissingCommon(servers,cpts,_,_) in mi.missingCommon,
     * candidateForMCStore(servers,cpts(0)) contains mi. */
-// IMPROVE: include the pid in the domain of the mapping.
-// IMPROVE: store only against the first MissingCommon.  This would require
-// MissingInfo.advanceMC calling updateWithNewMatch on the new MissingCommon.
   private val candidateForMCStore = 
     new ShardedHashMap[(ServerStates, State), MissingInfoSet]
 
@@ -131,18 +133,15 @@ class SimpleEffectOnStore extends EffectOnStore{
     theStore: Store, cv: ReducedComponentView, missingInfo: MissingInfo)
   = {
     val mis = theStore.getOrElseUpdate(cv, new MissingInfoSet) 
-    if(! mis.synchronized{ mis.add(missingInfo) }){
-      missingInfo.setNotAdded; //missingInfo.log(NotStored(storeName(theStore)))
-    } 
+    if(! mis.synchronized{ mis.add(missingInfo) }) missingInfo.setNotAdded
   }
 
   /** Add MissingInfo(nv, missing, missingCommon) to the stores. 
-    * This corresponds to transition pre -e-> post inducing
+    * This corresponds to transition trans inducing
     * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView. */
   def add(missing: List[ReducedComponentView], 
-    missingCommon: List[MissingCommon], nv: ComponentView,
-    pre: Concretization, oldCpts: Array[State], cv: ComponentView,
-    e: EventInt, post: Concretization, newCpts: Array[State])
+    missingCommon: List[MissingCommon], nv: ComponentView, trans: Transition, 
+    oldCpts: Array[State], cv: ComponentView, newCpts: Array[State])
       : Unit = {
     Profiler.count("EffectOnStore.add")
     // I think the following holds regardless of concurrent threads: each mc
@@ -152,33 +151,26 @@ class SimpleEffectOnStore extends EffectOnStore{
     val mcArray = missingCommon.toArray
     val nv1 = new ReducedComponentView(nv.servers, nv.components)
     val missingInfo = new MissingInfo(nv1, missing.toArray, mcArray, 
-      pre, oldCpts, cv, e, post, newCpts)
+      trans, oldCpts, cv, newCpts)
     if(missingCommon.isEmpty){
-      assert(missing.nonEmpty)
-      // missingInfo.log(McDoneStore(missingInfo.missingHead))
-      missingInfo.transferred = true
+      assert(missing.nonEmpty); missingInfo.transferred = true
       addToStore(mcDoneStore, missingInfo.missingHead, missingInfo)
     }
     else{
-      val mc0 = mcArray(0)
+      val mc0 = mcArray(0); val princ1 = mc0.cpts1(0); val servers1 = mc0.servers
       // Add entries to mcMissingCandidates against the first MissingCommon.
-      // Note: mcArray may be in a different order from missingCommon.
       for(cpts <- mc0.missingHeads){ 
-        val cv = new ReducedComponentView(mc0.servers, cpts)
-        // missingInfo.log(McNotDoneStore(cv))
+        val cv = new ReducedComponentView(servers1, cpts)
         addToStore(mcNotDoneStore, cv, missingInfo)
       }
-      // Add entries to candidateForMCStore.  IMPROVE: register just against
-      // mcArray(0)
-      for(mc <- missingCommon){
-        val princ1 = mc.cpts1(0); val key = (mc.servers, princ1)
-        val mis = candidateForMCStore.getOrElseUpdate(key, new MissingInfoSet) 
-        // missingInfo.log(CandidateForMC(mc.servers,princ1))
-        if(! mis.synchronized{ mis.add(missingInfo) }){
-          missingInfo.setNotAdded; 
-          // missingInfo.log(NotStored("candidateForMCStore -- add"))
-        }
-      }
+      // Add entries to candidateForMCStore.  All entries in missingCommon
+      // correspond to the same key in candidateForMCStore...
+      if(missingCommon.length > 1) for(mc <- missingCommon.tail)
+        assert(mc.servers == servers1 && mc.cpts1(0) == princ1)
+      // ... so it's enough to store against the key for mc0
+      val key = (servers1, princ1)
+      val mis = candidateForMCStore.getOrElseUpdate(key, new MissingInfoSet)
+      if(! mis.synchronized{ mis.add(missingInfo) }) missingInfo.setNotAdded
     }
   }
 
@@ -206,9 +198,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     require(mi.mcDone); require(mi.missingViewsUpdated(views))
     if(mi.done) maybeAdd(mi, buff)
     else{
-      // mi.log(McDoneStore(mi.missingHead))
-      mi.transferred = true
-      addToStore(mcDoneStore, mi.missingHead, mi)
+      mi.transferred = true; addToStore(mcDoneStore, mi.missingHead, mi)
       // IMPROVE: remove elsewhere
     }
   }
@@ -239,14 +229,9 @@ class SimpleEffectOnStore extends EffectOnStore{
                 // Register mi against each view in vb, and retain
                 for(cpts <- vb){
                   val rcv = new ReducedComponentView(cv.servers, cpts)
-                  // assert(!views.contains(cv1))
-                  // mi.log(McNotDoneStore(rcv))
                   addToStore(mcNotDoneStore, rcv, mi)
                 }
-                // mi.log(CandidateForMC(cv.servers, cv.principal))
-                if(!newMis.add(mi)){
-                  mi.setNotAdded; mi.log(NotStored("candidateForMCStore"))
-                }
+                if(!newMis.add(mi)) mi.setNotAdded
               }
             }
           } // end of mi.synchronized / for loop
@@ -306,10 +291,7 @@ class SimpleEffectOnStore extends EffectOnStore{
               else{
                 mi.updateMissingViewsBy(cv, views)
                 if(mi.done) maybeAdd(mi, result)
-                else{
-                  // mi.log(McDoneStore(mi.missingHead))
-                  addToStore(mcDoneStore, mi.missingHead, mi)
-                }
+                else addToStore(mcDoneStore, mi.missingHead, mi)
               }
             }
           } // end of mi.synchronized, for loop
@@ -343,6 +325,68 @@ class SimpleEffectOnStore extends EffectOnStore{
     result
   }
 
+  // ====================== Purging
+
+  /** Object to produce iterators over the shards of candidateForMCStore. */
+  private var candidateForMCStoreShardIterator: 
+      ShardedHashMap.ShardIteratorProducerT[
+    (ServerStates, State), MissingInfoSet] = null
+
+  private var mcNotDoneShardIterator: 
+      ShardedHashMap.ShardIteratorProducerT[
+    ReducedComponentView, MissingInfoSet] = null
+
+  /** Prepare for the next calls to purge. */
+  def prepareForPurge = {
+    candidateForMCStoreShardIterator = candidateForMCStore.shardIteratorProducer
+    mcNotDoneShardIterator = mcNotDoneStore.shardIteratorProducer
+  }
+
+  /** Attempt to purge entries from the stores that are no longer needed. */
+  def purge(views: ViewSet) = {
+    // Purge from candidateForMCStore
+    var shardIterator = candidateForMCStoreShardIterator.get
+    while(shardIterator != null){
+      while(shardIterator.hasNext){
+        val (key,mis) = shardIterator.next(); // assert(mis != null)
+        val misIter = mis.iterator
+        val newMis = new MissingInfoSet; var changed = false
+        while(misIter.hasNext){
+          val mi = misIter.next()
+          if(!mi.mcDone && !views.contains(mi.newView)) newMis += mi
+          else{ Profiler.count("candidateForMCStore.purge"); changed = true }
+        } // end of iteration over misIter
+        if(changed){
+          if(newMis.nonEmpty) candidateForMCStore.replace(key, newMis)
+          else candidateForMCStore.remove(key)
+        }
+      } // end of iteration over shardIterator
+      shardIterator = candidateForMCStoreShardIterator.get
+    } // end of outer iteration
+  }
+
+  /** Purge from mcNotDoneStore. */
+  def purgeMCNotDone(views: ViewSet) = {
+    var shardIterator = mcNotDoneShardIterator.get
+    while(shardIterator != null){
+      while(shardIterator.hasNext){
+        val (v, mis) = shardIterator.next()
+        val newMis = new MissingInfoSet; var changed = false
+        for(mi <- mis){
+          if(!mi.mcDone && !views.contains(mi.newView)) newMis += mi
+          else{ Profiler.count("mcNotDone.purge"); changed = true }
+        }
+        if(changed){
+          if(newMis.nonEmpty) mcNotDoneStore.replace(v,newMis)
+          else mcNotDoneStore.remove(v)
+        }
+      } // end of iteration over shardIterator
+      shardIterator = mcNotDoneShardIterator.get
+    }
+  }
+
+  // ====================== sanity check and reporting
+
   /** Perform sanity check.  Every stored MissingInfo should be up to date,
     * unless it has maybe been superseded by an equivalent object.  */
   def sanityCheck(views: ViewSet) = {
@@ -359,10 +403,7 @@ class SimpleEffectOnStore extends EffectOnStore{
       catch{ 
         case e: java.lang.AssertionError => {
           e.printStackTrace
-          println(s"\ncv = $cv. "+ // views.contains(cv)+"; "+
-            views.contains(mi.newView))
-          println(s"\nmi = $mi")
-          // println("log = "+mi.theLog.reverse.mkString("\n"))
+          println(s"\ncv = $cv. "+views.contains(mi.newView)+s"\nmi = $mi")
           sys.exit()
         }
       }
@@ -416,12 +457,8 @@ class SimpleEffectOnStore extends EffectOnStore{
     var iter = mcNotDoneStore.valuesIterator; var count = 0; val Max = 3
     while(iter.hasNext && count < Max){
       val mis: MissingInfoSet = iter.next(); val miIter = mis.iterator
-      //println(mis.size)
       while(miIter.hasNext && count < Max){
         val mi: MissingInfo = miIter.next();
-        // for(mc <- mi.missingCommon; if mc != null){
-        //   traverse("missingCommon", mc, maxPrint = 1); println; count += 1
-        // }
         traverse("missingInfo", mi, maxPrint = 1); count += 1; println()
       }
     }

@@ -242,7 +242,7 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
    * having width widths(s), to store states.  Inv: widths(s) is a
    * power of 2, widths(s) <= MaxWidth. */
 
-  /** The number of entries in each shard. */
+  /** The number of spaces in each shard. */
   private val widths: Array[Int] = Array.fill(shards)(initLength)
 
   /** Array holding the elements of the set. */
@@ -287,9 +287,10 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
       if(counts(sh) >= thresholds(sh)) resize(sh)
       // Find empty slot or slot containing x
       val i = find(sh, x, h)
-      if(hashes(sh)(i) == h){ /* assert(elements(sh)(i) == x); */  false }
+// IMPROVE: remove assertions
+      if(hashes(sh)(i) == h){ assert(elements(sh)(i) == x);   false }
       else{
-        // assert(hashes(sh)(i) == 0 && elements(sh)(i) == null)
+        assert(hashes(sh)(i) == 0 && elements(sh)(i) == null)
         hashes(sh)(i) = h; elements(sh)(i) = x; counts(sh) += 1; true
       }
     }
@@ -391,7 +392,7 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
       if(sh < shards){ val iter = shardIterator(sh); sh += 1; iter }
       else null
     }
-  }
+  } // end of ShardIteratorProducer
 
   /** An object that produces Iterator[A]s, each over the next shard. */
   def shardIteratorProducer = new ShardIteratorProducer
@@ -401,7 +402,7 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
     val h = hashOf(x); val sh = shardFor(h)
     locks(sh).synchronized{
       val i = find(sh, x, h)
-      // assert(elements(sh)(i) == x)
+      assert(elements(sh)(i) == x) // IMPROVE
       elements(sh)(i)
     }
   }
@@ -414,9 +415,10 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
       if(counts(sh) >= thresholds(sh)) resize(sh)
       val i = find(sh, x, h); val oldSt = elements(sh)(i)
       if(oldSt == null){
+        assert(hashes(sh)(i) == 0 && elements(sh)(i) == null)
         hashes(sh)(i) = h; elements(sh)(i) = x; counts(sh) += 1; x
       }
-      else{ /* assert(oldSt == x); */ oldSt }
+      else{ assert(oldSt == x);  oldSt } // IMPROVE
     }
   }
 }

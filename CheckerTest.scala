@@ -8,7 +8,7 @@ class CheckerTest(system: SystemP.System, numWorkers: Int)
 
   def reset() = { 
     val (sav, initViews) = system.initViews; sysAbsViews = sav
-    nextNewViews = new NewViewSet //BasicHashSet[ComponentView] 
+    nextNewViews = new NextNewViewSet //BasicHashSet[ComponentView] 
   }
 
   reset()

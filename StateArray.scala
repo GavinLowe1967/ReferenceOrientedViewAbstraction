@@ -280,7 +280,7 @@ object StateArray{
       val (t,id) = cpts(ix).componentProcessIdentity
       if(id >= indexMap(t).length){
         println(s"Not enough identities in script for "+show(cpts))
-        sys.exit
+        sys.exit()
       }
       // assert(id < indexMap(t).length, 
       //   s"Not enough identities in script for "+show(cpts)) // IMPROVE

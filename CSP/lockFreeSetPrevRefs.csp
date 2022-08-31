@@ -28,19 +28,22 @@ greater(x, y) = (x == C and y != C) or (x == B and y == A)
 
 -- Identities of nodes
 datatype NodeIDType = 
-  Null | N0 | N1 | N2   | N3    | N4 | N5 | N6  | N7 | N8
+  Null | N0 | N1 | N2   | N3    | N4  | N5 | N6  | N7  | N8 --| N9
 
 NodeID = diff(NodeIDType, {Null}) -- real nodes
 
 -- Thread identities
-datatype ThreadIDType = Constr | T0 | T1      | T2 | T3
+datatype ThreadIDType = Constr | T0 | T1      | T2  --| T3
+
+-- For bound 27, 9 nodes and 3 threads are enough
+-- For bound 23, 8 nodes and 3 threads are enough
 
 ThreadID = diff(ThreadIDType, {Constr}) -- real threads, excluding constructor
 
 ---------------------- Nodes
 
 -- initialise node to hold value and not deleted
-channel initNode : ThreadIDType . NodeID . Data . NodeIDType
+channel initNode : ThreadIDType . NodeID . Data . NodeIDType . NodeIDType
 
 -- Signals on getValue events.  ContainsFalseValue.v indicates that
 -- contains(v) gives false, because the traversal finds a value v1 > v.
@@ -131,35 +134,49 @@ channel getValueR : NodeID . Data
 
 channel getNextR : NodeID . NodeIDType
 
+channel setPrev: ThreadID . NodeID . NodeIDType
+
+-- get the prev reference.  I think these are necessary to get the prev field
+-- in the state machines.  These are blocked by the POR.  
+-- FIXME: And currently blocked in the model
+channel getPrev: NodeID . NodeIDType
+
 channel getR : NodeID . NodeIDType . Bool -- GetInfo
 
 channel CASR : NodeID . NodeIDType . {false} . NodeIDType . Bool . Bool
 
 FreeNodeR(me) = 
-  initNode?_!me?value?next -> joined?_!me -> NodeR(me, value, next, false, 0)
+  initNode?_!me?value?next?prev -> joined?_!me -> 
+  NodeR(me, value, next, prev, false, 0)
 
--- A node process, identity me, holding datum value and next pointer next, and
--- deleted flag deleted.  The decoup parameter indicates whether: (0) the node
--- thinks it has been not decoupled from the list; (1) the node thinks it has
--- been decoupled from the list before tracking by the watchdog started; (2)
--- the node thinks it has been decoupled from the list after tracking by the
+-- A node process, identity me, holding datum value, next pointer next, prev
+-- pointer prev, and deleted flag deleted.  The prev reference is used only to
+-- support the view abstraction, and otherwise shouldn't affect the behaviour
+-- of the model.  The decoup parameter indicates whether: (0) the node thinks
+-- it has been not decoupled from the list; (1) the node thinks it has been
+-- decoupled from the list before tracking by the watchdog started; (2) the
+-- node thinks it has been decoupled from the list after tracking by the
 -- watchdog started.
-NodeR :: (NodeIDType, Data, NodeIDType, Bool, Int) -> Proc
-NodeR(me, value, next, deleted, decoup) = 
-  getValueR.me.value -> NodeR(me, value, next, deleted, decoup)
+NodeR :: (NodeIDType, Data, NodeIDType, NodeIDType, Bool, Int) -> Proc
+NodeR(me, value, next, prev, deleted, decoup) = 
+  getValueR.me.value -> NodeR(me, value, next, prev, deleted, decoup)
   []
-  getNextR.me.next -> NodeR(me, value, next, deleted, decoup)
+  getNextR.me.next -> NodeR(me, value, next, prev, deleted, decoup)
   []
-  getR.me.next.deleted ->  NodeR(me, value, next, deleted, decoup)
+  setPrev?t!me?newPrev -> NodeR(me, value, next, newPrev, deleted, decoup)
+  []
+  false & getPrev!me!prev -> NodeR(me, value, next, prev, deleted, decoup)
+  []
+  getR.me.next.deleted ->  NodeR(me, value, next, prev, deleted, decoup)
   []
   CASR.me?en?ed?nn?nd!(en==next and ed==deleted) -> (
     let succ = en==next and ed==deleted within
-    NodeR(me, value, if succ then nn else next, 
+    NodeR(me, value, if succ then nn else next, prev,
           if succ then nd else deleted, decoup)
   )
   []
   decoupled?_!me?after!value?_ -> 
-    NodeR(me, value, next, deleted, 
+    NodeR(me, value, next, prev, deleted, 
     if value == A then (if after then 1 else 2) else 0)
 
 -- All events of thread t that a CASR gets renamed to.  Either all
@@ -187,9 +204,11 @@ NodeRename(me) = Union({
 })
 
 alphaNode(me) = Union({
-  {| getValue.t.me, getNext.t.me, get.t.me, decoupled.t.me | t <- ThreadID |},
+  {| getValue.t.me, getNext.t.me, get.t.me, decoupled.t.me, setPrev.t.me | 
+       t <- ThreadID |},
   { e | t <- ThreadID, e <- {| CAS.t.me |} }, -- , realCAS(e) 
-  {| initNode.t.me, joined.t.me | t <- ThreadIDType |} 
+  {| initNode.t.me, joined.t.me | t <- ThreadIDType |},
+  {| getPrev.me |}
 })
 
 -- Note: the attempts to reduce the number of CAS events in alphaNode doesn't
@@ -201,7 +220,8 @@ alphaNodeChunked(me) = makeChunks_(seq(alphaNode(me)), 1000)
 
 NodeRenameSeq(me) = makeChunks_(seq(NodeRename(me)), 520)
 
-NodeRenameMap = mapFromList(<(n, NodeRenameSeq(n)) | n <- seq(NodeID)>)
+-- NodeRenameMap = mapFromList(<(n, NodeRenameSeq(n)) | n <- seq(NodeID)>)
+NodeRenameMap = mapFromList(<(n, seq(NodeRename(n))) | n <- seq(NodeID)>)
 
 NodeRenamed(me) = FreeNodeR(me)[[ e1 <- e2 | (e1, e2) <- NodeRename(me) ]]
 
@@ -218,8 +238,8 @@ channel getHead: ThreadID . NodeID . Data
 -- node.  It is blocked by the watchdog.
 channel dummy: ThreadID . Data . NodeIDType
 
--- includeDelete = true
-includeDelete = false
+includeDelete = true
+-- includeDelete = false
 
 -- Main thread process
 Thread(me) = 
@@ -284,7 +304,11 @@ AddSearch(me, v, pred, curr) =
 AddSnip(me, v, pred, curr, succ) =
   CAS.me.pred.curr.false.succ.false?ok!
     (if ok then CASDecouple else CASNoSignal) -> 
-  if ok then AddSearch1(me, v, pred, curr, succ)
+  if ok then (
+    if succ != Null then 
+      setPrev.me.succ.pred -> AddSearch1(me, v, pred, curr, succ) 
+    else AddSearch1(me, v, pred, curr, succ)
+  )
   else Add(me,v)  -- CAS failed; restart. 
 
 -- Signal to node it is decoupled, return token and continue searching.
@@ -311,10 +335,13 @@ AddTest(me, v, pred, curr, succ) =
 -- try to add between pred and curr.  v1 is the datum in curr, or is C is curr
 -- = Null.
 AddAdd(me, v, pred, curr, v1) =
-  initNode.me?new!v.curr -> 
+  initNode.me?new!v.curr!pred -> 
   CAS.me.pred.curr.false.new.false?b!(if b then AddLP.v else CASNoSignal) 
     -> -- LP if successful
-  if b then AddAddSucc(me, v, new, v1, curr)
+  if b then (
+    if curr != Null then setPrev.me.curr.new -> AddAddSucc(me, v, new, v1, curr)
+    else AddAddSucc(me, v, new, v1, curr)
+  )
   else Add(me, v)  -- CAS failed; restart. 
 
 -- Adding of new holding v succeeded.  next is the node after new, which holds
@@ -352,6 +379,7 @@ DelSnip(me, v, pred, curr, succ) =
     if succ==Null then 
       decoupled.me.curr?after?v1?sig!DecoupleDelFail.v -> Thread(me)
     else 
+      setPrev.me.succ.curr -> 
       decoupled.me.curr?after?v1?sig!NoDecoupleDelFailSignal -> 
       DelSearch(me, v, pred, succ) 
   )
@@ -394,7 +422,9 @@ DelDel(me, v, pred, curr, succ) =
 DelDecouple(me, v, pred, curr, succ) = 
   CAS.me.pred.curr.false.succ.false?decoup!
     (if decoup then CASDecouple else CASNoSignal) ->  -- unlink
-  if decoup then DelDecoupleDone(me, v, curr) 
+  if decoup then 
+    if succ != Null then setPrev.me.succ.pred -> DelDecoupleDone(me, v, curr) 
+    else DelDecoupleDone(me, v, curr) 
   else Thread(me) -- CAS failed; restart
 
 -- Signal to node it is decoupled; and to watchdog that the deletion failed.
@@ -402,7 +432,7 @@ DelDecoupleDone(me, v, curr) =
   decoupled.me.curr?after?v1?sig!NoDecoupleDelFailSignal -> Thread(me)
 
 alphaThread(me) = Union({
-  {| getHead.me, initNode.me, getValue.me, get.me, getNext.me,
+  {| getHead.me, initNode.me, getValue.me, get.me, getNext.me, setPrev.me,
      decoupled.me, joined.me, dummy.me |},
   { e | e <- {| CAS.me |}, realCAS(e) }
 })
@@ -597,7 +627,8 @@ alphaWD = Union({
 
 -------- The constructor.
 
-Constructor = initNode.Constr?n!A.Null -> joined.Constr.n -> initHead.n -> STOP
+Constructor = 
+  initNode.Constr?n!A.Null.Null -> joined.Constr.n -> initHead.n -> STOP
 
 alphaConstr = {| initNode.Constr, joined.Constr, initHead |} 
 
@@ -613,17 +644,18 @@ channel CASPORAdd: ThreadID . NodeID . Bool
 
 -- Event that gets renamed to a decoupling CAS.  PORSnip.t.p.n represents t
 -- removing node n, which was after p.
-channel PORSnip: ThreadID . NodeID . NodeID 
+channel PORSnip: ThreadID . NodeID . NodeID .Bool
 
 POR = 
   -- Ensure initialisation of node, CAS and joining are atomic
-  initNode?t:ThreadID?new?_?_ -> CASPORAdd.t.new?b ->
-    (if b then PORJ(t, new) else POR)
+  initNode?t:ThreadID?new?_?next?_ -> CASPORAdd.t.new?b ->
+    (if b then 
+       (if next!=Null then setPrev.t.next.new -> PORJ(t, new) else PORJ(t, new))
+    else POR)
   []
   -- Ensure decoupling CAS and decoupled event are atomic
-  PORSnip?t?p?n -> 
-    decoupled.t.n?_?v1!(if v1 == A then DecoupleAAfter.p else Decouple)?_ -> 
-    POR
+  PORSnip?t?p?n?isNull -> 
+    (if isNull then PORD(t,p,n) else setPrev.t?_!p -> PORD(t,p,n))
   []
   -- Ensure a getNext with a GetNextAtomic signal and the subsequent getValue
   -- are atomic
@@ -638,6 +670,10 @@ POR =
 
 -- Force a joined event next
 PORJ(t, new) = joined.t.new -> POR
+
+PORD(t, p, n) = 
+    decoupled.t.n?_?v1!(if v1 == A then DecoupleAAfter.p else Decouple)?_ -> 
+    POR
 
 -- CAS events that aren't decouples
 CASNonDecouples = { e | e <- RealCAS, notDecouple(e) }
@@ -661,7 +697,7 @@ PORRename = Union({
   { (CASPORAdd.t.new.b, CAS.t.prev.n.false.new.false.b.sig) |
       t <- ThreadID, new <- NodeID, b <- Bool, prev <- NodeID, n <- NodeIDType, 
       sig <- if b then {|AddLP|} else {CASNoSignal} }, 
-  { (PORSnip.t.p.n, CAS.t.p.n.false.s.false.true.CASDecouple) |
+  { (PORSnip.t.p.n.(s==Null), CAS.t.p.n.false.s.false.true.CASDecouple) |
       t <- ThreadID, p <- NodeID, n <- NodeID, s <- NodeIDType }
 })
 
@@ -669,7 +705,7 @@ PORRenameChunked = makeChunks_(seq(PORRename), 1000)
 
 alphaPOR = Union({ 
   RealCAS,
-  {| get, getNext, getHead, decoupled, getValue |},
+  {| get, getNext, getHead, decoupled, getValue, getPrev, setPrev |},
   {| initNode.t, joined.t | t <- ThreadID |}
 })
 
@@ -756,10 +792,11 @@ ServerSet =
     (LastATracker, <seq(LastATrackerRename)>, <seq(alphaLastATracker)>, false),
     (BNodeTracker, <>, <seq(alphaBNodeTracker)>, false),
   -- Watchdog
-    --(Watchdog1, <seq(WDRename)>, <seq(alphaWD)>, false),
-    (Watchdog1, chunkedWDRename, chunkedAlphaWD, false),
+    (Watchdog1, <seq(WDRename)>, <seq(alphaWD)>, false),
+    -- (Watchdog1, chunkedWDRename, chunkedAlphaWD, false),
   -- POR  and constructor  
-    (POR, PORRenameChunked, alphaPORChunked, false),
+    (POR, <seq(PORRename)>, <seq(alphaPOR)>, false),
+   -- (POR, PORRenameChunked, alphaPORChunked, false),
     (Constructor, <>, <seq(alphaConstr)>, true)
   > 
 
@@ -771,7 +808,7 @@ Servers =
 
 Components =
   let sync = union(   -- synchronisation set
-        {| getValue, getNext, get, CAS, decoupled |},
+        {| getValue, getNext, get, CAS, decoupled, setPrev |},
         {| initNode.t, joined.t | t <- ThreadID |}
       )
   within AllNodes [| sync |] AllThreads

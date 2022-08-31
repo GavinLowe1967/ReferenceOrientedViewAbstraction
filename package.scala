@@ -197,6 +197,10 @@ package object ViewAbstraction{
   /** Do we report the size of the EffectOnStore? */
   var reportEffectOn = false
 
+  /** In Checker.endOfPly, do we swap the order of the "views" and "transitions
+    * stages?   Used in debugging, 2022/08/29. */
+  // var swappedEndOfPly = false
+
   /** Are we using the optimisation with
     * ComponentView0.doneInducedPostServersRemaps?  This seems to give a
     * marginal advantage. */

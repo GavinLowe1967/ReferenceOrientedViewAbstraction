@@ -21,16 +21,21 @@ object MyStateMap{
   @inline 
   def apply(family: Int, cs: ControlState, ids: Array[Identity]): State =
     stateStore.getOrAdd(family, cs, ids) 
-    //synchronized{ stateStore.getOrAdd(family, cs, ids) }
+  // synchronized{ stateStore.getOrAdd(family, cs, ids) }
 
   /** Replace the initial StateMap with a Trie-based one.  */
-  def renewStateStore = {
+  def renewStateStore: Unit = {
+    // return
     print("Creating Trie-based StateMap...")
     val it = stateStore.asInstanceOf[InitialisationStateHashMap].iterator
     // Entry i in it will receive index i+1
     val tsm = new MyTrieStateMap(State.numCS, State.minCS)
     var i = 1 // IMPROVE: remove assertions
-    for(st <- it){ tsm.add(st); assert(tsm.get(i) == st, i); i += 1  }
+    for(st <- it){ 
+      tsm.add(st); assert(tsm.get(i) == st, i); i += 1
+      // Initialise information about included parameters in st
+      st.initIncludedParams 
+    }
     assert(tsm.size == stateStore.size, s"${tsm.size}; ${stateStore.size}")
     stateStore = tsm 
     println(".  Done.")

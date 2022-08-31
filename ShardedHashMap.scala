@@ -161,7 +161,7 @@ class ShardedHashMap[A: scala.reflect.ClassTag, B: scala.reflect.ClassTag](
     val h = hashOf(a); val sh = shardFor(h)
     locks(sh).synchronized{
       if(usedSlots(sh) >= thresholds(sh)) resize(sh)
-      // Find empty slot or slot containing x
+      // Find empty slot or slot containing a
       val i = find(sh, a, h)
       if(hashes(sh)(i) == h){ assert(keys(sh)(i) == a); elements(sh)(i) = b }
       else{
@@ -171,6 +171,18 @@ class ShardedHashMap[A: scala.reflect.ClassTag, B: scala.reflect.ClassTag](
         hashes(sh)(i) = h; keys(sh)(i) = a; elements(sh)(i) = b
         counts(sh) += 1; usedSlots(sh) += 1
       }
+    }
+  }
+
+  /** Update the mapping so a -> b.  Pre: a is already in the domain.  Can be
+    * used while there is an iteration happening. */
+  def replace(a: A, b: B) = {
+    val h = hashOf(a); val sh = shardFor(h)
+    locks(sh).synchronized{
+      // Find slot containing a
+      val i = find(sh, a, h)
+      assert(hashes(sh)(i) == h && keys(sh)(i) == a)
+      elements(sh)(i) = b 
     }
   }
 
@@ -307,4 +319,50 @@ class ShardedHashMap[A: scala.reflect.ClassTag, B: scala.reflect.ClassTag](
     }
   } // end of iterator
 
+  /** An iterator over the (key, value) pairs in shard sh. */
+  private def shardIterator(sh: Int) = new Iterator[(A,B)]{
+    /** Current index in the shard. */
+    private var ix = 0
+
+    private val theWidth = widths(sh)
+
+    /** Advance to the next element. */
+    private def advance(): Unit = 
+      while(ix < theWidth && !filled(hashes(sh)(ix))) ix += 1
+
+    advance()
+
+    def hasNext = ix < theWidth
+
+    def next() = {
+      assert(elements(sh)(ix) != null, "hash = "+hashes(sh)(ix))
+      val res = (keys(sh)(ix), elements(sh)(ix)); ix += 1; advance(); res 
+    }
+  } // end of shardIterator
+
+  /** Objects that produce iterators over the different shards.  This is
+    * thread-safe, but each iterator it produces is not. */
+  class ShardIteratorProducer extends ShardedHashMap.ShardIteratorProducerT[A,B]{
+    private var sh = 0
+
+    /** Get the next iterator, or null if we're done. */
+    def get: Iterator[(A,B)] = synchronized{
+      if(sh < shards){ val iter = shardIterator(sh); sh += 1; iter }
+      else null
+    }
+  } // end of ShardIteratorProducer
+
+
+  /** An object that produces Iterator[(A,B)]s, each over the next shard. */
+  def shardIteratorProducer = new ShardIteratorProducer
+}
+
+
+// ==================================================================
+
+object ShardedHashMap{
+  /** Objects that produce iterators over the different shards. */
+  trait ShardIteratorProducerT[A,B]{
+    def get: Iterator[(A,B)]
+  }
 }

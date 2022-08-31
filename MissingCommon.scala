@@ -30,6 +30,20 @@ class MissingCommon(
 
   private val princ1 = cpts1(0)
 
+  /** Highlight if this relates to the relevant instance. 
+    * servers = [107(N0) || 109(N1) || 110() || 114(T0) || 119() || 1()]
+    * cpts1 = [75(T0,N0,N1,N2) || 14(N0,N1,Null)]
+    * cpts2 = [31(T1,N3,N2,N1) || 10(N3,Null,N2)] */
+  private def highlight = 
+    (pid == (0,1) || pid == (0,2)) && Transition.highlightPreServers(servers) && 
+    Transition.highlightPreCpts(cpts1) && {
+      val princ2 = cpts2(0)
+      princ2.cs == 31 && princ2.ids.sameElements(Array(1,3,2,1)) && {
+        val second2 = cpts2(1)
+        second2.cs == 10 && second2.ids.sameElements(Array(3,-1,2))
+      }
+    }
+
   require(princ1.processIdentities.contains(pid) && 
     cpts2(0).processIdentities.contains(pid))
 
@@ -37,8 +51,8 @@ class MissingCommon(
     * (servers,cpts) is added to the ViewSet for each cpts in cands, then this
     * obligation will be discharged.  Each corresponds to a particular
     * component state c for which condition (1) is satisfied; cands contains
-    * those components corresponding to conditions (2) and (3).  The list is
-    * sorted (wrt StateArray.lessThan).  */
+    * those components corresponding to conditions (2) and (3).  Each such
+    * cands is sorted (wrt StateArray.lessThan).  */
   import MissingCommon.MissingComponents // = Array[Array[State]]
 
   def showMissingComponents(cptsList: MissingComponents) =
@@ -71,8 +85,11 @@ class MissingCommon(
   /** Record that this is now done.  Also clear missingCandidates to reclaim
     * memory. */
   private def setDone = { 
-    isDone = true; missingCandidates = List(); log(SetDoneMC) 
+    isDone = true; missingCandidates = List(); doneMissingCandidates = null
+    // log(SetDoneMC)
   }
+
+  def notDoneEmpty = !isDone && missingCandidates.isEmpty
 
   /** The heads of the missing candidates.  The corresponding MissingInfo should
     * be registered against these in
@@ -102,15 +119,21 @@ class MissingCommon(
     * Return views against which this should now be registered, or null if
     * done. */
   def updateMissingViews(views: ViewSet): CptsBuffer = synchronized{
+    if(highlight) println(s"updateMissingViews $pid "+
+      missingCandidates.map(showMissingComponents))
     if(done){ assert(missingCandidates.isEmpty); null } 
     else{
       val toRegister = new CptsBuffer
-      assert(missingCandidates.nonEmpty)
+      // Note: it's possible that missingCandidates is empty here
       val newMC = missingCandidates.map(mc => removeViews(mc, views, toRegister))
+      if(highlight){
+        if(done) println("Now done")
+        else println("newMC = "+newMC.map(showMissingComponents _))
+      }
       if(done){ assert(missingCandidates.isEmpty);  null }
       else{
         missingCandidates = newMC
-        assert(toRegister.nonEmpty,
+        assert(missingCandidates.isEmpty || toRegister.nonEmpty,   // ***
           s"updateMissingViews with\n${missingCandidates}")
         toRegister
       }
@@ -130,11 +153,15 @@ class MissingCommon(
   def updateWithNewMatch(cv: ComponentView, views: ViewSet)
       : CptsBuffer = synchronized{
     require(matches(cv))
+    if(highlight) println(s"updateWithNewMatch($cv) $pid")
     if(!done){
       val cpt1 = cv.components(1)
       val vb = new CptsBuffer
       if(cpt1.hasPID(pid)){
-        if(updateMissingCandidates(cpt1, views, vb)){ setDone; null }
+        if(updateMissingCandidates(cpt1, views, vb)){ 
+          if(highlight) println("Now done")
+          setDone; null
+        }
         else vb
       }
       else vb
@@ -154,6 +181,7 @@ class MissingCommon(
   @inline private 
   def updateMissingCandidates(cpt1: State, views: ViewSet, vb: CptsBuffer)
       : Boolean = {
+    if(highlight) println(s"updateMissingCandidates($cpt1) $pid")
     require(!done && cpt1.hasPID(pid))
     if(isNewUMCState(cpt1)){
       // All relevant renamings of cpt1: identity on params of servers and
@@ -164,9 +192,13 @@ class MissingCommon(
       var i = 0; var found = false
       while(i < renames.length && !found){
         val c = renames(i); i += 1
+        // if(highlight) println(s"c = $c")
         if(true || isNewUMCRenamedState(c)){ // IMPROVE
           val missing = getMissingCandidates(c, views)
-          // val missing = MissingCommon.getMissingCandidates(this, c, views)
+          // if(highlight){
+          //   if(missing.isEmpty) println("found") 
+          //   else println("missing = "+showMissingComponents(missing))
+          // }
           if(missing.isEmpty) found = true
           else{
             // Note we have to register the corresponding MissingInfo against
@@ -176,6 +208,9 @@ class MissingCommon(
           }
         }
       } // end of while loop
+      if(highlight && !found) println(s"found = $found; missingComponents = "+
+        missingCandidates.map(showMissingComponents))
+      //if(highlight) println(s"found = $found")
       found
     }
     else{ 
@@ -196,11 +231,13 @@ class MissingCommon(
     * StateArray.lessThan).  */
   @inline private 
   def getMissingCandidates(c: State, views: ViewSet): MissingComponents = {
+    //if(highlight) println(s"getMissingCandidates($c)")
     var missing = List[Array[State]]() // missing necessary views
     //val servers = mc.servers; val cpts1 = mc.cpts1; val cpts2 = mc.cpts2
     // Add cptsx, if servers || cptsx is not in views
     @inline def maybeAdd(cptsx: Array[State]) = { 
       val renamedCpts = Remapper.remapComponents(servers, cptsx)
+      //if(highlight) println(s"renamedCpts = "+StateArray.show(renamedCpts))
       if(!views.contains(servers, renamedCpts) && 
           !missing.exists(_.sameElements(renamedCpts)))
         missing ::= renamedCpts
@@ -227,7 +264,7 @@ class MissingCommon(
 
   /** States for which MissingCommon.updateMissingCandidates has been executed
     * on this. */
-  private val doneMissingCandidates = new HashSet[State]
+  private var doneMissingCandidates = new HashSet[State]
 
   /** Called by MissingCommon.updateMissingCandidates when updating this with
     * st.  Return true if this is the first such instance for st. */
@@ -295,7 +332,7 @@ class MissingCommon(
       s"  ${StateArray.show(cpts2)}, $pid)\n"+
       s"  missingCandidates = \n    "+
       missingCandidates.map(showMissingComponents).mkString("\n    ")+
-      s"\ndone = $done; " // "theLog = \n"+theLog.reverse.mkString("\n")
+      s"\ndone = $done" // "theLog = \n"+theLog.reverse.mkString("\n")
 
   /* Note: we avoid creating duplicates of MissingCommon objects, so we can use
    * object equality. */
@@ -456,6 +493,11 @@ object MissingCommon{
             found = mc.updateMissingCandidates(cpt1, views, ab)
         }
         if(found) mc.setDone
+        // if(mc.notDoneEmpty){
+        //   println(s"$mc is not done but has empty missing candidates.")
+        //   println("iter = "+views.iterator(servers, princ1).mkString("\n"))
+        //   sys.exit()
+        // }
         // Store mc if no other thread has done likewise in the meantime
         val mc2 = setOrGet(key, mc)
         if(!(mc2 eq mc)){

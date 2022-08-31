@@ -17,10 +17,10 @@ class Checker(system: SystemP.System, numWorkers: Int){
   protected var sysAbsViews: ViewSet = sav 
   // Note: reset by CheckerTest
 
-  protected type NewViewSet = MyShardedHashSet[ComponentView]
+  protected type NextNewViewSet = MyShardedHashSet[ComponentView]
 
   /** The new views to be considered on the next ply. */
-  protected var nextNewViews: NewViewSet = null
+  protected var nextNewViews: NextNewViewSet = null
 
   /* The transitions found so far. */
   private val transitions = new NewTransitionSet
@@ -172,25 +172,40 @@ class Checker(system: SystemP.System, numWorkers: Int){
 
   // ========= Effect of transitions on other views
 
+  // /** Does the pre-state of a transition match cv, so the induced transition
+  //   * will just reproduce the earlier transition? */
+  // private def matches(pre: Concretization, cv: ComponentView) = {
+  //   require(pre.servers == cv.servers)
+  //   if(singleRef){
+  //     val preCpts = pre.components; val cpts = cv.components
+  //     false && preCpts.sameElements(cpts)
+  //     // preCpts(0) == cpts(0) && preCpts.sameElements(cpts)
+  //     // preCpts.length == cpts.length &&
+  //       // (cpts.length == 1 || cpts(1) == preCpts(1))
+  //   }
+  //   else false // FIXME
+  // }
+
   /** Effect on other views of a transition t.  For every view v1 in
     * sysAbsViews, if it is consistent with t.pre (i.e. unifiable), and
     * contains at least one process that changes state, then update as per
     * this transition. */
   private def effectOnOthers(t: Transition) = if(t.pre != t.post){
-    val highlight = Transition.highlight(t)
+    val highlight = false && Transition.highlight(t)
     if(highlight) println(s"effectOnOthers($t)")
     val iter = 
       if(UseNewViewSet) sysAbsViews.iterator(t)
       else sysAbsViews.iterator(t.preServers)
     while(iter.hasNext){ 
-      val cv = iter.next(); new EffectOn(t, cv, nextNewViews)() 
+      val cv = iter.next()
+      new EffectOn(t, cv, nextNewViews)()
       // if(highlight) println(cv)
     }
   }
 
   /** The effect of previously found extended transitions on the view cv. */
   private def effectOfPreviousTransitions(cv: ComponentView) = {
-    val iter = transitions.iterator(cv)//.toArray
+    val iter = transitions.iterator(cv)
     while(iter.hasNext){ 
       val t = iter.next()
       // Note: second clause is because another transition in the same batch
@@ -251,7 +266,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
       println(s"#transitions = ${printLong(transitions.size)}")
       println(s"#transition templates = ${printLong(transitionTemplates.size)}")
       println("#new active abstract views = "+printInt(newViews.size))
-      nextNewViews = new NewViewSet
+      nextNewViews = new NextNewViewSet
       newTransitions = new NextTransitionSet 
       newTransitionTemplates = new BasicHashSet[TransitionTemplate]
 
@@ -260,13 +275,16 @@ class Checker(system: SystemP.System, numWorkers: Int){
       // newViewsAB = new ArrayBuffer[ComponentView]
       viewShardIteratorProducer = nextNewViews.shardIteratorProducer
       transitionShardIteratorProducer = newTransitions.shardIteratorProducer
+      EffectOn.prepareForPurge
     }
   }
 
   /** Add v to sysAbsViews and viewsBuff if new.  Return true if so. */
-  private def addView(me: Int, v: ComponentView): Boolean = {
+  private def addView(me: Int, v: ComponentView): Boolean = /*synchronized*/{
+// FIXME: CONCURRENCY
     if(ComponentView0.highlight(v)) println(s"adding $v")
     if(sysAbsViews.add(v)){
+      // if(ComponentView0.highlight(v)) println(s"Added $v")
       assert(v.representableInScript); viewsBuff.add(me, v); true
     }
     else false
@@ -280,9 +298,14 @@ class Checker(system: SystemP.System, numWorkers: Int){
     if(me == 0){
       print(s"\nCopying: nextNewViews, ${nextNewViews.size}; ")
       print(s"newTransitionTemplates, ${newTransitionTemplates.size}; ")
+      println(s"newTransitions, ${newTransitions.size}. ")
       for(template <- newTransitionTemplates.iterator)
         transitionTemplates.add(template)
     }
+
+    // Purges from the effectOnStore
+    if(ply%8 == 0) EffectOn.purge
+    else if(ply%8 == 1) EffectOn.purgeMCNotDone
 
     // Collectively copy views
     var iter = viewShardIteratorProducer.get
@@ -290,9 +313,8 @@ class Checker(system: SystemP.System, numWorkers: Int){
       for(v <- iter) addView(me, v)
       iter = viewShardIteratorProducer.get
     }
-    
+
     // Collectively copy transitions
-    if(me == 0) println(s"newTransitions, ${newTransitions.size}. ")
     var transIter = transitionShardIteratorProducer.get
     while(transIter != null){
       for(t <- transIter){
@@ -418,19 +440,37 @@ class Checker(system: SystemP.System, numWorkers: Int){
     println("Memory profile"); println()
     println("# states = "+MyStateMap.stateCount)
     traverse("MyStateMap", MyStateMap, maxPrint = 0); println()
+    if(true){ traverse("system", system, maxPrint = 0); println() }
+    else println("Omitting system\n") 
     traverse("ServerStates", ServerStates, maxPrint = 0); println()
-    traverse("first view", sysAbsViews.iterator.next(), maxPrint = 0); println()
+    //traverse("first view", sysAbsViews.iterator.next(), maxPrint = 0); println()
     traverse("sysAbsViews", sysAbsViews, maxPrint = 0); println()
     traverse("transitions", transitions, maxPrint = 0); println()
     traverse("transitionTemplates", transitionTemplates, maxPrint = 0); println()
     // traverse("extendability", extendability, maxPrint = 0); println()
     traverse("transitionTemplateExtender", transitionTemplateExtender, 
-      maxPrint = 0)
+      maxPrint = 0, ignore = List("System"))
     println()
-    if(true){ traverse("system", system, maxPrint = 0); println() }
-    else println("Omitting system\n") 
     EffectOn.memoryProfile; println()
     traverse("checker", this, maxPrint = 0); println()
+    // Below here should be trivial
+    traverse("CompatibleWithCache", CompatibleWithCache, maxPrint = 0)
+    traverse("ComponentView0", ComponentView0, maxPrint = 0)
+    traverse("ComponentView", ComponentView, maxPrint = 0)
+    traverse("Concretization", Concretization, maxPrint = 0)
+    traverse("Concurrency", Concurrency, maxPrint = 0)
+    traverse("EffectOnUnification", EffectOnUnification, maxPrint = 0)
+    traverse("FDRTransitionMap", FDRTransitionMap, maxPrint = 0)
+    traverse("MissingInfo", MissingInfo, maxPrint = 0)
+    traverse("ServersReducedMap", ServersReducedMap, maxPrint = 0)
+    traverse("SingleRefEffectOnUnification", SingleRefEffectOnUnification, maxPrint = 0)
+    traverse("State", State, maxPrint = 0)
+    traverse("Transition", Transition, maxPrint = 0)
+    traverse("TransitionSet", TransitionSet, maxPrint = 0)
+    traverse("TransitionTemplateSet", TransitionTemplateSet, maxPrint = 0)
+    traverse("Unification", Unification, maxPrint = 0)
+    traverse("View", View, maxPrint = 0)
+    traverse("ViewSet", ViewSet, maxPrint = 0)
   }
 }
 

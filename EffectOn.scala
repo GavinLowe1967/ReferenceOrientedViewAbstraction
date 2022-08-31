@@ -94,6 +94,14 @@ object EffectOn{
     } // end of outer if
   }
 
+  /** Purge from the store. */
+  def purge = effectOnStore.purge(views) 
+
+  def purgeMCNotDone = effectOnStore.purgeMCNotDone(views)
+
+  /** Prepare for the next purge. */
+  def prepareForPurge = effectOnStore.prepareForPurge
+
   def sanityCheck = effectOnStore.sanityCheck(views)
 
   def report = effectOnStore.report
@@ -101,8 +109,10 @@ object EffectOn{
   /** Perform a memory profile of this. */
   def memoryProfile = {
     import ox.gavin.profiling.MemoryProfiler.traverse
-    effectOnStore.report; println()
-    effectOnStore.memoryProfile
+    if(effectOnStore != null){
+      effectOnStore.report; println()
+      effectOnStore.memoryProfile
+    }
     traverse("effectOn", this, maxPrint = 1)
   }
 }
@@ -134,27 +144,33 @@ class EffectOn(
   //   ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
   // SecondaryInducedInfo = ArrayBuffer[(Array[State], UnificationList, Int)]
 
-    // false &&
-    // Transition.highlight(trans) && {
-    //   val princ = cv.components(0); // 44(T2,N2,N3)
-    //   princ.cs == 44 && princ.ids.sameElements(Array(1,1,2))
-    // } && {
-    //   val second = cv.components(1); // 16(N2,T3,N4,N5)
-    //   second.cs == 16 && second.ids.sameElements(Array(1,2,3,4))
-    // }
-
   private val pre = trans.pre; private val post = trans.post
   private val postCpts = post.components;
 
   private val highlight = 
-    Transition.highlight(trans) &&
-    // ComponentView0.highlightServers0(pre.servers) &&
-    //   pre.components(0).cs == 94 && 
-      cv.components(0).cs == 7
+    Transition.highlight(trans) && {
+      // [107(N0) || 109(N1) || 110() || 114(T0) || 119() || 1()] ||
+      // [31(T1,N2,N3,N1) || 10(N2,Null,N3)]
+      val princ = cv.components(0)
+      princ.cs == 31 && princ.ids.sameElements(Array(1,2,3,1)) && {
+        val second = cv.components(1)
+        second.cs == 10 && second.ids.sameElements(Array(2,-1,3))
+      }
+    }
 
-  // if(highlight) println(s"\nEffectOn($trans,\n  $cv)")
+  if(highlight) println(s"\nEffectOn($trans,\n  $cv)")
 
   require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
+
+  /** Do pre and cv have the same secondary component, or both missing a
+    * secondary component?  Assumes they have the same principal, so pre has
+    * at least as many components as cv. */
+  // private def matchingSecondaries = 
+  //   cv.components.length == 1 || pre.components(1) == cv.components(1)
+
+  // if(pre.components(0) == cv.components(0) && 
+  //     (!singleRef || matchingSecondaries))
+  //   println(s"Matching views in EffectOn:\n$trans\n$cv") 
 
   /** What does cpt get mapped to given unifications unifs? */
   private def getNewPrinc(cpt: State, unifs: UnificationList): State = {
@@ -259,7 +275,10 @@ class EffectOn(
       : Unit = {
     Profiler.count(s"processInducedInfo $isPrimary")
     // StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
-    //if(highlight) println("processInducedInfo: "+unifs+"; "+Remapper.show(map))
+    val highlight1 = highlight && map(0).sameElements(Array(0,1,3,2))
+    if(highlight1) 
+      println("processInducedInfo: "+unifs+"; "+Remapper.show(map)+
+        "; cpts = "+StateArray.show(cpts))
 
     /* Record this induced transition if singleRef and primary, and (1) if
      * newEffectOn, no acquired references, (2) otherwise no unifs. */
@@ -315,7 +334,9 @@ class EffectOn(
       crossRefs.map(new ReducedComponentView(pre.servers, _)).
         filter(!views.contains(_))
     for(newComponents <- newComponentsList){
-      if(highlight) println("newComponents = "+StateArray.show(newComponents))
+      if(highlight1) 
+        println(s"unifs = $unifs; newComponents = "+
+          StateArray.show(newComponents))
       val nv = Remapper.mkComponentView(post.servers, newComponents)
       Profiler.count("newViewCount") 
       if(!views.contains(nv)){
@@ -337,13 +358,13 @@ class EffectOn(
           }
         } // end of if(missing.isEmpty && nextNewViews.add(nv))
         else if(missing.nonEmpty || missingCommons.nonEmpty){
-          if(highlight) 
+          if(highlight1) 
             println(s"missing = $missing\nmissingCommons = $missingCommons")
           // Note: we create nv eagerly, even if missing is non-empty: this
           // might not be the most efficient approach.  Note also that the
           // missingCommons may be shared.
-          EffectOn.effectOnStore.add(missing, missingCommons, nv, 
-            pre, cpts, cv, trans.e, post, newComponents)
+          EffectOn.effectOnStore.add(missing, missingCommons, nv, trans,
+            /*pre,*/ cpts, cv, /*trans.e, post,*/ newComponents)
           assert(missing.isEmpty || !views.contains(missing.head))
           // Profiler.count(s"EffectOn add to store-$isPrimary-${unifs.nonEmpty}"+
           //   s"-${pre.servers==post.servers}-${missing.nonEmpty}-"+

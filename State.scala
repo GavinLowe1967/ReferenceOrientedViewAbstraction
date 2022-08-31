@@ -100,22 +100,32 @@ class State(val family: Family, val cs: ControlState,
   }
 
   /** Bit map giving parameters for which corresponding states are included in
-    * views. */
+    * views.  
+    * 
+    * NOTE: the omission of parameters is currently disabled.  This would
+    * require the "includeParam(i)", below.  But the relevant information
+    * isn't available when states are first created. */
   private var includedParamBitMap: Array[Array[Boolean]] = null
 
-  /** Does this state have a parameter (f,id) that is not an omitted
-    * reference?  */
-  def hasIncludedParam(f: Family, id: Identity) = synchronized{ 
-    if(includedParamBitMap == null){
-      includedParamBitMap =
-        // FIXME: the +2 is a hack
-        Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)))
-      for(i <- 0 until length)
-        if(!isDistinguished(ids(i)) && includeParam(i))
-          includedParamBitMap(typeMap(i))(ids(i)) = true
-    }
-    includedParamBitMap(f)(id)
+  /** Initialise information about included parameters.  For States created at
+    * compile time, this is called from MyStateMap.renewStateStore.  For other
+    * States, it is called when the State is created. */
+  def initIncludedParams = {
+    includedParamBitMap =
+      // FIXME: the +2 is a hack
+      Array.tabulate(numTypes)(t => new Array[Boolean](2*typeSizes(t)))
+    for(i <- 0 until length)
+      if(!isDistinguished(ids(i)) && includeParam(i))
+        includedParamBitMap(typeMap(i))(ids(i)) = true
   }
+
+  // Initialise information about included parameters, for States not created
+  // at compile time.
+  if(!compiling) initIncludedParams
+
+  /** Does this state have a parameter (f,id) that is not an omitted
+    * reference?  NOTE: the omission of parameters is currently disabled. */
+  def hasIncludedParam(f: Family, id: Identity) = includedParamBitMap(f)(id)
 
   /** A bound on the values of each type. */
   private var paramsBound: Array[Int] = null 

@@ -97,6 +97,7 @@ class FDRSession(fname: String){
           val thisChunk =
             session.evaluateIterableExpression(thisChunkString, canceller).
               result.asScala
+          // print(" "+thisChunk.length)
           myResult ++= thisChunk
         }
         else done = true

@@ -130,6 +130,10 @@ class System(fname: String) {
     assert(serverAlphaMap.length == eventsSize, 
            s"${serverAlphaMap.length}; $numEvents; ${showEvent(numEvents+2)}")
 
+    // if(file.omitInfos.nonEmpty){
+    //   println("Omit information is currently disabled"); sys.exit()
+    // }
+
     for(oi <- file.omitInfos) processOmitInfo(oi)
 
     fdr.libraryExit(); fdrSession.delete
@@ -576,14 +580,14 @@ class System(fname: String) {
 
 // ==================================================================
 
-object System{
+// object System{
 
-  /** The System being checked.  Set by Checker. */
-  //private var system: System = null
+//   /** The System being checked.  Set by Checker. */
+//   //private var system: System = null
 
-  //def setSystem(sys: System) = system = sys
+//   //def setSystem(sys: System) = system = sys
 
-  /** Show event e. */
-  // def showEvent(e: EventInt) = system.showEvent(e)
+//   /** Show event e. */
+//   // def showEvent(e: EventInt) = system.showEvent(e)
 
-}
+// }

@@ -384,45 +384,37 @@ object ComponentView0{
     }
   }
 
-  /** Function used when debugging.  Should we highlight information about v?
-    * 
-    * This is the view that is missing or the pre of the relevant transition. */
+  /* Functions used when debugging, to highlight particular views. */
+
+  /** Should we highlight information about v? */
   def highlight(v: ReducedComponentView) = 
-    highlightMissing(v) || highlightPre(v)
+    highlightOrigin(v) 
 
-
-  // [128(N0) || 130(N0) || 131() || 135(T0) || 141(T1) || _ || 1()] ||
-  // [7(N1,Null)]
-  def highlightMissing(v: ReducedComponentView) = {
-    val princ = v.components(0)
-    highlightServers0(v.servers) &&
-        princ.cs == 7 && princ.ids(0) == 1 && princ.ids(1) == -1
-  }
-
-    // [128(N0) || 130(N0) || 131() || 135(T0) || 141(T1) || 143(T1,N1) || 1()] ||
-    // [94(T1,N1,Null,N0) || 14(N0,N2)
-    def highlightPre(v: ReducedComponentView) = {
-      val servers = v.servers; val princ = v.components(0)
-      highlightServers0(servers) && 
-      servers(5).cs == 143 && princ.cs == 94 && 
-        v.components(1).cs == 14 && v.components(1).ids(1) == 2
+  /** The view whose origin we are trying to find. 
+    * [107(N0) || 109(N1) || 110() || 114(T0) || 121(T0,N0,N1) || 1()] || 
+    * [31(T1,N2,N3,N1) || 10(N2,Null,N3)] */
+  private def highlightOrigin(v: ReducedComponentView) = 
+    highlightServers(v.servers) && {
+      val princ = v.components(0)
+      princ.cs == 31 && princ.ids.sameElements(Array(1,2,3,1)) && {
+        val second = v.components(1)
+        second.cs == 10 && second.ids.sameElements(Array(2,-1,3))
+      }
     }
 
-  /** Common terms in all the servers of views of interest. 
-    * [128(N0) || 130(N0) || 131() || 135(T0) || 141(T1) || _. */
-  def highlightServers0(serverStates: ServerStates) = {
-    val servers = serverStates.servers
+  /** The servers common to the missing view and the pre-state of the transition
+    * that induces it.
+    * [107(N0) || 109(N1) || 110() || 114(T0) || _ || _] */
+  def highlightServers0(servers: ServerStates) = 
     false && 
-    servers(0).cs == 128 && servers(1).cs == 130 && servers(1).ids(0) == 0 &&
-    servers(2).cs == 131 && servers(3).cs == 135 && servers(4).cs == 141 &&
-    servers(4).ids(0) == 1
-  }
+    servers(0).cs == 107 && servers(1).cs == 109 && servers(1).ids(0) == 1 &&
+    servers(2).cs == 110 && servers(3).cs == 114 
 
-  /** The servers for the missing view. */
-  def highlightServers(serverStates: ServerStates) = {
-    // [128(N0) || 130(N0) || 131() || 135(T0) || 141(T1) || 142() || 1()]
-    val servers = serverStates.servers
-    highlightServers0(serverStates) && servers(5).cs == 142
+  /** The servers for the view under consideration. 
+    *  [107(N0) || 109(N1) || 110() || 114(T0) || 121(T0,N0,N1) || 1()] */
+  def highlightServers(servers: ServerStates) = {
+    highlightServers0(servers) &&
+    servers(4).cs == 121 && servers(4).ids.sameElements(Array(0,0,1))
   }
 
 

@@ -382,11 +382,13 @@ class Components(
       val me: Parameter = st.componentProcessIdentity 
       while(i < n){
         val e = events0(i); val nexts = nexts0(i); val cpts = eventMap(e); 
-        assert(cpts.contains(me), 
-               "Event "+showEvent(e)+" is not in the alphabet of component "+me+
-                 "\n"+cpts+"\n"+
-                 (if(st==null) "null state" else st.toString00)+"\n"+
-                 events0.map(showEvent).mkString("<",",",">"))
+        if(!cpts.contains(me)){
+          println("Event "+showEvent(e)+" is not in the alphabet of component "+
+            me+"\n"+cpts+"\n"+
+            (if(st==null) "null state" else st.toString00)+"\n"+
+            events0.map(showEvent).mkString("<",",",">"))
+          sys.exit()
+        }
         // IMPROVE: translate "me" into human-friendly form
         if(cpts.length == 1){
           if(serverAlphaBitMap(e)){
