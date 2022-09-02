@@ -183,7 +183,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
   //     // preCpts.length == cpts.length &&
   //       // (cpts.length == 1 || cpts(1) == preCpts(1))
   //   }
-  //   else false // FIXME
+  //   else false
   // }
 
   /** Effect on other views of a transition t.  For every view v1 in
@@ -251,7 +251,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     * particular, set done if all threads should terminate.  Performed by
     * worker 0.  */
   private def startOfPly(bound: Int) = {
-    if(ply != 0){
+    if(ply != 0){ 
       // Views for workers to work on in this ply. 
       newViews = viewsBuff.get; nextIndex.set(0)
       if(showEachPly)
@@ -275,13 +275,12 @@ class Checker(system: SystemP.System, numWorkers: Int){
       // newViewsAB = new ArrayBuffer[ComponentView]
       viewShardIteratorProducer = nextNewViews.shardIteratorProducer
       transitionShardIteratorProducer = newTransitions.shardIteratorProducer
-      EffectOn.prepareForPurge
+      if(singleRef) EffectOn.prepareForPurge
     }
   }
 
   /** Add v to sysAbsViews and viewsBuff if new.  Return true if so. */
   private def addView(me: Int, v: ComponentView): Boolean = /*synchronized*/{
-// FIXME: CONCURRENCY
     if(ComponentView0.highlight(v)) println(s"adding $v")
     if(sysAbsViews.add(v)){
       // if(ComponentView0.highlight(v)) println(s"Added $v")
@@ -304,8 +303,8 @@ class Checker(system: SystemP.System, numWorkers: Int){
     }
 
     // Purges from the effectOnStore
-    if(ply%8 == 0) EffectOn.purge
-    else if(ply%8 == 1) EffectOn.purgeMCNotDone
+// IMPROVE: only if enough views have been added since the last purge.
+    if(singleRef) EffectOn.purge
 
     // Collectively copy views
     var iter = viewShardIteratorProducer.get
@@ -449,7 +448,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     traverse("transitionTemplates", transitionTemplates, maxPrint = 0); println()
     // traverse("extendability", extendability, maxPrint = 0); println()
     traverse("transitionTemplateExtender", transitionTemplateExtender, 
-      maxPrint = 0, ignore = List("System"))
+      maxPrint = 1, ignore = List("System"))
     println()
     EffectOn.memoryProfile; println()
     traverse("checker", this, maxPrint = 0); println()

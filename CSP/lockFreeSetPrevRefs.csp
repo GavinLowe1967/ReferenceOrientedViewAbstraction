@@ -28,15 +28,17 @@ greater(x, y) = (x == C and y != C) or (x == B and y == A)
 
 -- Identities of nodes
 datatype NodeIDType = 
-  Null | N0 | N1 | N2   | N3    | N4  | N5 | N6  | N7  | N8 --| N9
+  Null | N0 | N1 | N2   | N3    | N4  | N5 | N6  | N7 | N8 | N9
 
 NodeID = diff(NodeIDType, {Null}) -- real nodes
 
 -- Thread identities
 datatype ThreadIDType = Constr | T0 | T1      | T2  --| T3
 
--- For bound 27, 9 nodes and 3 threads are enough
+-- For bound 29, 9 nodes and 3 threads are enough
 -- For bound 23, 8 nodes and 3 threads are enough
+-- For bound 21, 7 nodes and 3 threads are enough
+-- For bound 18, 6 nodes and 3 threads are enough
 
 ThreadID = diff(ThreadIDType, {Constr}) -- real threads, excluding constructor
 

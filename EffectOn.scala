@@ -47,7 +47,10 @@ object EffectOn{
   private var effectOnStore: EffectOnStore = 
     if(singleRef) new SimpleEffectOnStore else null
 
-  def reset = { effectOnStore = if(singleRef) new SimpleEffectOnStore else null }
+  def reset = { 
+    effectOnStore = if(singleRef) new SimpleEffectOnStore else null 
+    lastPurgeViewCount = 0L; doPurge = false
+  }
 
   import Unification.UnificationList //  = List[(Int,Int)]
 
@@ -94,13 +97,40 @@ object EffectOn{
     } // end of outer if
   }
 
-  /** Purge from the store. */
-  def purge = effectOnStore.purge(views) 
+  /* Purging of effectOnStore.  This is done according to certain heuristics. */
 
-  def purgeMCNotDone = effectOnStore.purgeMCNotDone(views)
+  /** The number of views when last we did a purge. */
+  private var lastPurgeViewCount = 0L
 
-  /** Prepare for the next purge. */
-  def prepareForPurge = effectOnStore.prepareForPurge
+  /** Only purge if at least purgeQuantum views have been added since the last
+    * round of purges. */
+  private val purgeQuantum = 300_000
+
+  /** Is it time for another purge? */
+  private var doPurge = false
+
+  /** Purge from the store.  Done at the end of each ply. */
+  def purge = if(doPurge){
+    if(ply%4 == 0) effectOnStore.purgeCandidateForMCStore(views)
+    else if(ply%4 == 1) effectOnStore.purgeMCNotDone(views)
+    else if(ply%4 == 2) effectOnStore.purgeMCDone(views)
+    else if(ply%4 == 3) MissingCommon.purgeMCs()
+  }
+
+  /** Prepare for the next purge.  Called at the start of each ply by worker
+    * 0. */
+  def prepareForPurge = if(ply%4 == 0){
+    // We'll do purges only if enough views have been found since the last
+    // round.
+    val viewCount = views.size
+    if(viewCount-lastPurgeViewCount >= purgeQuantum){
+      println("Preparing for purge")
+      doPurge = true; lastPurgeViewCount = viewCount
+      effectOnStore.prepareForPurge
+      MissingCommon.prepareForPurge
+    }
+    else doPurge = false
+  }
 
   def sanityCheck = effectOnStore.sanityCheck(views)
 

@@ -2,7 +2,7 @@ package ViewAbstraction
 
 import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
-import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap}
+import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap,Set}
 import MissingCommon.Cpts // = Array[State]
 
 /** The representation of the obligation to find a component state c with
@@ -75,25 +75,25 @@ class MissingCommon(
   @inline def done = synchronized{ isDone }
 
   // Log for debugging
+  import MissingCommon.{MCEvent, AddMC, UpdateMC, SetDoneMC,
+    MissingCandidateSuccess, UMCRepeat}
+  // private var theLog = List[MCEvent]() 
 
-  import MissingCommon.{MCEvent,AddMC,UpdateMC,SetDoneMC}
-  //private var theLog = List[MCEvent]() 
+  /** Logging for debugging.  Currently turned on. */
+  def log(e: MCEvent) = {} 
+  // def log(e: MCEvent) = synchronized{ theLog ::= e }
 
-  /** Logging for debugging.  Currently turned off. */
-  def log(e: MCEvent) = {} // theLog ::= e
-
-  /** Record that this is now done.  Also clear missingCandidates to reclaim
-    * memory. */
+  /** Record that this is now done.  Also clear missingCandidates and
+    * doneMissingCandidates to reclaim memory. */
   private def setDone = { 
     isDone = true; missingCandidates = List(); doneMissingCandidates = null
-    // log(SetDoneMC)
+    log(SetDoneMC)
   }
 
   def notDoneEmpty = !isDone && missingCandidates.isEmpty
 
   /** The heads of the missing candidates.  The corresponding MissingInfo should
-    * be registered against these in
-    * EffectOnStore.mcMissingCandidatesStore. */
+    * be registered against these in EffectOnStore.mcNotDoneStore. */
   def missingHeads: List[Cpts] = synchronized{ missingCandidates.map(_(0)) }
 
   import MissingCommon.CptsBuffer // = ArrayBuffer[Array[State]]
@@ -108,9 +108,9 @@ class MissingCommon(
     // This could be improved.
     var mc1 = mc.toList
     while(mc1.nonEmpty && views.contains(servers, mc1.head)) mc1 = mc1.tail
+    log(UpdateMC(mc, mc1.toArray, ply))
     if(mc1.isEmpty) setDone    // This is now satisfied
     else toRegister += mc1.head
-    // log(UpdateMC(mc, mc1))
     mc1.toArray
   }
 
@@ -159,6 +159,7 @@ class MissingCommon(
       val vb = new CptsBuffer
       if(cpt1.hasPID(pid)){
         if(updateMissingCandidates(cpt1, views, vb)){ 
+          log(MissingCommon.UpdateWithNewMatchSuccess(cv, ply))
           if(highlight) println("Now done")
           setDone; null
         }
@@ -199,7 +200,9 @@ class MissingCommon(
           //   if(missing.isEmpty) println("found") 
           //   else println("missing = "+showMissingComponents(missing))
           // }
-          if(missing.isEmpty) found = true
+          if(missing.isEmpty){ 
+            log(MissingCandidateSuccess(cpt1, c)); found = true 
+          }
           else{
             // Note we have to register the corresponding MissingInfo against
             // missing.head, whether or not the add succeeded, because this
@@ -212,13 +215,20 @@ class MissingCommon(
         missingCandidates.map(showMissingComponents))
       //if(highlight) println(s"found = $found")
       found
-    }
+    } // end of if isNewUMCState
     else{ 
       // This update has previously been done, but we might need to
       // re-register the MissingInfo object, because of sharing.  The
       // following might be a bit pessimistic.  IMPROVE: store the relevant
       // values from one instance to reuse in the next.
-      for(cpts <- missingHeads) if(!views.contains(servers, cpts)) vb += cpts 
+      log(UMCRepeat(cpt1))
+// FIXME: I think the commented-out code is better, but needs to deal with the
+// case that vb1 is null.  
+/*
+      val vb1 = updateMissingViews(views); assert(vb1 != null, this)
+      vb ++= vb1 
+ */
+      for(cpts <- missingHeads) if(true || !views.contains(servers, cpts)) vb += cpts 
       false
     }
   }
@@ -264,7 +274,7 @@ class MissingCommon(
 
   /** States for which MissingCommon.updateMissingCandidates has been executed
     * on this. */
-  private var doneMissingCandidates = new HashSet[State]
+  private var doneMissingCandidates = Set[State]() // new HashSet[State]
 
   /** Called by MissingCommon.updateMissingCandidates when updating this with
     * st.  Return true if this is the first such instance for st. */
@@ -330,9 +340,9 @@ class MissingCommon(
   override def toString = 
     s"MissingCommon($servers, ${StateArray.show(cpts1)},\n"+
       s"  ${StateArray.show(cpts2)}, $pid)\n"+
-      s"  missingCandidates = \n    "+
+      s"  missingCandidates = "+
       missingCandidates.map(showMissingComponents).mkString("\n    ")+
-      s"\ndone = $done" // "theLog = \n"+theLog.reverse.mkString("\n")
+      s"\n  done = $done\n" // theLog = "+theLog.reverse.mkString("\n    ")+"\n"
 
   /* Note: we avoid creating duplicates of MissingCommon objects, so we can use
    * object equality. */
@@ -405,6 +415,9 @@ object MissingCommon{
     * sorted (wrt StateArray.lessThan).  */
   type MissingComponents = Array[Cpts]
 
+  def showMissingComponents(mc: MissingComponents) = 
+    mc.map(StateArray.show).mkString("; ")
+
   /** Type of keys for stored MissingCommons. */
   private type Key = (ServerStates, List[State], ProcessIdentity)
 
@@ -425,6 +438,26 @@ object MissingCommon{
   private def setOrGet(key: Key, mc: MissingCommon) = /*allMCs.synchronized*/{
     allMCs.getOrElseUpdate(key, mc)
   }
+
+  private var shardIteratorProducer: 
+       ShardedHashMap.ShardIteratorProducerT[Key, MissingCommon] = null
+
+  def prepareForPurge = { shardIteratorProducer = allMCs.shardIteratorProducer }
+
+  /** Purge MissingCommons that are done. */
+  def purgeMCs() = { 
+    var shardIterator = shardIteratorProducer.get
+    while(shardIterator != null){
+      // for((key,mc) <- shardIterator){
+      while(shardIterator.hasNext){
+        val (key,mc) = shardIterator.next()
+        if(mc.done) allMCs.remove(key)
+      }
+      shardIterator = shardIteratorProducer.get
+    }
+  }
+
+  def allMCsSize = allMCs.size
 
   /** Perform a memory profile of this. */
   def memoryProfile = {
@@ -560,8 +593,32 @@ object MissingCommon{
 
   // Events for log 
   trait MCEvent
-  case class AddMC(mc: MissingComponents) extends MCEvent 
-  case class UpdateMC(mc: MissingComponents, mc1: MissingComponents)
-      extends MCEvent
+  /** A call to add, leading to missingComponents being set to mc. */
+  case class AddMC(mc: MissingComponents) extends MCEvent{
+    override def toString = "AddMC"+showMissingComponents(mc)+")"
+  }
+  /** A call to removeViews(mc) giving result mc1. */
+  case class UpdateMC(mc: MissingComponents, mc1: MissingComponents, ply: Int)
+      extends MCEvent{
+    override def toString = 
+      "UpdateMC(mc = "+showMissingComponents(mc)+
+        "; mc1 = "+showMissingComponents(mc1)+s"; ply = $ply)"
+  }
+  /** A call to setDone. */
   case object SetDoneMC extends MCEvent
+
+  /** A call to updateMissingCandidates(cpt1), where instantiating with c led to
+    * this becoming done. */
+  case class MissingCandidateSuccess(cpt1: State, c: State) extends MCEvent
+
+  /** A call to updateWithNewMatch(cv) was successful. */
+  case class UpdateWithNewMatchSuccess(cv: ComponentView, ply: Int)
+      extends MCEvent
+
+  /** A call to updateWithNewMatch(cv,...,key). */
+  case class UpdateWithNewMatch(cv: ComponentView, key: (ServerStates,State)) 
+      extends MCEvent
+
+  /** A repeated call to updateMissingCandidates(cpt1). */
+  case class UMCRepeat(cpt1: State) extends MCEvent
 }
