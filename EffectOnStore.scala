@@ -121,8 +121,10 @@ class SimpleEffectOnStore extends EffectOnStore{
   private val candidateForMCStore = 
     new ShardedHashMap[(ServerStates, State), MissingInfoSet]
 
-  /* Operations on each MissingInfoSet is protected by a synchronized block on
-   * that MissingInfoSet. */
+  /* Operations on each MissingInfoSet are protected by a synchronized block on
+   * that MissingInfoSet.  The protocol for updating a maplet is (1) read the
+   * maplet; (2) lock the MissingInfoSet; (3) check the maplet is still valid,
+   * and if not restart.  */
 
 /* IMPROVE: periodically purge the stores of MissingInfos that are done or for
  * which the newView has been found, and purge mcNotDoneStore and
@@ -130,6 +132,15 @@ class SimpleEffectOnStore extends EffectOnStore{
 
   import MissingInfo.{LogEntry,  McNotDoneStore,
     CandidateForMC} // McDoneStore,, NotStored
+
+  /** Does store contain the mapping key -> mis? */
+  @inline private def mapsto[A](
+    store: ShardedHashMap[A, MissingInfoSet], key: A, mis: MissingInfoSet)
+      : Boolean =
+    store.get(key) match{
+      case Some(mis1) => mis1 eq mis // Note: reference equality
+      case None => false
+    }
 
   /** Name of theStore.  Used in logging for debugging. */
   @inline private def storeName(theStore: Store): String = 
@@ -139,10 +150,30 @@ class SimpleEffectOnStore extends EffectOnStore{
   /** Add missingInfo to theStore(cv), if not already there. */
   @inline private def addToStore(
     theStore: Store, cv: ReducedComponentView, missingInfo: MissingInfo)
-  = {
-    val mis = theStore.getOrElseUpdate(cv, new MissingInfoSet) 
-    if(! mis.synchronized{ mis.add(missingInfo) }) missingInfo.setNotAdded
+      : Unit = {
+    var done = false
+    while(!done){
+      val mis = theStore.getOrElseUpdate(cv, new MissingInfoSet)
+      mis.synchronized{
+        if(mapsto(theStore, cv, mis)){
+          if(!mis.add(missingInfo)) missingInfo.setNotAdded
+          done = true
+        }
+      }
+    }
+    //   else ok = false // another thread updated theStore(cv)
+    // }
+    // if(!ok) addToStore(theStore, cv, missingInfo) // retry
+    // Following is a race
+    // if(! mis.synchronized{ mis.add(missingInfo) }) missingInfo.setNotAdded
   }
+
+  /** Add missingInfo to theStore(cv), if not in the MissingInfoStore. */
+  @inline private def maybeAddToStore(
+    theStore: Store, cv: ReducedComponentView, missingInfo: MissingInfo)
+  = 
+    if(MissingInfoStore.add(missingInfo)) addToStore(theStore, cv, missingInfo)
+    else Profiler.count("MissingInfo not added") 
 
   /** Add MissingInfo(nv, missing, missingCommon) to the stores. 
     * This corresponds to transition trans inducing
@@ -158,9 +189,12 @@ class SimpleEffectOnStore extends EffectOnStore{
     for(mc <- missingCommon) assert(!mc.done)
     val mcArray = missingCommon.toArray
     val nv1 = new ReducedComponentView(nv.servers, nv.components)
+    // Profiler.count(s"new MissingInfo ${mcArray.size} ${missing.length}")
     val missingInfo = new MissingInfo(nv1, missing.toArray, mcArray, 
       trans, oldCpts, cv, newCpts)
-    if(missingCommon.isEmpty){
+    if(!MissingInfoStore.add(missingInfo))
+      Profiler.count("MissingInfo not added")
+    else if(missingCommon.isEmpty){
       assert(missing.nonEmpty); missingInfo.transferred = true
       addToStore(mcDoneStore, missingInfo.missingHead, missingInfo)
     }
@@ -178,10 +212,19 @@ class SimpleEffectOnStore extends EffectOnStore{
       if(missingCommon.length > 1) for(mc <- missingCommon.tail)
         assert(mc.servers == servers1 && mc.cpts1(0) == princ1)
       // ... so it's enough to store against the key for mc0
-      val key = (servers1, princ1)
+      val key = (servers1, princ1); var done = false
       missingInfo.log(CandidateForMC(servers1, princ1, ply))
-      val mis = candidateForMCStore.getOrElseUpdate(key, new MissingInfoSet)
-      if(! mis.synchronized{ mis.add(missingInfo) }) missingInfo.setNotAdded
+      while(!done){
+        val mis = candidateForMCStore.getOrElseUpdate(key, new MissingInfoSet)
+        mis.synchronized{
+          if(mapsto(candidateForMCStore, key, mis)){
+            if(!mis.add(missingInfo)) missingInfo.setNotAdded
+            done = true
+          }
+          // else another thread updated key, so go round the loop again
+        }
+      }
+      // if(! mis.synchronized{ mis.add(missingInfo) }) missingInfo.setNotAdded
     }
   }
 
@@ -209,7 +252,9 @@ class SimpleEffectOnStore extends EffectOnStore{
     require(mi.mcDone); require(mi.missingViewsUpdated(views))
     if(mi.done) maybeAdd(mi, buff)
     else{
-      mi.transferred = true; addToStore(mcDoneStore, mi.missingHead, mi)
+      mi.transferred = true; 
+      // addToStore(mcDoneStore, mi.missingHead, mi)
+      maybeAddToStore(mcDoneStore, mi.missingHead, mi)
       // IMPROVE: remove elsewhere
     }
   }
@@ -226,34 +271,51 @@ class SimpleEffectOnStore extends EffectOnStore{
     candidateForMCStore.get(key) match{
       case Some(mis) => 
         val newMis = new MissingInfoSet // those to retain
+        var ok = true
         mis.synchronized{
-          for(mi <- mis) mi.synchronized{
-            mi.log(MissingInfo.CCFMCIter(cv))
-            if(mi.mcDone) assert(mi.done || mi.transferred)
-            else if(views.contains(mi.newView)) mi.markNewViewFound
-            else{
-              val vb: CptsBuffer = mi.updateMissingCommon(cv, views) //, key
-              if(vb == null){
-                if(mi.done) maybeAdd(mi, result)
-                else{ assert(mi.mcDone); mcDone(mi, views, result) }
-              }
+          if(!mapsto(candidateForMCStore, key, mis)){
+            // The earlier read raced with another thread, which got the lock
+            // on mis first; retry.
+            Profiler.count("completeCandidateForMC retry")//few times per MState
+            ok = false // completeCandidateForMC(cv, views, result)
+          }
+          else{
+            for(mi <- mis) mi.synchronized{
+              mi.log(MissingInfo.CCFMCIter(cv))
+              if(mi.mcDone) assert(mi.done || mi.transferred)
+              else if(views.contains(mi.newView)) mi.markNewViewFound
               else{
-                // Register mi against each view in vb, and retain
-                for(cpts <- vb){
-                  val rcv = new ReducedComponentView(cv.servers, cpts)
-                  mi.log(MissingInfo.McNotDoneStore(rcv, ply))
-                  addToStore(mcNotDoneStore, rcv, mi)
+                MissingInfoStore.remove(mi)
+                val vb: CptsBuffer = mi.updateMissingCommon(cv, views) //, key
+                if(vb == null){
+                  if(mi.done) maybeAdd(mi, result)
+                  else{ assert(mi.mcDone); mcDone(mi, views, result) }
                 }
-                if(!newMis.add(mi)) mi.setNotAdded
+                else if(MissingInfoStore.add(mi)){
+                  // Register mi against each view in vb, and retain
+                  for(cpts <- vb){
+                    val rcv = new ReducedComponentView(cv.servers, cpts)
+                    mi.log(MissingInfo.McNotDoneStore(rcv, ply))
+                    addToStore(mcNotDoneStore, rcv, mi)
+                  }
+                  if(!newMis.add(mi)) mi.setNotAdded
+                }
               }
-            }
-          } // end of mi.synchronized / for loop
+            } // end of mi.synchronized / for loop
+            // Update candidateForMCStore
+            val ok1 =
+              if(newMis.nonEmpty) 
+                candidateForMCStore.compareAndSet(key,mis,newMis)
+              else candidateForMCStore.removeIfEquals(key, mis)
+            assert(ok1) // The locking protocol should ensure this
+            // Note: the above needs to be inside the mis.synchronized block,
+            // in case of a race with another thread where the order of
+            // updating the store is the opposite of the order for obtaining
+            // the lock: in this case, if the first thread successfully does a
+            // MissingInfoStore.add(mi), the latter will fail, and mi will be
+            // lost.
+          } // end of else clause
         } // end of mis.synchronized
-
-        // Update candidateForMCStore if this mapping hasn't changed.
-        val ok = 
-          if(newMis.nonEmpty) candidateForMCStore.compareAndSet(key, mis, newMis)
-          else candidateForMCStore.removeIfEquals(key, mis)
         if(!ok){
           Profiler.count("completeCandidateForMC retry")// a few times per MState
           completeCandidateForMC(cv, views, result)
@@ -275,16 +337,19 @@ class SimpleEffectOnStore extends EffectOnStore{
             if(mi.mcDone) assert(mi.done || mi.transferred)
             else if(views.contains(mi.newView)) mi.markNewViewFound
             else{
+              MissingInfoStore.remove(mi)
               val vb = mi.updateMissingViewsOfMissingCommon(views)
               if(vb == null){
                 if(mi.done) maybeAdd(mi, result)
                 else{ assert(mi.mcDone); mcDone(mi, views, result) }
               }
-              else for(cpts <- vb){
-                val rcv = new ReducedComponentView(cv.servers, cpts)
-                mi.log(McNotDoneStore(rcv, ply))
-                addToStore(mcNotDoneStore, rcv, mi)
-              }
+              else if(MissingInfoStore.add(mi))
+                for(cpts <- vb){
+                  val rcv = new ReducedComponentView(cv.servers, cpts)
+                  mi.log(McNotDoneStore(rcv, ply))
+                  addToStore(mcNotDoneStore, rcv, mi)
+                }
+                else Profiler.count("MissingInfo not added")
             }
           } // end of mi.synchronized and for loop
         } // end of mis.synchronized
@@ -302,10 +367,12 @@ class SimpleEffectOnStore extends EffectOnStore{
           for(mi <- mis) mi.synchronized{
             if(!mi.done){
               if(views.contains(mi.newView)) mi.markNewViewFound
-              else{
+              else{ 
+                // Would it be better to do the remove later?
+                MissingInfoStore.remove(mi)
                 mi.updateMissingViewsBy(cv, views)
                 if(mi.done) maybeAdd(mi, result)
-                else addToStore(mcDoneStore, mi.missingHead, mi)
+                else maybeAddToStore(mcDoneStore, mi.missingHead, mi)
               }
             }
           } // end of mi.synchronized, for loop
@@ -497,8 +564,10 @@ class SimpleEffectOnStore extends EffectOnStore{
   /** Perform a memory profile of this. */
   def memoryProfile = {
     import ox.gavin.profiling.MemoryProfiler.traverse
-    // profile Max MissingCommons
+    // profile MissingCommon, MissingInfoStore
     MissingCommon.memoryProfile
+    traverse("MissingInfoStore", MissingInfoStore, maxPrint = 1)
+
     println("mcNotDoneStore: size = "+mcNotDoneStore.size)
     var iter = mcNotDoneStore.valuesIterator; var count = 0; val Max = 3
     while(iter.hasNext && count < Max){

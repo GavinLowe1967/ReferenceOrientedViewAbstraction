@@ -52,7 +52,10 @@ object Remapper{
     * entries to -1.  Different calls to this will use the same arrays, so two
     * RemappingMaps created by the same thread should not be in use at the
     * same time. */
-  @inline def newRemappingMap: RemappingMap = cloneMap(remappingMapTemplate)
+  @inline def newRemappingMap: RemappingMap = {
+    Profiler.count("newRemappingMap")
+    cloneMap(remappingMapTemplate)
+  }
 
   /** Is the mapping represented by map injective? */
   def isInjective(map: RemappingMap): Boolean = {

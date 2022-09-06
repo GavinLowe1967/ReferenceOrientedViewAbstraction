@@ -59,7 +59,7 @@ object VA{
   }
 
   var bound = Int.MaxValue // bound on check
-  var numWorkers = 1
+  // var numWorkers = 1
   var testing = false // Are we running the unit tests?
   var memoryProfile = false // Are we doing memory profiling?
 
@@ -126,7 +126,8 @@ object VA{
   def runTestSuite() = {
     val theTestSuite = if(singleRef) srTestSuite else testSuite
     for((fname, states) <- theTestSuite){
-      State.reset; MyStateMap.reset; MissingCommon.reset; EffectOn.reset; 
+      State.reset; MyStateMap.reset; MissingCommon.reset; 
+      MissingInfoStore.reset; EffectOn.reset;
       println("********* "+fname)
       val states1 = run(fname)
       assert(states == states1,

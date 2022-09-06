@@ -10,11 +10,11 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
   * This corresponds to transition trans inducing
   * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView. */
 // IMPROVE: can we store these in a more memory-efficient way?  Do we need
-// them all?
+// them all?  
 class MissingInfo(
   val newView: ReducedComponentView, 
-  private var missingViews: Array[ReducedComponentView], 
-  private var missingCommon: Array[MissingCommon], trans: Transition,
+  var missingViews: Array[ReducedComponentView], 
+  var missingCommon: Array[MissingCommon], trans: Transition,
   val oldCpts: Array[State], val cv: ComponentView, val newCpts: Array[State]
 ){
   /* missingViews contains component views that are necessary to satisfy this
@@ -100,12 +100,14 @@ class MissingInfo(
 
   import MissingInfo.LogEntry
 
-  /** Log used for debugging. */
-  // var theLog = null //  List[LogEntry]()
+  /** Log used for debugging, stored in reverse. */
+  // var theLog = List[LogEntry]()
 
   /** Log for debugging purposes.  Currently turned off. */
-  def log(item: LogEntry) = {} // theLog ::= item
+  def log(item: LogEntry) = {} 
   // def log(item: LogEntry) = synchronized{ theLog ::= item }
+
+  // def showLog = theLog.reverse.mkString("\n")
 
   /** Record missingCommon(i) as being completed. */
   @inline private def mcNull(i: Int) = {
@@ -158,6 +160,7 @@ class MissingInfo(
   @inline def getMcDone/*(key: String)*/ = synchronized{ 
     if(missingCommon == null || mcIndex == missingCommon.length) true
     else{
+// Note, I think the following might fail when notAdded is true
       assert(!missingCommon(mcIndex).done, s"$this") // \nkey = $key
       false
     }
@@ -251,9 +254,6 @@ class MissingInfo(
     }
   }
 
-  // Do above for each index in mcIndex until missingCommon.length.  Call
-  // advanceMC only for index = mcIndex.  Concatenate the view buffers.
-
   /** Update the missing views in the MissingCommon fields of this.
     * @return the views against which this should now be registered, or
     * null if all the missingCommon entries are satisfied.  If all
@@ -263,9 +263,7 @@ class MissingInfo(
     if(highlight) println("updateMissingViewsOfMissingCommon")
     val mc = missingCommon(mcIndex)
     val vb: CptsBuffer = mc.updateMissingViews(views)
-    if(vb == null){ 
-      assert(mc.done); mcNull(mcIndex); advanceMC(views) 
-    }
+    if(vb == null){ assert(mc.done); mcNull(mcIndex); advanceMC(views) }
     else vb
   }
 
@@ -275,6 +273,9 @@ class MissingInfo(
     * views.  */
   private def updateMissingViews(views: ViewSet) = {
     require(mcDone)
+    // Profiler.count("updateMissingViews "+
+    //   (mvIndex < missingViews.length &&
+    //   (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))))
     while(mvIndex < missingViews.length && 
       (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))){
       missingViews(mvIndex) = null; mvIndex += 1
@@ -290,13 +291,16 @@ class MissingInfo(
   /** Update missingViews and mvIndex based on the addition of cv.  cv is
     * expected to match the next missing view. */
   def updateMissingViewsBy(cv: ComponentView, views: ViewSet) = synchronized{
-// FIXME: the assertion looks like a TOCTTOU
+    // Note: the assertion below is checked in EffectOnStore, within a
+    // synchronized block on this, so the following is not a TOCTTOU.
     require(mcDone && mvIndex < missingViews.length && 
       missingViews(mvIndex) == cv,
       s"mvIndex = $mvIndex, cv = $cv, missingViews = \n"+
         missingViews.mkString("\n"))
+//    val oldMissingViews = missingViews.clone
     missingViews(mvIndex) = null; mvIndex += 1
     updateMissingViews(views)
+// Replace in MissingInfoStore
   }
 
   private var notAdded = false
@@ -310,8 +314,7 @@ class MissingInfo(
 
   /** Check that we have nulled-out all done MissingCommons. */
   def sanity1 = 
-    missingCommon == null ||
-      missingCommon.forall(mc => mc == null || !mc.done)
+    missingCommon == null || missingCommon.forall(mc => mc == null || !mc.done)
 
   /** Check that: (1) if all the MissingCommon objects are done, then views does
     * not contain missingHead; (2) otherwise the first non-done MissingCommon
@@ -325,11 +328,10 @@ class MissingInfo(
     if(flag) assert(mcDone) // Check (3)
     if(mcDone){
       if(!flag) assert(transferred)
-      assert(missingCommon == null) // assert(missingCommon.forall(_ == null))
+      assert(missingCommon == null)
       if(flag || !notAdded) //  IMPROVE: do we need this guard? 
         assert(!views.contains(missingHead),  // Check (1)
-          s"$this\nstill contains $missingHead.\n")
-         // theLog.reverse.mkString("\n"))
+          s"$this\nstill contains $missingHead.\n") // + showLog
       else Profiler.count("missingInfo sanity check skipped")
     }
     else{ 
@@ -341,9 +343,7 @@ class MissingInfo(
           if(!mc.done) done = true // no need to check further
         }
       }
-      // Profiler.count("missingCommon sanity check done")
     }
-    // else Profiler.count("missingCommon sanity check skipped")
   }
 
   override def toString =
@@ -354,7 +354,7 @@ class MissingInfo(
       (if(missingCommon == null) "null\n" 
       else missingCommon.mkString("<",",\n  ",">")+")\n")+
       s"  notAdded = $notAdded; mcDone = $mcDone; mcIndex = $mcIndex; "+
-      s"done = $done\n" // + "theLog = "+theLog.reverse.mkString("\n  ")
+      s"done = $done\n" // + showLog
 
   /* Note: we override equality and hashCode, since these leads to fewer
    * MissingInfos being stored, at least in McDoneSet.  This needs more
@@ -383,31 +383,31 @@ class MissingInfo(
   private var mcHash = -1
 
   /** Update mcHash.  Should be called at each update of mcIndex. */
-  @inline private def rehashMC() = {
-    var h = newView.hashCode
-    if(missingCommon != null){
-      var i = mcIndex
-      while(i < missingCommon.length){
-        if(missingCommon(i) != null){ // not if we blanked one out when sorting
-          h = h*73 + missingCommon(i).hashCode
-        }
-        i += 1
-      }
-    }
-    mcHash = h
-  }
+  @inline private def rehashMC() = 
+    mcHash = MissingInfo.hashMC(newView, missingCommon, mcIndex)
+  //   var h = newView.hashCode
+  //   if(missingCommon != null){
+  //     var i = mcIndex
+  //     while(i < missingCommon.length){
+  //       if(missingCommon(i) != null) h = h*73 + missingCommon(i).hashCode
+  //       i += 1
+  //     }
+  //   }
+  //   mcHash = h
+  // }
 
   /** Hash of missingViews. */
   private var mvHash = -1
 
   /** Update mvHash.  Should be called at each update of mvIndex. */
-  private def rehashMV() = {
-    var h = 0; var i = mvIndex
-    while(i < missingViews.length){
-      if(missingViews(i) != null) h = h*73 + missingViews(i).hashCode
-      i += 1
-    }
-  }
+  private def rehashMV() = mvHash = MissingInfo.hashMV(missingViews, mvIndex)
+  //   var h = 0; var i = mvIndex
+  //   while(i < missingViews.length){
+  //     if(missingViews(i) != null) h = h*73 + missingViews(i).hashCode
+  //     i += 1
+  //   }
+  //   mvHash = h
+  // }
 
   rehashMC(); rehashMV()
 
@@ -436,29 +436,41 @@ class MissingInfo(
     (viewCount, mcCount)
   }
 
-    // (missingViews.count(_ != null),
-    //   if(missingCommon == null) 0 
-    //   else if(missingCommon.length == 1){ // optimise for this case
-    //     if(missingCommon(0) == null) 0 else missingCommon(0).size
-    //   }
-    //   else{
-    //     var sum = 0; var i = 0
-    //     while(i < missingCommon.length){
-    //       if(missingCommon(i) != null) sum += missingCommon(i).size
-    //       i += 1
-    //     }
-    //     sum
-    //   })
-  // missingCommon.filter(_ != null).map(_.size).sum)
 }
 
 // ==================================================================
 
 /** Companion object. */
 object MissingInfo{
+  /** A hash of newView and the non-null entries in missingCommon[start..). */
+  @inline def hashMC(newView: ReducedComponentView,
+    missingCommon: Array[MissingCommon], start: Int)
+      : Int = {
+    var h = newView.hashCode
+    if(missingCommon != null){
+      var i = start
+      while(i < missingCommon.length){
+        if(missingCommon(i) != null) h = h*73 + missingCommon(i).hashCode
+        i += 1
+      }
+    }
+    h
+  }
+
+  @inline def hashMV(missingViews: Array[ReducedComponentView], start: Int)
+      : Int = {
+    var h = 0; var i = start
+    while(i < missingViews.length){
+      if(missingViews(i) != null) h = h*73 + missingViews(i).hashCode
+      i += 1
+    }
+    h
+  }
+
+
   /** Sort missingCommon and missingViews. */
-  private def sort(
-    missingCommon: Array[MissingCommon], missingViews: Array[ReducedComponentView])
+  private def sort(missingCommon: Array[MissingCommon], 
+    missingViews: Array[ReducedComponentView])
   = {
     require(missingCommon.length <= 2)
     // Sort missingCommon
@@ -490,7 +502,7 @@ object MissingInfo{
   }
 
   /** Do xs and ys hold the same non-null values? */
-  @inline private def equalExceptNull[A](xs: Array[A], ys: Array[A]) = {
+  @inline  def equalExceptNull[A](xs: Array[A], ys: Array[A]) = {
     var i = 0; var j = 0
     while(i < xs.length && xs(i) == null) i += 1
     while(j < ys.length && ys(j) == null) j += 1
@@ -530,4 +542,131 @@ object MissingInfo{
 
   /** An iteration of completeMcNotDone(cv) saw this. */
   case class CMNDIter(cv: ComponentView, ply: Int) extends LogEntry
+}
+
+// ==================================================================
+
+import scala.collection.mutable.HashMap
+
+/** A store of all the current MissingInfos. */
+object MissingInfoStore{
+  /** Keys used in the mapping. */
+  private class Key(val newView: ReducedComponentView,
+      val missingViews: Array[ReducedComponentView],
+      val missingCommon: Array[MissingCommon]){
+
+    /** Equality is equality of non-null elements.  Note: each parameter is
+      * expected to be sorted. */
+    override def equals(that: Any) = that match{
+      case k: Key =>
+        k.newView == newView && 
+        MissingInfo.equalExceptNull(k.missingViews, missingViews) && 
+        (if(missingCommon == null) k.missingCommon == null
+        else k.missingCommon != null &&
+          MissingInfo.equalExceptNull(k.missingCommon, missingCommon) )
+    }
+
+    override def hashCode = 
+      MissingInfo.hashMC(newView, missingCommon, 0) ^ 
+      MissingInfo.hashMV(missingViews, 0)
+  } // end of Key
+
+  /** The number of shards used in the store. */
+  private val numShards = powerOfTwoAtLeast(numWorkers) * 32
+
+// IMPROVE: make the contains operation lock-free
+
+// IMPROVE: we don't do anything with the stored MissingInfos!  But could
+// purge when the MissingInfo is done.
+
+  /** The underlying store. */
+  private var store = new ShardedHashMap[Key, MissingInfo](shards = numShards)
+
+  /* Note: if two MissingInfos have the same newView, and the constraints of one
+   * are a subset of those of another, then we aim not to include the latter.
+   * We don't do this completely, as we don't purge supersets when we add a
+   * new value.  Also, concurrent adds might not see the effect of the other.
+   * However, this doesn't matter, as this is only a heuristic. */
+
+  /** Does the store contain a MissingInfo for newView and a subset of
+    * missingViews and missingCommon? */
+  private def containsSubset(newView: ReducedComponentView,
+    missingViews: Array[ReducedComponentView], 
+    missingCommon: Array[MissingCommon])
+  : Boolean = {
+    assert(missingViews != null)
+    // Consider each subset of missingViews. 
+    // Each subset is represented by a value for flags.  We only set entries
+    // in flags corresponding to non-null entries in missingViews.
+    // Considering flags as a number in binary, we consider each value in
+    // turn.  found is true if we've found a subset.  Inv: we've considered
+    // each subset up to and including flags.  done is true if we've
+    // considered them all or found a subset.
+// FIXME: and MissingCommon
+    val flags = new Array[Boolean](missingViews.length)
+    var done = false; var found = false
+    while(!done){
+      // Advance flags to next subset.  In effect, we increment the number
+      // represented by flags (in binary), but skipping over bits that
+      // correspond to nulls in missingViews.
+      var done1 = false; var i = 0
+      /* Advance i to next non-null element of missingViews. */
+      @inline def advance() =
+        while(i < missingViews.length && missingViews(i) == null) i += 1
+      advance()
+      while(i < missingViews.length && !done1){
+        assert(missingViews(i) != null); flags(i) = !flags(i)
+        if(flags(i)) done1 = true else{ i += 1; advance() }
+      }
+      if(done1){
+        // The subset of missingViews corresponding to flags.
+        val missingViews1 = Array.tabulate(missingViews.length)(i =>
+          if(flags(i)) missingViews(i) else null)
+        val key = new Key(newView, missingViews1, missingCommon)
+        if(store.contains(key)){ found = true; done = true }
+      }
+      else done = true
+    }
+    found
+  }
+
+
+  /** Add mi if there is no existing MissingInfo that represents a subset of the
+    * constraints. */
+  @inline def add(mi: MissingInfo): Boolean = {
+    val newView = mi.newView
+    val missingViews = mi.missingViews; val missingCommon = mi.missingCommon
+    if(!containsSubset(newView, missingViews, missingCommon)){
+      val key = new Key(newView, missingViews, missingCommon)
+      store += key -> mi 
+      true
+    }
+    else{ mi.setNotAdded; false }
+  }
+// IMPROVE: better to construct the missingInfo here when first adding.
+
+  /** Remove the entry corresponding to mi but using oldMissingViews; replace it
+    * with mi if there is no subset. */
+  def replace(mi: MissingInfo, oldMissingViews: Array[ReducedComponentView])
+      : Boolean = {
+    // Note: we try to make the remove and add as close together as possible. 
+    val newView = mi.newView; val newMissingViews = mi.missingViews
+    val missingCommon = mi.missingCommon
+    val oldKey = new Key(newView, oldMissingViews, missingCommon)
+    if(!containsSubset(newView, newMissingViews, missingCommon)){
+      val newKey =  new Key(newView, newMissingViews, missingCommon)
+      store.remove(oldKey); store += newKey -> mi; true
+    }
+    else{ store.remove(oldKey); false }
+  }
+
+  /** Remove mi from the store. */
+  def remove(mi: MissingInfo) = {
+    val key = new Key(mi.newView, mi.missingViews, mi.missingCommon)
+    store.remove(key)
+  }
+
+  /** Reset for a new check. */
+  def reset = store = new ShardedHashMap[Key, MissingInfo](shards = numShards)
+
 }

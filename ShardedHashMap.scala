@@ -24,7 +24,7 @@ class ShardedHashMap[A: scala.reflect.ClassTag, B: scala.reflect.ClassTag](
 
   /** A hash for a; guaranteed not to be Empty or Deleted. */
   private def hashOf(a: A): Int = {
-    val h = a.hashCode
+    val h = scala.util.hashing.byteswap32(a.hashCode)  // a.hashCode
     if(h == Empty) EmptyProxy else if(h == Deleted) DeletedProxy else h 
   }
 
@@ -144,6 +144,16 @@ class ShardedHashMap[A: scala.reflect.ClassTag, B: scala.reflect.ClassTag](
       assert(hashes(sh)(i) == h && keys(sh)(i) == a, s"Key not found: $a")
       elements(sh)(i)
     }
+  }
+
+  def contains(a: A): Boolean = {
+    val h = hashOf(a); val sh = shardFor(h)
+    // The hash in the position corresponding to h
+    val h1 =  locks(sh).synchronized{
+      val i = find(sh, a, h); hashes(sh)(i)
+    }
+    if(filled(h1)){ assert(h1 == h); true }
+    else false
   }
 
   /** Get the value associated with a; or default if there is no such value. */

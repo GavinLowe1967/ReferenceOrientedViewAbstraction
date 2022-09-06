@@ -119,21 +119,21 @@ class MissingCommon(
     * Return views against which this should now be registered, or null if
     * done. */
   def updateMissingViews(views: ViewSet): CptsBuffer = synchronized{
-    if(highlight) println(s"updateMissingViews $pid "+
-      missingCandidates.map(showMissingComponents))
+    // if(highlight) println(s"updateMissingViews $pid "+
+    //   missingCandidates.map(showMissingComponents))
     if(done){ assert(missingCandidates.isEmpty); null } 
     else{
       val toRegister = new CptsBuffer
       // Note: it's possible that missingCandidates is empty here
       val newMC = missingCandidates.map(mc => removeViews(mc, views, toRegister))
-      if(highlight){
-        if(done) println("Now done")
-        else println("newMC = "+newMC.map(showMissingComponents _))
-      }
+      // if(highlight){
+      //   if(done) println("Now done")
+      //   else println("newMC = "+newMC.map(showMissingComponents _))
+      // }
       if(done){ assert(missingCandidates.isEmpty);  null }
       else{
         missingCandidates = newMC
-        assert(missingCandidates.isEmpty || toRegister.nonEmpty,   // ***
+        assert(missingCandidates.isEmpty || toRegister.nonEmpty, 
           s"updateMissingViews with\n${missingCandidates}")
         toRegister
       }
@@ -211,8 +211,8 @@ class MissingCommon(
           }
         }
       } // end of while loop
-      if(highlight && !found) println(s"found = $found; missingComponents = "+
-        missingCandidates.map(showMissingComponents))
+      // if(highlight && !found) println(s"found = $found; missingComponents = "+
+      //   missingCandidates.map(showMissingComponents))
       //if(highlight) println(s"found = $found")
       found
     } // end of if isNewUMCState
@@ -228,7 +228,8 @@ class MissingCommon(
       val vb1 = updateMissingViews(views); assert(vb1 != null, this)
       vb ++= vb1 
  */
-      for(cpts <- missingHeads) if(true || !views.contains(servers, cpts)) vb += cpts 
+      for(cpts <- missingHeads) 
+        if(true || !views.contains(servers, cpts)) vb += cpts
       false
     }
   }
@@ -419,7 +420,32 @@ object MissingCommon{
     mc.map(StateArray.show).mkString("; ")
 
   /** Type of keys for stored MissingCommons. */
-  private type Key = (ServerStates, List[State], ProcessIdentity)
+  //private type Key = (ServerStates, List[State], ProcessIdentity)
+// IMPROVE: create more memory-efficient type
+
+  /** Type of keys for storing MissingCommons. */
+  class Key(
+      val ssIndex: Int, val cpts: Array[State], val pf: Int, val pId: Int){
+    override def hashCode = StateArray.mkHash((ssIndex*71+pf)*71+pId, cpts)
+
+    override def equals(that: Any) = that match{
+      case key: Key => 
+        key.ssIndex == ssIndex && key.pf == pf && key.pId == pId &&
+        key.cpts.sameElements(cpts)
+    }
+  }
+
+  private def mkKey(
+    servers: ServerStates, cpts1: Cpts, cpts2: Cpts, pid: ProcessIdentity)
+      : Key = {
+    // Build concatenation of cpts1 and cpts2
+    val cpts = new Array[State](cpts1.length+cpts2.length)
+    var i = 0; var j = 0
+    while(i < cpts1.length){ cpts(j) = cpts1(i); i += 1; j += 1 }
+    i = 0
+    while(i < cpts2.length){ cpts(j) = cpts2(i); i += 1; j += 1 }
+    new Key(servers.index, cpts, pid._1, pid._2)
+  }
 
   /** The type of the store of all MissingCommon we have created. */
   //type MissingCommonStore = MyLockFreeReadHashMap[Key, MissingCommon]
@@ -506,7 +532,8 @@ object MissingCommon{
     pid: ProcessIdentity, views: ViewSet)
       : MissingCommon = {
     require(singleRef && cpts2.length == 2, StateArray.show(cpts2))
-    val key = (servers, cpts1.toList++cpts2.toList, pid)
+    // val key = (servers, cpts1.toList++cpts2.toList, pid)
+    val key = mkKey(servers, cpts1, cpts2, pid)
     getMC(key) match{
       case Some(mc) => 
         Profiler.count("old MissingCommon")
