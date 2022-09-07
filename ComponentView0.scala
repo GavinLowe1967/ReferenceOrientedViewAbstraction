@@ -116,7 +116,10 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   }
 
   /** Produce a ReducedComponentView equivalent to this. */
-  def reduce = new ReducedComponentView(servers, components)
+  // def reduce = {
+  //   Profiler.count("ReducedComponentView: ComponentView0")
+  //   new ReducedComponentView(servers, components)
+  // }
 
   // -------------------------------------------------------
 
@@ -212,6 +215,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   @inline def addDoneInducedPostServersRemaps(
     servers: ServerStates, map: ReducedMap, postUnified: List[State] = null)
       : Boolean = {
+    assert(postUnified == null)
     val key = ServersReducedMap(servers, map, postUnified)
     synchronized{ doneInducedPostServersRemaps.add(key) }
   }
@@ -222,6 +226,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   def containsDoneInducedPostServersRemaps(
     servers: ServerStates, map: ReducedMap, postUnified: List[State] = null)
       : Boolean = {
+    assert(postUnified == null)
     val key = ServersReducedMap(servers, map, postUnified)
     synchronized{ doneInducedPostServersRemaps.contains(key) }
   }

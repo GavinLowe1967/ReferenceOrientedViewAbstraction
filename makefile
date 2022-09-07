@@ -54,7 +54,7 @@ $(DIR)/FDRTransitionMap.class: $(DIR)/State.class $(DIR)/CSPFileParser.class	\
 
 $(DIR)/ServersReducedMap.class: $(DIR)/ServerStates.class
 
-$(DIR)/View.class:  $(DIR)/StateArray.class $(DIR)/ServerStates.class
+$(DIR)/View.class:  $(DIR)/StateArray.class $(DIR)/ServerStates.class $(DIR)/ShardedHashSet.class
 
 $(DIR)/MyHashSet.class:  $(DIR)/Sharding.class
 
@@ -97,7 +97,8 @@ $(DIR)/ViewSet.class: $(DIR)/ComponentView.class $(DIR)/MyHashSet.class $(DIR)/T
 
 $(DIR)/IndexSet.class: $(DIR)/ComponentView.class
 
-$(DIR)/NewViewSet.class: $(DIR)/ViewSet.class $(DIR)/IndexSet.class $(DIR)/ShardedHashMap.class
+$(DIR)/NewViewSet.class: $(DIR)/ViewSet.class $(DIR)/IndexSet.class \
+  $(DIR)/ShardedHashMap.class $(DIR)/ShardedHashSet.class
 
 # # The system itself
 
@@ -120,7 +121,7 @@ $(DIR)/MissingCommon.class: $(DIR)/Unification.class $(DIR)/ViewSet.class $(DIR)
 
 $(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
 
-$(DIR)/MissingInfoStore.class:  $(DIR)/MissingInfo.class 
+$(DIR)/MissingInfoStore.class: $(DIR)/ShardedHashSet.class $(DIR)/MissingInfo.class 
 
 $(DIR)/EffectOnStore.class: $(DIR)/MissingInfoStore.class 
 

@@ -59,11 +59,10 @@ class MissingCommon(
     cptsList.map(StateArray.show).mkString("; ")
 
   /** When any element of missingCandidates is satisfied, then this obligation
-    * will be discharged.  Each MissingComponents within the list is sorted
+    * will be discharged.  Each MissingComponents within the array is sorted
     * (wrt StateArray.lessThan).  missingCandidates is set to null when this
     * is done. */
-  private[this] var missingCandidates = new Array[MissingComponents](0) 
-    // List[MissingComponents]()
+  private[this] var missingCandidates = new Array[MissingComponents](0)
   /* We maintain the invariant that, if this is the first non-done MissingCommon
    * in a MissingInfo, then the first element of each list is either missing
    * from the current view set, or in the set of new views being considered on
@@ -121,7 +120,7 @@ class MissingCommon(
   def updateMissingViews(views: ViewSet): CptsBuffer = synchronized{
     // if(highlight) println(s"updateMissingViews $pid "+
     //   missingCandidates.map(showMissingComponents))
-    if(done){ assert(missingCandidates == null /*.isEmpty*/); null } 
+    if(done){ assert(missingCandidates == null); null } 
     else{
       val toRegister = new CptsBuffer
       // Note: it's possible that missingCandidates is empty here
@@ -130,7 +129,7 @@ class MissingCommon(
       //   if(done) println("Now done")
       //   else println("newMC = "+newMC.map(showMissingComponents _))
       // }
-      if(done){ assert(missingCandidates == null /*.isEmpty*/);  null }
+      if(done){ assert(missingCandidates == null);  null }
       else{
         missingCandidates = newMC
         assert(missingCandidates.isEmpty || toRegister.nonEmpty, 
@@ -299,12 +298,10 @@ class MissingCommon(
   private def add(mCpts: MissingComponents): Boolean = {
     assert(!done)
     require(isSorted(mCpts), mCpts.map(StateArray.show)) // IMPROVE: quite expensive
-    // Traverse missingCandidates.  Add to newMC any that is not a proper
-    // superset of mCpts.
-    // var newMC = List[MissingComponents]()
-    // Bitmap showing which elements of missingCandidates to retain.
+    // Traverse missingCandidates.  We aim to retain any that is  not a proper
+    // superset of mCpts.  Record which to retain in toRetain.
     val toRetain = new Array[Boolean](missingCandidates.length); 
-    var retainCount = 0
+    var retainCount = 0 // number to retain
     var found = false // true if missingCandidates includes a subset of mCpts
     // for(mCpts1 <- missingCandidates){
     for(i <- 0 until missingCandidates.length){
@@ -313,22 +310,19 @@ class MissingCommon(
       // parameters can be mutated by a concurrent thread.
       val cmp = MissingCommon.compare(mCpts1, mCpts)
       if(cmp != Sup){ toRetain(i) = true; retainCount += 1}
-      //newMC::= mCpts1 // mCpts1 can't be replaced by mCpts
       found ||= cmp == Sub || cmp == Eq // mCpts can't be replaced by mCpts1
     }
     // Update missingCandidates, retaining elements of missingCandidates as
     // indicated by toretain.
     val newMC = 
       new Array[MissingComponents](if(found) retainCount else retainCount+1)
-    var j = 0
+    assert(newMC.length > 0); var j = 0
     for(i <- 0 until missingCandidates.length; if toRetain(i)){
       newMC(j) = missingCandidates(i); j += 1 
     }
     assert(j == retainCount)
-    if(!found) newMC(retainCount) = mCpts //newMC ::= mCpts; log(AddMC(mCpts)) } 
-    assert(newMC.nonEmpty)
-    missingCandidates = newMC
-    !found
+    if(!found) newMC(retainCount) = mCpts
+    missingCandidates = newMC; !found
   }
 
   /** Is mCand sorted, without repetitions. */
@@ -395,19 +389,13 @@ class MissingCommon(
   /** A measure of the size of this: the number of ComponentViews stored.  If
     * size has already been called, then return 0 to avoid double-counting. */
   def size = {
-    if(counted) 0
+    if(counted || missingCandidates == null) 0
     else{
-      counted = true; /* var mcs = missingCandidates; */
-      if(missingCandidates != null){
-        var i = 0; var size = 0
-        while(i < missingCandidates.length){
-          size += missingCandidates(i).length; i += 1
-        }
-        size
+      counted = true; var i = 0; var size = 0
+      while(i < missingCandidates.length){
+        size += missingCandidates(i).length; i += 1
       }
-      else 0
-      // while(mcs.nonEmpty){ size += mcs.head.length; mcs = mcs.tail }
-      // size
+      size
     }
   }
 }
@@ -447,7 +435,9 @@ object MissingCommon{
 
   /** Type of keys for storing MissingCommons. */
   class Key(
-      val ssIndex: Int, val cpts1: Array[State], val cpts2: Array[State], val pf: Int, val pId: Int){
+    val ssIndex: Int, val cpts1: Array[State], val cpts2: Array[State],
+    val pf: Int, val pId: Int
+  ){
     override def hashCode = 
       StateArray.mkHash( StateArray.mkHash((ssIndex*71+pf)*71+pId, cpts1), cpts2)
 
@@ -462,7 +452,7 @@ object MissingCommon{
     servers: ServerStates, cpts1: Cpts, cpts2: Cpts, pid: ProcessIdentity)
       : Key = {
     // Build concatenation of cpts1 and cpts2
-// IMPROVE: that's probably worse for memory usage, since cpts1, cpts2 are shared
+    //  that's probably worse for memory usage, since cpts1, cpts2 are shared
     // val cpts = new Array[State](cpts1.length+cpts2.length)
     // var i = 0; var j = 0
     // while(i < cpts1.length){ cpts(j) = cpts1(i); i += 1; j += 1 }

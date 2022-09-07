@@ -57,12 +57,17 @@ class ReducedComponentView(
 
 // =======================================================
 
-// object ReducedComponentView{
-//   /** A store of ReducedComponentViews created previously. */
-//   private val store = new ShardedHashMap[ServerStates, HashMap[
+object ReducedComponentView{
+  /** A store of ReducedComponentViews created previously. */
+  private val store = new ShardedHashSet[ReducedComponentView]
 
+  /** Get a ReducedComponentView corresponding to servers and cpts.  Note: we
+    * avoid storing multiple equivalent ReducedComponentViews, to reduce
+    * memory usage. */  
+  def apply(servers: ServerStates, cpts: Array[State]) = 
+    store.getOrAdd(new ReducedComponentView(servers, cpts))
 
-// }
+}
 
 // ==================================================================
 

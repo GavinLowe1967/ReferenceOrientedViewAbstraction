@@ -9,7 +9,7 @@ import ox.gavin.profiling.Profiler
 /** An implementation of ViewSet allowing efficient iteration. */
 class NewViewSet extends ViewSet{
   /** A set containing all the views. */
-  private val allViews = new MyShardedHashSet[ReducedComponentView]
+  private val allViews = new ShardedHashSet[ReducedComponentView]
   // IMPROVE: it would be better to use ComponentView here.  But then we
   // couldn't call contains on it with a ReducedComponentView.  We could
   // implement the set directly, like ComponentsSet.
@@ -45,7 +45,7 @@ class NewViewSet extends ViewSet{
 
   /** Does this contain a view corresponding to servers and cpts? */
   def contains(servers: ServerStates, cpts: Array[State]): Boolean = {
-    // Profiler.count("NewViewSet.contains")
+    Profiler.count("ReducedComponentView: NewViewSet.contains")
     allViews.contains(new ReducedComponentView(servers, cpts))
   }
   // IMPROVE: the above is potentially inefficiency

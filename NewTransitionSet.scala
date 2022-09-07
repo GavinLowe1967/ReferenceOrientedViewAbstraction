@@ -8,7 +8,7 @@ import scala.collection.mutable.{HashMap,HashSet,ArrayBuffer}
 /** A set recording the transitions seen so far. */
 class NewTransitionSet{
   /** All the transitions added. */
-  private var underlying = new MyShardedHashSet[Transition]
+  private var underlying = new ShardedHashSet[Transition]
 
   /** The transitions, partitioned according to their preServers value. */
   private val byPreServers = 

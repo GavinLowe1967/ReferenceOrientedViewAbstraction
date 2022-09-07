@@ -184,15 +184,15 @@ class SimpleEffectOnStore extends EffectOnStore{
   def add(missing: List[ReducedComponentView], 
     missingCommon: List[MissingCommon], nv: ComponentView, trans: Transition, 
     oldCpts: Array[State], cv: ComponentView, newCpts: Array[State])
-      : Unit = /*synchronized*/{
+      : Unit = {
     Profiler.count("EffectOnStore.add")
     // I think the following holds regardless of concurrent threads: each mc
     // is created based on earlier plies; and any update will be based just on
     // the previous ply.
     for(mc <- missingCommon) assert(!mc.done)
     val mcArray = missingCommon.toArray
-    val nv1 = new ReducedComponentView(nv.servers, nv.components)
-    // Profiler.count(s"new MissingInfo ${mcArray.size} ${missing.length}")
+    val nv1 = ReducedComponentView(nv.servers, nv.components)
+    Profiler.count("ReducedComponentView: EffectOnStore.add")
     val missingInfo = new MissingInfo(nv1, missing.toArray, mcArray, 
       trans, oldCpts, cv, newCpts)
     if(missingCommon.isEmpty && !MissingInfoStore.add(missingInfo)) 
@@ -207,7 +207,8 @@ class SimpleEffectOnStore extends EffectOnStore{
       // Add entries to mcMissingCandidates against the first MissingCommon.
       for(cpts <- mc0.missingHeads){ 
         assert(cpts != null)
-        val cv = new ReducedComponentView(servers1, cpts)
+        val cv = ReducedComponentView(servers1, cpts)
+        Profiler.count("ReducedComponentView: EffectOnStore.add-cv")
         missingInfo.log(MissingInfo.McNotDoneStore(cv, ply))
         addToStore(mcNotDoneStore, cv, missingInfo)
       }
@@ -296,7 +297,8 @@ class SimpleEffectOnStore extends EffectOnStore{
                 else if(!MISFlag || MissingInfoStore.add(mi)){
                   // Register mi against each view in vb, and retain
                   for(cpts <- vb){
-                    val rcv = new ReducedComponentView(cv.servers, cpts)
+                    val rcv = ReducedComponentView(cv.servers, cpts)
+                    Profiler.count("ReducedComponentView: completeCandidateForMC")
                     // mi.log(MissingInfo.McNotDoneStore(rcv, ply))
                     addToStore(mcNotDoneStore, rcv, mi)
                   }
@@ -347,7 +349,8 @@ class SimpleEffectOnStore extends EffectOnStore{
               }
               else if(!MISFlag || MissingInfoStore.add(mi)){
                 for(cpts <- vb){
-                  val rcv = new ReducedComponentView(cv.servers, cpts)
+                  val rcv = ReducedComponentView(cv.servers, cpts)
+                  Profiler.count("ReducedComponentView: completeMcNotDone")
                   // mi.log(McNotDoneStore(rcv, ply))
                   addToStore(mcNotDoneStore, rcv, mi)
                 }

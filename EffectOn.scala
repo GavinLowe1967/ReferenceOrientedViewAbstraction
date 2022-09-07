@@ -142,7 +142,7 @@ object EffectOn{
       effectOnStore.report; println()
       effectOnStore.memoryProfile
     }
-    traverse("effectOn", this, maxPrint = 1)
+    traverse("effectOn", this, maxPrint = 1, ignore = List("System"))
   }
 }
 
@@ -313,9 +313,9 @@ class EffectOn(
      * newEffectOn, no acquired references, (2) otherwise no unifs. */
     @inline def recordInduced() = if(singleRef && isPrimary){ // and newEffectOn
       // IMPROVE: repeats work from SingleRefEffectOnUnification:
-      // doesPrincipalAcquireRef and getPostUnified.  Currently disabled.
-      if(StoreDoneInducedPostServersRemaps){
-        if(DetectRepeatRDMapWithUnification){
+      // doesPrincipalAcquireRef and getPostUnified.  
+      if(StoreDoneInducedPostServersRemaps){ // currently true
+        if(DetectRepeatRDMapWithUnification){ // currently false
           if(!trans.doesPrincipalAcquireRef(unifs))
             cv.addDoneInducedPostServersRemaps(post.servers, reducedMap,
               trans.getPostUnified(unifs, cv.components.length) )
@@ -360,7 +360,9 @@ class EffectOn(
     // cv, then check that that combination is possible in sysAbsViews:
     // those that are missing.
     val missing: List[ReducedComponentView] =
-      crossRefs.map(new ReducedComponentView(pre.servers, _)).
+      crossRefs.map{ cpts => { 
+        Profiler.count("ReducedComponentView: EffectOn")
+        ReducedComponentView(pre.servers, cpts) } }.
         filter(!views.contains(_))
     for(newComponents <- newComponentsList){
       if(highlight1) 

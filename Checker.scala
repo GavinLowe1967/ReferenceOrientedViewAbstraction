@@ -17,7 +17,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
   protected var sysAbsViews: ViewSet = sav 
   // Note: reset by CheckerTest
 
-  protected type NextNewViewSet = MyShardedHashSet[ComponentView]
+  protected type NextNewViewSet = ShardedHashSet[ComponentView]
 
   /** The new views to be considered on the next ply. */
   protected var nextNewViews: NextNewViewSet = null
@@ -25,7 +25,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
   /* The transitions found so far. */
   private val transitions = new NewTransitionSet
 
-  private type NextTransitionSet = MyShardedHashSet[Transition]
+  private type NextTransitionSet = ShardedHashSet[Transition]
 
   /** Transitions found on this ply.  Transitions are initially added to
     * newTransitions, but transferred to transitions at the end of the ply. */
@@ -439,14 +439,16 @@ class Checker(system: SystemP.System, numWorkers: Int){
     println("Memory profile"); println()
     println("# states = "+MyStateMap.stateCount)
     traverse("MyStateMap", MyStateMap, maxPrint = 0); println()
-    if(true){ traverse("system", system, maxPrint = 0); println() }
+    if(false){ traverse("system", system, maxPrint = 0); println() }
     else println("Omitting system\n") 
     traverse("ServerStates", ServerStates, maxPrint = 0); println()
     //traverse("first view", sysAbsViews.iterator.next(), maxPrint = 0); println()
+    traverse("ReducedComponentView", ReducedComponentView, maxPrint = 0)
+    println()
+    // Traverse 3 views.  Not very useful as mostly in creationIngredients.
     val viewsIter = sysAbsViews.iterator
-    // Traverse 3 views
     for(_ <- 0 until 3; if viewsIter.hasNext){
-      traverse("ComponentView", viewsIter.next(), maxPrint = 0); println()
+      traverse("ComponentView", viewsIter.next(), maxPrint = 1); println()
     }
     traverse("sysAbsViews", sysAbsViews, maxPrint = 0); println()
     traverse("transitions", transitions, maxPrint = 0); println()

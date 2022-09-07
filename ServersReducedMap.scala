@@ -13,7 +13,10 @@ import ox.gavin.profiling.Profiler
  * 3. the post states of the unified components that change state.
  * 
  * They are used in ComponentView.doneInducedPostServerRemaps and
- * ComponentView.conditionBInducedMap. */
+ * ComponentView.conditionBInducedMap. 
+ * 
+ * Note: item 3 is currently not used.  This is controlled by
+ * DetectRepeatRDMapWithUnification. */
 
 object ServersReducedMap{
   /** Type representing the range restriction of a RemappingMap.  The
@@ -23,11 +26,12 @@ object ServersReducedMap{
   /** Factory method for ServersReducedMaps. */
   def apply(servers: ServerStates, map: ReducedMap, newCpts: List[State] = null)
       : ServersReducedMap = {
+    assert(newCpts == null) 
     // Profiler.count("ServersReducedMap"+map.length)
     // With lazySet bound 44: 0 -> 6; 1 -> 2.3B; 2 -> 51.5M; 3 -> 1.6K 
-    if(map.isEmpty) new ServersReducedMap0(servers, newCpts)
-    else if(map.length == 1) new ServersReducedMap1(servers, map(0), newCpts)
-    else new ServersReducedMapN(servers, map, newCpts)
+    if(map.isEmpty) new ServersReducedMap0(servers/*, newCpts*/)
+    else if(map.length == 1) new ServersReducedMap1(servers, map(0) /*,newCpts*/)
+    else new ServersReducedMapN(servers, map /*, newCpts*/)
   }
 }
 
@@ -51,47 +55,46 @@ abstract class ServersReducedMap{
 
 /** A ServersReducedMap corresponding to an empty map. */
 class ServersReducedMap0(
-  val servers: ServerStates, val newCpts: List[State] = null)
+  val servers: ServerStates /*, val newCpts: List[State] = null*/)
     extends ServersReducedMap{
   override def equals(that: Any) = that match{
     case srm: ServersReducedMap0 => 
-      srm.servers == servers && srm.newCpts == newCpts
+      srm.servers == servers // && srm.newCpts == newCpts
     case _: ServersReducedMap => false
   }
 
-  override def hashCode = servers.hashCode ^ hashCpts(newCpts)
+  override def hashCode = servers.hashCode // ^ hashCpts(newCpts)
 
-  override def toString = s"ServersReducedMap0($servers, $newCpts)"
+  override def toString = s"ServersReducedMap0($servers)" // , $newCpts
 }
 
 // ==================================================================
 
 /** A ServersReducedMap whose map is a single Long. */
-class ServersReducedMap1(
-  val servers: ServerStates, val map: Long, val newCpts: List[State] = null)
+class ServersReducedMap1(val servers: ServerStates, val map: Long)
+ //, val newCpts: List[State] = null
     extends ServersReducedMap{
   override def equals(that: Any) = that match{
     case srm: ServersReducedMap1 => 
-      srm.servers == servers && srm.map == map && srm.newCpts == newCpts
+      srm.servers == servers && srm.map == map // && srm.newCpts == newCpts
     case _: ServersReducedMap => false
   }
 
-  override def hashCode = combine(servers.hashCode, map) ^ hashCpts(newCpts)
+  override def hashCode = combine(servers.hashCode, map) //^ hashCpts(newCpts)
 
-  override def toString = s"ServersReducedMap1($servers, $map, $newCpts)"
+  override def toString = s"ServersReducedMap1($servers, $map)" //, $newCpts
 }
 
 // ==================================================================
 
 /** A ServersReducedMap whose map contains at least two Longs. */
-class ServersReducedMapN(
-  val servers: ServerStates, val map: ReducedMap, 
-  val newCpts: List[State] = null)
+class ServersReducedMapN(val servers: ServerStates, val map: ReducedMap)
+  //val newCpts: List[State] = null)
     extends ServersReducedMap{
   override def equals(that: Any) = that match{
     case srm: ServersReducedMapN =>
-      srm.servers == servers && srm.map.sameElements(map) && 
-      srm.newCpts == newCpts
+      srm.servers == servers && srm.map.sameElements(map)//  && 
+      // srm.newCpts == newCpts
     case _: ServersReducedMap => false
   }
 
@@ -102,11 +105,11 @@ class ServersReducedMapN(
     // In FP terms: foldl combine servers.hashCode map
     var h = servers.hashCode; var i = 0
     while(i < map.length){ h = combine(h, map(i)); i += 1 }
-    h ^ hashCpts(newCpts)
+    h // ^ hashCpts(newCpts)
   }
 
   override def toString = 
-    s"ServersReducedMapN($servers, ${map.mkString(", ")}, $newCpts)"
+    s"ServersReducedMapN($servers, ${map.mkString(", ")})" // , $newCpts
 }
 
 // It might be worth having a case for exactly two Longs.

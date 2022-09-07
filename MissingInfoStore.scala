@@ -46,7 +46,7 @@ object MissingInfoStore{
 
   /** The underlying store. */
   // private var store = new ShardedHashMap[Key, MissingInfo](shards = numShards)
-  private var store = new MyShardedHashSet[Key](shards = numShards)
+  private var store = new ShardedHashSet[Key](shards = numShards)
 
   /* Note: if two MissingInfos have the same newView, and the constraints of one
    * are a subset of those of another, then we aim not to include the latter.
@@ -179,7 +179,7 @@ object MissingInfoStore{
   def size = store.size
 
   /** Reset for a new check. */
-  def reset = store = new MyShardedHashSet[Key](shards = numShards)
+  def reset = store = new ShardedHashSet[Key](shards = numShards)
   // new ShardedHashMap[Key, MissingInfo](shards = numShards)
 
 }
