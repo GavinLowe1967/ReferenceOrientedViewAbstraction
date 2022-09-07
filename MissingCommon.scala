@@ -28,7 +28,7 @@ class MissingCommon(
    * done, missingHeads, matches, sanityCheck, compare, size
    */
 
-  private val princ1 = cpts1(0)
+  @inline private def princ1 = cpts1(0)
 
   /** Highlight if this relates to the relevant instance. 
     * servers = [107(N0) || 109(N1) || 110() || 114(T0) || 119() || 1()]
@@ -53,15 +53,17 @@ class MissingCommon(
     * component state c for which condition (1) is satisfied; cands contains
     * those components corresponding to conditions (2) and (3).  Each such
     * cands is sorted (wrt StateArray.lessThan).  */
-  import MissingCommon.MissingComponents // = Array[Array[State]]
+  import MissingCommon.MissingComponents // = Array[Cpts]
 
   def showMissingComponents(cptsList: MissingComponents) =
     cptsList.map(StateArray.show).mkString("; ")
 
   /** When any element of missingCandidates is satisfied, then this obligation
     * will be discharged.  Each MissingComponents within the list is sorted
-    * (wrt StateArray.lessThan). */
-  private[this] var missingCandidates = List[MissingComponents]()
+    * (wrt StateArray.lessThan).  missingCandidates is set to null when this
+    * is done. */
+  private[this] var missingCandidates = new Array[MissingComponents](0) 
+    // List[MissingComponents]()
   /* We maintain the invariant that, if this is the first non-done MissingCommon
    * in a MissingInfo, then the first element of each list is either missing
    * from the current view set, or in the set of new views being considered on
@@ -86,17 +88,15 @@ class MissingCommon(
   /** Record that this is now done.  Also clear missingCandidates and
     * doneMissingCandidates to reclaim memory. */
   private def setDone = { 
-    isDone = true; missingCandidates = List(); doneMissingCandidates = null
-    log(SetDoneMC)
+    isDone = true; missingCandidates = null
+    doneMissingCandidates = null // ; log(SetDoneMC)
   }
-
-  def notDoneEmpty = !isDone && missingCandidates.isEmpty
 
   /** The heads of the missing candidates.  The corresponding MissingInfo should
     * be registered against these in EffectOnStore.mcNotDoneStore. */
-  def missingHeads: List[Cpts] = synchronized{ missingCandidates.map(_(0)) }
+  def missingHeads: Array[Cpts] = synchronized{ missingCandidates.map(_(0)) }
 
-  import MissingCommon.CptsBuffer // = ArrayBuffer[Array[State]]
+  import MissingCommon.CptsBuffer // = ArrayBuffer[Cpts]
 
   /** Remove the maximum prefix of mc consisting of elements of views.  If any
     * is empty, record that this is done; otherwise add the next view to
@@ -121,7 +121,7 @@ class MissingCommon(
   def updateMissingViews(views: ViewSet): CptsBuffer = synchronized{
     // if(highlight) println(s"updateMissingViews $pid "+
     //   missingCandidates.map(showMissingComponents))
-    if(done){ assert(missingCandidates.isEmpty); null } 
+    if(done){ assert(missingCandidates == null /*.isEmpty*/); null } 
     else{
       val toRegister = new CptsBuffer
       // Note: it's possible that missingCandidates is empty here
@@ -130,7 +130,7 @@ class MissingCommon(
       //   if(done) println("Now done")
       //   else println("newMC = "+newMC.map(showMissingComponents _))
       // }
-      if(done){ assert(missingCandidates.isEmpty);  null }
+      if(done){ assert(missingCandidates == null /*.isEmpty*/);  null }
       else{
         missingCandidates = newMC
         assert(missingCandidates.isEmpty || toRegister.nonEmpty, 
@@ -235,16 +235,15 @@ class MissingCommon(
   }
 
   /** Find the missing components that (with servers) are necessary to complete
-    * this for a particular candidate state c.  Return a list containing each
-    * of the following that is not currently in views: (1) cpts2(0) || c; and
-    * (2) if c has a reference to a secondary component c2 of cpts1 or cpts2,
-    * then c || c2 (renamed).  The list is sorted (wrt
+    * this for a particular candidate state c.  Return an array containing
+    * each of the following that is not currently in views: (1) cpts2(0) || c;
+    * and (2) if c has a reference to a secondary component c2 of cpts1 or
+    * cpts2, then c || c2 (renamed).  The array is sorted (wrt
     * StateArray.lessThan).  */
   @inline private 
   def getMissingCandidates(c: State, views: ViewSet): MissingComponents = {
     //if(highlight) println(s"getMissingCandidates($c)")
     var missing = List[Array[State]]() // missing necessary views
-    //val servers = mc.servers; val cpts1 = mc.cpts1; val cpts2 = mc.cpts2
     // Add cptsx, if servers || cptsx is not in views
     @inline def maybeAdd(cptsx: Array[State]) = { 
       val renamedCpts = Remapper.remapComponents(servers, cptsx)
@@ -302,16 +301,31 @@ class MissingCommon(
     require(isSorted(mCpts), mCpts.map(StateArray.show)) // IMPROVE: quite expensive
     // Traverse missingCandidates.  Add to newMC any that is not a proper
     // superset of mCpts.
-    var newMC = List[MissingComponents]()
+    // var newMC = List[MissingComponents]()
+    // Bitmap showing which elements of missingCandidates to retain.
+    val toRetain = new Array[Boolean](missingCandidates.length); 
+    var retainCount = 0
     var found = false // true if missingCandidates includes a subset of mCpts
-    for(mCpts1 <- missingCandidates){
+    // for(mCpts1 <- missingCandidates){
+    for(i <- 0 until missingCandidates.length){
+      val mCpts1 = missingCandidates(i)
       // Note: mCpts is local; this is locked; so neither of following
       // parameters can be mutated by a concurrent thread.
       val cmp = MissingCommon.compare(mCpts1, mCpts)
-      if(cmp != Sup) newMC::= mCpts1 // mCpts1 can't be replaced by mCpts
+      if(cmp != Sup){ toRetain(i) = true; retainCount += 1}
+      //newMC::= mCpts1 // mCpts1 can't be replaced by mCpts
       found ||= cmp == Sub || cmp == Eq // mCpts can't be replaced by mCpts1
     }
-    if(!found){ newMC ::= mCpts; log(AddMC(mCpts)) } 
+    // Update missingCandidates, retaining elements of missingCandidates as
+    // indicated by toretain.
+    val newMC = 
+      new Array[MissingComponents](if(found) retainCount else retainCount+1)
+    var j = 0
+    for(i <- 0 until missingCandidates.length; if toRetain(i)){
+      newMC(j) = missingCandidates(i); j += 1 
+    }
+    assert(j == retainCount)
+    if(!found) newMC(retainCount) = mCpts //newMC ::= mCpts; log(AddMC(mCpts)) } 
     assert(newMC.nonEmpty)
     missingCandidates = newMC
     !found
@@ -383,9 +397,17 @@ class MissingCommon(
   def size = {
     if(counted) 0
     else{
-      counted = true; var mcs = missingCandidates; var size = 0
-      while(mcs.nonEmpty){ size += mcs.head.length; mcs = mcs.tail }
-      size
+      counted = true; /* var mcs = missingCandidates; */
+      if(missingCandidates != null){
+        var i = 0; var size = 0
+        while(i < missingCandidates.length){
+          size += missingCandidates(i).length; i += 1
+        }
+        size
+      }
+      else 0
+      // while(mcs.nonEmpty){ size += mcs.head.length; mcs = mcs.tail }
+      // size
     }
   }
 }
@@ -425,13 +447,14 @@ object MissingCommon{
 
   /** Type of keys for storing MissingCommons. */
   class Key(
-      val ssIndex: Int, val cpts: Array[State], val pf: Int, val pId: Int){
-    override def hashCode = StateArray.mkHash((ssIndex*71+pf)*71+pId, cpts)
+      val ssIndex: Int, val cpts1: Array[State], val cpts2: Array[State], val pf: Int, val pId: Int){
+    override def hashCode = 
+      StateArray.mkHash( StateArray.mkHash((ssIndex*71+pf)*71+pId, cpts1), cpts2)
 
     override def equals(that: Any) = that match{
       case key: Key => 
         key.ssIndex == ssIndex && key.pf == pf && key.pId == pId &&
-        key.cpts.sameElements(cpts)
+        key.cpts1.sameElements(cpts1) && key.cpts2.sameElements(cpts2)
     }
   }
 
@@ -440,12 +463,12 @@ object MissingCommon{
       : Key = {
     // Build concatenation of cpts1 and cpts2
 // IMPROVE: that's probably worse for memory usage, since cpts1, cpts2 are shared
-    val cpts = new Array[State](cpts1.length+cpts2.length)
-    var i = 0; var j = 0
-    while(i < cpts1.length){ cpts(j) = cpts1(i); i += 1; j += 1 }
-    i = 0
-    while(i < cpts2.length){ cpts(j) = cpts2(i); i += 1; j += 1 }
-    new Key(servers.index, cpts, pid._1, pid._2)
+    // val cpts = new Array[State](cpts1.length+cpts2.length)
+    // var i = 0; var j = 0
+    // while(i < cpts1.length){ cpts(j) = cpts1(i); i += 1; j += 1 }
+    // i = 0
+    // while(i < cpts2.length){ cpts(j) = cpts2(i); i += 1; j += 1 }
+    new Key(servers.index, cpts1, cpts2, pid._1, pid._2)
   }
 
   /** The type of the store of all MissingCommon we have created. */
@@ -458,11 +481,10 @@ object MissingCommon{
 
   /** Get the MissingCommon associated with key. */
   @inline private def getMC(key: Key) = allMCs.get(key)
-  // allMCs.synchronized{ allMCs.get(key) }
 
   /** Store mc against key, unless there is already an associated value.  Return
     * the resulting stored value. */
-  private def setOrGet(key: Key, mc: MissingCommon) = /*allMCs.synchronized*/{
+  private def setOrGet(key: Key, mc: MissingCommon) = {
     allMCs.getOrElseUpdate(key, mc)
   }
 
@@ -489,13 +511,14 @@ object MissingCommon{
   /** Perform a memory profile of this. */
   def memoryProfile = {
     import ox.gavin.profiling.MemoryProfiler.traverse
+    // Traverse 3 MissingCommons
+    val iter = allMCs.iterator
+    for(_ <- 0 until 3; if iter.hasNext)
+      traverse("MissingCommon", iter.next(), maxPrint = 2); println() 
+    // allMCs
     println("MissingCommon.allMCs size = "+allMCs.size)
-/* IMPROVE: needs take on map
-    for(mc <- allMCs.take(3)){
-      traverse("missingCommon", mc, maxPrint = 2); println()
-    }
- */
     traverse("allMCs", allMCs, maxPrint = 1); println()
+    // the rest
     traverse("MissingCommon", this, maxPrint = 1); println()
   }
 

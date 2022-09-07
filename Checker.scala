@@ -443,6 +443,11 @@ class Checker(system: SystemP.System, numWorkers: Int){
     else println("Omitting system\n") 
     traverse("ServerStates", ServerStates, maxPrint = 0); println()
     //traverse("first view", sysAbsViews.iterator.next(), maxPrint = 0); println()
+    val viewsIter = sysAbsViews.iterator
+    // Traverse 3 views
+    for(_ <- 0 until 3; if viewsIter.hasNext){
+      traverse("ComponentView", viewsIter.next(), maxPrint = 0); println()
+    }
     traverse("sysAbsViews", sysAbsViews, maxPrint = 0); println()
     traverse("transitions", transitions, maxPrint = 0); println()
     traverse("transitionTemplates", transitionTemplates, maxPrint = 0); println()

@@ -569,7 +569,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     import ox.gavin.profiling.MemoryProfiler.traverse
     // profile MissingCommon, MissingInfoStore
     MissingCommon.memoryProfile
-    println("MissingInfoStore.size = "+MissingInfoStore.size)
+    println("MissingInfoStore.size = "+printLong(MissingInfoStore.size))
     traverse("MissingInfoStore", MissingInfoStore, maxPrint = 3)
     println()
 
@@ -579,7 +579,7 @@ class SimpleEffectOnStore extends EffectOnStore{
       val mis: MissingInfoSet = iter.next(); val miIter = mis.iterator
       while(miIter.hasNext && count < Max){
         val mi: MissingInfo = miIter.next();
-        traverse("missingInfo", mi, maxPrint = 1); count += 1; println()
+        traverse("missingInfo", mi, maxPrint = 0); count += 1; println()
       }
     }
 

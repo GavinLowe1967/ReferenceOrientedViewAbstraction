@@ -25,7 +25,7 @@ object MissingInfoStore{
 
     override def hashCode = 
       // MissingInfo.hashMC(newView, missingCommon, 0) ^ 
-      MissingInfo.hashMV(missingViews, 0)
+      MissingInfo.hashMV(missingViews, 0) ^ newView.hashCode
   } // end of Key
 
   /** Make a key.  Note: we need to clone the arrays, because of sharing. */

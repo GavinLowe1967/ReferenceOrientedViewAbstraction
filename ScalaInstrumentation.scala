@@ -13,7 +13,7 @@ class ScalaInstrumentation{
     // Gives 4016 or 8024, depending on whether 32 or 64 bit refs are used,
     // which corresponds to whether there is less than or at least 32GB of
     // heap.
-    for(arg <- args) println(arg)
+    // for(arg <- args) println(arg)
     var fname = ""; var i = 0; 
     var singleRef = false; var numWorkers = 1
     var bound = Int.MaxValue

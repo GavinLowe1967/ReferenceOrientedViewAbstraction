@@ -121,9 +121,9 @@ object EffectOn{
     * 0. */
   def prepareForPurge = if(ply%4 == 0){
     // We'll do purges only if enough views have been found since the last
-    // round: at least PurgeQuantum and 10% of the total.
+    // round: at least PurgeQuantum and 25% of the total.
     val viewCount = views.size; val newViewCount = viewCount-lastPurgeViewCount
-    if(newViewCount >= PurgeQuantum && 10*newViewCount >= viewCount){
+    if(newViewCount >= PurgeQuantum && 4*newViewCount >= viewCount){
       println("Preparing for purge")
       doPurge = true; lastPurgeViewCount = viewCount
       effectOnStore.prepareForPurge; MissingCommon.prepareForPurge

@@ -120,7 +120,7 @@ $(DIR)/MissingCommon.class: $(DIR)/Unification.class $(DIR)/ViewSet.class $(DIR)
 
 $(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
 
-$(DIR)/MissingInfoSet.class:  $(DIR)/MissingInfo.class 
+$(DIR)/MissingInfoStore.class:  $(DIR)/MissingInfo.class 
 
 $(DIR)/EffectOnStore.class: $(DIR)/MissingInfoStore.class 
 
