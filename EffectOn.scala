@@ -104,7 +104,7 @@ object EffectOn{
 
   /** Only purge if at least purgeQuantum views have been added since the last
     * round of purges. */
-  private val purgeQuantum = 300_000
+  private val PurgeQuantum = 300_000
 
   /** Is it time for another purge? */
   private var doPurge = false
@@ -121,13 +121,12 @@ object EffectOn{
     * 0. */
   def prepareForPurge = if(ply%4 == 0){
     // We'll do purges only if enough views have been found since the last
-    // round.
-    val viewCount = views.size
-    if(viewCount-lastPurgeViewCount >= purgeQuantum){
+    // round: at least PurgeQuantum and 10% of the total.
+    val viewCount = views.size; val newViewCount = viewCount-lastPurgeViewCount
+    if(newViewCount >= PurgeQuantum && 10*newViewCount >= viewCount){
       println("Preparing for purge")
       doPurge = true; lastPurgeViewCount = viewCount
-      effectOnStore.prepareForPurge
-      MissingCommon.prepareForPurge
+      effectOnStore.prepareForPurge; MissingCommon.prepareForPurge
     }
     else doPurge = false
   }

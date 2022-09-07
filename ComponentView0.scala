@@ -1,5 +1,7 @@
 package ViewAbstraction
 
+import ox.gavin.profiling.Profiler
+
 /** A component-centric view.
   * @param servers the states of the servers
   * @param components the components, with the principal component state first.
@@ -9,6 +11,8 @@ package ViewAbstraction
   */
 abstract class ComponentView0(servers: ServerStates, components: Array[State])
     extends ReducedComponentView(servers, components){
+
+  Profiler.count("ComponentView0") // 179M with lazySetNoJoined.csp!
 
   /** Identities of components. */
   //val cptIds = components.map(_.componentProcessIdentity)

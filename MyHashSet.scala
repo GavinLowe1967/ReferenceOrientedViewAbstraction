@@ -126,8 +126,11 @@ class BasicHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
 //==================================================================
 
 /** An implementation of MyHashSet using open addressing that also stores the
-  * hashes.  Not thread safe. */
-class OpenHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
+  * hashes.  Not thread safe. 
+  * @param initSize the initial size for the table.  Must be a power of 2.
+  * @param ThresholdRatio the loading ratio at which resizing takes place. */
+class OpenHashSet[A: scala.reflect.ClassTag](
+  initSize: Int = 16, ThresholdRatio: Float = 0.5F)
     extends MyHashSet[A]{
 
   checkPow2(initSize)
@@ -142,7 +145,7 @@ class OpenHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
   private var mask = n-1
 
   /** The threshold ratio at which resizing happens. */
-  private val ThresholdRatio = 0.4 // 0.5
+  // private val ThresholdRatio = 0.4 // 0.5
 
   /** The threshold at which the next resizing will happen. */
   private var threshold = initSize * ThresholdRatio
@@ -165,6 +168,7 @@ class OpenHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
 
   /** Add x to this set. */
   def add(x: A): Boolean = {
+    require(x != null.asInstanceOf[A])
     val h = x.hashCode; val i = find(x, h)
     if(keys(i) == null){
       if(count >= threshold){ resize(); return add(x) }
@@ -172,6 +176,8 @@ class OpenHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
     }
     else false
   }
+
+  def += (x: A) = add(x)
 
   /** Resize the hash table. */
   private def resize(): Unit = {
@@ -212,6 +218,8 @@ class OpenHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
 
   def size: Long = count
 
+  def nonEmpty = count > 0
+
   def clear = {
     keys = new Array[A](initSize); hashes = new Array[Int](initSize); count = 0; 
     n = initSize; mask = n-1; threshold = initSize * ThresholdRatio
@@ -229,14 +237,40 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
   initLength: Int = 32)
     extends Sharding(shards) with MyHashSet[A]{
   /** Log (base 2) of the maximum width of rows in the arrays. */
-  private val LogMaxWidth = 30
+  private def LogMaxWidth = 30
 
   /** Maximum width of rows in the arrays. */
-  private val MaxWidth = 1<<LogMaxWidth
+  private def MaxWidth = 1<<LogMaxWidth
 
   // check initLength is a power of 2
   checkPow2(initLength)
   assert(initLength <= MaxWidth)
+
+  /** Value representing an empty slot in hashes. */
+  private val Empty = 0    // = 000...0 binary
+
+  /** Value representing a deleted slot in hashes. */
+  private val Deleted = -1 // = 111...1 binary
+
+  /* If the hashCode of a key is either Empty or Deleted, we replace it by
+   * EmptyProxy or DeletedProxy, respectively (flipping most significant
+   * bit). */
+  private val EmptyProxy = Empty ^ Int.MinValue     // = 1000...0 binary
+  private val DeletedProxy = Deleted ^ Int.MinValue // = 0111...1 binary
+
+  /** A hash for a; guaranteed not to be Empty or Deleted. */
+  private def hashOf(a: A): Int = {
+    val h = scala.util.hashing.byteswap32(a.hashCode)
+    if(h == Empty) EmptyProxy else if(h == Deleted) DeletedProxy else h 
+  }
+
+  /** Does the hash value h represent a used slot (neither Empty nor
+    * Deleted)? */
+  @inline private def filled(h: Int) = h != Empty && h != Deleted
+
+  /** Does the hash value h represent an unused slot (either Empty or
+    * Deleted)? */
+  @inline private def unfilled(h: Int) = h == Empty || h == Deleted
 
   /* We use a two-dimensional array, of size shards, with each row s
    * having width widths(s), to store states.  Inv: widths(s) is a
@@ -251,8 +285,12 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
   /** The hashes of the set. */
   private val hashes = Array.fill(shards)(new Array[Int](initLength))
 
-  /** The current number of entries in each shard. */
+  /** The current number of entries in each shard (excluding Deleted values). */
   private val counts = new Array[Int](shards)
+
+  /** The current number of used slots in each shard (including Deleted
+    * values). */
+  private val usedSlots = new Array[Int](shards)
 
   /** Bit mask to produce a value in [0..width).  Inv: equals width-1. */
   private val widthMasks = Array.fill(shards)(initLength-1)
@@ -270,46 +308,50 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
     * should be placed. */
   @inline private def entryFor(sh: Int, h: Int): Int = h & widthMasks(sh)
 
-  /* An element with hash h is placed in shard sh = shardFor(h), in the
-   * first empty (null) position in elements(sh) starting from
-   * position entryFor(sh, h), wrapping round.  Its hash h is placed
-   * in the corresponding position in hashes.  Note that we wrap
-   * around in the same shard, rather than moving onto the next shard.  */
+  /* An element with hash h is placed in shard sh = shardFor(h), in the first
+   * empty (null) position in elements(sh) starting from position entryFor(sh,
+   * h), wrapping round.  Its hash h is placed in the corresponding position
+   * in hashes.  For slots where a value has been deleted, the hash is
+   * Deleted, and the element is null.  Note that we wrap around in the same
+   * shard, rather than moving onto the next shard.  */
 
   /** The number of elements in this. */
   def size: Long = counts.map(_.toLong).sum
 
-   /** Add x to the set.
+  /** Find the position at which element x with hash h is stored, or the first
+    * Empty slot, where h should be placed.  Note: we skip over Deleted
+    * items. */
+  @inline private def find(sh: Int, x: A, h: Int): Int = {
+    var i = entryFor(sh, h)
+    // assert(i < widths(sh))
+    while(hashes(sh)(i) != Empty && (hashes(sh)(i) != h || elements(sh)(i) != x))
+      i = (i+1) & widthMasks(sh)
+    i
+  }
+
+  /** Add x to the set.
     * @return true if x was not previously in the set. */
   def add(x: A): Boolean = {
     val h = hashOf(x); val sh = shardFor(h)
     locks(sh).synchronized{
-      if(counts(sh) >= thresholds(sh)) resize(sh)
+      if(usedSlots(sh) >= thresholds(sh)) resize(sh)
       // Find empty slot or slot containing x
       val i = find(sh, x, h)
 // IMPROVE: remove assertions
-      if(hashes(sh)(i) == h){ assert(elements(sh)(i) == x);   false }
+      if(hashes(sh)(i) == h){ assert(elements(sh)(i) == x); false }
       else{
-        assert(hashes(sh)(i) == 0 && elements(sh)(i) == null)
-        hashes(sh)(i) = h; elements(sh)(i) = x; counts(sh) += 1; true
+        assert(hashes(sh)(i) == Empty && elements(sh)(i) == null)
+        hashes(sh)(i) = h; elements(sh)(i) = x; 
+        counts(sh) += 1; usedSlots(sh) += 1; true
       }
     }
-  }
-
-  /** Find the position at which element x with hash h is stored or should be
-    * placed. */
-  @inline private def find(sh: Int, x: A, h: Int): Int = {
-    var i = entryFor(sh, h)
-    // assert(i < widths(sh))
-    while(hashes(sh)(i) != 0 && (hashes(sh)(i) != h || elements(sh)(i) != x))
-      i = (i+1) & widthMasks(sh)
-    i
   }
 
   /** Resize shard sh of the hash table. */
   @inline private def resize(sh: Int) = {
     // Increase width or height
     val oldWidth = widths(sh) // assert(oldWidth < MaxWidth, "too many elements")
+// IMPROVE: if usedSlots(sh) is small, keep oldWidth? 
     widths(sh) += oldWidth; widthMasks(sh) = widths(sh)-1
     thresholds(sh) += thresholds(sh)
     // Create new arrays
@@ -319,15 +361,16 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
     var i = 0  //  index into oldHashes, oldElements
     while(i < oldWidth){
       val h = oldHashes(i)
-      if(h != 0){ // add oldElements(i) to new table
+      if(filled(h)){ // add oldElements(i) to new table
         var i1 = entryFor(sh, h)
-        while(hashes(sh)(i1) != 0) i1 = (i1+1) & widthMasks(sh)
+        while(hashes(sh)(i1) != Empty) i1 = (i1+1) & widthMasks(sh)
         hashes(sh)(i1) = h
         // assert(elements(sh)(i1) == null)
         elements(sh)(i1) = oldElements(i)
       }
       i += 1
     }
+    usedSlots(sh) = counts(sh)
   }
 
   /** Does this contain x? */
@@ -354,7 +397,7 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
 
     /** Advance (sh, i) to the next element. */
     @inline private def advance =
-      while(sh < shards && hashes(sh)(i) == 0) advance1
+      while(sh < shards && unfilled(hashes(sh)(i))) advance1
 
     /** Does the iterator have a next element? */
     def hasNext = sh < shards
@@ -375,7 +418,7 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
     advance()
 
     @inline private def advance() = 
-      while(i < thisWidth && hashes(sh)(i) == 0) i += 1
+      while(i < thisWidth && unfilled(hashes(sh)(i))) i += 1
 
     def hasNext = i < thisWidth
 
@@ -412,16 +455,32 @@ class MyShardedHashSet[A : scala.reflect.ClassTag](
   def getOrAdd(x: A): A = {
     val h = hashOf(x); val sh = shardFor(h)
     locks(sh).synchronized{
-      if(counts(sh) >= thresholds(sh)) resize(sh)
+      if(usedSlots(sh) >= thresholds(sh)) resize(sh)
       val i = find(sh, x, h); val oldSt = elements(sh)(i)
       if(oldSt == null){
-        assert(hashes(sh)(i) == 0 && elements(sh)(i) == null)
-        hashes(sh)(i) = h; elements(sh)(i) = x; counts(sh) += 1; x
+        assert(hashes(sh)(i) == Empty && elements(sh)(i) == null)
+        hashes(sh)(i) = h; elements(sh)(i) = x; 
+        counts(sh) += 1; usedSlots(sh) += 1; x
       }
       else{ assert(oldSt == x);  oldSt } // IMPROVE
     }
   }
+
+  /** Remove x from the set.  Return true if successful. */
+  def remove(x: A): Boolean = {
+    val h = hashOf(x); val sh = shardFor(h)
+    locks(sh).synchronized{
+      val i = find(sh, x, h)
+      if(hashes(sh)(i) == h){
+        assert(elements(sh)(i) == x); hashes(sh)(i) = Deleted
+        elements(sh)(i) = null.asInstanceOf[A]; counts(sh) -= 1; true
+      }
+      else{ assert(elements(sh)(i) == Empty); false }
+    }
+  }
 }
+
+// ==================================================================
 
 object ShardedHashSet{
   /** Objects that produce iterators over the different shards. */

@@ -439,6 +439,7 @@ object MissingCommon{
     servers: ServerStates, cpts1: Cpts, cpts2: Cpts, pid: ProcessIdentity)
       : Key = {
     // Build concatenation of cpts1 and cpts2
+// IMPROVE: that's probably worse for memory usage, since cpts1, cpts2 are shared
     val cpts = new Array[State](cpts1.length+cpts2.length)
     var i = 0; var j = 0
     while(i < cpts1.length){ cpts(j) = cpts1(i); i += 1; j += 1 }

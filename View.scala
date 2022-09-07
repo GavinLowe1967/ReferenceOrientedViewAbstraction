@@ -6,6 +6,8 @@ import ox.gavin.profiling.Profiler
 class ReducedComponentView(
   val servers: ServerStates, val components: Array[State]){
 
+  Profiler.count("ReducedComponentView") // 1.3B with lazySetNoJoined.csp!
+
   /** The principal component. */
   def principal = components(0)
 
@@ -54,6 +56,15 @@ class ReducedComponentView(
 }
 
 // =======================================================
+
+// object ReducedComponentView{
+//   /** A store of ReducedComponentViews created previously. */
+//   private val store = new ShardedHashMap[ServerStates, HashMap[
+
+
+// }
+
+// ==================================================================
 
 /** Companion object. */
 object View{

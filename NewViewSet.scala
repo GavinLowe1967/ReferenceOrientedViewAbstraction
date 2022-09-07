@@ -44,8 +44,10 @@ class NewViewSet extends ViewSet{
   def contains(view: ReducedComponentView): Boolean = allViews.contains(view)
 
   /** Does this contain a view corresponding to servers and cpts? */
-  def contains(servers: ServerStates, cpts: Array[State]): Boolean = 
+  def contains(servers: ServerStates, cpts: Array[State]): Boolean = {
+    // Profiler.count("NewViewSet.contains")
     allViews.contains(new ReducedComponentView(servers, cpts))
+  }
   // IMPROVE: the above is potentially inefficiency
 
   /** Get the view in this corresponding to v.  Pre: there is one. */

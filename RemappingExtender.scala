@@ -19,6 +19,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
    *    |  |--extendMapOverComponent (also visible externally)
    */
 
+  Profiler.count("RemappingExtender")
+
   /* A few object variables, extracted directly from pre and cv, used in
    * several functions. */
   private val pre = trans.pre; val post = trans.post
