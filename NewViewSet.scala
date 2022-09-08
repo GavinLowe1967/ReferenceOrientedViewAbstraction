@@ -1,5 +1,6 @@
 package ViewAbstraction
 
+import collection.{ShardedHashSet,ShardedHashMap}
 import scala.collection.mutable.{HashMap,HashSet,ArrayBuffer}
 import ox.gavin.profiling.Profiler
 
@@ -45,7 +46,7 @@ class NewViewSet extends ViewSet{
 
   /** Does this contain a view corresponding to servers and cpts? */
   def contains(servers: ServerStates, cpts: Array[State]): Boolean = {
-    Profiler.count("ReducedComponentView: NewViewSet.contains")
+    // Profiler.count("ReducedComponentView: NewViewSet.contains")
     allViews.contains(new ReducedComponentView(servers, cpts))
   }
   // IMPROVE: the above is potentially inefficiency

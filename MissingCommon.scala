@@ -1,8 +1,10 @@
 package ViewAbstraction
 
+import ViewAbstraction.collection.ShardedHashMap
 import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
 import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap,Set}
+import collection.OpenHashSet
 import MissingCommon.Cpts // = Array[State]
 
 /** The representation of the obligation to find a component state c with
@@ -273,7 +275,7 @@ class MissingCommon(
 
   /** States for which MissingCommon.updateMissingCandidates has been executed
     * on this. */
-  private var doneMissingCandidates = Set[State]() // new HashSet[State]
+  private var doneMissingCandidates = new OpenHashSet[State](initSize = 4) // Set[State]() // new HashSet[State]
 
   /** Called by MissingCommon.updateMissingCandidates when updating this with
     * st.  Return true if this is the first such instance for st. */

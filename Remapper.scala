@@ -1,6 +1,7 @@
 package ViewAbstraction.RemapperP 
 
 import ViewAbstraction._
+import ViewAbstraction.collection.ShardedHashMap
 import ox.gavin.profiling.Profiler
 import scala.math.Ordering.Implicits._ // for sorting list of lists
 import scala.collection.mutable.{ArrayBuffer,HashMap}

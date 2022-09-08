@@ -1,5 +1,6 @@
 package ViewAbstraction
 
+import collection.ShardedHashSet
 import scala.collection.mutable.{ArrayBuffer}
 
 /** A set of indices into an array of ComponentViews for a particular

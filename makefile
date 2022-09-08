@@ -14,6 +14,8 @@ CP = .:$(UTIL):$(FDRHOME)/lib/fdr.jar
 
 DIR = ViewAbstraction
 
+COLLDIR = $(DIR)/collection
+
 COMBINERP = $(DIR)/CombinerP
 REMAPPERP = $(DIR)/RemapperP
 EXTENDERP = $(DIR)/ExtendabilityP
@@ -25,6 +27,14 @@ all:   $(DIR)/VA.class Instrumentation.class $(DIR)/CompileTest.class
 
 clean:
 	rm $(DIR)/*.class $(DIR)/*/*.class; fsc -shutdown
+
+# Collections
+
+$(COLLDIR)/MyHashSet.class:	$(COLLDIR)/Sharding.class $(DIR)/package.class
+
+$(COLLDIR)/ShardedHashSet.class:	$(COLLDIR)/MyHashSet.class
+
+$(COLLDIR)/ShardedHashMap.class: $(COLLDIR)/Sharding.class $(DIR)/package.class
 
 # States etc.
 
@@ -38,7 +48,7 @@ $(DIR)/MyTrieStateMap.class $(DIR)/StateHashMap.class: $(DIR)/StateMap.class
 
 $(DIR)/MyStateMap.class: $(DIR)/MyTrieStateMap.class $(DIR)/StateHashMap.class
 
-$(DIR)/ServerStates.class: $(DIR)/State.class $(DIR)/MyHashMap.class
+$(DIR)/ServerStates.class: $(DIR)/State.class $(COLLDIR)/MyHashMap.class
 
 # FDR interaction
 
@@ -54,17 +64,18 @@ $(DIR)/FDRTransitionMap.class: $(DIR)/State.class $(DIR)/CSPFileParser.class	\
 
 $(DIR)/ServersReducedMap.class: $(DIR)/ServerStates.class
 
-$(DIR)/View.class:  $(DIR)/StateArray.class $(DIR)/ServerStates.class $(DIR)/ShardedHashSet.class
 
-$(DIR)/MyHashSet.class:  $(DIR)/Sharding.class
+$(DIR)/View.class:  $(DIR)/StateArray.class $(DIR)/ServerStates.class $(COLLDIR)/ShardedHashSet.class
 
-$(DIR)/ComponentView0.class: $(DIR)/View.class $(DIR)/MyHashSet.class $(DIR)/ServersReducedMap.class
+# $(DIR)/MyHashSet.class:  $(DIR)/Sharding.class
+
+$(DIR)/ComponentView0.class: $(DIR)/View.class $(COLLDIR)/MyHashSet.class $(DIR)/ServersReducedMap.class
 
 $(DIR)/ComponentView.class: $(DIR)/ComponentView0.class
 
 $(DIR)/TestStates.class: $(DIR)/MyStateMap.class
 
-$(DIR)/RemapperP/Remapper.class: $(DIR)/ComponentView.class $(DIR)/MyStateMap.class
+$(DIR)/RemapperP/Remapper.class: $(COLLDIR)/ShardedHashMap.class $(DIR)/ComponentView.class $(DIR)/MyStateMap.class
 
 $(DIR)/RemapperP/RemapperTest.class: $(DIR)/TestStates.class $(DIR)/RemapperP/Remapper.class $(DIR)/Unification.class
 
@@ -93,19 +104,19 @@ $(DIR)/TransitionSet.class $(DIR)/NewTransitionSet.class: $(DIR)/Transition.clas
 
 $(DIR)/TransitionTemplateSet.class: $(DIR)/ComponentView.class
 
-$(DIR)/ViewSet.class: $(DIR)/ComponentView.class $(DIR)/MyHashSet.class $(DIR)/Transition.class
+$(DIR)/ViewSet.class: $(DIR)/ComponentView.class $(COLLDIR)/MyHashSet.class $(DIR)/Transition.class
 
 $(DIR)/IndexSet.class: $(DIR)/ComponentView.class
 
 $(DIR)/NewViewSet.class: $(DIR)/ViewSet.class $(DIR)/IndexSet.class \
-  $(DIR)/ShardedHashMap.class $(DIR)/ShardedHashSet.class
+  $(COLLDIR)/ShardedHashMap.class $(COLLDIR)/ShardedHashSet.class
 
 # # The system itself
 
 $(DIR)/Components.class: $(DIR)/FDRSession.class	\
   $(DIR)/FDRTransitionMap.class $(DIR)/ComponentView.class
 
-$(DIR)/Servers.class: $(DIR)/FDRSession.class $(DIR)/MyHashMap.class	\
+$(DIR)/Servers.class: $(DIR)/FDRSession.class $(COLLDIR)/MyHashMap.class	\
    $(DIR)/FDRTransitionMap.class
 
 $(DIR)/SystemP/System.class: $(DIR)/FDRTransitionMap.class		\
@@ -115,13 +126,12 @@ $(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.c
 
 # # EffectOn and helper modules
 
-$(DIR)/ShardedHashMap.class: $(DIR)/Sharding.class
 
-$(DIR)/MissingCommon.class: $(DIR)/Unification.class $(DIR)/ViewSet.class $(DIR)/ShardedHashMap.class
+$(DIR)/MissingCommon.class: $(DIR)/Unification.class $(DIR)/ViewSet.class $(COLLDIR)/ShardedHashMap.class
 
 $(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
 
-$(DIR)/MissingInfoStore.class: $(DIR)/ShardedHashSet.class $(DIR)/MissingInfo.class 
+$(DIR)/MissingInfoStore.class: $(COLLDIR)/ShardedHashSet.class $(DIR)/MissingInfo.class 
 
 $(DIR)/EffectOnStore.class: $(DIR)/MissingInfoStore.class 
 
@@ -171,6 +181,12 @@ $(DIR)/VA.class:  $(DIR)/Checker.class $(TESTS)
 $(TESTS): $(DIR)/TestStates.class $(DIR)/TestUtils.class
 
 # # Standard recipe
+
+# $(DIR)/collection/MyHashSet.class: Collection/MyHashSet.scala
+# 	$(FSC) Collection/MyHashSet.scala
+
+$(DIR)/collection/%.class:	Collection/%.scala
+	$(FSC) $<
 
 $(DIR)/RemapperP/%.class $(DIR)/SystemP/%.class $(COMBINERP)/%.class $(EXTENDERP)/%.class:	%.scala
 	$(FSC) $<

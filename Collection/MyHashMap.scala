@@ -1,4 +1,6 @@
-package ViewAbstraction
+package ViewAbstraction.collection
+
+import ViewAbstraction.{hashOf,checkPow2}
 
 /** A HashMap, mapping from A to B. */
 trait MyHashMap[A,B]{

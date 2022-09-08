@@ -1,5 +1,6 @@
 package ViewAbstraction
 
+import collection.{MyHashSet,BasicHashSet,ShardedHashSet}
 import ox.gavin.profiling.Profiler
 import ViewAbstraction.RemapperP.Remapper
 import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap}
@@ -303,7 +304,6 @@ class Checker(system: SystemP.System, numWorkers: Int){
     }
 
     // Purges from the effectOnStore
-// IMPROVE: only if enough views have been added since the last purge.
     if(singleRef) EffectOn.purge
 
     // Collectively copy views
@@ -458,7 +458,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
       maxPrint = 1, ignore = List("System"))
     println()
     EffectOn.memoryProfile; println()
-    traverse("checker", this, maxPrint = 0); println()
+    traverse("checker", this, maxPrint = 1); println()
     // Below here should be trivial
     traverse("CompatibleWithCache", CompatibleWithCache, maxPrint = 0)
     traverse("ComponentView0", ComponentView0, maxPrint = 0)

@@ -1,5 +1,6 @@
 package ViewAbstraction
 import ViewAbstraction.RemapperP.Remapper
+import collection.{OpenHashSet,ShardedHashMap}
 import ox.gavin.profiling.Profiler
 import scala.collection.mutable.{ArrayBuffer,HashMap,HashSet}
 
@@ -192,7 +193,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     for(mc <- missingCommon) assert(!mc.done)
     val mcArray = missingCommon.toArray
     val nv1 = ReducedComponentView(nv.servers, nv.components)
-    Profiler.count("ReducedComponentView: EffectOnStore.add")
+    // Profiler.count("ReducedComponentView: EffectOnStore.add")
     val missingInfo = new MissingInfo(nv1, missing.toArray, mcArray, 
       trans, oldCpts, cv, newCpts)
     if(missingCommon.isEmpty && !MissingInfoStore.add(missingInfo)) 
@@ -208,7 +209,7 @@ class SimpleEffectOnStore extends EffectOnStore{
       for(cpts <- mc0.missingHeads){ 
         assert(cpts != null)
         val cv = ReducedComponentView(servers1, cpts)
-        Profiler.count("ReducedComponentView: EffectOnStore.add-cv")
+        // Profiler.count("ReducedComponentView: EffectOnStore.add-cv")
         missingInfo.log(MissingInfo.McNotDoneStore(cv, ply))
         addToStore(mcNotDoneStore, cv, missingInfo)
       }
@@ -298,7 +299,7 @@ class SimpleEffectOnStore extends EffectOnStore{
                   // Register mi against each view in vb, and retain
                   for(cpts <- vb){
                     val rcv = ReducedComponentView(cv.servers, cpts)
-                    Profiler.count("ReducedComponentView: completeCandidateForMC")
+                    // Profiler.count("ReducedComponentView: completeCandidateForMC")
                     // mi.log(MissingInfo.McNotDoneStore(rcv, ply))
                     addToStore(mcNotDoneStore, rcv, mi)
                   }
@@ -350,7 +351,7 @@ class SimpleEffectOnStore extends EffectOnStore{
               else if(!MISFlag || MissingInfoStore.add(mi)){
                 for(cpts <- vb){
                   val rcv = ReducedComponentView(cv.servers, cpts)
-                  Profiler.count("ReducedComponentView: completeMcNotDone")
+                  // Profiler.count("ReducedComponentView: completeMcNotDone")
                   // mi.log(McNotDoneStore(rcv, ply))
                   addToStore(mcNotDoneStore, rcv, mi)
                 }

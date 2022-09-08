@@ -1,4 +1,4 @@
-package ViewAbstraction
+package ViewAbstraction.collection
 
 /** Trait supporting sharing. */
 abstract class Sharding(shards: Int){

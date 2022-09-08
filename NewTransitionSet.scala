@@ -1,5 +1,6 @@
 package ViewAbstraction
 
+import collection.{ShardedHashSet,ShardedHashMap}
 import scala.collection.mutable.{HashMap,HashSet,ArrayBuffer}
 
 /* We include various bits of jiggery-pokery in these classes, to support

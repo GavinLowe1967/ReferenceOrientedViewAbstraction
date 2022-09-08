@@ -1,12 +1,13 @@
 package ViewAbstraction
 
+import collection.ShardedHashSet
 import ox.gavin.profiling.Profiler
 
 /** A minimal ComponentView.  Used where it's useful to use less memory. */
 class ReducedComponentView(
   val servers: ServerStates, val components: Array[State]){
 
-  Profiler.count("ReducedComponentView") // 1.3B with lazySetNoJoined.csp!
+  // Profiler.count("ReducedComponentView") // 1.3B with lazySetNoJoined.csp!
 
   /** The principal component. */
   def principal = components(0)

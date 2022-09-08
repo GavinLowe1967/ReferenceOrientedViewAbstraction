@@ -1,4 +1,5 @@
 package ViewAbstraction
+import collection.ShardedHashSet
 import scala.collection.mutable.HashMap
 
 /** A store of all the current MissingInfos.  
@@ -63,13 +64,13 @@ object MissingInfoStore{
   : Boolean = {
     assert(missingCommon == null)
     assert(missingViews != null); val mvLength = missingViews.length
-    val mcLength = if(missingCommon == null) 0 else missingCommon.length
-    val length = mvLength + mcLength
+    //val mcLength = if(missingCommon == null) 0 else missingCommon.length
+    val length = mvLength //+ mcLength
     // Count number of non-nulls in missingViews, missingCommon
     var i = 0; var nonNulls = 0
     while(i < mvLength){ if(missingViews(i) != null) nonNulls += 1; i += 1 }
-    i = 0
-    while(i < mcLength){ if(missingCommon(i) != null) nonNulls += 1; i += 1}
+    // i = 0
+    // while(i < mcLength){ if(missingCommon(i) != null) nonNulls += 1; i += 1}
     /* Consider each subset of missingViews and missingCommon.  flags represents
      * the subset
      * 
@@ -81,8 +82,9 @@ object MissingInfoStore{
      * binary, iter is the corresponding Int.  We consider each value in turn.
      * found is true if we've found a subset.  Inv: we've considered each
      * subset up to and including flags/iters.  If strict, we omit the final
-     * case, where flags gets set to all true, corresponding to MissingInfo and
-     * MissingCommon. */
+     * case, where flags gets set to all true, corresponding to MissingInfo
+     * and MissingCommon.  Also, if strict then this must not be called
+     * concurrently with any add to the underlying store. */
 // IMPROVE: it's not clear that considering MissingCommon actually helps
     val flags = new Array[Boolean](length); var found = false 
     var iter = 0; val iterBound = if(strict) (1<<nonNulls)-2 else (1<<nonNulls)-1
@@ -95,14 +97,14 @@ object MissingInfoStore{
       /* Advance i to next non-null element of missingViews/missingCommon. */
       @inline def advance() = {
         while(i < mvLength && missingViews(i) == null) i += 1
-        if(i >= mvLength)
-          while(i < length && missingCommon(i-mvLength) == null) i += 1
+        // if(i >= mvLength)
+        //   while(i < length && missingCommon(i-mvLength) == null) i += 1
       }
       advance()
       // Inv: i < length because iter < (1<<nonNulls)
       while(/*i < length && */ !done1){
         if(i < mvLength) assert(missingViews(i) != null) 
-        else assert(missingCommon(i-mvLength) != null)
+        // else assert(missingCommon(i-mvLength) != null)
         flags(i) = !flags(i)
         if(flags(i)) done1 = true else{ i += 1; advance() }
       }
@@ -111,12 +113,14 @@ object MissingInfoStore{
         // The subset of missingViews corresponding to flags.
         val missingViews1 = Array.tabulate(mvLength)(j =>
           if(flags(j)) missingViews(j) else null)
-        val missingCommon1 = 
-          if(missingCommon == null) null
-          else Array.tabulate(mcLength)(j =>
-            if(flags(mvLength+j)) missingCommon(j) else null)
-        val key = mkKey(newView, missingViews1, missingCommon1)
-        if(store.contains(key)) found = true
+        //val missingCommon1 = null
+          // if(missingCommon == null) null
+          // else Array.tabulate(mcLength)(j =>
+          //   if(flags(mvLength+j)) missingCommon(j) else null)
+        val key = mkKey(newView, missingViews1 /*, missingCommon1*/)
+        // Test if store contains key; do this lock-free if strict.
+        if(strict){ if(store.lockFreeContains(key)) found = true }
+        else if(store.contains(key)) found = true
       }
       // else assert(iter == iterBound)
       //else{ done = true; assert(iter == (1 << nonNulls), s"$iter $nonNulls") }
@@ -166,7 +170,7 @@ object MissingInfoStore{
 
   /** If the store contains a MissingInfo representing a proper subset of mi,
     * then remove mi and return true.  Otherwise, return false, indicating mi
-    * should be retained. */
+    * should be retained.  Called during purging of EffectOnStore. */
   def removeIfProperSubset(mi: MissingInfo): Boolean = {
     val newView = mi.newView; val missingViews = mi.missingViews
     val missingCommon = mi.missingCommon

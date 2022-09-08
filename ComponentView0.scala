@@ -1,6 +1,7 @@
 package ViewAbstraction
 
 import ox.gavin.profiling.Profiler
+import collection.OpenHashSet
 
 /** A component-centric view.
   * @param servers the states of the servers
@@ -206,7 +207,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * from this with no unifications.  */
   private val doneInducedPostServersRemaps = 
     if(singleRef && StoreDoneInducedPostServersRemaps)
-      new OpenHashSet[ServersReducedMap]
+      new OpenHashSet[ServersReducedMap](initSize = 4, ThresholdRatio = 0.6F)
     else null
 
   /** Record that this has been used to create an induced transition, with
@@ -262,7 +263,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * no element of the list is a subset of another.  Protected by
     * synchronized blocks. */
   private val conditionBInducedMap = 
-    if(singleRef) 
+    if(singleRef) // new OpenHashMap[ServersReducedMap, List[CrossRefInfo]]
       new scala.collection.mutable.HashMap[ServersReducedMap, List[CrossRefInfo]]
     else null
 

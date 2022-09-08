@@ -1,5 +1,6 @@
 package ViewAbstraction
 
+import collection.MyHashSet
 import ox.gavin.profiling.Profiler
 import ViewAbstraction.RemapperP.Remapper
 
@@ -360,9 +361,8 @@ class EffectOn(
     // cv, then check that that combination is possible in sysAbsViews:
     // those that are missing.
     val missing: List[ReducedComponentView] =
-      crossRefs.map{ cpts => { 
-        Profiler.count("ReducedComponentView: EffectOn")
-        ReducedComponentView(pre.servers, cpts) } }.
+      crossRefs.map{ cpts => ReducedComponentView(pre.servers, cpts) }.
+        // Profiler.count("ReducedComponentView: EffectOn")
         filter(!views.contains(_))
     for(newComponents <- newComponentsList){
       if(highlight1) 

@@ -1,6 +1,8 @@
-package ViewAbstraction
+package ViewAbstraction.collection
 
 // import ox.cads.util.Profiler
+
+import ViewAbstraction.{hashOf,checkPow2,numThreads}
 
 /** A HashSet containing data of type A. */
 trait MyHashSet[A]{
@@ -13,7 +15,7 @@ trait MyHashSet[A]{
   /** Add x to the set.
     * @return true if x was not previously in the set. */
   def add(x: A): Boolean
-
+ 
   /** An iterator over the elements of this.
     * Not thread safe. */
   def iterator: Iterator[A]
@@ -28,7 +30,7 @@ trait MyHashSet[A]{
   // def getOrAdd(x: A): A 
 
   def apply(x: A) = contains(x)
-
+ 
   /** Does this contain x?
     *  Pre: this operation is not concurrent to any add operation. */
   def contains(x: A): Boolean
@@ -228,11 +230,7 @@ class OpenHashSet[A: scala.reflect.ClassTag](
 
 // =======================================================
 
-
-// =======================================================
-
 import java.util.concurrent.atomic.AtomicIntegerArray
-
 
 /** An implementation of MyHashSet using a sharded hash table with open
   * addressing, and such that the add operation is lock-free if the element is
