@@ -178,13 +178,13 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
     val princRenames = c2Refs.map(_._2) // normally empty; sometimes singleton
     require(singleRef || princRenames.isEmpty)
     val changedServers = servers != post.servers
-    val map0 = servers.remappingMap1(cv.getParamsBound)
-    // All params in post.servers but not in pre.servers, as a bitmap.
-    val newServerIds: Array[Array[Boolean]] = 
-      ServerStates.newParamsBitMap(servers, post.servers)
+    //val map0 = servers.remappingMap1(cv.getParamsBound)
+    // All params in post.servers but not in pre.servers, as a bitmap// .
+    // val newServerIds: Array[Array[Boolean]] = 
+    //   ServerStates.newParamsBitMap(servers, post.servers)
 
     // Get all ways of unifying pre and cv. 
-    val allUs = Unification.allUnifs(map0, pre/*Cpts*/, cpts)
+    val allUs = Unification.allUnifs(pre, cv) // cpts)
     // assert(allUs.distinct.length == allUs.length)
     var ix = 0
     while(ix < allUs.length){
@@ -201,7 +201,7 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
       //if(highlight) 
       //  println(s"sufficientUnif = $sufficientUnif; c2Refs = $c2Refs")
       if(c2Refs.nonEmpty || sufficientUnif){
-        val otherArgsBitMap = mkOtherArgsBitMap(newServerIds, unifs)
+        val otherArgsBitMap = mkOtherArgsBitMap(/*newServerIds,*/ unifs)
         if(singleRef) 
           extendUnifSingleRef(unifs, map1, otherArgsBitMap, sufficientUnif)
         else extendUnif(unifs, map1, otherArgsBitMap)
@@ -266,9 +266,11 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
     * (pre.)servers; (3) in post.cpts for a component to which cv.principal
     * gains a reference; But excluding parameters of servers in all cases.  */
   @inline private 
-  def mkOtherArgsBitMap(newServerIds: BitMap, unifs: UnificationList): BitMap = {
+  def mkOtherArgsBitMap(/*newServerIds: BitMap,*/ unifs: UnificationList): BitMap = {
     // (1) parameters in newServerIds
-    val otherArgsBitMap = newServerIds.map(_.clone); var us = unifs
+    val otherArgsBitMap = ServerStates.newParamsBitMap(servers, post.servers)
+    //newServerIds.map(_.clone);
+    var us = unifs
     while(us.nonEmpty){
       val (j, i) = us.head; us = us.tail
       // (2) Add parameters of postCpts(i), which is unified with a component

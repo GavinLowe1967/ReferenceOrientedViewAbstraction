@@ -122,9 +122,9 @@ object EffectOn{
     * 0. */
   def prepareForPurge = if(ply%4 == 0){
     // We'll do purges only if enough views have been found since the last
-    // round: at least PurgeQuantum and 25% of the total.
+    // round: at least PurgeQuantum and one third of the total.
     val viewCount = views.size; val newViewCount = viewCount-lastPurgeViewCount
-    if(newViewCount >= PurgeQuantum && 4*newViewCount >= viewCount){
+    if(newViewCount >= PurgeQuantum && 3*newViewCount >= viewCount){
       println("Preparing for purge")
       doPurge = true; lastPurgeViewCount = viewCount
       effectOnStore.prepareForPurge; MissingCommon.prepareForPurge
@@ -252,9 +252,8 @@ class EffectOn(
       val crossRefs: List[Array[State]] =
         if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
         else List()
-// IMPROVE.  Turning off optimisation
       if(unifs.nonEmpty || reducedMapInfo == null ||
-        !cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)){
+          !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs)){
         val newPrinc = getNewPrinc(cpts(0), unifs)
         var newComponentsList =
           StateArray.makePostComponents(newPrinc, postCpts, cpts)
@@ -263,10 +262,7 @@ class EffectOn(
         processInducedInfo(
           map, cpts, unifs, reducedMapInfo, true, crossRefs, newComponentsList)
       }
-      // else if(hl) println(
-      //   s"*** reducedMapInfo = ${reducedMapInfo.mkString(",")}; "+
-      //     cv.containsConditionBInduced(post.servers, reducedMapInfo, crossRefs)+
-      //     "; crossRefs = "+crossRefs.map(StateArray.show).mkString("; "))
+      Pools.returnRemappingRows(map)
     } // end of while loop
   }
 

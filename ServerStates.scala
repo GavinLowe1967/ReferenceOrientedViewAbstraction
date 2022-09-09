@@ -184,7 +184,7 @@ object ServerStates{
       remappingMapRowStore(t)(size) = new Array[Identity](size)
     remappingMapRowStore(t)(size)
   }
-  else new Array[Identity](size)
+  else Pools.getRemappingRow(size) // new Array[Identity](size)
   // IMPROVE: reuse
 
   /** A RemappingMap, used in remappingMap1(size).

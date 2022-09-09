@@ -68,7 +68,7 @@ package object ViewAbstraction{
 
 // FIXME: the size of each row is a hack, and may be insufficient 
   @inline def newBitMap: BitMap = {
-    // Profiler.count("newBitMap") // 707M with lazySetNoJoined
+    Profiler.count("newBitMap") // 707M with lazySetNoJoined
     val newIds = new BitMap(numTypes); var f = 0
     while(f < numTypes){ newIds(f) = new Array[Boolean](typeSizes(f)+1); f += 1 }
     newIds

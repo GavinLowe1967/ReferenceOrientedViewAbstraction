@@ -50,11 +50,12 @@ object UnificationTest
       buff.map{ case (map, us) => show(map)+"; "+us }.mkString("\n")
 
     def mkConc(cpts: Array[State]) = new Concretization(servers0, cpts)
+    def mkView(cpts: Array[State]) = new ComponentView(servers0, cpts)
 
     def test1 = {
       val buffer = 
-        allUnifs(newRemappingMap, mkConc(Array(aNode(N0,N1))), 
-          Array(aNode(N2,N3)))
+        allUnifs(mkConc(Array(aNode(N0,N1))), 
+          mkView(Array(aNode(N0,N1),bNode(N1,Null))))
       // println("\n"+showBuffer(buffer))
       // One result without unification: can't unify principals.
       assert(buffer.length == 1)
@@ -68,8 +69,9 @@ object UnificationTest
     def test2 = {
       //println("test2")
       val buffer = 
-        allUnifs(newRemappingMap, mkConc(Array(aNode(N0,N1), aNode(N1,N2))), 
-          Array(aNode(N2,N3), aNode(N3,N4)))
+        allUnifs(mkConc(Array(aNode(N0,N1), aNode(N1,N2))), 
+          mkView(Array(aNode(N0,N1), aNode(N1,N2)))) 
+       //   mkView(Array(aNode(N2,N3), aNode(N3,N4))))
       //println("\n"+showBuffer(buffer))
       assert(buffer.length == 4)
       assert(buffer.forall{case (map, unifs) => 
@@ -77,12 +79,18 @@ object UnificationTest
           // unify both -- no, can't unify principals
           // checkMap(map(0), List((2,0), (3,1), (4,2))) && 
             // unifs == List((1,1), (0,0)) ||
+            // // N2 -> N1, N3 -> N2
+            // checkMap(map(0), List((2,1),(3,2))) && unifs == List((0,1)) ||
+            // // N3 -> N0, N4 -> N1
+            // checkMap(map(0), List((3,0),(4,1))) && unifs == List((1,0)) ||
+            // // N3 -> N1, N4 -> N2
+            // checkMap(map(0), List((3,1),(4,2))) && unifs == List((1,1)) ||
             // N2 -> N1, N3 -> N2
-            checkMap(map(0), List((2,1),(3,2))) && unifs == List((0,1)) ||
+            checkMap(map(0), List((0,1),(1,2))) && unifs == List((0,1)) ||
             // N3 -> N0, N4 -> N1
-            checkMap(map(0), List((3,0),(4,1))) && unifs == List((1,0)) ||
+            checkMap(map(0), List((1,0),(2,1))) && unifs == List((1,0)) ||
             // N3 -> N1, N4 -> N2
-            checkMap(map(0), List((3,1),(4,2))) && unifs == List((1,1)) ||
+            checkMap(map(0), List((1,1),(2,2))) && unifs == List((1,1)) ||
             // no unification
             emptyMap(map(0)) && unifs.isEmpty
         )})
@@ -90,14 +98,15 @@ object UnificationTest
 
     def test3 = {
       val buffer = 
-        allUnifs(newRemappingMap, mkConc(Array(initNodeSt(T0,N0), aNode(N0,N1))), 
-          Array(unlock(T0), aNode(N2,N3)))
+        allUnifs(mkConc(Array(initNodeSt(T0,N0), aNode(N0,N1))), 
+          mkView(Array(initNodeSt(T0,N0), aNode(N0,N1))))
+          // mkView(Array(unlock(T0), aNode(N2,N3),bNode(N3,Null))))
       // println("\n"+showBuffer(buffer))
       // One result without unification: can't unify principals.
       assert(buffer.length == 2)
       assert(buffer.forall{case (map, unifs) => 
         map.forall(emptyMap) && unifs.isEmpty  ||
-        checkMap(map(0), List((2,0), (3,1))) && emptyMap(map(1)) &&
+        checkMap(map(0), List((0,0), (1,1))) && emptyMap(map(1)) &&
           unifs == List((1,1))
       })
     }
@@ -105,9 +114,8 @@ object UnificationTest
     def test4 = {
       // println("test4")
       val buffer = 
-        allUnifs(newRemappingMap, 
-          mkConc(Array(initNodeSt(T0,N0), aNode(N0,N1), aNode(N1,N2))),
-          Array(unlock(T0), aNode(N2,N3), aNode(N3,N4)))
+        allUnifs(mkConc(Array(initNodeSt(T0,N0), aNode(N0,N1), aNode(N1,N2))),
+          mkView(Array(popSt(T0,N2,N3), aNode(N2,N3), aNode(N3,N4))))
       // println("\n"+showBuffer(buffer))
       assert(buffer.length == 5)
       assert(buffer.forall{case (map, unifs) => 

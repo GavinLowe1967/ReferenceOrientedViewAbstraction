@@ -45,7 +45,7 @@ object Unification{
         else ok = map1(t)(id2) == id1
         i += 1
       }
-      if(ok) map1 else null 
+      if(ok) map1 else { Pools.returnRemappingRows(map1); null }
     }
   }
 
@@ -60,15 +60,19 @@ object Unification{
   private def show(allUs: AllUnifsResult) = 
     allUs.map{case(map,us) => "("+Remapper.show(map)+", "+us+")"}.mkString("; ")
 
-  /** All ways of extending map0 to unify elements of cpts with elements of
-    * preCpts, other than the two principal components.  
+  /** All ways of extending map0 to unify components of cv with components of
+    * pre, other than the two principal components.  
     * 
-    * For each combination of unifications, map0 is extended to a mapping map
-    * so that if c = cpts(j) is unified with preC = preCpts(i), them map0(c) =
-    * preC, and (j,i) is included in the UnificationList.  */
-  def allUnifs(map0: RemappingMap, pre: Concretization, cpts: Array[State]) 
+    * For each combination of unifications, a remapping map so that if c =
+    * cv.components(j) is unified with preC = pre.components(i), them map0(c)
+    * = preC, and (j,i) is included in the UnificationList.
+    * 
+    * The maps returned are distinct.  */
+  def allUnifs(pre: Concretization, cv: ComponentView) //cpts: Array[State]) 
       : AllUnifsResult = {
-    val preCpts = pre.components
+    require(pre.servers == cv.servers)
+    val cpts = cv.components; val preCpts = pre.components
+    val map0 = pre.servers.remappingMap1(cv.getParamsBound)
     // Map from identities to the index of the corresponding component in
     // preCpts, if any, otherwise -1.
     val preCptsIndexMap = pre.idsIndexMap // State.indexMap(preCpts)
@@ -83,7 +87,7 @@ object Unification{
 
         // Try to unify c with preCpts(i)
         @inline def tryUnify(i: Int): Unit = {
-          val map1 = unify(map,  preCpts(i), c)
+          val map1 = unify(map,  preCpts(i), c) // map1 is a new map
           if(map1 != null){
             // check that map was not extended on any identity of a component
             // in cpts[0..from) to match a component in preCpts: if so, we
@@ -107,7 +111,10 @@ object Unification{
         // if !singleRef (that would just recreate the same transition).
         val fc = c.family; val id1 = map(fc)(c.id)
         val ix = if(id1 < 0) -1 else preCptsIndexMap(fc)(id1)
-        if(ix >= 0){ if(singleRef || from > 0 || ix > 0) tryUnify(ix) }
+        if(ix >= 0){ 
+          if(singleRef || from > 0 || ix > 0) tryUnify(ix)
+          Pools.returnRemappingRows(map) // finished with map
+        }
         else{
           // Try to unify with each component in turn, but don't unify the two
           // principals if !singleRef (that would just recreate the same
@@ -269,9 +276,12 @@ object Unification{
     val result = new ArrayBuffer[RemappingMap] // CombineResult
     // the bitmap is empty: c's id should not be remapped, by precondition.
     // Profiler.count("Unification:newBitMap")
-    getCombiningMaps(map0, otherArgs, newBitMap, nextArgMap, Array(c), result)
+    getCombiningMaps(map0, otherArgs, /*new*/emptyBitMap, nextArgMap, Array(c), result)
     result.map{ case map => Remapper.applyRemappingToState(map, c) }
   }
+
+  /** An empty bit map, for use in remapToJoin. */
+  private val emptyBitMap = newBitMap
 
   /** Hooks for testing. */
   trait Tester{

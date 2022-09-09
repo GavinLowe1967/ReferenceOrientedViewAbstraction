@@ -427,6 +427,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     } // end of worker
 
     // Run numWorker workers
+    ThreadID.reset
     Concurrency.runIndexedSystem(numWorkers, worker)
 
     endOfCheck(bound)
@@ -443,6 +444,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     else println("Omitting system\n") 
     traverse("ServerStates", ServerStates, maxPrint = 0); println()
     //traverse("first view", sysAbsViews.iterator.next(), maxPrint = 0); println()
+    println("ReducedComponentView size = "+ReducedComponentView.size)
     traverse("ReducedComponentView", ReducedComponentView, maxPrint = 0)
     println()
     // Traverse 3 views.  Not very useful as mostly in creationIngredients.
@@ -450,7 +452,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     for(_ <- 0 until 3; if viewsIter.hasNext){
       traverse("ComponentView", viewsIter.next(), maxPrint = 1); println()
     }
-    traverse("sysAbsViews", sysAbsViews, maxPrint = 0); println()
+    traverse("sysAbsViews", sysAbsViews, maxPrint = 1); println()
     traverse("transitions", transitions, maxPrint = 0); println()
     traverse("transitionTemplates", transitionTemplates, maxPrint = 0); println()
     // traverse("extendability", extendability, maxPrint = 0); println()
@@ -458,7 +460,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
       maxPrint = 1, ignore = List("System"))
     println()
     EffectOn.memoryProfile; println()
-    traverse("checker", this, maxPrint = 1); println()
+    traverse("checker", this, maxPrint = 1, ignore = List("System")); println()
     // Below here should be trivial
     traverse("CompatibleWithCache", CompatibleWithCache, maxPrint = 0)
     traverse("ComponentView0", ComponentView0, maxPrint = 0)

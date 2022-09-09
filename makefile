@@ -69,13 +69,13 @@ $(DIR)/View.class:  $(DIR)/StateArray.class $(DIR)/ServerStates.class $(COLLDIR)
 
 # $(DIR)/MyHashSet.class:  $(DIR)/Sharding.class
 
-$(DIR)/ComponentView0.class: $(DIR)/View.class $(COLLDIR)/MyHashSet.class $(DIR)/ServersReducedMap.class
+$(DIR)/ComponentView0.class: $(DIR)/View.class $(COLLDIR)/MyHashSet.class $(DIR)/ServersReducedMap.class $(COLLDIR)/OpenHashMap.class
 
 $(DIR)/ComponentView.class: $(DIR)/ComponentView0.class
 
 $(DIR)/TestStates.class: $(DIR)/MyStateMap.class
 
-$(DIR)/RemapperP/Remapper.class: $(COLLDIR)/ShardedHashMap.class $(DIR)/ComponentView.class $(DIR)/MyStateMap.class
+$(DIR)/RemapperP/Remapper.class: $(COLLDIR)/ShardedHashMap.class $(DIR)/ComponentView.class $(DIR)/MyStateMap.class $(DIR)/Pools.class
 
 $(DIR)/RemapperP/RemapperTest.class: $(DIR)/TestStates.class $(DIR)/RemapperP/Remapper.class $(DIR)/Unification.class
 
@@ -87,7 +87,7 @@ $(DIR)/Unification.class: $(REMAPPERP)/Remapper.class
 
 $(DIR)/UnificationTest.class: $(DIR)/Unification.class $(DIR)/EffectOnUnification.class 
 
-$(DIR)/RemappingExtender.class: $(DIR)/RemapperP/Remapper.class $(DIR)/Unification.class $(DIR)/Transition.class
+$(DIR)/RemappingExtender.class: $(DIR)/RemapperP/Remapper.class $(DIR)/Unification.class $(DIR)/Transition.class $(DIR)/Pools.class
 
 $(DIR)/RemappingExtenderTest.class: $(DIR)/RemappingExtender.class
 

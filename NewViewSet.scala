@@ -42,7 +42,11 @@ class NewViewSet extends ViewSet{
   }
 
   /** Does this contain view? */
-  def contains(view: ReducedComponentView): Boolean = allViews.contains(view)
+  def contains(view: ReducedComponentView): Boolean = {
+    if(view.isFound) true
+    else if(allViews.contains(view)){ view.setFound; true }
+    else false
+  }
 
   /** Does this contain a view corresponding to servers and cpts? */
   def contains(servers: ServerStates, cpts: Array[State]): Boolean = {

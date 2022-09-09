@@ -27,6 +27,13 @@ object Remapper{
   /** Show a remapping map. */
   def show(map: RemappingMap) = map.map(_.mkString("[",",","]")).mkString("; ") 
 
+  /** Produce a (deep) clone of map. */
+  @inline def cloneMap(map: RemappingMap): RemappingMap = {
+    val map1 = new Array[Array[Int]](numTypes); var t = 0
+    while(t < numTypes){ map1(t) = Pools.cloneRow(map(t)); t += 1 }
+    map1
+  }
+
   /** The size for the remapping map for type t.  */
 // FIXME: the "*2" below is arbitrary, and probably insufficient in some cases. 
   @inline private def sizeForRemapping(t: Type) = 2*typeSizes(t)+2
@@ -36,26 +43,15 @@ object Remapper{
 // Maybe chose the map's size on a case-by-case basis.
     Array.tabulate(numTypes)(t => Array.fill(sizeForRemapping(t))(-1))
 
-  /** Produce a (deep) clone of map. */
-  @inline def cloneMap(map: RemappingMap): RemappingMap = {
-    val map1 = new Array[Array[Int]](numTypes); var t = 0
-    while(t < numTypes){ 
-      map1(t) = map(t).clone; 
-      // val size = map(t).size
-      // map1(t) = new Array[Int](size); var i = 0
-      // while(i < size){ map1(t)(i) = map(t)(i); i += 1 }
-      t += 1 
-    }
-    map1
-  }
-
   /** A clear RemappingMap, representing the empty mapping, i.e. mapping all
     * entries to -1.  Different calls to this will use the same arrays, so two
     * RemappingMaps created by the same thread should not be in use at the
     * same time. */
   @inline def newRemappingMap: RemappingMap = {
     Profiler.count("newRemappingMap")
-    cloneMap(remappingMapTemplate)
+    val map1 = new Array[Array[Int]](numTypes); var t = 0
+    while(t < numTypes){ map1(t) = remappingMapTemplate(t).clone; t += 1 }
+    map1
   }
 
   /** Is the mapping represented by map injective? */
@@ -557,11 +553,6 @@ object Remapper{
     map: RemappingMap, nextArg: NextArgMap, procs: Array[State]): Array[State] = 
     procs.map(st => remapState(map, nextArg, st))
 
-  // @inline private 
-  // def remapServerStates(map: RemappingMap, nextArg: NextArgMap, ss: ServerStates)
-  //     : ServerStates = 
-  //   ServerStates(remapStates(map, nextArg, ss.servers))
-
   /** Cache used in remapServerStates. */
   private val remapSSCache = 
     new ShardedHashMap[ServerStates, (ServerStates, RemappingMap, NextArgMap)]
@@ -571,33 +562,13 @@ object Remapper{
   @inline private def remapServerStates(ss: ServerStates)
       : (ServerStates, RemappingMap, NextArgMap) = {
     def mkTuple: (ServerStates, RemappingMap, NextArgMap) = {
-      val map = newRemappingMap; var nextArg = newNextArgMap
-      val servers = ServerStates(remapStates(map, nextArg, ss.servers))
-      (servers, map, nextArg)
+      val map0 = newRemappingMap; var nextArg = newNextArgMap
+      val servers = ServerStates(remapStates(map0, nextArg, ss.servers))
+      (servers, map0, nextArg)
     }
-    val (servers, map, nextArgs) = 
-      /*synchronized*/{ remapSSCache.getOrElseUpdate(ss, mkTuple) }
+    val (servers, map, nextArgs) = remapSSCache.getOrElseUpdate(ss, mkTuple) 
     (servers, cloneMap(map), nextArgs.clone)
-  }
-/*
-    synchronized{ remapSSCache.get(ss) } match{ // Try to retrieve from cache. 
-      case Some((ss1, map, nextArgs)) => 
-        // Profiler.count("remapServerStates found")
-        (ss1, cloneMap(map), nextArgs.clone)
-      case None =>
-        // Profiler.count("remapServerStates new")
-        val map = newRemappingMap; var nextArg = newNextArgMap
-        val servers = ServerStates(remapStates(map, nextArg, ss.servers))
-        val newTuple = ((servers, cloneMap(map), nextArg.clone))
-        synchronized { remapSSCache += ss -> newTuple }
-        (servers, map, nextArg)
-        // Note: it doesn't matter if two concurrent threads write to the same
-        // ss, above, as they will write equivalent values.
-    }
-  }
- */
-
-  
+  }  
 
   // =================== Remapping views
 

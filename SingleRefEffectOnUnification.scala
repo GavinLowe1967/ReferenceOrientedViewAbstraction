@@ -11,20 +11,24 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
    * apply
    * |--Unification.allUnifs
    * |--isSufficientUnif
-   * |--mkOtherArgsMap       
-   * |  |--addIdsFromNewRef
-   * |--extendToRDMap     (produces primary result-defining maps)
-   * |--makePrimaryExtension
-   * |  |--RemappingExtender.makeExtensions
-   * |--getSecondaryInfo
-   * |--mkSecondaryOtherArgsMap
-   * |--RemappingExtender.extendMapOverComponent
-   * |--makeSecondaryExtension
-   * |  |--RemappingExtender.makeExtensions
+   * |--makePrimaryInduced
+   * |  |--mkOtherArgsMap       
+   * |  |  |--addIdsFromNewRef
+   * |  |--extendToRDMap     (produces primary result-defining maps)
+   * |  |--makePrimaryExtension
+   * |  |  |--RemappingExtender.makeExtensions
+   * |--makeSecondaryInduced
+   *    |--getSecondaryInfo
+   *    |--mkSecondaryOtherArgsMap
+   *    |--RemappingExtender.extendMapOverComponent
+   *    |--makeSecondaryExtension
+   *    |  |--RemappingExtender.makeExtensions
    * 
    * IMPROVE: maybe factor out mkOtherArgsMap, extendToRDMap,
    * getSecondaryInfo, mkSecondaryOtherArgsMap.
    */
+
+  Profiler.count("SingleRefEffectOnUnification")
 
   /* A few object variables, extracted directly from pre, post and cv, used in
    * several functions. */
@@ -85,8 +89,8 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     // val map0 = cv.getRemappingMap // 
     // Profiler.count("SREOU.apply")
     if(highlight) println(s"SREOU.apply($trans,\n  $cv)")
-    val map0 = servers.remappingMap1(cv.getParamsBound)
-    val allUnifs = Unification.allUnifs(map0, pre, cpts)
+    //val map0 = servers.remappingMap1(cv.getParamsBound)
+    val allUnifs = Unification.allUnifs(pre, cv) // cpts)
     var k = 0
 
     while(k < allUnifs.length){
@@ -102,13 +106,13 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   /** Try to create primary induced transitions based on map1 and unifs. */
   @inline private 
   def makePrimaryInduced(map1: RemappingMap, unifs: UnificationList) = {
-    val hl = highlight && map1(0)(3) == 2 // N4 -> N3
-    if(hl) println("makePrimaryInduced("+Remapper.show(map1)+s", $unifs)")
+    // val hl = highlight && map1(0)(3) == 2 // N4 -> N3
+    // if(hl) println("makePrimaryInduced("+Remapper.show(map1)+s", $unifs)")
     // Result-relevant parameters: parameters to map params of cv to, in order
     // to create result-defining map.
     val otherArgsBitMap = mkOtherArgsMap(map1, unifs)
-    if(highlight) println("otherArgsBitMap = "+
-      otherArgsBitMap.map(_.mkString("<", ", ", ">")).mkString("; "))
+    // if(highlight) println("otherArgsBitMap = "+
+    //   otherArgsBitMap.map(_.mkString("<", ", ", ">")).mkString("; "))
     // Profiler.count("SREOU.apply-iter")
     // Primary result-defining maps
     val rdMaps =
@@ -154,8 +158,8 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
               postServers, reducedMapInfo, postUnified)
         else unifs.isEmpty && // old version; this might be better
           cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo) )
-      if(hl)
-        println("rdMap = "+Remapper.show(rdMap)+s"; duplicated = $duplicated")
+      // if(hl)
+      //   println("rdMap = "+Remapper.show(rdMap)+s"; duplicated = $duplicated")
       if(!duplicated)
         makePrimaryExtension(unifs, otherArgsBitMap, rdMap, reducedMapInfo)
     }
@@ -189,7 +193,6 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     // EffectOn.recordInduced) doesn't work, because the previous case only
     // implies that *one* of the result-defining maps led to success, not all
     // of them.
-
 
   /** Create a BitMap containing all parameters: (1) in newServerIds (parameters
     * in post.servers but not pre.servers), or (2) in a unified component of
@@ -249,11 +252,11 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       while(i > 0 && !resultRelevantParams(t)(i-1)) i -= 1
       bounds(t) = i; t += 1
     }
-    val result = new ArrayBuffer[RemappingMap]
+    val mapBuff = new ArrayBuffer[RemappingMap]
 
     /* Extend map, remapping parameters from (t,i) onwards. */
     def rec(t: Int, i: Int): Unit = {
-      if(t == numTypes) result += Remapper.cloneMap(map)  // done this branch
+      if(t == numTypes) mapBuff += Remapper.cloneMap(map)  // done this branch
       else if(i == map(t).length) rec(t+1, 0) // advance
       else if(map(t)(i) >= 0) rec(t, i+1) // advance
       else{
@@ -278,7 +281,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       }
     } // end of rec
 
-    rec(0,0); result
+    rec(0,0); mapBuff
   }
 
   /* Extend the result-defining map rdMap, based on unifications unifs, to

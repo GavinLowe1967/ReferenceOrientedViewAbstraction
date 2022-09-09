@@ -124,8 +124,8 @@ class CheckerTest(system: SystemP.System, numWorkers: Int)
       // !singleRef.
       val cv1 = new ComponentView(servers1, Array(initNodeSt(T0,Null)))
 
-      val map0 = servers1.remappingMap1(cv1.getParamsBound)
-      val unifs = Unification.allUnifs(map0, pre, cv1.components)
+      //val map0 = servers1.remappingMap1(cv1.getParamsBound)
+      val unifs = Unification.allUnifs(pre, cv1) // .components)
       assert(unifs.isEmpty)
       // println("unifs = \n"+unifs.map{case (map,unifs) =>
       //   RemapperP.Remapper.show(map)+": "+unifs}.mkString("\n"))

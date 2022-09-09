@@ -23,19 +23,20 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
 
   /* A few object variables, extracted directly from pre and cv, used in
    * several functions. */
-  private val pre = trans.pre; val post = trans.post
-  private val preCpts = pre.components;
-  private val cpts = cv.components
+  @inline private def pre = trans.pre; 
+  @inline private def post = trans.post
+  @inline private def preCpts = pre.components;
+  @inline private def cpts = cv.components
 
   // IDs of components in pre, cv
-  private val preCptIds = pre.cptIdsBitMap 
-  private val cptIds = cv.cptIdsBitMap 
+  @inline private def preCptIds = pre.cptIdsBitMap 
+  @inline private def cptIds = cv.cptIdsBitMap 
 
-  private val preParamSizes = pre.getNextArgMap
+  @inline private def preParamSizes = pre.getNextArgMap
 
   /** Temporary test to help with debugging.  Might this be the instance causing
     * problems? */
-  val highlight = false && // IMPROVE
+  @inline private def highlight = false && // IMPROVE
     pre.servers.servers(1).cs == 34 && 
     preCpts.length == 2 && cpts.length == 2 &&
       preCpts(0).cs == 23 && preCpts(1).cs == 15 && 
@@ -221,7 +222,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     map: RemappingMap, c: State, candidates: Array[List[Identity]])
       : ArrayBuffer[RemappingMap] = {
     val result = new ArrayBuffer[RemappingMap] // builds result
-    val addedParams = newBitMap  // Parameters that we have added to map
+    val addedParams = Pools.getBitMap // newBitMap  // Parameters that we have added to map
 
     /* Extend map over parameters of c from index ix onwards. */
     def rec(ix: Int): Unit = {
@@ -250,7 +251,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       } // end of else
     }
 
-    rec(0); result
+    rec(0); Pools.returnBitMap(addedParams); result
   }
 
 

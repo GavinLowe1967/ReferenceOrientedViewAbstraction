@@ -187,7 +187,8 @@ class MissingInfo(
 
   /** Does views contain newView?  Store the result. */
   def isNewViewFound(views: ViewSet) = synchronized{
-    if(views.contains(newView)){ newViewFound = true; true } else false
+    newViewFound ||
+    (if(views.contains(newView)){ newViewFound = true; true } else false)
   }
 
   /** Is this complete? */

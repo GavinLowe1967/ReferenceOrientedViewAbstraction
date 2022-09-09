@@ -30,6 +30,15 @@ class ReducedComponentView(
     else false
   }
 
+  /** Is this known to be in the ViewSet? */
+  private var found = false
+
+  /** Is this known to be in the ViewSet?  Might give false negative. */
+  def isFound = found
+
+  /** Record that this is in the ViewSet. */
+  def setFound = found = true
+
   /** Create hash code. */
   @inline private def mkHashCode = {
     StateArray.mkHash(servers.hashCode, components)
@@ -39,7 +48,7 @@ class ReducedComponentView(
     // h 
   }
 
-  override val hashCode = mkHashCode
+  override def hashCode = mkHashCode
 
  /** Ordering on ReducedComponentViews.  Return a value x s.t.: x < 0 if this <
     * that; x == 0 when this == that; x > 0 when this > that. */
@@ -67,6 +76,8 @@ object ReducedComponentView{
     * memory usage. */  
   def apply(servers: ServerStates, cpts: Array[State]) = 
     store.getOrAdd(new ReducedComponentView(servers, cpts))
+
+  def size = store.size
 
 }
 

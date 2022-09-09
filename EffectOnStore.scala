@@ -574,7 +574,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     // profile MissingCommon, MissingInfoStore
     MissingCommon.memoryProfile
     println("MissingInfoStore.size = "+printLong(MissingInfoStore.size))
-    traverse("MissingInfoStore", MissingInfoStore, maxPrint = 3)
+    traverse("MissingInfoStore", MissingInfoStore, maxPrint = 1)
     println()
 
     println("mcNotDoneStore: size = "+mcNotDoneStore.size)
@@ -587,9 +587,9 @@ class SimpleEffectOnStore extends EffectOnStore{
       }
     }
 
-    traverse("mcNotDoneStore", mcNotDoneStore, maxPrint = 2); println()
-    traverse("mcDoneStore", mcDoneStore, maxPrint = 2); println()
-    traverse("candidateForMCStore", candidateForMCStore, maxPrint = 2); println()
+    traverse("mcNotDoneStore", mcNotDoneStore, maxPrint = 1); println()
+    traverse("mcDoneStore", mcDoneStore, maxPrint = 1); println()
+    traverse("candidateForMCStore", candidateForMCStore, maxPrint = 1); println()
     traverse("effectOnStore", this, maxPrint = 1); println()
   }
 

@@ -112,10 +112,9 @@ class ShardedHashSet[A : scala.reflect.ClassTag](
       if(usedSlots(sh) >= thresholds(sh)) resize(sh)
       // Find empty slot or slot containing x
       val i = find(sh, x, h)
-// IMPROVE: remove assertions
-      if(hashes(sh)(i) == h){ assert(elements(sh)(i) == x); false }
+      if(hashes(sh)(i) == h){ /*assert(elements(sh)(i) == x);*/ false }
       else{
-        assert(hashes(sh)(i) == Empty && elements(sh)(i) == null)
+        // assert(hashes(sh)(i) == Empty && elements(sh)(i) == null)
         hashes(sh)(i) = h; elements(sh)(i) = x; 
         counts(sh) += 1; usedSlots(sh) += 1; true
       }
@@ -159,8 +158,8 @@ class ShardedHashSet[A : scala.reflect.ClassTag](
 
   /** Does shard sh contain x with hash h? */
   @inline private def shardContains(sh: Int, x: A, h: Int): Boolean = {
-    val i = find(sh, x, h)
-    elements(sh)(i) == x // IMPROVE: replace with test of hash
+    val i = find(sh, x, h); hashes(sh)(i) == h
+    // elements(sh)(i) == x // IMPROVE: replace with test of hash
   }
 
   /** Does this contain x?  Performed in a lock-free way.  Should not be called
@@ -233,7 +232,7 @@ class ShardedHashSet[A : scala.reflect.ClassTag](
     val h = hashOf(x); val sh = shardFor(h)
     locks(sh).synchronized{
       val i = find(sh, x, h)
-      assert(elements(sh)(i) == x) // IMPROVE
+      // assert(elements(sh)(i) == x)
       elements(sh)(i)
     }
   }
@@ -260,10 +259,11 @@ class ShardedHashSet[A : scala.reflect.ClassTag](
     locks(sh).synchronized{
       val i = find(sh, x, h)
       if(hashes(sh)(i) == h){
-        assert(elements(sh)(i) == x); hashes(sh)(i) = Deleted
+        // assert(elements(sh)(i) == x); 
+        hashes(sh)(i) = Deleted
         elements(sh)(i) = null.asInstanceOf[A]; counts(sh) -= 1; true
       }
-      else{ assert(elements(sh)(i) == Empty); false }
+      else{ assert(elements(sh)(i) == null.asInstanceOf[A]); false }
     }
   }
 }

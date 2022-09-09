@@ -1,5 +1,5 @@
 package ViewAbstraction
-
+import collection.OpenHashMap
 import ox.gavin.profiling.Profiler
 import collection.OpenHashSet
 
@@ -262,9 +262,9 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * mapping, post.servers != this.servers; and for each list in the range,
     * no element of the list is a subset of another.  Protected by
     * synchronized blocks. */
-  private val conditionBInducedMap = 
-    if(singleRef) // new OpenHashMap[ServersReducedMap, List[CrossRefInfo]]
-      new scala.collection.mutable.HashMap[ServersReducedMap, List[CrossRefInfo]]
+  private var conditionBInducedMap = 
+    if(singleRef) new OpenHashMap[ServersReducedMap, List[CrossRefInfo]]
+  // new scala.collection.mutable.HashMap[ServersReducedMap, List[CrossRefInfo]]
     else null
 
   /** Is crossRefs1 a subset of crossRefs2? */
@@ -335,9 +335,10 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
 // IMPROVE (if still using this)
         else if(false)
           println(s"Not added: ${showCRI(crossRefs)}\n${crl.map(showCRI)}")
-        conditionBInducedMap += key -> newList; !foundSubset
+        conditionBInducedMap.add(key, newList); /* += key -> newList;*/ !foundSubset
 
-      case None => conditionBInducedMap += key -> List(crossRefs); true
+      case None => conditionBInducedMap.add(key, List(crossRefs)); true
+          // += key -> List(crossRefs); true
     }
   }
 
@@ -345,7 +346,8 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   def clearInduced = {
     // if(doneInducedPostServers != null) doneInducedPostServers.clear
     doneInducedPostServersBM = new Array[Long](0)
-    if(conditionBInducedMap != null) conditionBInducedMap.clear()
+    // if(conditionBInducedMap != null) conditionBInducedMap.clear()
+    if(singleRef) conditionBInducedMap =  new OpenHashMap[ServersReducedMap, List[CrossRefInfo]]
   }
 
 }
