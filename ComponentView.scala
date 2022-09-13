@@ -13,46 +13,61 @@ class ComponentView(servers: ServerStates, components: Array[State])
     this(servers, principal +: others)
   }
 
-  /** This view was created by the extended transition pre -e-> post. */
-  private var pre, post: Concretization = null
-  private var e: EventInt = -1
+  /** This view was created by the view transition creationTrans post. */
+  // private var pre, post: Concretization = null
+  private var creationTrans: Transition = null
+  // private var e: EventInt = -1
+
+  /** record that this was created by the view transition trans. */
+  def setCreationTrans(trans: Transition) = synchronized{
+    require(creationTrans == null); creationTrans = trans
+  }
 
   /** Ingredients for making an extended transition.  If this contains a tuple
-    * (pre1, cpts, cv, post1, newCpts) then this was created by the extended
+    * (trans, cpts, cv,  newCpts) then this was created by the extended
     * transition 
-    * mkExtendedPre(pre1, cpts, cv) -e1-> mkExtendedPost(post1, newCpts). 
+    * mkExtendedPre(trans.pre, cpts, cv) -trans.e-> mkExtendedPost(trans.post, newCpts). 
     * We lazily avoid creating these concretizations until needed. */ 
   private var creationIngredients: 
-      (Concretization, Array[State], ComponentView, Concretization, Array[State])
+      (Transition, Array[State], ComponentView,  Array[State])
   = null
 
   /** Get the creation information for this. */
   def getCreationInfo: (Concretization, EventInt, Concretization) = synchronized{
-    if(pre != null) (pre, e, post) 
+    // if(pre != null) (pre, e, post) 
+    if(creationTrans != null) 
+      (creationTrans.pre, creationTrans.e, creationTrans.post)
     else{ 
-      val (pre1, cpts, cv, post1, newCpts) = creationIngredients
-      (mkExtendedPre(pre1, cpts, cv), e, mkExtendedPost(post1, newCpts))
+      val (trans, cpts, cv, newCpts) = creationIngredients
+      (mkExtendedPre(trans.pre, cpts, cv), trans.e,
+        mkExtendedPost(trans.post, newCpts))
     }
   }
 
+  /** Get information about how this was created.  Used only in print
+    * statements. */
   def getCreationIngredients = synchronized{ creationIngredients }
 
-  /** Record that this view was created by the extended transition 
-    * pre1 -e1-> post1. */
-  def setCreationInfo(pre1: Concretization, e1: EventInt, post1: Concretization)
-  = synchronized{
-    require(creationIngredients == null && pre == null)
-    pre = pre1; e = e1; post = post1
-  }
+
+  // /** Record that this view was created by the extended transition 
+  //   * pre1 -e1-> post1. */
+  // def setCreationInfo(pre1: Concretization, e1: EventInt, post1: Concretization)
+  // = synchronized{
+  //   require(creationIngredients == null && pre == null)
+  //   pre = pre1; e = e1; post = post1
+  // }
 
   /** Record that this view was created by the extended transition
     * mkExtendedPre(pre1, cpts, cv) -e1-> mkExtendedPost(post1, newCpts).
     */
   def setCreationInfoIndirect(
-    pre1: Concretization, cpts: Array[State], cv: ComponentView,
-    e1: EventInt, post1: Concretization, newCpts: Array[State]) 
+    trans: Transition, cpts: Array[State], cv: ComponentView, 
+    newCpts: Array[State])
   = synchronized{
-    creationIngredients = (pre1, cpts, cv, post1, newCpts); e = e1
+// NOTE: I'm not entirely sure about following test. 
+//    if(pre == null){
+      creationIngredients = (trans, cpts, cv, newCpts)
+//    }
   }
 
   /** Make the extended pre-state by extending pre1 with cpts, and setting cv as
@@ -72,8 +87,8 @@ class ComponentView(servers: ServerStates, components: Array[State])
       StateArray.union(post1.components, newCpts))
 
   def showCreationInfo: String = creationIngredients match{
-    case (pre1, cpts, cv, post1, newCpts) => s"induced by $pre1 -> $post1 on $cv"
-    case null => s"produced by $pre -> $post"
+    case (trans, cpts, cv, newCpts) => s"induced by $trans on $cv"
+    case null => s"produced by $creationTrans"
   }
 
   /** Was this induced by a transition from cv1?  Used in trying to understand

@@ -2,7 +2,7 @@ package ViewAbstraction.collection
 
 // import ox.cads.util.Profiler
 
-import ViewAbstraction.{hashOf,checkPow2,numThreads}
+import ViewAbstraction.{hashOf,checkPow2,numWorkers}
 
 /** A HashSet containing data of type A. */
 trait MyHashSet[A]{
@@ -459,7 +459,7 @@ object LockFreeReadHashSet{
   /** numThreads rounded up to next power of 2. 
     * This is used in deciding the size of some sharded hash tables.  */
   val powerOf2AboveNumThreads = {
-    var pow = 1; var nt = numThreads
+    var pow = 1; var nt = numWorkers
     while(nt > 1){ pow *= 2; nt = (nt-1)/2+1 }
     pow
   }

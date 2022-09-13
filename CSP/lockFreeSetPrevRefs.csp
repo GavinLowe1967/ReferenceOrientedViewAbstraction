@@ -28,12 +28,12 @@ greater(x, y) = (x == C and y != C) or (x == B and y == A)
 
 -- Identities of nodes
 datatype NodeIDType = 
-  Null | N0 | N1 | N2   | N3    | N4  | N5 | N6  | N7 | N8 | N9
+  Null | N0 | N1 | N2 | N3 | N4  | N5 | N6  | N7 | N8 | N9 | N10
 
 NodeID = diff(NodeIDType, {Null}) -- real nodes
 
 -- Thread identities
-datatype ThreadIDType = Constr | T0 | T1      | T2  --| T3
+datatype ThreadIDType = Constr | T0 | T1   | T2 | T3
 
 -- For bound 29, 9 nodes and 3 threads are enough
 -- For bound 23, 8 nodes and 3 threads are enough
@@ -165,7 +165,9 @@ NodeR(me, value, next, prev, deleted, decoup) =
   []
   getNextR.me.next -> NodeR(me, value, next, prev, deleted, decoup)
   []
-  setPrev?t!me?newPrev -> NodeR(me, value, next, newPrev, deleted, decoup)
+  setPrev?t!me?newPrev -> 
+  -- Store prev only if this is the B-Node (?)
+    NodeR(me, value, next, if value == B then newPrev else Null, deleted, decoup)
   []
   false & getPrev!me!prev -> NodeR(me, value, next, prev, deleted, decoup)
   []
@@ -429,7 +431,8 @@ DelDecouple(me, v, pred, curr, succ) =
     else DelDecoupleDone(me, v, curr) 
   else Thread(me) -- CAS failed; restart
 
--- Signal to node it is decoupled; and to watchdog that the deletion failed.
+-- Signal to node it is decoupled; and to watchdog that this is not a failed
+-- deletion.
 DelDecoupleDone(me, v, curr) = 
   decoupled.me.curr?after?v1?sig!NoDecoupleDelFailSignal -> Thread(me)
 
@@ -779,6 +782,56 @@ alphaBNodeTracker = Union({
   {errorNT.B}
 })
 
+------------
+
+-- Process to test whether an expected error trace can happen
+
+Check = initNode.Constr?n!A.Null.Null -> joined.Constr.n -> initHead.n -> Check2
+
+-- Insert C
+Check2 = getHead?t?h.C -> getNext.t.h.Null.GetNextNoSignal ->
+   initNode.t?n!C.Null.h -> CAS.t.h.Null.false.n.false.true.AddLP.C ->
+   joined.t.n -> Check3
+
+-- Start to insert B
+Check3 = 
+  getHead?t?h!B -> getNext.t.h?n:NodeID!GetNextNoSignal ->
+  get.t.n.Null.false.GetAtomic -> getValue.t.n.C.GetValueNoSignal -> Check4
+
+-- Insert B
+Check4 = 
+  getHead?t?h!B -> getNext.t.h?n:NodeID!GetNextNoSignal ->
+  get.t.n.Null.false.GetAtomic -> getValue.t.n.C.GetValueNoSignal ->
+  initNode.t?n2!B.n.h -> CAS.t.h.n.false.n2.false.true.AddLP.B ->
+  setPrev.t.n.n2 -> joined.t.n2 -> Check5
+
+-- Insert A
+Check5 = 
+  getHead?t?h!A -> getNext.t.h?nb:NodeID!GetNextNoSignal ->
+  get.t.nb?_!false.GetAtomic -> getValue.t.nb.B.GetValueNoSignal ->
+  initNode.t?new!A.nb.h -> CAS.t.h.nb.false.new.false.true.AddLP.A ->
+  setPrev.t.nb.new -> joined.t.new -> Check6
+
+-- Insert another A
+Check6 = 
+  getHead?t?h!A -> getNext.t.h?na:NodeID!GetNextNoSignal ->
+  get.t.na?_!false.GetAtomic -> getValue.t.na.A.GetValueNoSignal ->
+  initNode.t?new!A.na.h -> CAS.t.h.na.false.new.false.true.AddLP.A ->
+  setPrev.t.na.new -> joined.t.new -> Check7(h)
+
+-- Continue with insertion of B
+Check7(h) = 
+  initNode?t:ThreadID?new!B?_!h -> 
+  -- CAS.t.h?_!false.new.false.true.AddLP.B -> 
+  CAS.t.h?_!false.new.false.false.CASNoSignal ->
+  CheckErr
+
+CheckErr = error -> STOP 
+
+alphaCheck = 
+  {| initNode, joined, initHead, getHead, getNext, CAS, error,
+     get, getValue, setPrev |}
+
 ------------ All the servers
 
 ChunkSize = 5000
@@ -794,8 +847,11 @@ ServerSet =
     (LastATracker, <seq(LastATrackerRename)>, <seq(alphaLastATracker)>, false),
     (BNodeTracker, <>, <seq(alphaBNodeTracker)>, false),
   -- Watchdog
-    (Watchdog1, <seq(WDRename)>, <seq(alphaWD)>, false),
-    -- (Watchdog1, chunkedWDRename, chunkedAlphaWD, false),
+-- FIXME: include
+--(Watchdog1, <seq(WDRename)>, <seq(alphaWD)>, false),
+    (Watchdog1, chunkedWDRename, chunkedAlphaWD, false),
+  -- Check process
+  -- (Check, <>, <seq(alphaCheck)>, false), 
   -- POR  and constructor  
     (POR, <seq(PORRename)>, <seq(alphaPOR)>, false),
    -- (POR, PORRenameChunked, alphaPORChunked, false),
@@ -853,3 +909,42 @@ assert STOP [T= STOP :[symmetry reduce]:
 -- assert STOP [T= Components
 
 -- assert STOP [T= Servers
+
+-- assert System :[has trace [T]]: <
+--   initNode.Constr.N0.A.Null.Null, joined.Constr.N0, initHead.N0,
+--   -- add of C
+--   getHead.T0.N0.C, getNext.T0.N0.Null.GetNextNoSignal,
+--   initNode.T0.N1.C.Null.N0, CAS.T0.N0.Null.false.N1.false.true.AddLP.C,
+--   joined.T0.N1,
+--   -- start of add of B
+--   getHead.T1.N0.B, getNext.T1.N0.N1.GetNextNoSignal, 
+--   get.T1.N1.Null.false.GetAtomic, getValue.T1.N1.C.GetValueNoSignal,
+--   -- T1 into state Add(T1,C,N0,N1,C)
+--   -- Now insert B between N0 and N1
+--   getHead.T0.N0.B, getNext.T0.N0.N1.GetNextNoSignal,
+--   get.T0.N1.Null.false.GetAtomic, getValue.T0.N1.C.GetValueNoSignal,
+--   initNode.T0.N2.B.N1.N0, CAS.T0.N0.N1.false.N2.false.true.AddLP.B,
+--   setPrev.T0.N1.N2,  joined.T0.N2
+--   -- Now insert A 
+-- >
+
+
+-- As it stands, this model finds false errors.  Consider a state where the
+-- list contains a single C-node N_C after the header node N_H.  Suppose
+-- thread T is trying to insert a B, and reads N_C and its value, but is then
+-- suspended (process state AddAdd(T, B, N_H, N_C, C)).  Suppose then other
+-- threads insert a B and at least 2 As.  Then when T continues, the inserting
+-- CAS should fail.  However, the relevant view, containing T and N_H, does
+-- not capture the property that the next node is different from N_C, since
+-- N_C is not included in the view.  (The additional two As are necessary,
+-- because the model does capture the property that N_C is distinct from the
+-- last A-node and the B-node, so N_H.next has to be distinct from each of
+-- these.)
+
+-- Perhaps we can arrange for the watchdog to guess that a particular
+-- invocation is going to be such an incorrect insertion, and then remember
+-- the identity of the N_C node.  Then we have the invariant that the thread's
+-- "curr" node matches this value.
+
+-- Do we find this false error without deletions?
+

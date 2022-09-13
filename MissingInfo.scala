@@ -14,7 +14,7 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
 class MissingInfo(
   val newView: ReducedComponentView, 
   var missingViews: Array[ReducedComponentView], 
-  var missingCommon: Array[MissingCommon], trans: Transition,
+  var missingCommon: Array[MissingCommon], val trans: Transition,
   val oldCpts: Array[State], val cv: ComponentView, val newCpts: Array[State]
 ){
   /* missingViews contains component views that are necessary to satisfy this
@@ -53,9 +53,9 @@ class MissingInfo(
    * setNotAdded, sanity1, sanityCheck, equals, hashCode, size
    */
 
-  def pre = trans.pre
-  def post = trans.post
-  def e = trans.e
+  // def pre = trans.pre
+  // def post = trans.post
+  // def e = trans.e
 
   /** For debugging. oldCpts = [31(T1,N3,N2,N1) || 10(N3,Null,N2)] */
   @inline private def highlight = false &&

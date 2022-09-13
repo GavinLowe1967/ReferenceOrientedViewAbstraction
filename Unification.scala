@@ -78,7 +78,8 @@ object Unification{
     val preCptsIndexMap = pre.idsIndexMap // State.indexMap(preCpts)
     val result = new AllUnifsResult // holds final result
 
-    // Extend map and unifs to cpts[from..), adding results to results. 
+    // Extend map and unifs to cpts[from..), adding results to results.  Each
+    // call either uses map in the result or recycles it.
     def allUnifsRec(map: RemappingMap, from: Int, unifs: UnificationList)
         : Unit = {
       if(from == cpts.length) result += ((map, unifs))
@@ -195,9 +196,7 @@ object Unification{
     def rec(i: Int, j: Int): Unit = {
       if(false && debugging) // Following is very expensive
         assert(Remapper.isInjective(map), Remapper.show(map))
-      if(i == cpts.length){
-        result += Remapper.cloneMap(map)
-      }
+      if(i == cpts.length) result += Remapper.cloneMap(map)
       else{
         val c = cpts(i); val ids = c.ids
         if(j == ids.length) // End of this component; move to next component

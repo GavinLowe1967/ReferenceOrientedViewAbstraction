@@ -1,6 +1,6 @@
 package ViewAbstraction.collection
 
-import ViewAbstraction.{hashOf,checkPow2,numThreads}
+import ViewAbstraction.{hashOf,checkPow2}
 
 /** An implementation of MyHashMap using a sharded hash table with
   * open addressing. 

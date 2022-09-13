@@ -84,15 +84,15 @@ object EffectOn{
     // require(mi.done); val nv = mi.newView
     if(nextNewViews.add(nv)){
       if(showTransitions || ComponentView0.highlight(nv)){
-        val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
+        val (trans, cpts, cv, newComponents) = nv.getCreationIngredients
         println(s"Adding via completeDelayed \n"+
-          s"$pre\n  --> $post induces \n"+
-          EffectOnStore.showInduced(cv, cpts, post.servers, newComponents, nv))
+          s"$trans induces \n"+
+          EffectOnStore.showInduced(cv, cpts, trans.post.servers, newComponents, nv))
       }
       if(!nv.representableInScript){
-        val (pre, cpts, cv, post, newComponents) = nv.getCreationIngredients
+        val (trans, cpts, cv, newComponents) = nv.getCreationIngredients
         println("Not enough identities in script to combine transition\n"+
-          s"$pre -> \n  $post and\n$cv.  Produced view\n"+nv.toString0)
+          s"$trans and\n$cv.  Produced view\n"+nv.toString0)
         sys.exit()
       }
     } // end of outer if
@@ -149,9 +149,9 @@ object EffectOn{
 
 // ==================================================================
 
-/** Object to calculate the effect of the transition t on cv.  Create extra
-    * views caused by the way the transition changes cv, and add them to
-    * nextNewViews. */
+/** Object to calculate the effect of the transition trans on cv.  Create
+  * extra views caused by the way the transition changes cv, and add them to
+  * nextNewViews. */
 class EffectOn(
   trans: Transition, cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
 {
@@ -159,7 +159,7 @@ class EffectOn(
    * 
    * apply
    * |--getCrossReferences
-   * |--EffectOnUnification.apply
+   * |--EffectOnUnification.apply/SingleRefEffectOnUnification.apply
    * |--processInducedInfo
    * |  |--checkCompatibleMissing
    * |  |--missingCrossRefs
@@ -218,7 +218,7 @@ class EffectOn(
     // transitions.  This captures over about 25% of cases with lazySet.csp,
     // bound 44; nearly all other cases have servers that change state.
     if(trans.mightGiveSufficientUnifs(cv)){
-      if(highlight) println("mightGiveSufficientUnifs")
+      // if(highlight) println("mightGiveSufficientUnifs")
       // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList,
       // ReducedMap)] is a set of tuples (pi, pi(cv.cpts), unifs, reducedMap)
       // where pi is a unification function corresponding to
@@ -233,8 +233,8 @@ class EffectOn(
       processInduced(inducedInfo)
       processSecondaryInduced(secondaryInduced)
     }
-    else if(highlight)
-      println(s"Not sufficient unifs: "+cv.containsDoneInduced(post.servers))
+    // else if(highlight)
+    //   println(s"Not sufficient unifs: "+cv.containsDoneInduced(post.servers))
   }
 
   /** Process the information about primary induced transitions. */
@@ -372,7 +372,7 @@ class EffectOn(
           Profiler.count("addedViewCount")
           if(showTransitions || ComponentView0.highlight(nv)) 
             showTransition(newComponents, nv)
-          nv.setCreationInfoIndirect(pre, cpts, cv, trans.e, post, newComponents)
+          nv.setCreationInfoIndirect(trans, cpts, cv, newComponents)
           recordInduced() 
           // Following superceded by recordInduced
           // if(false && singleRef && isPrimary && unifs.isEmpty){
@@ -396,7 +396,7 @@ class EffectOn(
           // Profiler.count(s"EffectOn add to store-$isPrimary-${unifs.nonEmpty}"+
           //   s"-${pre.servers==post.servers}-${missing.nonEmpty}-"+
           //  missingCommons.nonEmpty)
-          nv.setCreationInfoIndirect(pre, cpts, cv, trans.e, post, newComponents)
+          nv.setCreationInfoIndirect(trans, cpts, cv, newComponents)
 // IMPROVE: do we need to check isPrimary here? 
           if(isPrimary && unifs.isEmpty && missingCommons.isEmpty){
             val ok = cv.addConditionBInduced(post.servers, reducedMap, crossRefs)

@@ -105,7 +105,7 @@ class FDRSession(fname: String){
       result.synchronized{ result ++= myResult }
     }
 
-    Concurrency.runSystem(numThreads min length, worker)
+    Concurrency.runSystem(numWorkers min length, worker)
 
     print(result.length); result.toArray
   }

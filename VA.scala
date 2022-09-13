@@ -80,7 +80,7 @@ object VA{
   private def doMemoryProfile = {
     checker.memoryProfile
     // traverse("Combiner", CombinerP.Combiner, maxPrint = 0); println
-    traverse("VA", this, maxPrint = 0)
+    traverse("VA", this, maxPrint = 0, ignore = List("System"))
   }
 
   /** The output of profiling. */
@@ -172,12 +172,12 @@ object VA{
         else{ fname = fn; i += 1 }
     }
     assert(fname.nonEmpty || testing || testSuite, "no filename specified")
-    println("numThreads = "+numThreads)
+    // println("numThreads = "+numThreads)
     println("numWorkers = "+numWorkers)
     // IMPROVE: we don't want both numWorkers and numThreads
 
     // Initialise Profiler. 
-    ox.gavin.profiling.Profiler.setWorkers(numThreads)
+    ox.gavin.profiling.Profiler.setWorkers(numWorkers)
     val profiler = getProfiler
     // Run the check
     val start = java.lang.System.nanoTime

@@ -13,6 +13,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
    * |--makeExtensions1
    *    |--findLinkagesC
    *    |--allExtensions
+   *    |  |--extendMapToCandidates
+   *    |  |--mapUndefinedToFresh
    *    |--findLinkages
    *    |--mapUndefinedToFresh
    *    |--extendForLinkage
@@ -43,7 +45,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       cpts(0).cs == 24 && cpts(1).cs == 11 && cpts(0).ids(2) == 2
 
   /** A NextArgMap, containing values greater than anything in pre or post. */
-  private val nextArg: NextArgMap = trans.getNextArgMap
+  //private val nextArg: NextArgMap = trans.getNextArgMap
   // pre.getNextArgMap
   // post.updateNextArgMap(nextArg)
 
@@ -56,6 +58,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   /** Representation of a linkage.  A pair (i, j) represents a linkage between
     * cpts(i) and preCpts(j). */
   private type Linkage = (Int,Int)
+
+  private def recycle(map: RemappingMap) = Pools.returnRemappingRows(map)
 
   /** Find a linkage for part (b) implied by rdMap, excluding those already in
     * doneB; or null if none exists.  A pair (i, j) such that for some
@@ -145,7 +149,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   /** Extend map to map all undefined values to distinct fresh values. */
   @inline private def mapUndefinedToFresh(map: RemappingMap) = {
     for(t <- 0 until numTypes){
-      var next = nextArg(t)
+      var next = trans.getNextArgMap(t) // nextArg(t)
       for(i <- 0 until map(t).length)
         if(map(t)(i) < 0){ map(t)(i) = next; next += 1 }
     }
@@ -256,7 +260,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
 
 
   /** Find all consistent extensions of map over the parameters of c, mapping
-    * each parameter to an element of otherArgs, or not. */
+    * each parameter to an element of otherArgs, or not.  Each such map is
+    * fresh.  map is mutated but changes rolled back.*/
   def extendMapOverComponent(map: RemappingMap, c: State, otherArgs: OtherArgMap)
       : ArrayBuffer[RemappingMap] = {
     val extendedMaps = new ArrayBuffer[RemappingMap]
@@ -266,7 +271,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
 
   /** Find all consistent extensions of map over the parameters of c, mapping
     * each parameter to an element of otherArgs, or not.  Add all such to
-    * result. */
+    * result.  Each such map is fresh.  map is mutated but changes rolled
+    * back. */
   private def extendMapOverComponent1(
     map: RemappingMap, c: State, otherArgs: OtherArgMap, 
     result: ArrayBuffer[RemappingMap]) 
@@ -328,8 +334,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   }
 
   /** Extend rdMap, mapping each parameter (t,p) to each element of
-    * candidates(t)(p), or not.  rdMap is mutated, but all changes are
-    * backtracked. */
+    * candidates(t)(p), or not.  Each map is fresh.  rdMap is mutated, but all
+    * changes are backtracked.  */
   private def extendMapToCandidates(
     rdMap: RemappingMap, candidates: Array[Array[List[Identity]]]) 
       : ArrayBuffer[RemappingMap] = {
@@ -351,7 +357,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
             rdMap(t)(i) = x; rec(t,i+1)
             used(t)(x) = false            // backtrack (*)
           }
-          rdMap(t)(i) = -1 // undo update
+          rdMap(t)(i) = -1                // undo update
         }
         rec(t,i+1) // leave (t,i) unmapped
       }
@@ -399,7 +405,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   }
 
   /** Implementation of makeExtensions from the paper.  Create all required
-    * extensions of result-defining map rdMap.  Note: rdMap may be mutated. */
+    * extensions of result-defining map rdMap.  Note: rdMap may be mutated and
+    * included in the result; otherwise it is recycled. */
   def makeExtensions(
     unifs: UnificationList, resultRelevantParams: BitMap, rdMap: RemappingMap, 
     isPrimary: Boolean)
@@ -411,9 +418,9 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   }
 
   /** Implementation of makeExtensions from the paper.  Create all required
-    * extensions of result-defiling map rdMap.  Add all such to extensions.
+    * extensions of result-defining map rdMap.  Add all such to extensions.
     * doneB gives the instances of condition (b) that we have dealt with so
-    * far.  Note: rdMap may be mutated. */
+    * far.  Note: rdMap may be mutated and might be included in result. */
   private def makeExtensions1(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, doneB: List[Linkage], 
@@ -422,8 +429,10 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     // if(highlight)println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
     //   s"; doneB = $doneB")
     val linkagesC = findLinkagesC(unifs, rdMap)
-    if(linkagesC.nonEmpty) 
+    if(linkagesC.nonEmpty){
       allExtensions(resultRelevantParams, rdMap, doneB, extensions)
+      recycle(rdMap)
+    }
     else{
       val newLinkage = findLinkage(unifs, rdMap, doneB) 
       if(newLinkage == null){ // map remaining params to fresh
@@ -433,10 +442,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
         while(ix < extensions.length && 
             !Remapper.equivalent(extensions(ix), rdMap))
           ix += 1
-        if(ix == extensions.length)
-          // if(extensions.forall(m => !Remapper.equivalent(m, rdMap))){
-          extensions += rdMap
-          // Profiler.count("makeExtensions1 -- add")
+        if(ix == extensions.length) extensions += rdMap
+        else recycle(rdMap)
       }
       else{
         val (i,j) = newLinkage
@@ -453,6 +460,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
           makeExtensions1(unifs, resultRelevantParams, eMap, 
             (i,j)::doneB, isPrimary, extensions)
         }
+        recycle(rdMap)
       }
     }
   }

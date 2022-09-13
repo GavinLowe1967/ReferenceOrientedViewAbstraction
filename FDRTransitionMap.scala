@@ -140,6 +140,7 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
             val inverse = Remapper.inverse(map)
             assert(Remapper.applyMap(normSt, inverse, types) == st)
             val remappedTrans = remapTransitions(trans, inverse)
+            recycle(inverse)
             for((e1,dst1) <- remappedTrans){
               // println(show1(st)+s" -${showEvent(e1)}-> "+show(dst1))
               if(seen.add(dst1)) queue.enqueue((null,dst1))
@@ -176,11 +177,14 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
               transMap += normSt -> remappedTrans // .sortBy(_._1).toList
             }
         } // end of match
-      }
+        recycle(map)
+      } // end of while
     }
     else println(s"$rootState already seen")
     rootState
   }
+
+  private def recycle(map: RemappingMap) = Pools.returnRemappingRows(map)
 
   /** Augment transMap by building the transitions corresponding to state0 with
     *  its identity renamed to id.  Pre: state0 is in normal form, and
@@ -201,12 +205,13 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
     while(queue.nonEmpty){
       val st = queue.dequeue(); val types = stateTypeMap0(st.cs)
       // Map to normal form
-      val (normSt, map) = Remapper.normaliseState(st, types)
+      val (normSt, map1) = Remapper.normaliseState(st, types)
       val trans = transMap(normSt) // Must succeed by precondition
       // Remap transitions trans of normSt
-      val inverse = Remapper.inverse(map)
+      val inverse = Remapper.inverse(map1)
       assert(Remapper.applyMap(normSt, inverse, types) == st)
       val remappedTrans = remapTransitions(trans, inverse)
+      recycle(inverse); recycle(map1)
       for((e1,dst1) <- remappedTrans){
         // println(show1(st)+s" -${showEvent(e1)}-> "+show(dst1))
         if(seen.add(dst1)) queue.enqueue(dst1)
@@ -215,6 +220,7 @@ class FDRTransitionMap(fdrSession: FDRSession, fdrEvents: FDREvents){
       transMap += st -> remappedTrans 
     }
 
+    recycle(map)
     rootState
   }
 

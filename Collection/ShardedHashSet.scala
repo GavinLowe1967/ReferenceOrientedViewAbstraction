@@ -11,27 +11,16 @@ class ShardedHashSet[A : scala.reflect.ClassTag](
   shards: Int = LockFreeReadHashSet.powerOf2AboveNumThreads*16, 
   initLength: Int = 32)
     extends Sharding(shards) with MyHashSet[A]{
-  /** Log (base 2) of the maximum width of rows in the arrays. */
-  private def LogMaxWidth = 30
 
-  /** Maximum width of rows in the arrays. */
-  private def MaxWidth = 1<<LogMaxWidth
+  import ShardedHashSet.{Empty,Deleted,EmptyProxy,DeletedProxy,MaxWidth}
 
   // check initLength is a power of 2 
   checkPow2(initLength)
   assert(initLength <= MaxWidth)
 
-  /** Value representing an empty slot in hashes. */
-  private val Empty = 0    // = 000...0 binary
-
-  /** Value representing a deleted slot in hashes. */
-  private val Deleted = -1 // = 111...1 binary
-
-  /* If the hashCode of a key is either Empty or Deleted, we replace it by
-   * EmptyProxy or DeletedProxy, respectively (flipping most significant
-   * bit). */
-  private val EmptyProxy = Empty ^ Int.MinValue     // = 1000...0 binary
-  private val DeletedProxy = Deleted ^ Int.MinValue // = 0111...1 binary
+  /* In hashes, Empty (= 0) represents an empty slot, and Deleted represents a
+   * deleted slot.  If the hashCode of a key is either Empty or Deleted, we
+   * replace it by EmptyProxy or DeletedProxy, respectively. */
 
   /** A hash for a; guaranteed not to be Empty or Deleted. */
   private def hashOf(a: A): Int = {
@@ -271,6 +260,25 @@ class ShardedHashSet[A : scala.reflect.ClassTag](
 // ==================================================================
 
 object ShardedHashSet{
+  /** Log (base 2) of the maximum width of rows in the arrays. */
+  private val LogMaxWidth = 30
+
+  /** Maximum width of rows in the arrays. */
+  private val MaxWidth = 1<<LogMaxWidth
+
+  /** Value representing an empty slot in hashes. */
+  private val Empty = 0    // = 000...0 binary
+
+  /** Value representing a deleted slot in hashes. */
+  private val Deleted = -1 // = 111...1 binary
+
+  /* If the hashCode of a key is either Empty or Deleted, we replace it by
+   * EmptyProxy or DeletedProxy, respectively (flipping most significant
+   * bit). */
+  private val EmptyProxy = Empty ^ Int.MinValue     // = 1000...0 binary
+  private val DeletedProxy = Deleted ^ Int.MinValue // = 0111...1 binary
+
+
   /** Objects that produce iterators over the different shards. */
   trait ShardIteratorProducerT[A]{
     def get: Iterator[A]

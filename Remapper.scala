@@ -576,6 +576,7 @@ object Remapper{
   @inline def remapView(v: ComponentView): ComponentView = {
     val (servers1, map, nextArg) = remapServerStates(v.servers)
     val components1 = remapStates(map, nextArg, v.components)
+    Pools.returnRemappingRows(map)
     new ComponentView(servers1, components1) // principal1, others1)
   }
 
@@ -592,6 +593,7 @@ object Remapper{
     assert(components.forall(_ != null)) // IMPROVE
     val (servers1, map, nextArg) = remapServerStates(servers)
     val components1 = remapStates(map, nextArg, components)
+    Pools.returnRemappingRows(map)
     new ComponentView(servers1, components1)
   }
 

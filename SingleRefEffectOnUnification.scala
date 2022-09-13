@@ -81,6 +81,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       second.cs == 16 && second.ids.sameElements(Array(1,2,3,4))
     }
 
+  def recycle(map: RemappingMap) = Pools.returnRemappingRows(map)
 
   // =======================================================
 
@@ -89,8 +90,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     // val map0 = cv.getRemappingMap // 
     // Profiler.count("SREOU.apply")
     if(highlight) println(s"SREOU.apply($trans,\n  $cv)")
-    //val map0 = servers.remappingMap1(cv.getParamsBound)
-    val allUnifs = Unification.allUnifs(pre, cv) // cpts)
+    val allUnifs = Unification.allUnifs(pre, cv) 
     var k = 0
 
     while(k < allUnifs.length){
@@ -117,25 +117,19 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     // Primary result-defining maps
     val rdMaps =
       // If there are no new parameters, then the only result-defining map is
-      // map1.  Note: it's necessary to clone below, because map1 gets used
-      // again with secondary transitions.  With lazySet, bound 44, ~99.8% of
-      // iterations fall into this case.
+      // map1. 
       if(isEmpty(otherArgsBitMap)){
         // If no unified component changes state and the servers do not get
         // any new reference (which includes the case that unifs is empty),
         // and we've previously successfully induced a transition with this
         // change of servers, then this instance can only reproduce that
-        // transition.  Profiling stats with lazySet, bound 44.
-        // category.
+        // transition. 
         if(!trans.isChangingUnif(unifs) && !trans.serverGetsNewId &&
-            cv.containsDoneInduced(postServers)){
-          //Profiler.count("SREOU: empty otherArgs previously done") // ~99.7%
-          SingleRefEffectOnUnification.EmptyArrayBuffer
-        }
-        else{
-          //Profiler.count("SREOU: empty otherArgs") // ~0.13%
-          ArrayBuffer(Remapper.cloneMap(map1))
-        }
+            cv.containsDoneInduced(postServers))
+          SingleRefEffectOnUnification.EmptyArrayBuffer 
+        // Note: it's necessary to clone below, because map1 gets used again
+        // with secondary transitions.
+        else ArrayBuffer(Remapper.cloneMap(map1))
       }
       else extendToRDMap(map1,otherArgsBitMap) // ~0.19%
 
@@ -162,6 +156,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       //   println("rdMap = "+Remapper.show(rdMap)+s"; duplicated = $duplicated")
       if(!duplicated)
         makePrimaryExtension(unifs, otherArgsBitMap, rdMap, reducedMapInfo)
+      // Note: rdMap is included in result or recycled by above.
     }
   }
 
@@ -239,7 +234,10 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   }
 
   /** Extend map, mapping undefined parameters to parameters in
-    * resultRelevantParams, or not. */
+    * resultRelevantParams, or not.  
+    * 
+    * Each map produced is fresh.  map is mutated, but changes are rolled
+    * back. */
   private def extendToRDMap(map: RemappingMap, resultRelevantParams: BitMap)
       : ArrayBuffer[RemappingMap] = {
     Profiler.count("extendToRDMap")
@@ -286,7 +284,8 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
 
   /* Extend the result-defining map rdMap, based on unifications unifs, to
    * produce all primary representative extensions.  For each such map, add an
-   * appropriate tuple to result. */
+   * appropriate tuple to result.  rdMap might be included in the result or
+   * recycled.  */
   private def makePrimaryExtension(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, reducedMapInfo: ReducedMap)
@@ -297,11 +296,12 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     Profiler.count("makePrimaryExtension")
     val extensions = 
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, true)
+    // Note: recycles or returns rdMap
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
       val newCpts = Remapper.applyRemapping(map1, cpts)
-      if(hl) println("map1 = "+Remapper.show(map1)+
-        "\nnewCpts = "+StateArray.show(newCpts))
+      // if(hl) println("map1 = "+Remapper.show(map1)+
+      //   "\nnewCpts = "+StateArray.show(newCpts))
       result += ((map1, newCpts, unifs, reducedMapInfo))
     }
   }
@@ -319,6 +319,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       // Secondary result-defining maps
       val rdMaps =
         remappingExtender.extendMapOverComponent(map2, cpts(0), otherArgs)
+      recycle(map2)
       var j = 0
       // Then consider linkages
       while(j < rdMaps.length){
@@ -331,7 +332,8 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
 
   /* Extend the result-defining map rdMap, based on unifications unifs, to
    * produce all secondary representative extensions corresponding to
-   * postCpts(ix).  For each such map, add an appropriate tuple to result2. */
+   * postCpts(ix).  For each such map, add an appropriate tuple to result2.
+   * rdMap is recycled or included in the result. */
   private def makeSecondaryExtension(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, ix: Int)
@@ -339,12 +341,14 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     if(showTransitions) println("makeSecondaryExtension: "+Remapper.show(rdMap))
     val extensions = 
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, false)
+    // Note: the above recycles rdMap or includes it in result
 // FIXME: this seems to give repeats
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
       val newCpts = Remapper.applyRemapping(map1, cpts)
       if(showTransitions) println("newCpts = "+StateArray.show(newCpts)) 
       result2 += ((newCpts, unifs, ix))
+      recycle(map1) //Pools.returnRemappingRows(map1)
     }
   }
 
@@ -361,9 +365,9 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       // already there; or (2) map1 is undefined on cvpid, id isn't in the
       // range, and id isn't an identity in pre (which would imply
       // unification).
-      if(id1 == id ||
-          id1 < 0 && !preCptIds(t)(id)/*.contains((t,id))*/ && !map1(t).contains(id) ){
+      if(id1 == id || id1 < 0 && !preCptIds(t)(id) && !map1(t).contains(id) ){
         val map2 = Remapper.cloneMap(map1); map2(cvpf)(cvpid) = id
+        // map2 is recycled in makeSecondaryInfo
         result += ((map2, i))
       }
     }

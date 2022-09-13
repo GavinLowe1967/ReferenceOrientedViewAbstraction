@@ -279,7 +279,7 @@ package object ViewAbstraction{
   var numCptControlStates = -1
 
   /** Number of machine threads. */
-  var numThreads = Runtime.getRuntime.availableProcessors 
+  // var numThreads = Runtime.getRuntime.availableProcessors 
 
   /** Number of threads used during checking. */
   var numWorkers = Runtime.getRuntime.availableProcessors 

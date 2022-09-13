@@ -322,7 +322,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
         while(vs.nonEmpty){
           val v0 = vs.head; vs = vs.tail; val v = Remapper.remapView(v0)
           if(addView(me, v)){
-            v.setCreationInfo(t.pre, t.e, t.post)
+            v.setCreationTrans(t) // (t.pre, t.e, t.post)
             if(showTransitions) println(s"${t.toString}\ngives $v")
           }
         }
@@ -414,6 +414,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
             }
             else donePly = true
           } 
+// IMPROVE: if done here because another thread has found an error, then exit
           // Wait for other workers to finish; then worker 0 resets for next ply.
           barrier.sync(me)
           // barrier1.sync
@@ -463,22 +464,30 @@ class Checker(system: SystemP.System, numWorkers: Int){
     traverse("checker", this, maxPrint = 1, ignore = List("System")); println()
     // Below here should be trivial
     traverse("CompatibleWithCache", CompatibleWithCache, maxPrint = 0)
+    traverse("Combiner", CombinerP.Combiner, maxPrint = 0)
     traverse("ComponentView0", ComponentView0, maxPrint = 0)
     traverse("ComponentView", ComponentView, maxPrint = 0)
     traverse("Concretization", Concretization, maxPrint = 0)
     traverse("Concurrency", Concurrency, maxPrint = 0)
+    // traverse("EffectOn", EffectOn, maxPrint = 0)
+    traverse("EffectOnStore", EffectOnStore, maxPrint = 0)
     traverse("EffectOnUnification", EffectOnUnification, maxPrint = 0)
     traverse("FDRTransitionMap", FDRTransitionMap, maxPrint = 0)
     traverse("MissingInfo", MissingInfo, maxPrint = 0)
+    traverse("Pools", Pools, maxPrint = 0)
+    traverse("Remapper", Remapper, maxPrint = 0)
+    traverse("ServerBasedViewSet", ServerBasedViewSet, maxPrint = 0)
     traverse("ServersReducedMap", ServersReducedMap, maxPrint = 0)
     traverse("SingleRefEffectOnUnification", SingleRefEffectOnUnification, maxPrint = 0)
     traverse("State", State, maxPrint = 0)
+    traverse("StateArray", StateArray, maxPrint = 0)
     traverse("Transition", Transition, maxPrint = 0)
     traverse("TransitionSet", TransitionSet, maxPrint = 0)
     traverse("TransitionTemplateSet", TransitionTemplateSet, maxPrint = 0)
     traverse("Unification", Unification, maxPrint = 0)
     traverse("View", View, maxPrint = 0)
     traverse("ViewSet", ViewSet, maxPrint = 0)
+//    traverse("package", ViewAbstraction, maxPrint = 0)
   }
 }
 
