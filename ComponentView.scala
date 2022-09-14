@@ -20,17 +20,18 @@ class ComponentView(servers: ServerStates, components: Array[State])
 
   /** record that this was created by the view transition trans. */
   def setCreationTrans(trans: Transition) = synchronized{
-    require(creationTrans == null); creationTrans = trans
+    require(creationTrans == null && creationIngredients == null)
+    creationTrans = trans
   }
 
   /** Ingredients for making an extended transition.  If this contains a tuple
-    * (trans, cpts, cv,  newCpts) then this was created by the extended
-    * transition 
-    * mkExtendedPre(trans.pre, cpts, cv) -trans.e-> mkExtendedPost(trans.post, newCpts). 
-    * We lazily avoid creating these concretizations until needed. */ 
+    * (trans, cpts, cv, newCpts) then this was created by trans operating on
+    * (trans.pre.servers, cpts) == cv, so the extended transition
+    * mkExtendedPre(trans.pre, cpts, cv) -trans.e-> mkExtendedPost(trans.post,
+    * newCpts).  We lazily avoid creating these concretizations until
+    * needed. */ 
   private var creationIngredients: 
-      (Transition, Array[State], ComponentView,  Array[State])
-  = null
+      (Transition, Array[State], ComponentView,  Array[State])  = null
 
   /** Get the creation information for this. */
   def getCreationInfo: (Concretization, EventInt, Concretization) = synchronized{
@@ -48,26 +49,24 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * statements. */
   def getCreationIngredients = synchronized{ creationIngredients }
 
-
-  // /** Record that this view was created by the extended transition 
-  //   * pre1 -e1-> post1. */
-  // def setCreationInfo(pre1: Concretization, e1: EventInt, post1: Concretization)
-  // = synchronized{
-  //   require(creationIngredients == null && pre == null)
-  //   pre = pre1; e = e1; post = post1
-  // }
+  /** The view on which the induced transition had an effect, and its renamed
+    * version for compatibility with trans.pre. */
+  def preInducedView: (Concretization, ComponentView, ComponentView) = 
+    creationIngredients match{
+      case null => (null, null, null)
+      case (trans, cpts, cv, _) => 
+        (trans.pre, cv, new ComponentView(trans.preServers, cpts))
+    }
 
   /** Record that this view was created by the extended transition
-    * mkExtendedPre(pre1, cpts, cv) -e1-> mkExtendedPost(post1, newCpts).
-    */
+    * mkExtendedPre(trans.pre, cpts, cv) -trans.e-> 
+    * mkExtendedPost(trans.post, newCpts).   */
   def setCreationInfoIndirect(
     trans: Transition, cpts: Array[State], cv: ComponentView, 
     newCpts: Array[State])
   = synchronized{
-// NOTE: I'm not entirely sure about following test. 
-//    if(pre == null){
-      creationIngredients = (trans, cpts, cv, newCpts)
-//    }
+    require(creationTrans == null && creationIngredients == null)
+    creationIngredients = (trans, cpts, cv, newCpts)
   }
 
   /** Make the extended pre-state by extending pre1 with cpts, and setting cv as
@@ -77,7 +76,8 @@ class ComponentView(servers: ServerStates, components: Array[State])
       : Concretization = {
     val extendedPre = new Concretization(pre1.servers,
       StateArray.union(pre1.components, cpts))
-    extendedPre.setSecondaryView(cv, null)
+    // extendedPre.setSecondaryView(cv, null)
+    extendedPre.copySecondaryAndReferencingViews(pre1)
     extendedPre
   }
 
@@ -236,8 +236,13 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   /** Set the secondary view. */
   def setSecondaryView(sv: ComponentView, rv: Array[ComponentView]) = synchronized{
     require(sv != null && (secondaryView == null || secondaryView == sv),
-    s"this = $this\nsecondaryView = $secondaryView\nsv = $sv")
+      s"this = $this\nsecondaryView = $secondaryView\nsv = $sv")
     secondaryView = sv; referencingViews = rv 
+  }
+
+  def copySecondaryAndReferencingViews(conc: Concretization) = {
+    require(secondaryView == null && referencingViews == null)
+    secondaryView = conc.secondaryView; referencingViews = conc.referencingViews
   }
 
   /** Get the secondary view. */

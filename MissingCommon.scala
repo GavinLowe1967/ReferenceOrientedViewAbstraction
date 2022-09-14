@@ -230,7 +230,7 @@ class MissingCommon(
       vb ++= vb1 
  */
       for(cpts <- missingHeads) 
-        if(true || !views.contains(servers, cpts)) vb += cpts
+        if(/* true || */ !views.contains(servers, cpts)) vb += cpts
       false
     }
   }
@@ -245,6 +245,11 @@ class MissingCommon(
   def getMissingCandidates(c: State, views: ViewSet): MissingComponents = {
     //if(highlight) println(s"getMissingCandidates($c)")
     var missing = List[Array[State]]() // missing necessary views
+    for(cpts <- MissingCommon.requiredCpts(servers, cpts1, cpts2, c)){
+      if(!views.contains(servers, cpts) && !missing.exists(_.sameElements(cpts)))
+        missing ::= cpts
+    }
+/*
     // Add cptsx, if servers || cptsx is not in views
     @inline def maybeAdd(cptsx: Array[State]) = { 
       val renamedCpts = Remapper.remapComponents(servers, cptsx)
@@ -270,8 +275,28 @@ class MissingCommon(
       }
       j += 1
     }
+ */
     missing.toArray.sortWith(StateArray.lessThan)
   }
+
+  // /** Given that c is a component with identity pid that satisfies condition (1)
+  //   * of this MissingCommon, find those views that are required for conditions
+  //   * (2) and (3). */
+  // @inline private def requiredViews(c: State): ArrayBuffer[Array[State]] = {
+  //   val ab = new ArrayBuffer[Array[State]]
+  //   /* Add the normalised version of cpts to ab. */
+  //   def add(cpts: Array[State]) = ab += Remapper.remapComponents(servers, cpts)
+  //   add(Array(cpts2(0), c)); var j = 1
+  //   while(j < c.length){
+  //     if(c.includeParam(j)){
+  //       val pid2 = c.processIdentities(j)
+  //       val c2 = StateArray.find(pid2, cpts2); if(c2 != null) add(Array(c, c2))
+  //       val c1 = StateArray.find(pid2, cpts1); if(c1 != null) add(Array(c, c1))
+  //     }
+  //     j += 1
+  //   }
+  //   ab
+  // }
 
   /** States for which MissingCommon.updateMissingCandidates has been executed
     * on this. */
@@ -557,23 +582,16 @@ object MissingCommon{
       case None => 
         val mc = new MissingCommon(servers, cpts1, cpts2, pid)
         Profiler.count("new MissingCommon")
-        val ab = new CptsBuffer
-        val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
-        // Search for elements of views of the form servers || princ1 || c
-        // where c has identity pid
-        val iter = views.iterator(servers, princ1)
-        while(iter.hasNext && !found){
-          val cv = iter.next(); val cpts = cv.components;
-          assert(cpts.length == 2, cv); val cpt1 = cpts(1)
-          if(cpt1.hasPID(pid))
-            found = mc.updateMissingCandidates(cpt1, views, ab)
+        val ab = new CptsBuffer; val princ1 = cpts1(0); var found = false
+        // All component states c with identity pid such that views contains
+        // servers || princ1 || c
+        val cs = allInstantiations(servers, princ1, pid, views); var i = 0
+        // Update mc for each
+        while(i < cs.length && !found){
+          val c = cs(i); i += 1
+          found = mc.updateMissingCandidates(c, views, ab)
         }
         if(found) mc.setDone
-        // if(mc.notDoneEmpty){
-        //   println(s"$mc is not done but has empty missing candidates.")
-        //   println("iter = "+views.iterator(servers, princ1).mkString("\n"))
-        //   sys.exit()
-        // }
         // Store mc if no other thread has done likewise in the meantime
         val mc2 = setOrGet(key, mc)
         if(!(mc2 eq mc)){
@@ -584,32 +602,41 @@ object MissingCommon{
     }
   }
 
-// // IMPROVE: we wrap this in a synchronized block, to protect allMCs; but I
-// // suspect we can do better.  Need to ensure the MissingCommon is fully
-// // initiailised before it becomes visible.
-//     Profiler.count("makeMissingCommon")
-//     assert(singleRef)
-//     assert(cpts2.length == 2, StateArray.show(cpts2))
-//     val (mc, isNew) = getOrInit(servers, cpts1, cpts2, pid)
-//     if(isNew){ 
-//       // Initialise mc, based on views
-//       val ab = new CptsBuffer
-//       val princ1 = cpts1(0); val princ2 = cpts2(0); var found = false
-//       // Search for elements of views of the form servers || princ1 || c where c
-//       // has identity pid
-//       val iter = views.iterator(servers, princ1)
-//       while(iter.hasNext && !found){
-//         val cv = iter.next(); val cpts = cv.components; 
-//         assert(cpts.length == 2, cv); val cpt1 = cpts(1)
-//         if(cpt1.hasPID(pid)) 
-//           found = mc.updateMissingCandidates(cpt1, views, ab)
-//       }
-//       if(found){ mc.setDone; null } else mc 
-//       // Note: we don't need to do anything with ab here, as mc.allcandidates
-//       // will store the same Views.  IMPROVE?
-//     }
-//     else if(mc.done) null else mc 
-//   }
+  /** All component states cpt with identity pid such that views contains
+    * servers || princ || cpt. */
+  @inline def allInstantiations(
+    servers: ServerStates, princ: State, pid: ProcessIdentity, views: ViewSet)
+      : ArrayBuffer[State] = {
+    val ab = new ArrayBuffer[State]
+    val iter = views.iterator(servers, princ)
+    while(iter.hasNext){
+      val cv = iter.next(); val cpts = cv.components;
+      assert(cpts.length == 2, cv); val cpt = cpts(1)
+      if(cpt.hasPID(pid)) ab += cpt
+    }
+    ab
+  }
+
+  /** For a MissingCommon corresponding to servers, cpts1 and cpts2, given that
+    * c is a component with identity pid that satisfies condition (1), find
+    * those components that are required for conditions (2) and (3). */
+  @inline def requiredCpts(
+    servers: ServerStates, cpts1: Array[State], cpts2: Array[State], c: State)
+      : ArrayBuffer[Array[State]] = {
+    val ab = new ArrayBuffer[Array[State]]
+    /* Add the normalised version of cpts to ab. */
+    def add(cpts: Array[State]) = ab += Remapper.remapComponents(servers, cpts)
+    add(Array(cpts2(0), c)); var j = 1
+    while(j < c.length){
+      if(c.includeParam(j)){
+        val pid2 = c.processIdentities(j)
+        val c2 = StateArray.find(pid2, cpts2); if(c2 != null) add(Array(c, c2))
+        val c1 = StateArray.find(pid2, cpts1); if(c1 != null) add(Array(c, c1))
+      }
+      j += 1
+    }
+    ab
+  } 
 
   // Possible returns from compare
   private val Eq = 0; private val Sub = 1; 

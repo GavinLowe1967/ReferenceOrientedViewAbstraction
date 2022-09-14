@@ -158,7 +158,7 @@ $(DIR)/TransitionTemplateExtender.class: $(DIR)/Transition.class	\
 
 # # Checker and main program
 
-$(DIR)/Debugger.class: $(DIR)/SystemP/System.class
+$(DIR)/Debugger.class: $(DIR)/SystemP/System.class $(DIR)/EffectOn.class
 
 $(DIR)/Checker.class: $(DIR)/TransitionSet.class		\
   $(DIR)/NewTransitionSet.class $(DIR)/Unification.class	\

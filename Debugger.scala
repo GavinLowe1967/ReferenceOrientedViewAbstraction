@@ -4,21 +4,12 @@ import scala.collection.mutable.ArrayBuffer
 
 /** Object to produce debugging output.
   * @param system the system we are debugging.
-  * @param k the abstraction parameter used.
-  * @param l the length of concrete views.
-  * @param aShapes the shapes of abstract views
   * @param sysAbsViews the abstract views encountered during the search.
   * @param initViews the initial views (of size k). */
 class Debugger(
   system: SystemP.System, sysAbsViews: ViewSet, initViews: Array[ComponentView]
 ){
-
-  // Parameters used in printing: indent is the width of the left-hand column;
-  // pad is a blank left-hand column.
-  private val indent = 7; private val pad0 = " "*(indent-3);
-  private val pad = " "*indent
-  /** Right pad st to the width of the left-hand column. */
-  def rPad(st: String) = st.padTo(indent, ' ')
+  import Debugger.{pad,pad0,rPad,Sqle,Sqge}
  
   /** Information about a trace found. 
     * For each i in [0..plies),
@@ -34,9 +25,6 @@ class Debugger(
     assert(abss.size == plies+1 && afters.size == plies &&
       (befores.size == plies || befores.size == plies+1))
 
-    private val Sqle = '\u2291' // ⊑
-    private val Sqge = '\u2292' // ⊒
-
     /** Print this trace. */
     def print(toError: Boolean = false) = {
      println()
@@ -50,7 +38,7 @@ class Debugger(
             println(pad0+Sqge+"\n"+pad+abss(i+1))
           if(! befores(i+1).matches(abss(i+1))){
             // Use ">--->" in the last step, as Sqle might be incorrect
-            if(i+1 == plies) println(pad0+">--->\n") else println(pad0+Sqle+"\n")
+            if(i+1 == plies) println(pad0+">--->") else println(pad0+Sqle)
             println(rPad((i+1).toString+": ")+befores(i+1))
           }
         }
@@ -82,10 +70,9 @@ class Debugger(
     tr.print(last == null)
     // Interactively get next thing to do
     def help =
-      println(
-        "Type: a number from 0 to "+tr.plies+
-          " to expand the sources of that state;\n"+
-          "'u' to go up a level; 's' to list servers; 'q' to quit.")
+      println("Type: a number from 0 to "+tr.plies+
+        " to expand the sources of that state;\n"+
+        "'u' to go up a level; 's' to list servers; 'q' to quit.")
     var done = false
     while(!done){
       val input = scala.io.StdIn.readLine("> ")
@@ -95,7 +82,10 @@ class Debugger(
           if(last != null) done = true // backtrack up the stack of traces
           else println("Already at the top level.")
         case st if st.nonEmpty && st.forall(_.isDigit) =>
-          expandConc(tr.befores(st.toInt))
+          val n = st.toInt
+          // If this is an induced transition, the other view.
+          val (pre,cv,cv1) = tr.abss(n+1).preInducedView
+          expandConc(tr.befores(n), pre, cv, cv1)
           tr.print(last == null) // re-print trace on return
         case "s" => showServers
         case "h" | "?" | "help" => help
@@ -127,30 +117,29 @@ class Debugger(
     // (modulo renaming).  And v = abss.target
     // befores, events, afters have same length; abss is one longer
     while(!done){
-      val (pre, e, post) = v.getCreationInfo
+      val (pre,e,post) = v.getCreationInfo
       // assert(pre.ply <= v.ply)
       // if(pre.ply > v.ply) 
       //   println("Unexpected ply in pre: $pre $pre.ply$; $v $v.ply$")
       assert(e >= 0, s"$pre -($e)-> $post")
-      // println(s"$pre -${system.showEvent(e)}-> $post ]= $v")
       befores += pre; events += e; afters += post
 // IMPROVE: is the "head" below what we want?
       val v1 = RemapperP.Remapper.remapView(pre.toComponentView.head)
-      try{ v = sysAbsViews.get/*Representative*/(v1) }catch{
+      try{ v = sysAbsViews.get(v1) }
+      catch{
         case e: java.lang.AssertionError =>
           e.printStackTrace()
           println("pre = $pre\n"+pre.toComponentView+
             "\nabss =\n"+abss.mkString("\n")+
             "\nevents =\n"+events.map(showEvent).mkString("\n")+
             "\nbefores =\n"+befores.mkString("\n")+
-            "\nafters =\n"+afters.mkString("\n")
-          )
+            "\nafters =\n"+afters.mkString("\n") )
           abss += v1
           val beforesR = befores.reverse; if(conc != null) beforesR += conc
           val ti = 
             TraceInfo(abss.reverse, beforesR, events.reverse, afters.reverse)
           ti.print(false); sys.exit()
-      }
+      } // end of catch
       abss += v
       done = initViews.contains(v)
     }
@@ -161,17 +150,61 @@ class Debugger(
   }
 
   /** Expand the concretization conc, giving the trace leading to the secondary
-    * view. */
-  private def expandConc(conc: Concretization) = {
-    val cv = conc.getSecondaryView; val rv = conc.getReferencingViews
-    println(s"Secondary view = $cv")
+    * view.  If pre != null, then conc was formed to capture an induced
+    * transition, with a transition starting with pre on view cv1, where cv is
+    * the normal form of cv. */
+  private def expandConc(conc: Concretization, 
+    pre: Concretization, cv: ComponentView, cv1: ComponentView)
+  = {
+    val secondary = conc.getSecondaryView; val rv = conc.getReferencingViews
+    println(s"Secondary view = $secondary")
     println(s"Referencing views = "+
       (if(rv == null) "null" 
       else rv.filter(_ != null).map(_.toString).mkString("; ")))
+    if(pre != null){
+      println(s"Transition from $pre\nacting on $cv1")
+      if(cv != cv1) println(s"       == $cv")
+    }
     // Get the options for expanding
     val options = new ArrayBuffer[ComponentView]
-    if(cv != null) options += cv
+    if(secondary != null) options += secondary
+    if(pre != null){
+      val servers = pre.servers; assert(cv.servers == servers)
+      options += cv
+      val preCpts = pre.components; val cpts1 = cv1.components
+
+      // Find the missing views required for condition (b). 
+      // val crossRefs =
+      //   EffectOn.getCrossRefs(servers, cv1.components, pre.components)
+      // println("crossRefs = "+crossRefs.map(StateArray.show))
+      val missing: List[ComponentView] =
+        EffectOn.getCrossRefs(servers, cpts1, preCpts)
+          .map(new ComponentView(servers, _))
+      println(s"missing = "+missing.mkString(",\n  "))
+      options ++= missing
+
+      // Find the missing views required for condition (c).
+      // Identities of common missing components
+      val commonMissing =  EffectOn.commonMissingRefs(cpts1, preCpts)
+      println(s"commonMissing = $commonMissing")
+// IMPROVE: use script names for commonMissing
+      for(pid <- commonMissing){
+        // All states instantiating pid compatible with cv1
+        val insts = 
+          MissingCommon.allInstantiations(servers, cpts1(0), pid, sysAbsViews)
+        println(s"$pid -> "+insts.mkString(", "))
+        for(c <- insts){
+          val req = MissingCommon.requiredCpts(servers, cpts1, preCpts, c)
+          println(s"$c -> "+req.map(StateArray.show).mkString(",\n  "))
+          if(req.forall(cpts => sysAbsViews.contains(servers, cpts))){
+            println("All found")
+            options ++= req.map(new ComponentView(servers, _))
+          }
+        }
+      }
+    }
     if(rv != null) for(v <- rv; if v != null) options += v
+    // Prompt the user for the option to explore. 
     val len = options.length
     if(len == 0) println(s"No secondary components found in $conc")
     else{
@@ -185,10 +218,7 @@ class Debugger(
         if(input.nonEmpty && input.forall(_.isDigit)){
           val n = input.toInt
           if(0 <= n && n < len){ 
-            // val target = options(n)
-            // val last = if(target == cv) conc else target
-            // Note: if options(n) != cv, then we might not have cv [= conc
-            apply1(options(n), conc); done = true 
+            apply1(sysAbsViews.get(options(n)), conc); done = true 
           }
           else help
         }
@@ -197,7 +227,6 @@ class Debugger(
         else help
       }
     }
-    // apply1(cv, conc)
   }
 
   /** Print the server names. */
@@ -208,104 +237,19 @@ class Debugger(
 
 }
 
+// ==================================================================
 
-// ============================================================================
+object Debugger{
 
-      // before was created by gamma using the elements of absList
-    //   val absList =
-    //     if(init) { init = false; List(penultimate) }
-    //     else
-    //       Views.alpha(aShapes, before.componentView).map(absCpts =>
-    //         View.mkView(before.servers, absCpts))
-    //   // after =alpha=> abs1 == abs =gamma=> before, and this is the latest
-    //   // contributor to before to be found.
-    //   val (abs,abs1,after,ply) = absList.map(getStep).maxBy(_._4)
-    //   // val abs =
-    //   //   if(init) { init = false; penultimate }
-    //   //   else{
-    //   //     val absCpts = Views.alpha(k, aShapes, before.componentView).head
-    //   //     system.mkView(before.servers, absCpts)
-    //   //   }
-    //   abss += abs
-    //   // val (abs1,after,ply) = getStep(abs)
-    //   if(ply < 0) done = true
-    //   // if(initViews.contains(abs1)) done = true
-    //   else{
-    //     abs1s += abs1
-    //     // prev1 was created by alpha from prev2
-    //     //val (after,_) = View.alphaLog(abs1)
-    //     //if(verbose) println("<-alpha=\n"+after)
-    //     afters += after 
+  // Parameters used in printing: indent is the width of the left-hand column;
+  // pad is a blank left-hand column.
+  private val indent = 7; private val pad0 = " "*(indent-3);
+  private val pad = " "*indent
+  /** Right pad st to the width of the left-hand column. */
+  def rPad(st: String) = st.padTo(indent, ' ')
 
-    //     // The checker found the transition before -e-> after
-    //     val (b, e) = after.getPred; before = b
-    //     // val (b, e) = system.debugLog(after); before = b
-    //     // assert(after.getPred == (b,e))
-    //     assert(before.componentView.length == l)
-    //     // assert(checkLength(before.componentView, 1))
-    //     if(verbose) println("<-"+system.showEvent(e)+"-\n"+before)
-    //     befores += before; events += e 
-    //   }
-    // // end of while(done)
+  // Sub-view symbols
+  private val Sqle = '\u2291' // ⊑
+  private val Sqge = '\u2292' // ⊒
 
-  /** Given an abstraction abs, return (abs, abs1, after, ply) such that on ply
-    * ply, after =alpha=> abs1 equiv abs. */
-  // def getStep(abs: View): (View, View, View, Int) = {
-  //   assert(abs.componentView.length == k)
-  //   if(verbose) println("<=gamma=\n"+abs)
-  //   // abs1 is equivalent to abs in sysAbsViews.
-  //   val abs1 = sysAbsViews.getRepresentative(abs)
-  //   assert(abs1 == abs) // but they will be different objects
-  //   if(initViews.contains(abs1)) (abs, abs1, null, -1)
-  //   else{
-  //     // val (after,ply) = View.alphaLog(abs1)
-  //     // assert(abs1.getPred == (after,ply))
-  //     val (after,ply) = abs1.getPred
-  //     if(verbose) println("<-alpha=\n"+after)
-  //     (abs, abs1, after, ply)
-  //   }
-  // }
-
-
-
-  /** Show all Views of size k that contributed to conc (of size l). */
-  // private def expandGamma(conc: View) = {
-  //   val cmpts = conc.componentView
-  //   assert(cmpts.length == l)
-  //   // assert(checkLength(cmpts, 1))
-  //   println("Expanding "+conc)
-  //   // The abstract views of the components
-  //   val absViews = Views.alpha(aShapes, cmpts)
-  //   // (for(i <- 0 until k+1) yield cmpts.take(i)++cmpts.drop(i+1)).toList
-  //   // Create all abstract system views from these
-  //   val abss: List[View] =
-  //     absViews.map(View.mkView(conc.servers, _))
-  //   def printAbss = for(i <- 0 until abss.length) println(rPad(s"$i: ")+abss(i))
-  //   printAbss
-  //   // Interactively get next thing to do
-  //   def help =
-  //     println(
-  //       "Type: a number from 0 to "+(abss.length-1)+
-  //         " to obtain the trace leading to that state;\n"+
-  //         "'u' to go up a level; 's' to list servers; 'q' to quit.")
-  //   var done = false
-  //   while(!done){
-  //     val input = scala.io.StdIn.readLine("> ")
-  //     input match{
-  //       case "q" => println("Goodbye."); sys.exit
-  //       case "u" => done = true // backtrack up the stack of traces
-  //       case st if st.nonEmpty && st.forall(_.isDigit) =>
-  //         apply1(conc, abss(st.toInt))
-  //         printAbss // re-print choices on return
-  //       case "s" => showServers
-  //       case "h" | "?" | "help" => help
-  //       case _ => println("Invalid command."); help
-  //     }
-  //   }
-  // }
-
-  /* IMPROVE: The debugging needs to be improved.  Try to find consecutive
-   * alpha/gamma steps to minimise the change, i.e. either giving the same
-   * view or one that is equivalent, if possible. */
-
-
+}

@@ -147,9 +147,15 @@ channel getR : NodeID . NodeIDType . Bool -- GetInfo
 
 channel CASR : NodeID . NodeIDType . {false} . NodeIDType . Bool . Bool
 
+-- The value to store for prev in a node holding value when it is appearently
+-- set to newPrev.
+storePrev(value, newPrev) = if value == C then Null else newPrev
+--storePrev(value, newPrev) = newPrev
+
 FreeNodeR(me) = 
   initNode?_!me?value?next?prev -> joined?_!me -> 
-  NodeR(me, value, next, prev, false, 0)
+  -- Store prev unless this is a C-Node (?)
+  NodeR(me, value, next, storePrev(value, prev), false, 0)
 
 -- A node process, identity me, holding datum value, next pointer next, prev
 -- pointer prev, and deleted flag deleted.  The prev reference is used only to
@@ -166,8 +172,8 @@ NodeR(me, value, next, prev, deleted, decoup) =
   getNextR.me.next -> NodeR(me, value, next, prev, deleted, decoup)
   []
   setPrev?t!me?newPrev -> 
-  -- Store prev only if this is the B-Node (?)
-    NodeR(me, value, next, if value == B then newPrev else Null, deleted, decoup)
+  -- Store prev only if this is not a C-Node (?)
+    NodeR(me, value, next, storePrev(value, newPrev), deleted, decoup)
   []
   false & getPrev!me!prev -> NodeR(me, value, next, prev, deleted, decoup)
   []
