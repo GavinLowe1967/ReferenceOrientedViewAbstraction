@@ -228,16 +228,14 @@ class Checker(system: SystemP.System, numWorkers: Int){
 
   /** Producer for iterators for copying views found on one ply, ready for the
     * next ply.  Set by worker 0 on each ply. */
-  private var viewShardIteratorProducer: 
-      ShardedHashSet.ShardIteratorProducerT[ComponentView] = null
+  // private var viewShardIteratorProducer: 
+  //     ShardedHashSet.ShardIteratorProducerT[ComponentView] = null
 
-  private var transitionShardIteratorProducer: 
-      ShardedHashSet.ShardIteratorProducerT[Transition] = null
+  // private var transitionShardIteratorProducer: 
+  //     ShardedHashSet.ShardIteratorProducerT[Transition] = null
 
-  /** Buffer that accumulated views found on one ply for the next ply.
-    * Protected by synchronized block IMPROVE*/
-  // private var newViewsAB = new ArrayBuffer[ComponentView]
-  private var viewsBuff: ConcurrentBuffer[ComponentView] = null
+  // /** Buffer that accumulated views found on one ply for the next ply. */
+  // private var viewsBuff: ConcurrentBuffer[ComponentView] = null
 
   /** Print information, and update variables for the start of the next ply.  In
     * particular, set done if all threads should terminate.  Performed by
@@ -245,7 +243,8 @@ class Checker(system: SystemP.System, numWorkers: Int){
   private def startOfPly(bound: Int) = {
     if(ply != 0){ 
       // Views for workers to work on in this ply. 
-      newViews = viewsBuff.get; nextIndex.set(0)
+      newViews = checkerState.getNewViews // viewsBuff.get; 
+      nextIndex.set(0)
       if(showEachPly)
         println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
     }
@@ -264,64 +263,64 @@ class Checker(system: SystemP.System, numWorkers: Int){
       // newTransitionTemplates = new BasicHashSet[TransitionTemplate]
 
       // Initialise objects ready for end of ply
-      viewsBuff = new ConcurrentBuffer[ComponentView](numWorkers)
+      // viewsBuff = new ConcurrentBuffer[ComponentView](numWorkers)
       // newViewsAB = new ArrayBuffer[ComponentView]
-      viewShardIteratorProducer = checkerState.nextNewViews.shardIteratorProducer
-      transitionShardIteratorProducer = checkerState.newTransitions.shardIteratorProducer
+      // viewShardIteratorProducer = checkerState.nextNewViews.shardIteratorProducer
+      // transitionShardIteratorProducer = checkerState.newTransitions.shardIteratorProducer
       if(singleRef) EffectOn.prepareForPurge
     }
   }
 
-  /** Add v to sysAbsViews and viewsBuff if new.  Return true if so. */
-  private def addView(me: Int, v: ComponentView): Boolean = /*synchronized*/{
-    if(ComponentView0.highlight(v)) println(s"adding $v")
-    if(checkerState.sysAbsViews.add(v)){
-      // if(ComponentView0.highlight(v)) println(s"Added $v")
-      assert(v.representableInScript); viewsBuff.add(me, v); true
-    }
-    else false
-  } // end of addView
+  // /** Add v to sysAbsViews and viewsBuff if new.  Return true if so. */
+  // private def addView(me: Int, v: ComponentView): Boolean = /*synchronized*/{
+  //   if(ComponentView0.highlight(v)) println(s"adding $v")
+  //   if(checkerState.sysAbsViews.add(v)){
+  //     // if(ComponentView0.highlight(v)) println(s"Added $v")
+  //     assert(v.representableInScript); viewsBuff.add(me, v); true
+  //   }
+  //   else false
+  // } // end of addView
 
 
   /** Collectively, workers copy new views and transitions, at the end of a
     * ply. */
   private def endOfPly(me: Int) = {
     // Worker 0 copies transition templates.
-    if(me == 0){
-      checkerState.endOfPly
+    //if(me == 0){
+      checkerState.endOfPly(me)
       // print(s"\nCopying: nextNewViews, ${nextNewViews.size}; ")
       // print(s"newTransitionTemplates, ${newTransitionTemplates.size}; ")
       // println(s"newTransitions, ${newTransitions.size}. ")
       // for(template <- newTransitionTemplates.iterator)
       //   transitionTemplates.add(template)
-    }
+    //}
 
     // Purges from the effectOnStore
     if(singleRef) EffectOn.purge
 
     // Collectively copy views
-    var iter = viewShardIteratorProducer.get
-    while(iter != null){
-      for(v <- iter) addView(me, v)
-      iter = viewShardIteratorProducer.get
-    }
+    // var iter = viewShardIteratorProducer.get
+    // while(iter != null){
+    //   for(v <- iter) checkerState.addView(me, v)
+    //   iter = viewShardIteratorProducer.get
+    // }
 
-    // Collectively copy transitions
-    var transIter = transitionShardIteratorProducer.get
-    while(transIter != null){
-      for(t <- transIter){
-        checkerState.transitions.add(t)
-        var vs = t.post.toComponentView
-        while(vs.nonEmpty){
-          val v0 = vs.head; vs = vs.tail; val v = Remapper.remapView(v0)
-          if(addView(me, v)){
-            v.setCreationTrans(t) // (t.pre, t.e, t.post)
-            if(showTransitions) println(s"${t.toString}\ngives $v")
-          }
-        }
-      } // end of iteration over transIter
-      transIter = transitionShardIteratorProducer.get
-    }
+    // // Collectively copy transitions
+    // var transIter = transitionShardIteratorProducer.get
+    // while(transIter != null){
+    //   for(t <- transIter){
+    //     checkerState.transitions.add(t)
+    //     var vs = t.post.toComponentView
+    //     while(vs.nonEmpty){
+    //       val v0 = vs.head; vs = vs.tail; val v = Remapper.remapView(v0)
+    //       if(checkerState.addView(me, v)){
+    //         v.setCreationTrans(t) // (t.pre, t.e, t.post)
+    //         if(showTransitions) println(s"${t.toString}\ngives $v")
+    //       }
+    //     }
+    //   } // end of iteration over transIter
+    //   transIter = transitionShardIteratorProducer.get
+    // }
   }
 
   /** Produce debugger, based on view,unless another thread has got here

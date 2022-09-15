@@ -1,5 +1,6 @@
 package ViewAbstraction
 
+import ViewAbstraction.RemapperP.Remapper
 import collection.{MyHashSet,BasicHashSet,ShardedHashSet}
 import scala.collection.mutable.{ArrayBuffer}
 
@@ -207,6 +208,24 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
     addTransitions(
       transitionTemplateExtender.effectOfPreviousTransitionTemplates(view) )
 
+  //----------------------  Administrative functions, start and end of ply
+
+  /** Buffer that accumulated views found on one ply for the next ply. */
+  private var viewsBuff: ConcurrentBuffer[ComponentView] = null
+
+  /** Producer for iterators for copying views found on one ply, ready for the
+    * next ply.  Set by worker 0 on each ply. */
+  private var viewShardIteratorProducer: 
+      ShardedHashSet.ShardIteratorProducerT[ComponentView] = null
+
+  /** Producer for iterators for copying transitions found on one ply, ready for
+    * the next ply.  Set by worker 0 on each ply. */
+  private var transitionShardIteratorProducer: 
+      ShardedHashSet.ShardIteratorProducerT[Transition] = null
+
+  /** Get the views for the next ply. */
+  def getNewViews: Array[ComponentView] = viewsBuff.get
+
   /** Prepare for the next ply.  Performed by thread 0. */
   def startOfPly = {
     println("#abstractions = "+printLong(sysAbsViews.size))
@@ -216,15 +235,57 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
     nextNewViews = new NextNewViewSet
     newTransitions = new NextTransitionSet
     newTransitionTemplates = new BasicHashSet[TransitionTemplate]
+
+    // Initialise objects ready for end of ply
+    viewsBuff = new ConcurrentBuffer[ComponentView](numWorkers)
+    viewShardIteratorProducer = nextNewViews.shardIteratorProducer
+    transitionShardIteratorProducer = newTransitions.shardIteratorProducer
   }
 
-  /** Updates at the end of a ply.  Performed by thread 0. */
-  def endOfPly = {
-    print(s"\nCopying: nextNewViews, ${nextNewViews.size}; ")
-    print(s"newTransitionTemplates, ${newTransitionTemplates.size}; ")
-    println(s"newTransitions, ${newTransitions.size}. ")
-    for(template <- newTransitionTemplates.iterator)
-      transitionTemplates.add(template)
+  /** Add v to sysAbsViews and viewsBuff if new.  Return true if so. */
+  def addView(me: Int, v: ComponentView): Boolean = /*synchronized*/{
+    if(ComponentView0.highlight(v)) println(s"adding $v")
+    if(sysAbsViews.add(v)){
+      // if(ComponentView0.highlight(v)) println(s"Added $v")
+      assert(v.representableInScript); viewsBuff.add(me, v); true
+    }
+    else false
+  } // end of addView
+
+  /** Updates at the end of a ply. */
+  def endOfPly(me: Int) = {
+    if(me == 0){
+      // Worker 0 prints info and copies transition templates.
+      print(s"\nCopying: nextNewViews, ${nextNewViews.size}; ")
+      print(s"newTransitionTemplates, ${newTransitionTemplates.size}; ")
+      println(s"newTransitions, ${newTransitions.size}. ")
+      for(template <- newTransitionTemplates.iterator)
+        transitionTemplates.add(template)
+    }
+
+    // Collectively copy views
+    var iter = viewShardIteratorProducer.get
+    while(iter != null){
+      for(v <- iter) addView(me, v)
+      iter = viewShardIteratorProducer.get
+    }
+
+    // Collectively copy transitions
+    var transIter = transitionShardIteratorProducer.get
+    while(transIter != null){
+      for(t <- transIter){
+        transitions.add(t)
+        var vs = t.post.toComponentView
+        while(vs.nonEmpty){
+          val v0 = vs.head; vs = vs.tail; val v = Remapper.remapView(v0)
+          if(addView(me, v)){
+            v.setCreationTrans(t) 
+            if(showTransitions) println(s"${t.toString}\ngives $v")
+          }
+        }
+      } // end of iteration over transIter
+      transIter = transitionShardIteratorProducer.get
+    }
   }
 
   /** Reporting at the end of a check. */
