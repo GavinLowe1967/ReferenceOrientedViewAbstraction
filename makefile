@@ -160,11 +160,12 @@ $(DIR)/TransitionTemplateExtender.class: $(DIR)/Transition.class	\
 
 $(DIR)/Debugger.class: $(DIR)/SystemP/System.class $(DIR)/EffectOn.class
 
-$(DIR)/Checker.class: $(DIR)/TransitionSet.class		\
+$(DIR)/CheckerState.class: $(DIR)/TransitionSet.class		\
   $(DIR)/NewTransitionSet.class $(DIR)/Unification.class	\
-  $(DIR)/Debugger.class $(DIR)/EffectOn.class			\
-  $(DIR)/TransitionTemplateExtender.class $(DIR)/Barrier.class	\
-  $(DIR)/Concurrency.class
+  $(DIR)/EffectOn.class $(DIR)/TransitionTemplateExtender.class
+
+$(DIR)/Checker.class: $(DIR)/CheckerState.class $(DIR)/Debugger.class	\
+  $(DIR)/Barrier.class $(DIR)/Concurrency.class
 
 $(DIR)/CheckerTest.class: $(DIR)/Checker.class
 

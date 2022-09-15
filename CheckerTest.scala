@@ -7,11 +7,15 @@ class CheckerTest(system: SystemP.System, numWorkers: Int)
   import TestStates._
 
   def reset() = { 
-    val (sav, initViews) = system.initViews; sysAbsViews = sav
-    nextNewViews = new NextNewViewSet //BasicHashSet[ComponentView] 
+    val (sav, initViews) = system.initViews //; sysAbsViews = sav
+    checkerState = new CheckerState(system, sav)
+    checkerState.initNextNewViews
   }
 
   reset()
+
+  @inline private def sysAbsViews = checkerState.sysAbsViews
+  @inline private def nextNewViews = checkerState.nextNewViews
 
   /** Test of effectOn. */
   private def effectOnTest = {
