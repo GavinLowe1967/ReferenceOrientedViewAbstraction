@@ -206,7 +206,7 @@ class Debugger(
           println(s"Required views for $c: "+
             req.map(StateArray.show).mkString(",\n  "))
           if(req.forall(cpts => sysAbsViews.contains(servers, cpts))){
-            println("All found")
+            println("  all found")
             options += new ComponentView(servers, Array(prePrinc, c))
             options ++= req.map(new ComponentView(servers, _))
           }
