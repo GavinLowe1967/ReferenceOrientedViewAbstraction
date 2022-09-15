@@ -123,7 +123,8 @@ class Debugger(
       //   println("Unexpected ply in pre: $pre $pre.ply$; $v $v.ply$")
       assert(e >= 0, s"$pre -($e)-> $post")
       befores += pre; events += e; afters += post
-// IMPROVE: is the "head" below what we want?
+      // Note: the "head" below is somewhat arbitrary.  The debugger allows
+      // expansion of other views.
       val v1 = RemapperP.Remapper.remapView(pre.toComponentView.head)
       try{ v = sysAbsViews.get(v1) }
       catch{
@@ -167,11 +168,14 @@ class Debugger(
     }
     // Get the options for expanding
     val options = new ArrayBuffer[ComponentView]
+    // All views of conc.  This repeats a view seen in the previous expansion.
+    options ++= conc.toComponentView
     if(secondary != null) options += secondary
     if(pre != null){
-      val servers = pre.servers; assert(cv.servers == servers)
       options += cv
+      val servers = pre.servers; assert(cv.servers == servers)
       val preCpts = pre.components; val cpts1 = cv1.components
+      val prePrinc = preCpts(0)
 
       // Find the missing views required for condition (b). 
       // val crossRefs =
@@ -186,18 +190,24 @@ class Debugger(
       // Find the missing views required for condition (c).
       // Identities of common missing components
       val commonMissing =  EffectOn.commonMissingRefs(cpts1, preCpts)
-      println(s"commonMissing = $commonMissing")
-// IMPROVE: use script names for commonMissing
+      println(s"Common missing component identities: "+
+        commonMissing.map(getScriptName).mkString(", "))
       for(pid <- commonMissing){
-        // All states instantiating pid compatible with cv1
+        // All states instantiating pid compatible with pre.  Note, using
+        // cpts1(0) here would be wrong, since it's not in normal form.
         val insts = 
-          MissingCommon.allInstantiations(servers, cpts1(0), pid, sysAbsViews)
-        println(s"$pid -> "+insts.mkString(", "))
+          //MissingCommon.allInstantiations(servers, cpts1(0), pid, sysAbsViews)
+          MissingCommon.allInstantiations(servers, prePrinc, pid, sysAbsViews)
+        println("Possible states for "+getScriptName(pid)+
+          s" with $prePrinc: "+insts.mkString(", "))
         for(c <- insts){
-          val req = MissingCommon.requiredCpts(servers, cpts1, preCpts, c)
-          println(s"$c -> "+req.map(StateArray.show).mkString(",\n  "))
+          //val req = MissingCommon.requiredCpts(servers, cpts1, preCpts, c)
+          val req = MissingCommon.requiredCpts(servers, preCpts, cpts1, c)
+          println(s"Required views for $c: "+
+            req.map(StateArray.show).mkString(",\n  "))
           if(req.forall(cpts => sysAbsViews.contains(servers, cpts))){
             println("All found")
+            options += new ComponentView(servers, Array(prePrinc, c))
             options ++= req.map(new ComponentView(servers, _))
           }
         }
@@ -228,6 +238,9 @@ class Debugger(
       }
     }
   }
+
+  /** The script name for pId. */
+  private def getScriptName(pId: ProcessIdentity) = scriptNames(pId._1)(pId._2)
 
   /** Print the server names. */
   private def showServers = {

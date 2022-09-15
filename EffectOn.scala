@@ -207,8 +207,11 @@ class EffectOn(
     // If singleRef, identities of components referenced by both principals,
     // but not included in the views, and such that there is no way of
     // instantiating them consistently within sysAbsViews.
+    assert(!pre.components.sameElements(cpts))
     val missingCommons: List[MissingCommon] =
-      if(singleRef && !pre.components.sameElements(cv.components))
+      if(singleRef  && !pre.components.sameElements(cv.components) )
+// FIXME: I don't understand the second conjunct.  It makes a difference on
+// lockFreeQueue.csp
         checkCompatibleMissing(pre.servers, pre.components, cpts)
       else List()
     // If singleRef and there are references between components from pre and
@@ -277,6 +280,7 @@ class EffectOn(
   /** Test whether, if the principal components of cpts1 and cpts2 both have a
     * reference to the same missing component then there is a way of
     * instantiating that component, consistent with the current set of views.
+    * Pre: servers || cpts1 is in normal form.
     * @return the identities of all such missing components. */ 
   private def checkCompatibleMissing(
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State])

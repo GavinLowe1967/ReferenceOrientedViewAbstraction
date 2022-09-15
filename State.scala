@@ -56,13 +56,16 @@ class State(val family: Family, val cs: ControlState,
     pIds
   }
 
-  /** Bitmap giving the parameters of this. */
+  /** Bitmap giving the parameters of this.  Note: size is limited to be just
+    * enough for the parameters of this. */
   private var paramsBitMap: BitMap = null
 
   /** Initialise paramsBitMap.  Needs typeMap to be initialised. */
   @inline private def initParamsBitMap = synchronized{
     if(paramsBitMap == null){
-      paramsBitMap = newBitMap; var i = 0
+      val sizes = getParamsBound    //  sizes for rows of bitmap
+      paramsBitMap = Array.tabulate(numTypes)(t => new Array[Boolean](sizes(t)))
+      var i = 0
       while(i < length){
         val id = ids(i)
         if(!isDistinguished(id)) paramsBitMap(typeMap(i))(id) = true
@@ -72,14 +75,17 @@ class State(val family: Family, val cs: ControlState,
   }
 
   /** Does this have a reference to (t,id)?  Pre: this is not its identity. */
-  @inline def hasRef(t: Family, id: Identity) = {
+  @inline def hasRef(t: Family, id: Identity): Boolean = {
     initParamsBitMap // make sure initialised
-    assert(!hasPID(t,id)); paramsBitMap(t)(id)
+    assert(!hasPID(t,id)); id < paramsBitMap(t).length && paramsBitMap(t)(id)
   }
+
+  /** Does this have a reference to pid?  Pre: this is not its identity. */
+  @inline def hasRef(pid: ProcessIdentity): Boolean = hasRef(pid._1, pid._2)
 
   /** Does this have a parameter (t,id)? */
   @inline def hasParam(t: Family, id: Identity): Boolean = {
-    initParamsBitMap; paramsBitMap(t)(id)
+    initParamsBitMap; id < paramsBitMap(t).length && paramsBitMap(t)(id)
   }
 
   /** Information about which references are used to create views.  It is set

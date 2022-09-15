@@ -110,13 +110,13 @@ class SimpleEffectOnStore extends EffectOnStore{
     * mcNotDoneStore might also hold some MissingInfos that are mcDone,
     * because they were found to be mcDone in the first phase of complete
     * (from candidateForMCStore). */
-  private val mcNotDoneStore = new Store
+  private val mcNotDoneStore = new Store(shards = numWorkers*8)
 
   /** Information about those mi: MissingInfo in the abstract set such that
     * mi.mcDone (i.e. all MissingCommon in mi.missingCommon are done).  For
     * each such mi, mcDoneStore contains mi.missingHead -> mi (i.e. keyed against
     * the next missing view). */
-  private val mcDoneStore = new Store
+  private val mcDoneStore = new Store(shards = numWorkers*8)
 
   /** Information used to identify whether a new view can be used to instantiate
     * c in clause (1) of the obligation of a MissingCommon.  For each mi:
@@ -124,7 +124,8 @@ class SimpleEffectOnStore extends EffectOnStore{
     * MissingCommon(servers,cpts,_,_) in mi.missingCommon,
     * candidateForMCStore(servers,cpts(0)) contains mi. */
   private val candidateForMCStore = 
-    new ShardedHashMap[(ServerStates, State), MissingInfoSet]
+    new ShardedHashMap[(ServerStates, State), MissingInfoSet](
+      shards = numWorkers*8)
 
   /* Operations on each MissingInfoSet are protected by a synchronized block on
    * that MissingInfoSet.  The protocol for updating a maplet is (1) read the

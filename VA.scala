@@ -112,8 +112,12 @@ object VA{
     // The switch below corresponds to the switch in StateArray.crossRefs
     if(StateArray.CrossRefFlag) List(
       ("CSP/lockBasedStack.csp", 294), ("CSP/lockBasedQueue.csp", 553),
-      ("CSP/TreiberStack.csp", 1072), // 1075 if clause (3) in MissingCommon omitted
-      ("CSP/lockFreeQueue.csp", 2210)// , ("CSP/TreiberStackOmitCreator.csp", 889)
+      // ("CSP/TreiberStack.csp", 1072), old version of clause (3)
+      // 1075 if clause (3) in MissingCommon omitted
+      ("CSP/TreiberStack.csp", 1066),
+      // ("CSP/lockFreeQueue.csp", 2210) old version of clause (3)
+      // , ("CSP/TreiberStackOmitCreator.csp", 889)
+      ("CSP/lockFreeQueue.csp", 2194)
     )
   else List(
     ("CSP/lockBasedStack.csp", 306), ("CSP/lockBasedQueue.csp", 570),

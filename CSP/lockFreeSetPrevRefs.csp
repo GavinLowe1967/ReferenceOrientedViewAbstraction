@@ -149,8 +149,8 @@ channel CASR : NodeID . NodeIDType . {false} . NodeIDType . Bool . Bool
 
 -- The value to store for prev in a node holding value when it is appearently
 -- set to newPrev.
-storePrev(value, newPrev) = if value == C then Null else newPrev
---storePrev(value, newPrev) = newPrev
+--storePrev(value, newPrev) = if value == C then Null else newPrev
+storePrev(value, newPrev) = newPrev
 
 FreeNodeR(me) = 
   initNode?_!me?value?next?prev -> joined?_!me -> 
