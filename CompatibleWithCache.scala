@@ -30,7 +30,7 @@ object CompatibleWithCache{
 // ==================================================================
 
 /** The results for a particular Key, abstractly a mapping from Array[State]
-  * to Boolean. */
+  * to Boolean.  Thread safe. */
 class ResultCache(initSize: Int = 16){
   type States = Array[State]
 

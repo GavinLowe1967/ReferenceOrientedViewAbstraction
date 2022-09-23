@@ -8,19 +8,24 @@
 -- @VA component identity type = ThreadID
 -- @VA component active = true
 -- @VA serversRename = ServerSet
+
+-- Omit views based on prev references.
+
 -- @VA omitInfo = omit prev from NodeR(me: NodeID, value: Data, next: NodeID, prev: NodeID, mark: Bool, decoup: DecoupInfo)
 
--- @VA omitInfo = omit prev, locker from LockedNodeR(me: NodeID, value: Data, next: NodeID, prev: NodeID, mark: BoolT, locker: ThreadID, decoup: DecoupInfo)
+-- @VA omitInfo = omit prev from LockedNodeR(me: NodeID, value: Data, next: NodeID, prev: NodeID, mark: Bool, locker: ThreadID, decoup: DecoupInfo)
+
 
 BoolF = {false}
 BoolT = {true}
 DecoupInfoU = {0}
 
+-- Previous omit experiments.
+
 -- VA omitInfo = omit prev from NodeR(me: NodeID, value: Data, next: NodeID, prev: NodeID, mark: BoolF, decoup: DecoupInfoU)
-
 -- VA omitInfo = omit prev, locker from LockedNodeR(me: NodeID, value: Data, next: NodeID, prev: NodeID, mark: BoolF, locker: ThreadID, decoup: DecoupInfoU)
-
 -- VA omitInfo = omit prev, locker from LockedNodeR(me: NodeID, value: Data, next: NodeID, prev: NodeID, mark: BoolT, locker: ThreadID, decoup: DecoupInfo)
+-- @ VA omitInfo = omit prev from LockedNodeR(me: NodeID, value: Data, next: NodeID, prev: NodeID, mark: BoolT, locker: ThreadID, decoup: DecoupInfo)
 
 include "definitions.csp"
 
@@ -95,12 +100,13 @@ gt(B) = {C,Infty}
 gt(C) = {C,Infty}
 
 -- Identities of nodes
-datatype NodeIDType = Null | N1 | N2 | N3 | N4 | N5 | N6 -- | N7 | N8 | N9 | N10 --| N11
+datatype NodeIDType = Null | N0 | N1 | N2 | N3 | N4 | N5 | N6  | N7 | N8 | N9  | N10
 
 NodeID = diff(NodeIDType, {Null}) -- real nodes
 
 -- Thread identities
-datatype ThreadIDType = Constr | T1 | T2 | T3 | T4 
+datatype ThreadIDType = Constr | T0 | T1 | T2 | T3 
+-- For bound 19, 6 node and 4 thread IDs enough
 
 -- 9 NodeIds, 4 ThreadIDs seems enough with singleRef. 
 
@@ -116,8 +122,9 @@ datatype Signal =
   AddLP.Data | AddBFail | DeleteB | DelBFail | ContainsB | NotContainsB | 
   NoSignal | Decouple.NodeID.Value
 
--- initialise node to hold value and not deleted
-channel initNode : ThreadIDType . NodeID . Data . NodeIDType
+-- initialise node to hold value and not deleted.  initNode.t.n.v.next.prev 
+-- means initialise node `n` with `next` and `prev` as next and prev nodes.
+channel initNode : ThreadIDType . NodeID . Data . NodeIDType . NodeIDType
 
 -- get the value field
 channel getValue : 
@@ -146,7 +153,7 @@ channel setPrev : ThreadID . NodeID. NodeID
   
 -- Signal to node that it has been added to the list, with a particular
 -- predecessor
-channel joined: ThreadIDType . NodeID . NodeIDType
+-- channel joined: ThreadIDType . NodeID . NodeIDType
 
 -- Signal to node that it has been decoupled from the list.  The Bool
 -- parameter is true if the node is decoupled after the watchdog starts
@@ -168,8 +175,9 @@ channel setNextR : NodeIDType
 channel setPrevR : NodeID
 
 FreeNodeR(me) = 
-  initNode?_!me?value?next -> joined?_!me?prev -> 
-  if(value == NegInfty and prev != Null or value == Infty and next != Null)
+  initNode?t!me?value?next?prev -> 
+  if(value == NegInfty and prev != Null or value == Infty and next != Null or
+     value != NegInfty and value != Infty and (prev == Null or next == Null))
   then NodeErr(me)
   else  NodeR(me, value, next, prev, false, 0)
 
@@ -201,7 +209,7 @@ NodeR(me, value, next, prev, mark, decoup) =
   getMarkR!mark -> NodeR(me, value, next, prev, mark, decoup)
   []
   setNextR?newNext -> (
-    if value == Infty then NodeErr(me)
+    if value == Infty or newNext == Null then NodeErr(me)
     else NodeR(me, value, newNext, prev, mark, decoup) )
   []
   setMarkR -> NodeErr(me) -- NodeR(me, value, next, prev, true, decoup)
@@ -236,7 +244,7 @@ LockedNodeR(me, value, next, prev, mark, locker, decoup) =
   getMarkR!mark -> LockedNodeR(me, value, next, prev, mark, locker, decoup)
   []
   setNextR?newNext -> (
-    if value == Infty then NodeErr(me)
+    if value == Infty or newNext == Null then NodeErr(me)
     else LockedNodeR(me, value, newNext, prev, mark, locker, decoup) )
   []
   setMarkR -> (
@@ -275,7 +283,7 @@ alphaNode(me) =
        setNext.t.me, setMark.t.me, decoupled.t.me, 
        setPrev.t.me, unlockSetPrev.t.me | 
          t <- ThreadID |},
-    {| initNode.t.me, joined.t.me | t <- ThreadIDType |},
+    {| initNode.t.me | t <- ThreadIDType |}, -- , joined.t.me
     {| dummy.me, nodeError.me |}
   })
 
@@ -384,8 +392,9 @@ AddTest(me, v, p, c) =
 
 -- Insert new node containing v between p and c. 
 AddAdd(me, v, p, c) = 
-  initNode.me?new!v!c -> setNext.me.p.new!AddLP.v -> 
-  joined.me.new.p -> unlockSetPrev.me.c.new -> Unlock'(me, p)
+  initNode.me?new!v!c!p -> setNext.me.p.new!AddLP.v -> 
+  -- joined.me.new.p -> 
+  unlockSetPrev.me.c.new -> Unlock'(me, p)
 
 -- Add or delete complete: unlock p and c.
 Unlock(me, p, c) = unlock.me.p -> Unlock'(me, c)
@@ -445,7 +454,8 @@ DelDel'(me, p, c) = decoupled.me.c?_ -> Unlock(me, p, c)
 alphaThread(me) =
   {| getHead.me, initNode.me, getValue.me, getNext.me, getMark.me,
      setNext.me, setMark.me, lock.me, unlock.me, 
-     threadError.me, joined.me, decoupled.me, setPrev.me, unlockSetPrev.me |}
+     threadError.me, decoupled.me, setPrev.me, unlockSetPrev.me |}
+-- joined.me,
 
 alphaThreadChunked(me) = makeChunks_(seq(alphaThread(me)), 1000)
      
@@ -465,15 +475,15 @@ alphaHead = {| initHead, getHead |}
 
 Constructor = 
   -- Create tail.
-  initNode.Constr?tail!Infty.Null -> 
+  initNode.Constr?tail!Infty.Null.Null -> 
   -- Create head pointing to tail
-  initNode.Constr?head!NegInfty.tail -> 
-  joined.Constr.tail.head -> joined.Constr.head.Null -> 
+  initNode.Constr?head!NegInfty.tail.Null -> 
+  -- joined.Constr.tail.head -> joined.Constr.head.Null -> 
   initHead.head -> Constructor'
 
 Constructor' = nodeError?_ -> Constructor'
 
-alphaConstr = {| initNode.Constr, joined.Constr, initHead, nodeError |} 
+alphaConstr = {| initNode.Constr,  initHead, nodeError |} -- joined.Constr,
 
 --------------------- Watchdog
 
@@ -734,8 +744,9 @@ channel setPrev1 : NodeID . NodeID
 -- LP of the add of a node
 channel addLP1 : NodeID
 
--- Initialisation of a node.
-channel initNodeR : NodeID
+-- Initialisation of a node.  initNodeR.n.c.p represents n being initialised
+-- to point to c, with prev = p.  Note: p,c != Null
+channel initNodeR : NodeID . NodeID . NodeID
 
 -- A node is informed that it has been decoupled
 channel decoupledR : NodeID
@@ -747,7 +758,7 @@ POR =
   decouple1?p?c?n -> 
     (if n != Null then setPrev1.n.p -> PORd(c) else PORd(c))
   []
-  initNodeR?n -> (addLP1.n -> PORJ(n) [] done -> STOP)
+  initNodeR?n?c?p -> PORJ(n,c) -- (if c != Null then PORJ(n,c) else PORJ'(n))
   []
   done -> STOP
   []
@@ -755,13 +766,24 @@ POR =
 
 PORd(n) = decoupledR.n -> POR 
 
-PORJ(n) = joined?_!n?_ -> POR
+-- Node n has been initialised to point to c, with prev = p
+PORJ(n,c) = 
+  addLP1.n -> (unlockSetPrev?_!c.n -> POR [] done -> STOP)
+-- joined?_!n?p -> 
+  [] done -> STOP
+
+-- IMPROVE: remove p; add done as alternative to unlockSetPrev
+
+-- Node n has been initialised to point to Null
+-- PORJ'(n) = 
+--   addLP1.n -> joined?_!n?_ -> POR 
+--   [] done -> STOP
 
 
 -- Events this process ignores
 
 PORIgnore = Union({
-  {| getNext, getValue, getHead, getMark, setMark, lock, unlock, unlockSetPrev |}
+  {| getNext, getValue, getHead, getMark, setMark, lock, unlock |}
 })
 
 -- Renaming for POR
@@ -771,16 +793,18 @@ PORRename = Union({
       t <- ThreadID, p <- NodeID, c <- NodeID, n <- NodeIDType, v <- Value },
   { (setPrev1.n.p, setPrev.t.n.p) | t <- ThreadID, n <- NodeID, p <- NodeID },
   { (decoupledR.n, decoupled.t.n.b) | t <- ThreadID, n <- NodeID, b <- Bool },
-  { (initNodeR.n, initNode.t.n.v.next) | 
-       t <- ThreadID, n <- NodeID, next <- NodeIDType, v <- Data },
+  { (initNodeR.n.next.prev, initNode.t.n.v.next.prev) | 
+       t <- ThreadID, n <- NodeID, next <- NodeID, v <- Data, prev <- NodeID },
+  -- { (initNodeR.n.next, initNode.t.n.v.next) | 
+  --      t <- ThreadID, n <- NodeID, next <- NodeIDType, v <- Data },
   { (addLP1.n, setNext.t.p.n.AddLP.v) |
        t <- ThreadID, n <- NodeID, p <- NodeID, v <- Data },
   { (ignore, e) | e <- PORIgnore }
 })
 
 alphaPOR = Union({
-  {| setNext, setPrev, decoupled |},
-  {| initNode.t, joined.t | t <- ThreadID |},
+  {| setNext, setPrev, decoupled, unlockSetPrev |},
+  {| initNode.t | t <- ThreadID |}, -- , joined.t
   PORIgnore
 })
 
@@ -853,13 +877,13 @@ Servers =
 Components =
   let sync = -- synchronisation set
       {| getValue.t, getNext.t, setNext.t, getMark.t, setMark.t, 
-         lock, unlock, initNode.t, decoupled.t, joined.t, unlockSetPrev, setPrev | 
-           t <- ThreadID|}
+         lock, unlock, initNode.t, decoupled.t, unlockSetPrev, setPrev | 
+           t <- ThreadID|} -- joined.t,
   within AllNodes [| sync |] AllThreads
 
 System =
   let sync = Union({ diff(alphaWD, {error,done}), 
-                     {| initNode.Constr, joined.Constr |},
+                     {| initNode.Constr |}, -- , joined.Constr
                      alphaLastTracker, 
                      alphaPOR
                   })

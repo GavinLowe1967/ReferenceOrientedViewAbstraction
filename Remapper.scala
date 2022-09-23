@@ -531,6 +531,34 @@ object Remapper{
     (st1, map)
   }
 
+  /** Remap st to normalise it with respect to servers, cpts1, cpts2, i.e. using
+    * the identity map over parameters of those, but otherwise mapping
+    * parameters to the next fresh value. */
+  def remapWRT(servers: ServerStates, cpts1: Array[State], cpts2: Array[State], 
+    st: State)
+      : State = {
+    // Get upper bound on ids in servers, cpts1, cpts2
+    val argBound = new Array[Identity](numTypes)
+    /* Update argBound wrt st1. */
+    @inline def update(st1: State) = 
+      for((t,id) <- st1.processIdentities) argBound(t) = argBound(t) max (id+1)
+    for(st1 <- servers.servers) update(st1)
+    for(st1 <- cpts1) update(st1)
+    for(st1 <- cpts2) update(st1)
+    val nextArg = argBound.clone
+    val map = newRemappingMap // IMPROVE: use Pools
+    val newArgs = new Array[Identity](st.length)
+    for(i <- 0 until st.length){
+      val t = st.typeMap(i); val id = st.ids(i)
+      if(id >= argBound(t)){
+        if(map(t)(id) >= 0) newArgs(i) = map(t)(id)
+        else{ map(t)(id) = nextArg(t); newArgs(i) = nextArg(t); nextArg(t) += 1 }
+      }
+      else newArgs(i) = id
+    }
+    MyStateMap(st.family, st.cs, newArgs)
+  }
+
   /** Apply map to st; types gives the types. */
   def applyMap(st: State, map: RemappingMap, types: Array[Type]): State = {
     val ids = st.ids; val len = ids.length
@@ -551,7 +579,7 @@ object Remapper{
   /** Remap procs, updating map and nextArg.  */
   @inline private def remapStates(
     map: RemappingMap, nextArg: NextArgMap, procs: Array[State]): Array[State] = 
-    procs.map(st => remapState(map, nextArg, st))
+    StateArray(procs.map(st => remapState(map, nextArg, st)))
 
   /** Cache used in remapServerStates. */
   private val remapSSCache = 
@@ -623,7 +651,7 @@ object Remapper{
     while(i < len){
       result(i) = applyRemappingToState(map, cpts(i)); i += 1
     }
-    result
+    StateArray(result)
   }
 
   /** Remap st so that it can be the principal component in a view with

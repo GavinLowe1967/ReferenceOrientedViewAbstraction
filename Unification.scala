@@ -61,7 +61,7 @@ object Unification{
     allUs.map{case(map,us) => "("+Remapper.show(map)+", "+us+")"}.mkString("; ")
 
   /** All ways of extending map0 to unify components of cv with components of
-    * pre, other than the two principal components.  
+    * pre; but don't unify the two principal components if !singleRef.  
     * 
     * For each combination of unifications, a remapping map so that if c =
     * cv.components(j) is unified with preC = pre.components(i), them map0(c)

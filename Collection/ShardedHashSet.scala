@@ -10,6 +10,7 @@ import ViewAbstraction.checkPow2
 class ShardedHashSet[A : scala.reflect.ClassTag](
   shards: Int = LockFreeReadHashSet.powerOf2AboveNumThreads*16, 
   initLength: Int = 32)
+// , matcher: (A,A) => Boolean = ShardedHashSet.equality[A] _)
     extends Sharding(shards) with MyHashSet[A]{
 
   import ShardedHashSet.{Empty,Deleted,EmptyProxy,DeletedProxy,MaxWidth}
@@ -283,4 +284,6 @@ object ShardedHashSet{
   trait ShardIteratorProducerT[A]{
     def get: Iterator[A]
   }
+
+  // def equality[A](x: A, y: A) = x == y
 }

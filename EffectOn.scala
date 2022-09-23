@@ -50,16 +50,6 @@ class EffectOn(
 
   require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
 
-  /** Do pre and cv have the same secondary component, or both missing a
-    * secondary component?  Assumes they have the same principal, so pre has
-    * at least as many components as cv. */
-  // private def matchingSecondaries = 
-  //   cv.components.length == 1 || pre.components(1) == cv.components(1)
-
-  // if(pre.components(0) == cv.components(0) && 
-  //     (!singleRef || matchingSecondaries))
-  //   println(s"Matching views in EffectOn:\n$trans\n$cv") 
-
   /** What does cpt get mapped to given unifications unifs? */
   private def getNewPrinc(cpt: State, unifs: UnificationList): State = {
     var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
@@ -113,6 +103,12 @@ class EffectOn(
       if(unifs.nonEmpty || reducedMapInfo == null ||
           !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs)){
         val newPrinc = getNewPrinc(cpts(0), unifs)
+        // If singleRef, the principals are unified, but the principal loses
+        // the reference to the second component, we can ignore this case.  
+        // Actually, I'm not sure about this.
+        // if(singleRef && unifs.contains((0,0)) && cpts.length == 2 &&
+        //   !newPrinc.hasIncludedParam(cpts(1).componentProcessIdentity)){ }
+        // else{
         var newComponentsList =
           StateArray.makePostComponents(newPrinc, postCpts, cpts)
         // if(hl || false && highlight)
@@ -135,7 +131,7 @@ class EffectOn(
         if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
         else List()
       val newPrinc = getNewPrinc(cpts(0), unifs)
-      val newComponentsList = List(Array(postCpts(k), newPrinc))
+      val newComponentsList = List(StateArray(postCpts(k), newPrinc))
       processInducedInfo(
         null, cpts, unifs, null, false, crossRefs, newComponentsList)
     }
@@ -157,7 +153,10 @@ class EffectOn(
     reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
     newComponentsList: List[Array[State]])
       : Unit = {
+    // assert(cpts.map(_.cs).sameElements(cv.components.map(_.cs)))
     Profiler.count(s"processInducedInfo $isPrimary")
+    // IMPROVE
+    for(cpts <- newComponentsList) ComponentView0.checkValid(pre.servers, cpts)
     // StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     val highlight1 = highlight && map(0).sameElements(Array(0,1,3,2))
     if(highlight1) 
@@ -207,11 +206,12 @@ class EffectOn(
     // If singleRef, identities of components referenced by both principals,
     // but not included in the views, and such that there is no way of
     // instantiating them consistently within sysAbsViews.
-    assert(!pre.components.sameElements(cpts))
+    assert(!pre.components.sameElements(cpts),
+      s"pre = $pre; cpts = "+StateArray.show(cpts))
     val missingCommons: List[MissingCommon] =
-      if(singleRef  && !pre.components.sameElements(cv.components) )
-// FIXME: I don't understand the second conjunct.  It makes a difference on
-// lockFreeQueue.csp
+      if(singleRef /* && !pre.components.sameElements(cv.components) */ )
+        // I don't understand the second conjunct.  It makes a difference on
+        // lockFreeQueue.csp
         checkCompatibleMissing(pre.servers, pre.components, cpts)
       else List()
     // If singleRef and there are references between components from pre and
@@ -252,7 +252,7 @@ class EffectOn(
           // might not be the most efficient approach.  Note also that the
           // missingCommons may be shared.
           EffectOn.effectOnStore.add(missing, missingCommons, nv, trans,
-            /*pre,*/ cpts, cv, /*trans.e, post,*/ newComponents)
+            cpts, cv, newComponents)
           assert(missing.isEmpty || !views.contains(missing.head))
           // Profiler.count(s"EffectOn add to store-$isPrimary-${unifs.nonEmpty}"+
           //   s"-${pre.servers==post.servers}-${missing.nonEmpty}-"+
@@ -287,7 +287,7 @@ class EffectOn(
       : List[MissingCommon]  = {
     require(singleRef)
     // The common missing references
-    var missingCRefs = commonMissingRefs(cpts1, cpts2)
+    var missingCRefs: List[ProcessIdentity] = commonMissingRefs(cpts1, cpts2)
     // Representation of the common missing references considered so far for
     // which there is no way of instantiating the referenced component.
     var missingCommons = List[MissingCommon]()
@@ -419,7 +419,7 @@ object EffectOn{
     StateArray.crossRefs(cpts1, cpts2).map(Remapper.remapComponents(servers,_))
   }
 
-  /** All common missing references from cpts1 and cpts2. */
+  /** All common included missing references from cpts1 and cpts2. */
   @inline def commonMissingRefs(cpts1: Array[State], cpts2: Array[State])
       : List[ProcessIdentity] = {
     var missingRefs1: List[ProcessIdentity] = StateArray.missingRefs(cpts1)

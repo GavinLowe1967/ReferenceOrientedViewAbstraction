@@ -15,8 +15,8 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
 
   Profiler.count("ComponentView0") // 179M with lazySetNoJoined.csp!
 
-  /** Identities of components. */
-  //val cptIds = components.map(_.componentProcessIdentity)
+  // Check this is a valid view.
+  ComponentView0.checkValid(servers, components)
 
   /** Identities of components as a bit map. */
   val cptIdsBitMap = StateArray.makeIdsBitMap(components)
@@ -51,61 +51,6 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     paramsBound
   }
 
-  // -------------------------------------------------------
-
-  /** Check all components referenced by principal are included, and no more. */
-  // IMPROVE: this is moderately expensive
-  @noinline private def checkValid = if(debugging){ 
-    val len = principal.ids.length; 
-    if(singleRef){
-      if(cptsLen == 2){
-        // Check principal has a reference to the other component
-        val cPid = components(1).componentProcessIdentity; var i = 0
-        while(i < len && principal.processIdentity(i) != cPid) i += 1
-        assert(i < len, s"Not a correct ComponentView: $this")
-        assert(principal.includeParam(i),
-          s"Not a correct ComponentView, omitted component included: $this")
-      }
-      else{ 
-        assert(cptsLen == 1, s"Too many components in ComponentView: $this") 
-        // Note: principal might have other references here, e.g. resulting
-        // from a transition 15(T0,N0,N1) || 7(N0,N1) -getDatum.T0.N0.A->
-        // 16(T0,N1) || 7(N0,N1)], where the principal loses the reference to
-        // N0.
-      }
-    } // end of if(singleRef)
-    else{
-      var i = 1; 
-      while(i < len){
-        val pid = principal.processIdentity(i)
-        if(!isDistinguished(pid._2) && principal.includeParam(i)){
-          // Test if there is a component with identity pid
-          var j = 1
-          while(j < cptsLen && components(j).componentProcessIdentity != pid)
-            j += 1
-          assert(j < cptsLen || pid == principal.componentProcessIdentity,
-            s"Not a correct ComponentView: $this")
-        }
-        i += 1
-      }
-      // Check all of others referenced by principal
-      var j = 1
-      while(j < cptsLen){
-        val otherId = components(j).componentProcessIdentity
-        var i = 0
-        while(i < len && principal.processIdentity(i) != otherId) i += 1
-        assert(i < len, s"Not a correct ComponentView: $this")
-        assert(principal.includeParam(i),
-          s"Not a correct ComponentView, omitted component included: $this")
-        j += 1
-      }
-    }
-  }
-
-  checkValid
-
-  // -------------------------------------------------------
-
   /** Is this representable using the values defined in the script? */
   def representableInScript: Boolean = {
     if(! servers.representableInScript) false
@@ -115,14 +60,6 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
       i == components.length
     }
   }
-
-  /** Produce a ReducedComponentView equivalent to this. */
-  // def reduce = {
-  //   Profiler.count("ReducedComponentView: ComponentView0")
-  //   new ReducedComponentView(servers, components)
-  // }
-
-  // -------------------------------------------------------
 
   import ComponentView0._
   /** Object containing the information needed for
@@ -355,6 +292,52 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
 // ==================================================================
 
 object ComponentView0{
+  /** Check that making a view from servers and components is valid. */
+  def checkValid(servers: ServerStates, components: Array[State]) = 
+    if(debugging){
+      def show = s"($servers, "+StateArray.show(components)+")"
+      val cptsLen = components.length; val principal = components(0)
+      val len = principal.ids.length;
+      if(singleRef){
+        if(cptsLen == 2){
+          // Check principal has a reference to the other component
+          val cPid = components(1).componentProcessIdentity; var i = 0
+          while(i < len && principal.processIdentity(i) != cPid) i += 1
+          assert(i < len, s"Not a correct ComponentView: $show, ")
+          assert(principal.includeParam(i),
+            s"Not a correct ComponentView, omitted component included: $show")
+        }
+        else assert(cptsLen == 1, s"Too many components in ComponentView: $show")
+      } // end of if(singleRef)
+      else{
+        var i = 1;
+        while(i < len){
+          val pid = principal.processIdentity(i)
+          if(!isDistinguished(pid._2) && principal.includeParam(i)){
+            // Test if there is a component with identity pid
+            var j = 1
+            while(j < cptsLen && components(j).componentProcessIdentity != pid)
+              j += 1
+            assert(j < cptsLen || pid == principal.componentProcessIdentity,
+              s"Not a correct ComponentView: $show")
+          }
+          i += 1
+        }
+        // Check all of others referenced by principal
+        var j = 1
+        while(j < cptsLen){
+          val otherId = components(j).componentProcessIdentity
+          var i = 0
+          while(i < len && principal.processIdentity(i) != otherId) i += 1
+          assert(i < len, s"Not a correct ComponentView: $show")
+          assert(principal.includeParam(i),
+            s"Not a correct ComponentView, omitted component included: $show")
+          j += 1
+        }
+      }
+    }
+
+
 
   /** Object containing the information needed for
     * Transition.mightGiveSufficientUnifs. */
@@ -396,37 +379,58 @@ object ComponentView0{
     }
   }
 
+  // -------------------------------------------------------
+
   /* Functions used when debugging, to highlight particular views. */
 
   /** Should we highlight information about v? */
   def highlight(v: ReducedComponentView) = 
-    highlightOrigin(v) 
+    highlightOrigin(v) // || highlightPrev(v)
 
-  /** The view whose origin we are trying to find. 
-    * [107(N0) || 109(N1) || 110() || 114(T0) || 121(T0,N0,N1) || 1()] || 
-    * [31(T1,N2,N3,N1) || 10(N2,Null,N3)] */
+  /** The view whose origin we are trying to find.  
+    * [107(N0) || 109(N0) || 110() || 113() || 119() || 1()] ||
+    *   [31(T0,N1,N2,N3) || 10(N1,Null,N2)] */
   private def highlightOrigin(v: ReducedComponentView) = 
     highlightServers(v.servers) && {
       val princ = v.components(0)
-      princ.cs == 31 && princ.ids.sameElements(Array(1,2,3,1)) && {
+      princ.cs == 31 && princ.ids.sameElements(Array(0,1,2,3)) && {
         val second = v.components(1)
-        second.cs == 10 && second.ids.sameElements(Array(2,-1,3))
+        second.cs == 10 // && second.ids.sameElements(Array(1,-1,2))
       }
     }
 
+  /* [36(T0,N1,N2,N0) || 10(N1,N3,N2)]. */
+  // def highlightPrevCpts(cpts: Array[State]) = {
+  //   val princ = cpts(0)
+  //   princ.cs == 36 && princ.ids.sameElements(Array(0,1,2,0)) &&
+  //   cpts(1).cs == 10 // && ...
+  // }
+
+  // 10(N3,Null,N1)
+  // def highlightNext(st: State) = 
+  //   st.cs == 10 && st.ids.sameElements(Array(3,-1,1))
+
+  /** The predecessor of the view whose origin we're trying to find. 
+    * [137(N0) || 138() || 146(N0) || 147(Null) || 151() || 152()] || 
+    *   [46(T0,N1) || 11(N1,N2,N0). */
+  // private def highlightPrev(v: ReducedComponentView) = 
+  //   highlightServers(v.servers) && highlightPrevCpts(v.components)
+
+  // def highlightPrev(v: Concretization) = 
+  //   highlightServers(v.servers) && highlightPrevCpts(v.components)
+
   /** The servers common to the missing view and the pre-state of the transition
     * that induces it.
-    * [107(N0) || 109(N1) || 110() || 114(T0) || _ || _] */
-  def highlightServers0(servers: ServerStates) = 
+    * [107(N0) || 109(N0) || 110() || 113() || 119() || 1()] */
+  @inline def highlightServers0(servers: ServerStates) = 
     false && 
-    servers(0).cs == 107 && servers(1).cs == 109 && servers(1).ids(0) == 1 &&
-    servers(2).cs == 110 && servers(3).cs == 114 
+    servers(0).cs == 107 && servers(1).cs == 109 && servers(1).ids(0) == 0 && 
+    servers(2).cs == 110 && servers(3).cs == 113 && servers(4).cs == 119
 
-  /** The servers for the view under consideration. 
-    *  [107(N0) || 109(N1) || 110() || 114(T0) || 121(T0,N0,N1) || 1()] */
+  /** The servers for the view under consideration.  */
   def highlightServers(servers: ServerStates) = {
-    highlightServers0(servers) &&
-    servers(4).cs == 121 && servers(4).ids.sameElements(Array(0,0,1))
+    highlightServers0(servers)//  &&
+    // servers(4).cs == 121 && servers(4).ids.sameElements(Array(0,0,1))
   }
 
 

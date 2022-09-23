@@ -87,18 +87,6 @@ object VA{
   private def profileReport = {
     ox.gavin.profiling.Profiler.report 
     if(memoryProfile) checker.memoryProfile
-    if(!testing){ // checker is null when testing
-      // println(s"checker.effectOnOthersCount = "+
-      //   printLong(checker.effectOnOthersCount))
-      // println(s"checker.effectOfPreviousTransitionsCount = "+
-      //   checker.effectOfPreviousTransitionsCount)
-      // println(s"checker.newViewCount = "+printLong(checker.newViewCount))
-      // println("checker.addedViewCount = "+printLong(checker.addedViewCount))
-      println("checker.addTransitionCount = "+
-        printLong(checker.addTransitionCount))
-      // println("checker.instantiateTransitionTemplateCount = "+
-      //   printLong(checker.instantiateTransitionTemplateCount))
-    }
   }
 
   // Test suite: list of filenames and expected number of states; first for
@@ -117,7 +105,9 @@ object VA{
       ("CSP/TreiberStack.csp", 1066),
       // ("CSP/lockFreeQueue.csp", 2210) old version of clause (3)
       // , ("CSP/TreiberStackOmitCreator.csp", 889)
-      ("CSP/lockFreeQueue.csp", 2194)
+      // ("CSP/lockFreeQueue.csp", 2194) with bug in EffectOn.processInducedInfo
+      ("CSP/lockFreeQueue.csp", 2118),
+      ("CSP/TreiberStackOmitCreator.csp", 883)
     )
   else List(
     ("CSP/lockBasedStack.csp", 306), ("CSP/lockBasedQueue.csp", 570),
@@ -166,6 +156,7 @@ object VA{
       case "--useOldViewSet" => UseNewViewSet = false; i += 1
       case "--doSanityCheck" => doSanityCheck = true; i += 1
       case "--reportEffectOn" => reportEffectOn = true; i += 1
+      case "--useOldReferencingViews" => useNewReferencingViews = false; i += 1
       // case "--swapEndOfPly" => swappedEndOfPly = true; i += 1
       // case "--newEffectOn" => newEffectOn = true; i += 1
       case "--memoryProfile" => memoryProfile = true; i += 1

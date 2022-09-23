@@ -17,6 +17,9 @@ class MissingInfo(
   var missingCommon: Array[MissingCommon], val trans: Transition,
   val oldCpts: Array[State], val cv: ComponentView, val newCpts: Array[State]
 ){
+  // assert(oldCpts.eq(StateArray(oldCpts)))
+  // assert(newCpts.eq(StateArray(newCpts)))
+
   /* missingViews contains component views that are necessary to satisfy this
    * constraint: all must be added to the ViewSet.  This corresponds to
    * condition (b) in the definition of induced transitions with restricted

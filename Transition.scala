@@ -97,7 +97,8 @@ class Transition(
     * components that could gain a reference to a component of type t: all
     * pairs (i,p1) such that pre.components(i) changes state in the transition
     * (with (i>0), and p1 is a new parameter of post.components(i), of type t,
-    * and not matching any parameter of pre. */
+    * for which views are considered, and not matching any parameter of
+    * pre. */
   val acquiredRefs: Array[List[(Int,Parameter)]] = {
     val aRefs = Array.fill(numTypes)(List[(Int,Parameter)]()); var t = 0
     while(t < numTypes){
@@ -105,12 +106,13 @@ class Transition(
       while(i < cptsLength){
         if(changedStateBitMap(i)){
           val preCpt = pre.components(i); val postCpt = post.components(i)
-          //if(preCpt != postCpt){
           var j = 1
           while(j < postCpt.length){
-            val p1@(t1,x) = postCpt.processIdentity(j)
-            if(t1 == t && !isDistinguished(x) && !preCpt.hasParam(t,x))
-              aRefs(t) ::= (i,p1)
+            if(postCpt.includeParam(j)){
+              val p1@(t1,x) = postCpt.processIdentity(j)
+              if(t1 == t && !isDistinguished(x) && !preCpt.hasParam(t,x))
+                aRefs(t) ::= (i,p1)
+            }
             j += 1
           }
         }

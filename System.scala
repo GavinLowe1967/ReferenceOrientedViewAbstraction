@@ -130,10 +130,6 @@ class System(fname: String) {
     assert(serverAlphaMap.length == eventsSize, 
            s"${serverAlphaMap.length}; $numEvents; ${showEvent(numEvents+2)}")
 
-    // if(file.omitInfos.nonEmpty){
-    //   println("Omit information is currently disabled"); sys.exit()
-    // }
-
     for(oi <- file.omitInfos) processOmitInfo(oi)
 
     fdr.libraryExit(); fdrSession.delete
@@ -150,24 +146,27 @@ class System(fname: String) {
     println(s"\nProcessing $omitInfo") 
     val OmitInfo(processName, params, omits) = omitInfo
 
-    // Map over parameter indices, giving the type identifier if the parameter
-    // is from a distinguished type, otherwise -1.
+    // Map over indices of params, giving the type identifier if the parameter
+    // is from an identity type, otherwise -1.
     val indexingTypes = params.map{ case (p,t) => familyTypeNames.indexOf(t) }
     // Number of such parameters
     val numDistinguished = indexingTypes.count(_ >= 0)
 
-    // Check each omitted value corresponds to a distinguished type. 
+    // Check each omitted value corresponds to an identity type, and is not
+    // the principal.
     val argNames = params.map(_._1)
     for(om <- omits){
       // Index of om in the parameters
       val ix = argNames.indexOf(om) 
-      assert(ix != 0, "Cannot omit principal of process "+processName)
+      assert(ix != 0, s"Cannot omit principal of process $processName")
       assert(indexingTypes(ix) >= 0,
         "Type "+params(ix)._2+
           " of omitted reference is not a distinguished type.")
     }
 
     // Bitmap showing which parameters of syntactic states will be included.
+    // includeBitMap(i) is true if the ith identity parameter is included (not
+    // omitted).
     val includeBitMap = new Array[Boolean](numDistinguished)
     var i = 0; var j = 0
     while(j < params.length){
@@ -179,17 +178,20 @@ class System(fname: String) {
 
     // The values in the types of the parameters
     val typeValues: List[List[String]] = 
-      params.map{ case(p,t) => fdrSession.getTypeValues/*setStringToList*/(t) }
-    // All values for the distinguished types
+      params.map{ case(p,t) => fdrSession.getTypeValues(t) }
+    // All values for the parameters.  In each element of distVals, if the ith
+    // value is Some(x) then the ith parameter is an identity parameter that
+    // can take value x; if the ith value is None, the ith parameter is not an
+    // identity parameter.
     val distVals: List[List[Option[String]]] = 
       cp(typeValues, indexingTypes.map(_ >= 0))
 
-    // List of distinct values to instantiate the distinguished parameters.
-    // Used to work out which syntactic parameter ends up as which parameter
-    // of resulting states.
+    // List of distinct values to instantiate the identity parameters.  Used
+    // to work out which syntactic parameter ends up as which parameter of
+    // resulting states.
     var distinctParams = List[Parameter]()
-    // Corresponding list of names of the parameters (i Some_) terms),
-    // interspersed with None in the place of non-distinguished parameters.
+    // Corresponding list of names of the identity parameters (as Some _)
+    // terms), interspersed with None in the place of non-identity parameters.
     var distinctParamNames = List[Option[String]]()
     // For each type, the index of the next value of that type to use.
     val nextVal = new Array[Int](numTypes)
@@ -242,6 +244,11 @@ class System(fname: String) {
           "Only passive families can have omit information.  Process "+
             processName+" is from an active family.")
         State.setIncludeInfo(cs, thisBitMap)
+
+// FIXME: if a process can transition from a state where certain views are
+// omitted to a state where the corresponding views are included, then we
+// won't always find the latter.  The code should check that this doesn't
+// happen.  (At present, it's a requirement on the user.)
 
         // Check all others agree.  This is very slow
         if(false){
@@ -359,7 +366,7 @@ class System(fname: String) {
       for(i <- 0 until princTrans.eventsSolo.length-1;
         st1 <- princTrans.nextsSolo(i)){
         val newCpts = cv.components.clone; newCpts(0) = st1
-        val post = new Concretization(cv.servers, newCpts) 
+        val post = new Concretization(cv.servers, StateArray(newCpts)) 
         maybeAdd(conc0, princTrans.eventsSolo(i), post, null)
       }
 
@@ -382,7 +389,8 @@ class System(fname: String) {
               // println(s"Server-principal sync on ${showEvent(pE)}")
               for(pNext <- pNexts(cptIndex); sNext <- sNexts(serverIndex)){
                 val newCpts = cv.components.clone; newCpts(0) = pNext
-                val post = new Concretization(ServerStates(sNext), newCpts) 
+                val post = 
+                  new Concretization(ServerStates(sNext), StateArray(newCpts))
                 maybeAdd(conc0, sE, post, null)
               }
             }
@@ -422,7 +430,7 @@ class System(fname: String) {
                 // Post-state of components
                 val cptsPost = cv.components.clone; cptsPost(0) = st1;
                 cptsPost(componentIx) = pNext
-                val post = new Concretization(cv.servers, cptsPost) 
+                val post = new Concretization(cv.servers, StateArray(cptsPost)) 
                 maybeAdd(conc0, e, post, null)
               }
             }
@@ -431,7 +439,7 @@ class System(fname: String) {
             val conc0 = Concretization(cv)
             for(st1 <- oNs(i)){ // the post state of the principal cpt
               val newCpts = cv.components.clone; newCpts(0) = st1
-              val post = new Concretization(cv.servers, newCpts)
+              val post = new Concretization(cv.servers, StateArray(newCpts))
               maybeAdd(conc0, e, post, (f,id))
             }
           }
@@ -507,8 +515,8 @@ class System(fname: String) {
                         st <- otherStates(oj)){
                       val newCpts = cv.components.clone
                       newCpts(0) = newPrincSt; newCpts(otherIndex) = st
-                      val post =
-                        new Concretization(ServerStates(newServers), newCpts)
+                      val post = new Concretization(
+                        ServerStates(newServers), StateArray(newCpts))
                       maybeAdd(pre, sE, post, null)
                     }
                   }
@@ -518,8 +526,8 @@ class System(fname: String) {
                 val pre = Concretization(cv)
                 for(newServers <- sNexts(sj); newPrincSt <- pNexts(pj)){
                   val newCpts = cv.components.clone; newCpts(0) = newPrincSt
-                  val post = 
-                    new Concretization(ServerStates(newServers), newCpts)
+                  val post = new Concretization(
+                    ServerStates(newServers), StateArray(newCpts))
                   if(verbose)
                     println(s"Three-way synchronisation: "+
                       s"$pre -${showEvent(sE)}-> $post with ${(of,oi)}")

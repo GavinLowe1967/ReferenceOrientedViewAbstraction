@@ -130,8 +130,12 @@ class State(val family: Family, val cs: ControlState,
   if(!compiling) initIncludedParams
 
   /** Does this state have a parameter (f,id) that is not an omitted
-    * reference?  NOTE: the omission of parameters is currently disabled. */
-  def hasIncludedParam(f: Family, id: Identity) = includedParamBitMap(f)(id)
+    * reference?   */
+  @inline def hasIncludedParam(f: Family, id: Identity): Boolean = 
+    includedParamBitMap(f)(id)
+
+  def hasIncludedParam(pid: ProcessIdentity): Boolean =
+    hasIncludedParam(pid._1, pid._2)
 
   /** A bound on the values of each type. */
   private var paramsBound: Array[Int] = null 

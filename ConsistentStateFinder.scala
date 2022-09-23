@@ -3,17 +3,16 @@ package ViewAbstraction
 import ViewAbstraction.RemapperP.Remapper
 import ViewAbstraction.CombinerP.Combiner
 import scala.collection.mutable.{ArrayBuffer,HashMap}
+import collection.ShardedHashMap
 
 /** Utility object for finding the consistent states for a transition
   * template. */
 class ConsistentStateFinder(system: SystemP.System){
   /* consistentStates
-   * |- getMaps
-   * |- checkCompatible
+   * |- getRenamedStates
+   * |  |- Combiner.remapToId
+   * |- processRenamedState
    */
-
-    // val highlight = servers.servers(0).cs == 32 && servers.servers(1).cs == 33 &&
-    //   preCpts(0).cs == 19 && preCpts(1).cs == 10
 
   /** Get all renamings of cv that: (1) include a component with identity pid;
     * (2) agree with pre on the states of all common components; and (3) can
@@ -35,7 +34,6 @@ class ConsistentStateFinder(system: SystemP.System){
     // principal: if several views are required for compatibility, the one
     // that is found on the latest ply might not have the relevant state as
     // principal.
-    // for(i <- 0 until cpts.length){ 
     while(i < cpts.length){
       val st1 = cpts(i); i += 1
       // Try to make st1 the component that gets renamed.  Need st1 of family
@@ -44,10 +42,10 @@ class ConsistentStateFinder(system: SystemP.System){
       // servers).
       if(st1.family == f && 
         (st1.id == id || !serverRefs && !servers.idsBitMap(f)(st1.id))){
-        // Calculate (in maps) all ways of remapping st1 (consistent with the
-        // servers) so that: (1) its identity maps to id; (2) other parameters
-        // are injectively mapped either to a parameter in pre.components,
-        // but not the servers; or the next fresh parameter.
+        // All ways of remapping st1 (consistent with the servers) so that:
+        // (1) its identity maps to id; (2) other parameters are injectively
+        // mapped either to a parameter in pre.components, but not the
+        // servers; or the next fresh parameter.
         val renamedStates = 
           try{ getRenamedStates(st1, pid, servers, preCpts) }
           catch{ case UnrepresentableException(renamedState) => 
@@ -91,13 +89,10 @@ class ConsistentStateFinder(system: SystemP.System){
   private case class UnrepresentableException(renamedState: State) 
       extends Exception
 
-  /** Part of the result of getMaps.  Each tuple represents a map, and the
-    * renamed states. */
-  //private type RenamingTuples = Array[(RemappingMap, State)]
 
-  /** Cache of previous results of getMaps. */
+  /** Cache of previous results of getRenamedStates. */
   private val mapCache = 
-    new HashMap[(State, ProcessIdentity, ServerStates, List[State]), 
+    new ShardedHashMap[(State, ProcessIdentity, ServerStates, List[State]), 
       Array[State]]
 
   /** Calculate all ways of remapping st (consistent with the servers) so
@@ -142,25 +137,4 @@ class ConsistentStateFinder(system: SystemP.System){
       else y::removeFromList(xs.tail, x)
     }
 
-/*
-  /** Check that renamedState agrees with preCpts on common components, and test
-    * whether the remainder of cpts (excluding component i) can be unified
-    * with preCpts (based on map and otherArgs1). */
-  private def checkCompatible(
-    map: RemappingMap, renamedState: State, cpts: Array[State], i: Int,
-    preCpts: Array[State], otherArgs: OtherArgMap)
-      : Boolean = {
-    val pid = renamedState.componentProcessIdentity
-    assert(preCpts.forall(!_.hasPID(pid)))
-    // Note: following is guaranteed to be true
-    // if(StateArray.agreesWithCommonComponent(renamedState, preCpts)){
-    // Renamed state consistent with preCpts. Check a corresponding renaming
-    // of the rest of cpts agrees with cpts on common components.  IMPROVE:
-    // Trivially true if singleton.
-    val otherArgs1 = Remapper.removeParamsOf(otherArgs, renamedState)
-    Combiner.areUnifiable(cpts, preCpts, map, i, otherArgs1)
-    // }
-    // else{ assert(false); false }
-  }
- */
 }

@@ -39,27 +39,32 @@ class Extendability(views: ViewSet){
     /*synchronized*/{ isExtendableCache += key -> res }
 
   /** Is pre extendable by state st, given the current set of views?  (1) Is
-    * there an existing view with st as principal component, and agreeing with
-    * pre on servers and common components?  And (2) for each component cpt of
-    * pre that references st, is there an existing view with cpt as principal
-    * and containing st (modulo renaming).  If so, return an array of those
-    * referencing views found under (2); otherwise return null.
+    * there an existing view with a renaming of st as principal component, and
+    * agreeing with pre on servers and common components?  And (2) for each
+    * component cpt of pre that references st, is there an existing view with
+    * cpt as principal and containing st (modulo renaming).  If so, return an
+    * array of those referencing views found under (2); otherwise return null.
     * 
     * PRE: pre is compatible with SysAbsViews, and pre does not include
     * st.identity.  This means it is enough to check the condition for cpt =
     * st or a non-principal component of pre that references st. ??????
     */
+// FIXME: and vice versa for (2)??  Equivalently
   @inline def isExtendable(pre: Concretization, st: State)
       : Array[ComponentView] = {
+    require(!singleRef || !useNewReferencingViews)
     // for(v <- pre.toComponentView) require(views.contains(v))
     // require(pre.components.forall(
     //   _.componentProcessIdentity != st.componentProcessIdentity))
+    val highlight = false
+    // ComponentView0.highlightPrev(pre) && ComponentView0.highlightNext(st)
+    if(highlight) println(s"isExtendable($pre, $st)")
     val key = (pre,st); val (k, rv) = getExtendabilityCache(key)
-    if(verbose) println("isExtendableCache: "+k)
 
     // Does SysAbsViews contain a view consistent with pre and with a
     // renaming of st as principal component?
     var found = k >= 0 || compatibleWith(pre, st)
+    if(highlight) println(s"isExtendable($pre, $st) \nfound = $found; k = $k")
     if(found){
       // If any component cpt of pre references st, then search for a
       // suitable view with a renaming of cpt and st. 
@@ -69,18 +74,24 @@ class Extendability(views: ViewSet){
       val referencingViews = 
         (if(rv != null) rv else new Array[ComponentView](length))
 // IMPROVE: does this always hold for j = 0, i.e. is this a preconditon? 
-// IMPROVE: this seems inefficient if we got here via instantiatetransitionTemplateViaRef (but this is a low-cost route).
+// IMPROVE: this seems inefficient if we got here via 
+// instantiatetransitionTemplateViaRef (but this is a low-cost route).
       while(j < length && found){
-        if(components(j).hasParam(f,id)/*processIdentities.contains(id)*/){
+        if(components(j).hasIncludedParam(f,id)){
           referencingViews(j) = findReferencingView(pre, st, j)
           found = referencingViews(j) != null
         }
         j += 1
       }
+      // If st references any component of pre, then test if there's a
+      // corresponding view.
+// if(false){
+//   while(j < length + components.length && found){
+//     ???
+//   } }
+
+      // Store where we got to
       setExtendabilityCache(key, (if(found) j else j-1, referencingViews))
-      // synchronized{ 
-      //   isExtendableCache += (pre,st) -> (if(found) j else j-1, referencingViews)
-      // }
       if(found) referencingViews else null
     }
     else null
@@ -99,54 +110,68 @@ class Extendability(views: ViewSet){
     * of `st` as principal component, and such that some renaming of the other
     * components agrees with `pre.components` on common components? */ 
   @inline protected[ExtendabilityP]
-  def compatibleWith(pre: Concretization, st: State)
-      : Boolean = {
+  def compatibleWith(pre: Concretization, st: State): Boolean = {
+    val highlight = false 
+    //  ComponentView0.highlightPrev(pre) && ComponentView0.highlightNext(st)
+    if(highlight) println("compatibleWith")
     val servers = pre.servers; val components = pre.components
     // Remap st so it can be the principal component with servers.
     val st1 = Remapper.remapState(servers.remappingMap, servers.nextArgMap, st)
     // IMPROVE: compare with Remapper.remapToPrincipal(servers, st)
 
-    val otherArgs = Remapper.newOtherArgMap
     // Create map as identity function on `server` ids and mapping `st1` back
-    // to `st`.  This is the base of the renaming applied to a view in
-    // `sysAbsViews`, to try to produce a view that matches `servers`, has
+    // to `st`.  Also set otherArgs to contain all parameters in pre not in
+    // the range of this map.  This is the base of the renaming applied to a
+    // view in `views`, to try to produce a view that matches `servers`, has
     // `st` as principal component, and agrees with `components` on common
     // components
     val map1 = servers.remappingMap; val typeMap = st1.typeMap
+    val preBound = pre.getParamsBound
+    // All parameters in pre.components but not pre.servers
+    val otherArgs: OtherArgMap = Array.tabulate(numTypes)(t =>
+      (servers.paramsBound(t) until preBound(t)).toList)
     val ids1 = st1.ids; var j = 0
     while(j < ids1.length){
-      val id = ids1(j)
+      val id = ids1(j); val t = typeMap(j)
       if(id >= 0){ 
-        val id1 = map1(typeMap(j))(id); assert(id1 < 0 || id1 == st.ids(j))
-        map1(typeMap(j))(id) = st.ids(j)
+        val id1 = map1(t)(id); val id2 = st.ids(j)  // map (t,id) -> id2
+        if(id1 < 0){ 
+          map1(t)(id) = id2; otherArgs(t) = otherArgs(t).filter(_ != id2)
+        }
+        else assert(id1 == id2)
       }
       j += 1
     } 
+    // for(f <- 0 until numTypes)
+    //   assert(otherArgs(f).forall(id => !map1(f).contains(id)),
+    //     Remapper.show(map1)+"\n"+Remapper.show(otherArgs)+"\n"+pre+"\n"+st)
 
     // Get cache corresponding to components, map1 and otherArgs.
     val cache = compatibleWithCache.get( 
       (pre.componentsList, map1.map(_.toList).toList, otherArgs.toList)) 
     // Test whether there is an existing view with a renaming of st as
     // principal component, and the same servers as conc.  
+    if(highlight){
+      println(s"st1 = $st1"); println(s"map1 = "+Remapper.show(map1))
+      println("otherArgs = "+Remapper.show(otherArgs))
+    }
     var found = false; val iter = views.iterator(servers, st1)
     while(iter.hasNext && !found){
       val cv1 = iter.next(); assert(cv1.principal == st1)
+      if(highlight) println(s"cv1 = $cv1")
       // Does a renaming of the other components of cv1 (consistent with
       // servers and st1) also agree with components on common components?
       // Try to get cached result.
-      val cpts1 = cv1.components // List
+      val cpts1 = cv1.components    // ComponentView0.checkValid(servers,cpts1)
       cache.get(cpts1) match{
-        case Some(b) => // Profiler.count("compatibleWith"+b); 
-          found = b
+        case Some(b) => found = b
         case None =>
-          // Profiler.count("compatibleWith-null")
           found =
             Combiner.areUnifiable(cv1.components, components, map1, 0, otherArgs)
+          // if(highlight) println(s"compatibleWith: $cv1; found = $found")
           cache.add(cpts1,found)
       } // end of match
     } // end of while ... match
-    // Profiler.count("compatibleWith"+found)
-    // assert(found, s"pre = $pre; st = $st") 
     found
   }
 

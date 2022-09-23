@@ -12,6 +12,8 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
   /** The abstract views. */
   var sysAbsViews: ViewSet = initViewSet
 
+  def numViews = sysAbsViews.size
+
   protected type NextNewViewSet = ShardedHashSet[ComponentView]
 
   /** The new views to be considered on the next ply. */
@@ -21,13 +23,13 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
   def initNextNewViews = nextNewViews = new NextNewViewSet
 
   /* The transitions found so far. */
-  val transitions = new NewTransitionSet
+  private val transitions = new NewTransitionSet
 
   private type NextTransitionSet = ShardedHashSet[Transition]
 
   /** Transitions found on this ply.  Transitions are initially added to
     * newTransitions, but transferred to transitions at the end of the ply. */
-  var newTransitions: NextTransitionSet = null
+  private var newTransitions: NextTransitionSet = null
 
   /** The transition templates found on previous plies.  Abstractly, a set of
     * TransitionTemplates. */
@@ -45,8 +47,6 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
    * newTransitions and newTransitionTemplates, and added to the main sets at
    * the end of each ply. */
 
-  def numViews = sysAbsViews.size
-
   /* Initialise utility object encapsulating the effectOn and completeDelayed
    * functions. */
   EffectOn.init(sysAbsViews, system)
@@ -55,12 +55,12 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
   private val transitionTemplateExtender = 
     new TransitionTemplateExtender(transitionTemplates, system, sysAbsViews)
 
-  var addTransitionCount = 0L
+  // var addTransitionCount = 0L
 
   /** Add trans to the set of transitions, and induce new transitions on
     * existing views. */
   private def addTransition(trans: Transition): Unit = {
-    addTransitionCount += 1
+    // addTransitionCount += 1
     if(!transitions.contains(trans)){
       if(newTransitions.add(trans)) effectOnOthers(trans)
       // Note: the views of post get added to sysAbsViews within apply.
@@ -240,13 +240,13 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
     viewsBuff = new ConcurrentBuffer[ComponentView](numWorkers)
     viewShardIteratorProducer = nextNewViews.shardIteratorProducer
     transitionShardIteratorProducer = newTransitions.shardIteratorProducer
+    if(singleRef) EffectOn.prepareForPurge
   }
 
   /** Add v to sysAbsViews and viewsBuff if new.  Return true if so. */
-  def addView(me: Int, v: ComponentView): Boolean = /*synchronized*/{
+  def addView(me: Int, v: ComponentView): Boolean = {
     if(ComponentView0.highlight(v)) println(s"adding $v")
     if(sysAbsViews.add(v)){
-      // if(ComponentView0.highlight(v)) println(s"Added $v")
       assert(v.representableInScript); viewsBuff.add(me, v); true
     }
     else false
@@ -262,6 +262,9 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
       for(template <- newTransitionTemplates.iterator)
         transitionTemplates.add(template)
     }
+
+    // Purges from the effectOnStore
+    if(singleRef) EffectOn.purge
 
     // Collectively copy views
     var iter = viewShardIteratorProducer.get
@@ -279,6 +282,7 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
         while(vs.nonEmpty){
           val v0 = vs.head; vs = vs.tail; val v = Remapper.remapView(v0)
           if(addView(me, v)){
+            if(ComponentView0.highlight(v)) println(s"adding $v from $t")
             v.setCreationTrans(t) 
             if(showTransitions) println(s"${t.toString}\ngives $v")
           }

@@ -27,6 +27,7 @@ class NewViewSet extends ViewSet{
 
   /** Add sv to this. */
   def add(view: ComponentView) : Boolean = {
+    // ComponentView0.checkValid(view.servers, view.components) 
     if(allViews.add(view)){
       // add to serversBased
       val sbSet = 

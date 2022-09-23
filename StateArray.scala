@@ -1,14 +1,42 @@
 package ViewAbstraction
+import ox.gavin.profiling.Profiler
 
 /** Various helper operations relating to Arrays of States. */
-
 object StateArray{
+  /* --------- A cache of Array[State] to allow sharing ------------ */
+  /** Keys used to store states.  A wrapper around an Array[State], allowing
+    * equality tests. */
+  private class Key(private val states: Array[State]){
+    override def equals(that: Any) = that match{
+      case k: Key => k.states.sameElements(states)
+    }
+
+    override def hashCode = mkHash(0, states)
+
+    def get = states
+  }
+
+  /** The store holding wrapped Array[State]. */
+  private val store = new collection.ShardedHashSet[Key]
+
+  /** Get an Array[State] equivalent to states, to allow sharing. */
+  def apply(states: Array[State]): Array[State] = {
+    val key = store.getOrAdd(new Key(states)); 
+    Profiler.count("StateArray.apply "+(key.get.eq(states)))
+    key.get
+  }
+
+  /** Get an Array[State] equivalent to states, to allow sharing. */
+  def apply(states: State*): Array[State] = apply(states.toArray)
+
+  // ------------------------------------------------------------------
+
   /** Convert states into a String. */
   def show(states: Array[State]) = 
     states.map(_.toString0).mkString("[", " || ", "]")
 
   /** If cpt shares a process identity with cpts, are they the same state? */
-  @inline
+  @inline private
   def agreesWithCommonComponent(cpt: State, cpts: Array[State]): Boolean = {
     val cptId = cpt.componentProcessIdentity; var j = 0; var ok = true
     while(j < cpts.length && ok){
@@ -42,7 +70,7 @@ object StateArray{
       assert(matches.length == 1)
       refed(i) = matches(0)
     }
-    refed
+    StateArray(refed)
   }
 
   /** The union of cpts1 and cpts2.  Pre: they agree on components with common
@@ -65,7 +93,7 @@ object StateArray{
     var j = 0
     while(j < len2){ if(newC(j)){ result(i) = cpts2(j); i += 1 }; j += 1 }
     assert(i == len1+count)
-    result
+    apply(result)
   }
 
   /** Check components in cpts are distinct. */
@@ -150,7 +178,7 @@ object StateArray{
           else{
             // States corresponding to pids(i)
             val st1 = findCpt(pids(i))
-            if(st1 != null) result ::= Array(newPrinc, st1)
+            if(st1 != null) result ::= StateArray(newPrinc, st1)
             else otherRef = true
           }
         }
@@ -165,7 +193,7 @@ object StateArray{
             !newPrinc.includeParam(i),
             s"newPrinc = $newPrinc; postCpts = ${show(postCpts)}\n"+
               s"cpts = ${show(cpts)}")
-        List(Array(newPrinc))
+        List(StateArray(newPrinc))
       }
       // If all the refs from newPrinc are distinguished, we need
       // to include the singleton view.
@@ -185,7 +213,7 @@ object StateArray{
         newComponents = nc
       }
       if(debugging) checkDistinct(newComponents, newPrinc.toString)
-      List(newComponents)
+      List(StateArray(newComponents))
     }
   }
 
@@ -218,9 +246,11 @@ object StateArray{
             val c2 = cpts2(j); j += 1
             if(! contains(cpts1, c2)){
               // Cross reference from cpts1 to cpts2
-              if(c1.hasIncludedParam(c2.family, c2.id)) result ::= Array(c1,c2)
+              if(c1.hasIncludedParam(c2.family, c2.id)) 
+                result ::= StateArray(c1,c2)
               // Cross reference from cpts2 to cpts1
-              if(c2.hasIncludedParam(c1.family, c1.id)) result ::= Array(c2,c1)
+              if(c2.hasIncludedParam(c1.family, c1.id)) 
+                result ::= StateArray(c2,c1)
             }
           }
         }

@@ -92,14 +92,14 @@ gt(B) = {C,Infty}
 gt(C) = {C,Infty}
 
 -- Identities of nodes
-datatype NodeIDType = Null | N1 | N2 | N3 | N4 | N5 | N6 | N7 | N8 | N9 | N10 | N11
-
+datatype NodeIDType = 
+  Null | N0 | N1 | N2 | N3 | N4 | N5 | N6 | N7 | N8 | N9 | N10 
 NodeID = diff(NodeIDType, {Null}) -- real nodes
 
 -- Thread identities
-datatype ThreadIDType = Constr | T1 | T2 | T3 | T4 
+datatype ThreadIDType = Constr | T0 | T1 | T2 | T3 
 
--- 9 NodeIds, 4 ThreadIDs seems enough with singleRef. 
+-- 11 NodeIds, 4 ThreadIDs are enough (and required) with singleRef. 
 
 ThreadID = diff(ThreadIDType, {Constr}) -- real threads, excluding constructor
 

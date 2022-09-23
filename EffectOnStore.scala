@@ -54,7 +54,8 @@ object EffectOnStore{
   /** Show an induced transition. */
   def showInduced(cv: ComponentView0, oldCpts: Array[State], 
     postServers: ServerStates, newCpts: Array[State], nv: ReducedComponentView)
-  = (
+      : String = {
+    // assert(oldCpts.map(_.cs).sameElements(cv.components.map(_.cs)))
     s"$cv\n"+
       (if(!cv.components.sameElements(oldCpts))
         s"  == ${View.show(cv.servers, oldCpts)}\n"
@@ -63,7 +64,11 @@ object EffectOnStore{
       (if(postServers != nv.servers || !newCpts.sameElements(nv.components))
         s"  ==  $nv"
       else "")
-  )
+  }
+  // Note, the above can look odd when cv changes state in the transition, and
+  // the induced transition gets a new secondary component.  Maybe it's
+  // possible to avoid these cases.
+
 }
 
 // =======================================================

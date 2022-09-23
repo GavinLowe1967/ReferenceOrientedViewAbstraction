@@ -32,6 +32,9 @@ case class TransitionTemplate(
     }
   }
 
+  override def toString = 
+    s"$pre\n  -${showEvent(e)}->\n  $post\n  [$id, $include]"
+
 }
 
 object TransitionTemplateSet{

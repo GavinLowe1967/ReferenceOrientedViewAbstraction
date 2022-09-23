@@ -28,7 +28,7 @@ greater(x, y) = (x == C and y != C) or (x == B and y == A)
 
 -- Identities of nodes
 datatype NodeIDType = 
-  Null | N0 | N1 | N2 | N3 | N4  | N5 | N6  | N7 | N8 | N9 | N10
+  Null | N0 | N1 | N2 | N3 | N4  | N5 | N6  | N7  | N8 | N9 | N10
 
 NodeID = diff(NodeIDType, {Null}) -- real nodes
 

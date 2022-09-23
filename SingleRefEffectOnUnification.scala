@@ -98,10 +98,14 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       if(highlight && map1(0)(3) == 2) 
         println(s"map1 = "+Remapper.show(map1)+s"; unifs = $unifs")
       if(isSufficientUnif(unifs)) makePrimaryInduced(map1, unifs)
-      makeSecondaryInduced(map1, unifs)
+      if(!isFullUnif(unifs)) makeSecondaryInduced(map1, unifs)
     } // end of while loop iterating over unifs
     (result,result2)
   }
+
+  /** Does this represent a unification of all components? */
+  @inline private def isFullUnif(unifs: UnificationList) =
+    unifs.length == cpts.length && unifs.contains((0,0))
 
   /** Try to create primary induced transitions based on map1 and unifs. */
   @inline private 
@@ -354,7 +358,8 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
 
   /** Get information about secondary induced transitions: pairs (map2,i) such
     * that map2 extends map1 to map cv.principal's identity to match a
-    * reference of a secondary component of post, postCpts(i). */ 
+    * reference of a secondary component of post, postCpts(i), and that
+    * reference is used to create views. */ 
   private def getSecondaryInfo(map1: RemappingMap)
       : ArrayBuffer[(RemappingMap, Int)] = {
     val result = new ArrayBuffer[(RemappingMap, Int)]; var ar = acquiredRefs

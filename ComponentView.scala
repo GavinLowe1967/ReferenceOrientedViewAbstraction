@@ -13,6 +13,9 @@ class ComponentView(servers: ServerStates, components: Array[State])
     this(servers, principal +: others)
   }
 
+// IMPROVE
+  //assert(components.eq(StateArray(components)))
+
   /** This view was created by the view transition creationTrans post. */
   // private var pre, post: Concretization = null
   private var creationTrans: Transition = null
@@ -113,6 +116,9 @@ object ComponentView{
 /** A concretization. */
 class Concretization(val servers: ServerStates, val components: Array[State]){ 
 
+// IMPROVE
+  //assert(components.eq(StateArray(components)))
+
   /** Make ComponentView(s) from this, with components(0) as the principal
     * component.  NOTE: not in canonical form (needs remapping). */
   def toComponentView: List[ComponentView] = getViewOf(components(0))
@@ -142,7 +148,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
         if(include(i)){
           val st1 = StateArray.find(princIds(i), components)
           if(st1 != null)
-            result ::= new ComponentView(servers, Array(princ, st1))
+            result ::= new ComponentView(servers, StateArray(princ, st1))
           else otherRef = true
         }
         i += 1
@@ -150,7 +156,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       if(result.nonEmpty || otherRef) result 
       // If all the refs from newPrinc are distinguished or omitted, we need
       // to include the singleton view.
-      else List( new ComponentView(servers, Array(princ)) )
+      else List( new ComponentView(servers, StateArray(princ)) )
     }
     else{
       var components1 = new Array[State](len); components1(0) = princ
@@ -171,7 +177,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
         while(k < j){ nc(k) = components1(k); k += 1 }
         components1 = nc
       }
-      List( new ComponentView(servers, components1) )
+      List( new ComponentView(servers, StateArray(components1)) )
     }
   }
 
@@ -352,7 +358,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   /** A new concretization, extending this with component newState. */
   def extend(newState: State): Concretization =
-    new Concretization(servers, components :+ newState)
+    new Concretization(servers, StateArray(components :+ newState))
 
   override def equals(that: Any) = that match{
     case c: Concretization => 

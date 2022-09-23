@@ -1,19 +1,7 @@
 Lock-based stack
 ================
 
-Not using three-way synchronisations:
 
-lockBasedStack0.csp: correct version of the lock-based stack, not using
-three-way synchronisations.  286 abstractions.
-
-lockBasedStack0Err1.csp: version where pop does not obtain lock.  Finds error. 
-
-lockBasedStack0Err2.csp: version where push does not obtain lock.  Finds error.
-
-lockBasedStackOmit.csp: version where Nodes referenced by "next" reference are
-omitted from Views.  Finds error.
-
-With three-way synchronisations:
 
 lockBasedStack.csp: correct version with three-way synchronisation.  274 -> 302
 abstractions.
@@ -22,8 +10,9 @@ lockBasedStackErr1.csp:  version where pop does not obtain lock.  Finds error.
 
 lockBasedStackErr2.csp:  version where push does not obtain lock.  Finds error.
 
-lockBasedStackKeep.csp: version that gives an error, I think because of too
-few synchronisations with the watchdog.
+lockBasedStackOmitNext.csp: version where Nodes referenced by "next" reference
+are omitted from Views.  Finds error.
+
 
 Lock-based queue
 ================
@@ -48,10 +37,47 @@ TreiberStack.csp: make node synchronise on the joining CAS.  1,653 states,
 
 TreiberStackOmitCreator.csp: for newly created nodes, store the identity of
 the creating thread, but don't include that thread in views.  1,026 states
-~2.5s.  Now 1,125 states.  889 with singleRef
+~2.5s.  Now 1,125 states.  883 with singleRef
 
 TreiberStackOmitNext.csp: Nodes referenced by "next" reference are omitted
 from Views.  Finds error.
+
+
+Lock-Free Queue
+===============
+
+lockFreeQueue.csp: 2272 states, ~7 s (about half compilation). 
+
+lockFreeQueueOmitNext.csp.  Omits views based on next references.  Finds false
+errors.
+
+Lazy Set
+========
+
+lazySetNoDel.csp: a version with no deletion
+
+lazySetNoJoined.csp: the standard version, without joined events.
+
+lazySetOmit.csp: same as previous, but omitting views based on prev and locker
+fields.
+
+
+Test files
+==========
+
+test-file.csp: file used for the unit tests.  125 states
+
+============================================== OLD
+
+lockBasedStack0.csp: correct version of the lock-based stack, not using
+three-way synchronisations.  286 abstractions.
+
+lockBasedStack0Err1.csp: version where pop does not obtain lock.  Finds error. 
+
+lockBasedStack0Err2.csp: version where push does not obtain lock.  Finds error.
+
+lockBasedStackKeep.csp: version that gives an error, I think because of too
+few synchronisations with the watchdog.
 
 TreiberStack2.csp: 2,780 states, ~7 sec.  This has a POR to force joined
 events immediately after the corresponding CAS.
@@ -73,18 +99,6 @@ can obtain the following two views:
   (containing B).
 There two views are compatible.  But from there merger, T0 can pop B, and then
 T1 can pop C, giving a false error.
-
-
-Lock-Free Queue
-===============
-
-lockFreeQueue.csp: 2272 states, ~7 s (about half compilation). 
-
-lockFreeQueueOmitNext.csp.  Omits views based on next references.  Finds false
-errors.
-
-Lazy Set
-========
 
 lazySetCasteret.csp: POR doesn't force unlockSetPrev immediately after joined
 
@@ -109,8 +123,3 @@ lazySetBug.csp: this seems to display a bug in FDR.  When a node is locked, it
 ought to store the identity of the locking thread, but doesn't.
 
 lazySet1.csp: version where nodes do not have prev references
-
-Test files
-==========
-
-test-file.csp: file used for the unit tests.  125 states

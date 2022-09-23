@@ -16,6 +16,10 @@ import MissingCommon.Cpts // = Array[State]
 class MissingCommon(
     val servers: ServerStates, val cpts1: Cpts, val cpts2: Cpts,
     val pid: ProcessIdentity){
+
+// IMPROVE
+  // assert(cpts1.eq(StateArray(cpts1))); assert(cpts2.eq(StateArray(cpts2)))
+
   /* Overview of main functions.
    * 
    * updateMissingViews       (called from MissingInfo)
@@ -109,7 +113,7 @@ class MissingCommon(
     // This could be improved.
     var mc1 = mc.toList
     while(mc1.nonEmpty && views.contains(servers, mc1.head)) mc1 = mc1.tail
-    log(UpdateMC(mc, mc1.toArray, ply))
+    // log(UpdateMC(mc, mc1.toArray, ply))
     if(mc1.isEmpty) setDone    // This is now satisfied
     else toRegister += mc1.head
     mc1.toArray
@@ -159,7 +163,9 @@ class MissingCommon(
       val cpt1 = cv.components(1)
       val vb = new CptsBuffer
       if(cpt1.hasPID(pid)){
-        if(updateMissingCandidates(cpt1, views, vb)){ 
+        // Remap cpt1 to a normal form
+        val cpt1Norm = Remapper.remapWRT(servers, cpts1, cpts2, cpt1) 
+        if(updateMissingCandidates(cpt1Norm, views, vb)){ 
           //log(MissingCommon.UpdateWithNewMatchSuccess(cv, ply))
           //if(highlight) println("Now done")
           setDone; null
@@ -281,6 +287,8 @@ class MissingCommon(
     * sorted.  */
   private def add(mCpts: MissingComponents): Boolean = {
     assert(!done)
+    // assert(mCpts.forall(cpts => cpts.eq(StateArray(cpts))))
+
     // require(isSorted(mCpts), mCpts.map(StateArray.show)) // IMPROVE: quite expensive
     // Traverse missingCandidates.  We aim to retain any that is  not a proper
     // superset of mCpts.  Record which to retain in toRetain.
@@ -310,6 +318,7 @@ class MissingCommon(
     }
     assert(j == retainCount)
     if(!found) newMC(retainCount) = mCpts
+    // Profiler.count("MissingCommon.add "+newMC.length)
     missingCandidates = newMC; !found
   }
 
@@ -417,10 +426,6 @@ object MissingCommon{
   def showMissingComponents(mc: MissingComponents) = 
     mc.map(StateArray.show).mkString("; ")
 
-  /** Type of keys for stored MissingCommons. */
-  //private type Key = (ServerStates, List[State], ProcessIdentity)
-// IMPROVE: create more memory-efficient type
-
   /** Type of keys for storing MissingCommons. */
   class Key(
     val ssIndex: Int, val cpts1: Array[State], val cpts2: Array[State],
@@ -437,20 +442,10 @@ object MissingCommon{
   }
 
   private def mkKey(
-    servers: ServerStates, cpts1: Cpts, cpts2: Cpts, pid: ProcessIdentity)
-      : Key = {
-    // Build concatenation of cpts1 and cpts2
-    //  that's probably worse for memory usage, since cpts1, cpts2 are shared
-    // val cpts = new Array[State](cpts1.length+cpts2.length)
-    // var i = 0; var j = 0
-    // while(i < cpts1.length){ cpts(j) = cpts1(i); i += 1; j += 1 }
-    // i = 0
-    // while(i < cpts2.length){ cpts(j) = cpts2(i); i += 1; j += 1 }
+    servers: ServerStates, cpts1: Cpts, cpts2: Cpts, pid: ProcessIdentity) = 
     new Key(servers.index, cpts1, cpts2, pid._1, pid._2)
-  }
 
   /** The type of the store of all MissingCommon we have created. */
-  //type MissingCommonStore = MyLockFreeReadHashMap[Key, MissingCommon]
   type MissingCommonStore = ShardedHashMap[Key, MissingCommon]
 
   /** All the MissingCommon we have created.  Protected by a synchronized block
@@ -500,24 +495,8 @@ object MissingCommon{
     traverse("MissingCommon", this, maxPrint = 1); println()
   }
 
-  // /** Get a MissingCommon corresponding to servers, cpts1, cpts2, pid: either
-  //   * retrieving a previous such object, or creating a new one.  The
-  //   * MissingCommon is paired with a Boolean that indicates if it is new. */
-  // @inline private def getOrInit(
-  //   servers: ServerStates, cpts1: Cpts, cpts2: Cpts, pid: ProcessIdentity)
-  //     : (MissingCommon, Boolean) = { 
-  //   val key = (servers, cpts1.toList++cpts2.toList, pid)
-  //   allMCs.get(key) match{
-  //     case Some(mc) => Profiler.count("old MissingCommon"); (mc, false)
-  //     case None => 
-  //       val mc = new MissingCommon(servers, cpts1, cpts2, pid)
-  //       Profiler.count("new MissingCommon"); allMCs += key -> mc; (mc, true)
-  //   }
-  // }
-
   /** Reset ready for a new check. */
-  def reset = 
-    allMCs = new MissingCommonStore // MyLockFreeReadHashMap[Key, MissingCommon]
+  def reset =  allMCs = new MissingCommonStore
 
   /** A MissingCommon object, corresponding to servers, cpts1, cpts2 and pid, or
     * null if the obligation is already satisfied.
@@ -588,8 +567,10 @@ object MissingCommon{
       : ArrayBuffer[Array[State]] = {
     val ab = new ArrayBuffer[Array[State]]
     /* Add the normalised version of cpts to ab. */
-    @inline def add(cpts: Array[State]) =
+    @inline def add(cpts: Array[State]) = {
+      ComponentView0.checkValid(servers, cpts) // IMPROVE
       ab += Remapper.remapComponents(servers, cpts)
+    }
     // Condition (2)
     add(Array(cpts2(0), c)); var j = 1
     // Condition (3): refs from c to components of cpts1 or cpts2
@@ -603,17 +584,17 @@ object MissingCommon{
     }
     // Note: the following corresponds to references from secondary components
     // of cpts1 or cpts2 to c, which is a new clause in condition (c).
-// FIXME
-//if(false){
-    val pid = c.componentProcessIdentity; j = 1
+    val (ct,cid) = c.componentProcessIdentity; j = 1
     while(j < cpts1.length){
-      val c1 = cpts1(j); j += 1; if(c1.hasRef(pid)) add(Array(c1, c))
+      val c1 = cpts1(j); j += 1; // if(c1.hasRef(pid)) add(Array(c1, c))
+      if(c1.hasIncludedParam(ct, cid)) add(Array(c1, c))
     }
     j = 1
     while(j < cpts2.length){
-      val c2 = cpts2(j); j += 1; if(c2.hasRef(pid)) add(Array(c2, c))
+      val c2 = cpts2(j); j += 1; // if(c2.hasRef(pid)) add(Array(c2, c))
+      if(c2.hasIncludedParam(ct, cid)) add(Array(c2, c))
     }
-//}
+    Profiler.count("MissingCommon.requiredCpts "+ab.length)
     ab
   } 
 

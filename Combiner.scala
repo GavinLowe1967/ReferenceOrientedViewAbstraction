@@ -191,15 +191,30 @@ object Combiner{
     * otherArgs.  Both map and otherArgs are guaranteed not to change.  */
   def areUnifiable(cpts1: Array[State], cpts2: Array[State], 
     map: RemappingMap, i: Int, otherArgs: OtherArgMap)
-      : Boolean = {              
+      : Boolean = {          
+    val highlight = false
+      // ComponentView0.highlightPrevCpts(cpts2) && {
+      //   // [10(N1,Null,N2) || 10(N2,N1,N3)]
+      //   val princ = cpts1(0); 
+      //   princ.cs == 10 && princ.ids.sameElements(Array(1,-1,2)) && {
+      //     val second = cpts1(1)
+      //     second.cs == 10 && second.ids.sameElements(Array(2,1,3))
+      //   }
+      // }
+    if(highlight) println("areUnifiable "+StateArray.show(cpts1)+", "+
+      StateArray.show(cpts2))
     Profiler.count("areUnifiable")
     if(cpts1.length == 1){ assert(i == 0); true }
     else{
-      //var otherArgs1: OtherArgMap = otherArgs // null
       // All renamings of cpts1.
       val remappedCptss = remapRest(map, otherArgs, cpts1, i)
       // Test if any agrees with cpts2 on common components.
+      if(highlight) println("remappedCptss = "+
+        remappedCptss.map(StateArray.show).mkString("; "))
       remappedCptss.exists(StateArray.agreeOnCommonComponents(_, cpts2, i))
+// FIXME: (if we came via Extendability.compatibleWith, and singleRef) and if
+// a component of the renamed cpts1 has a reference to cpts1(0), then there is
+// a corresponding view in the ViewSet.
     }
   }
 

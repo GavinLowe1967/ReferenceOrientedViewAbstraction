@@ -6,6 +6,8 @@ import ox.gavin.profiling.Profiler
 /** A minimal ComponentView.  Used where it's useful to use less memory. */
 class ReducedComponentView(
   val servers: ServerStates, val components: Array[State]){
+// IMPROVE
+  //assert(components.eq(StateArray(components)))
 
   // Profiler.count("ReducedComponentView") // 1.3B with lazySetNoJoined.csp!
 
