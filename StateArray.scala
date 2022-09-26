@@ -8,10 +8,18 @@ object StateArray{
     * equality tests. */
   private class Key(private val states: Array[State]){
     override def equals(that: Any) = that match{
-      case k: Key => k.states.sameElements(states)
+      case k: Key => 
+        // k.states.sameElements(states)
+        val len = states.length; val thatStates = k.states
+        if(thatStates.length != len) false
+        else{
+          var i = 0
+          while(i < len && states(i) == thatStates(i)) i += 1
+          i == len
+        }
     }
 
-    override def hashCode = mkHash(0, states)
+    override def hashCode = mkHash(states)
 
     def get = states
   }
@@ -22,12 +30,12 @@ object StateArray{
   /** Get an Array[State] equivalent to states, to allow sharing. */
   def apply(states: Array[State]): Array[State] = {
     val key = store.getOrAdd(new Key(states)); 
-    Profiler.count("StateArray.apply "+(key.get.eq(states)))
+    // Profiler.count("StateArray.apply "+(key.get.eq(states)))
     key.get
   }
 
   /** Get an Array[State] equivalent to states, to allow sharing. */
-  def apply(states: State*): Array[State] = apply(states.toArray)
+  def apply1(states: State*): Array[State] = apply(states.toArray)
 
   // ------------------------------------------------------------------
 
@@ -178,7 +186,7 @@ object StateArray{
           else{
             // States corresponding to pids(i)
             val st1 = findCpt(pids(i))
-            if(st1 != null) result ::= StateArray(newPrinc, st1)
+            if(st1 != null) result ::= StateArray(Array(newPrinc, st1))
             else otherRef = true
           }
         }
@@ -193,7 +201,7 @@ object StateArray{
             !newPrinc.includeParam(i),
             s"newPrinc = $newPrinc; postCpts = ${show(postCpts)}\n"+
               s"cpts = ${show(cpts)}")
-        List(StateArray(newPrinc))
+        List(StateArray(Array(newPrinc)))
       }
       // If all the refs from newPrinc are distinguished, we need
       // to include the singleton view.
@@ -247,10 +255,10 @@ object StateArray{
             if(! contains(cpts1, c2)){
               // Cross reference from cpts1 to cpts2
               if(c1.hasIncludedParam(c2.family, c2.id)) 
-                result ::= StateArray(c1,c2)
+                result ::= StateArray(Array(c1,c2))
               // Cross reference from cpts2 to cpts1
               if(c2.hasIncludedParam(c1.family, c1.id)) 
-                result ::= StateArray(c2,c1)
+                result ::= StateArray(Array(c2,c1))
             }
           }
         }
@@ -369,10 +377,23 @@ object StateArray{
     missing
   }
 
-  @inline def mkHash(start: Int = 0, cpts: Array[State]) = {
-    var h = start; var i = 0; var n = cpts.length
-    while(i < n){ h = h*71+cpts(i).hashCode; i += 1 }    
+  @inline def mkHash1(start: Int, cpts: Array[State]): Int = {
+    var h = start; var i = 0; val n = cpts.length
+    while(i < n){ h = (h<<6)+(h<<2)+h+cpts(i).hashCode; i += 1 }  
+    // while(i < n){ h = h*71+cpts(i).hashCode; i += 1 }     
     h 
+  }
+
+  @inline def mkHash(cpts: Array[State]): Int = {
+    val n = cpts.length
+    if(n == 0) 0
+    else if(n == 1) cpts(0).hashCode
+    else{
+      var h = cpts(0).hashCode; var i = 1
+      while(i < n){ h = (h<<6)+(h<<2)+h+cpts(i).hashCode; i += 1 }
+      // while(i < n){ h = h*71+cpts(i).hashCode; i += 1 }
+      h
+    }
   }
 
   /** Comparison function. */

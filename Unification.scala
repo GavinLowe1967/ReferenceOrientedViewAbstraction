@@ -28,26 +28,57 @@ object Unification{
     if(st1.cs != st2.cs) null // false
     else{
       val map1 = Remapper.cloneMap(map)
-      val ids1 = st1.ids; val ids2 = st2.ids
-      val len = ids1.length; val typeMap = st1.typeMap
-      assert(st1.family == st2.family && st2.typeMap == typeMap && 
-        ids2.length == len)
-      // Iterate through the parameters; ok indicates if matching successful
-      // so far.
-      var i = 0; var ok = true
-      while(i < len && ok){
-        val id1 = ids1(i); val id2 = ids2(i); val t = typeMap(i)
-        if(isDistinguished(id1) || isDistinguished(id2)) ok = id1 == id2
-        else if(map1(t)(id2) < 0){
-          if(map1(t).contains(id1)) ok = false // must preserve injectivity 
-          else map1(t)(id2) = id1 // extend map
-        }
-        else ok = map1(t)(id2) == id1
-        i += 1
-      }
+      val ok = unify1(map1, st1, st2)
+      // val ids1 = st1.ids; val ids2 = st2.ids
+      // val len = ids1.length; val typeMap = st1.typeMap
+      // assert(st1.family == st2.family && st2.typeMap == typeMap && 
+      //   ids2.length == len)
+      // // Iterate through the parameters; ok indicates if matching successful
+      // // so far.
+      // var i = 0; var ok = true
+      // while(i < len && ok){
+      //   val id1 = ids1(i); val id2 = ids2(i); val t = typeMap(i)
+      //   if(isDistinguished(id1) || isDistinguished(id2)) ok = id1 == id2
+      //   else if(map1(t)(id2) < 0){
+      //     if(map1(t).contains(id1)) ok = false // must preserve injectivity 
+      //     else map1(t)(id2) = id1 // extend map
+      //   }
+      //   else ok = map1(t)(id2) == id1
+      //   i += 1
+      // }
       if(ok) map1 else { Pools.returnRemappingRows(map1); null }
     }
   }
+
+  /** Try to extend map such that map(st2) = st1.  Return true if
+    * successful. Pre: st1.cs = st2.cs.  Note: mutates map. */
+  @inline private 
+  def unify1(map: RemappingMap, st1: State, st2: State): Boolean = {
+    require(st1.cs == st2.cs)
+    val ids1 = st1.ids; val ids2 = st2.ids
+    val len = ids1.length; val typeMap = st1.typeMap
+    assert(st1.family == st2.family && st2.typeMap == typeMap &&
+      ids2.length == len)
+    // Iterate through the parameters; ok indicates if matching successful
+    // so far.
+    var i = 0; var ok = true
+    while(i < len && ok){
+      val id1 = ids1(i); val id2 = ids2(i); val t = typeMap(i)
+      if(isDistinguished(id1) || isDistinguished(id2)) ok = id1 == id2
+      else if(map(t)(id2) < 0){
+        if(map(t).contains(id1)) ok = false // must preserve injectivity
+        else map(t)(id2) = id1 // extend map
+      }
+      else ok = map(t)(id2) == id1
+      i += 1
+    }
+    ok
+  }
+
+  /** Try to extend map such that map(st2) = st1.  Return true if
+    * successful. Pre: st1.cs = st2.cs.  Note: mutates map. */
+  def extendToUnify(map: RemappingMap, st1: State, st2: State): Boolean = 
+    st1.cs == st2.cs && unify1(map, st1, st2)
 
   /** The result of a unification, giving the indices of components that have
     * been unified.  A pair (j,i) indicates that cv.components(j) has been

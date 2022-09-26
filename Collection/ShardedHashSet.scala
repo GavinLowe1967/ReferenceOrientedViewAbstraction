@@ -61,7 +61,7 @@ class ShardedHashSet[A : scala.reflect.ClassTag](
   private val widthMasks = Array.fill(shards)(initLength-1)
 
   /** Maximum load factor before resizing. */
-  private val MaxLoad = 0.68
+  private val MaxLoad = 0.6
 
    /** Threshold at which resizing should be performed. */
   private val thresholds = Array.fill(shards)((initLength*MaxLoad).toInt)
@@ -239,7 +239,7 @@ class ShardedHashSet[A : scala.reflect.ClassTag](
         hashes(sh)(i) = h; elements(sh)(i) = x; 
         counts(sh) += 1; usedSlots(sh) += 1; x
       }
-      else{ assert(oldSt == x);  oldSt } // IMPROVE
+      else{ /* assert(oldSt == x);*/  oldSt } // IMPROVE
     }
   }
 

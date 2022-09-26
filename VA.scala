@@ -40,7 +40,10 @@ object VA{
     def filter(frame: StackTraceElement) : Boolean =
       SamplingProfiler.defaultFilter(frame) && 
         !frame.getClassName.contains("jdk.internal") ||
-        frame.getClassName.contains("Profiler") && frame.getMethodName == "count"
+        // ox.gavin.profiling.Profiler
+        frame.getClassName.contains("Profiler") && 
+        !frame.getClassName.contains("SamplingProfiler")
+    //&& frame.getMethodName == "count"
     val printer =
       if(profilingBoth){
         data: ArrayBuffer[SamplingProfiler.StackTrace] => {
@@ -78,6 +81,8 @@ object VA{
 
   /** Run the memory profiler. */
   private def doMemoryProfile = {
+    print("Garbage collection..."); java.lang.System.gc();
+    println(".  Done.")
     checker.memoryProfile
     // traverse("Combiner", CombinerP.Combiner, maxPrint = 0); println
     traverse("VA", this, maxPrint = 0, ignore = List("System"))
@@ -133,7 +138,7 @@ object VA{
   def main(args: Array[String]) = {
     // Parse arguments
     var i = 0; var fname = ""; var timing = false; var testSuite = false
-    var reps = 1
+    var reps = 1;
 
     while(i < args.length) args(i) match{
       case "--profile" => profiling = true; interval = args(i+1).toInt; i += 2
@@ -157,6 +162,7 @@ object VA{
       case "--doSanityCheck" => doSanityCheck = true; i += 1
       case "--reportEffectOn" => reportEffectOn = true; i += 1
       case "--useOldReferencingViews" => useNewReferencingViews = false; i += 1
+      case "--doGC" => doGC = true; i += 1
       // case "--swapEndOfPly" => swappedEndOfPly = true; i += 1
       // case "--newEffectOn" => newEffectOn = true; i += 1
       case "--memoryProfile" => memoryProfile = true; i += 1
@@ -199,6 +205,10 @@ object VA{
       else if(profiling || profilingFlat || profilingBoth) profiler(run(fname)) 
       else run(fname)
       val elapsed0 = (java.lang.System.nanoTime - start) // in ns
+      // if(doGC){ 
+      //   print("Garbage collection..."); java.lang.System.gc(); 
+      //   println(".  Done."); Thread.sleep(10000)
+      // }
       if(timing) println(elapsed0) else printTime(elapsed0)
     }
     finally{ if(system != null) system.finalise }

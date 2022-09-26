@@ -127,12 +127,15 @@ class BasicHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
 
 //==================================================================
 
+
+
 /** An implementation of MyHashSet using open addressing that also stores the
   * hashes.  Not thread safe. 
   * @param initSize the initial size for the table.  Must be a power of 2.
   * @param ThresholdRatio the loading ratio at which resizing takes place. */
-class OpenHashSet[A: scala.reflect.ClassTag](
-  initSize: Int = 16, ThresholdRatio: Float = 0.5F)
+class OpenHashSet[A <: AnyRef]( //[A: scala.reflect.ClassTag](
+  initSize: Int = 16, ThresholdRatio: Float = 0.5F)(
+  implicit tag: scala.reflect.ClassTag[A])
     extends MyHashSet[A]{
 
   checkPow2(initSize)
@@ -140,7 +143,7 @@ class OpenHashSet[A: scala.reflect.ClassTag](
   /** The number of keys. */
   private var count = 0L
 
- /** The number of slots in the hash table. */
+  /** The number of slots in the hash table. */
   private var n = initSize
 
   /** A bitmask to produce a value in [0..n). */
@@ -163,8 +166,11 @@ class OpenHashSet[A: scala.reflect.ClassTag](
   private def find(k: A, h: Int): Int = {
     var i = h & mask
     while((hashes(i) != h || keys(i) != k) && 
-        (hashes(i) != 0 || keys(i) != null))
+        (hashes(i) != 0 || keys(i) != null)){
       i = (i+1)&mask
+    }
+    // Note: if we don't have A <: AnyRef, then the comparison keys(i) != null
+    // can go wrong.  I think each entry is a boxed 0.
     i
   }  
 

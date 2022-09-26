@@ -201,6 +201,12 @@ class Checker(system: SystemP.System, numWorkers: Int){
     traverse("Unification", Unification, maxPrint = 0)
     traverse("View", View, maxPrint = 0)
     traverse("ViewSet", ViewSet, maxPrint = 0)
+    val others = List(
+      Profiler, Concretization, Debugger, EffectOn, FDRTransitionMap,
+      MissingCommon, MissingInfoStore, ServerBasedViewSet, ThreadID,
+      collection.IntSet, collection.LockFreeReadHashSet, 
+      collection.ShardedHashMap, collection.ShardedHashSet)
+    for(obj <- others)  traverse(obj.toString, obj, maxPrint = 0)
   }
 }
 

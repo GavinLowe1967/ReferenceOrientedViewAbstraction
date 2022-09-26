@@ -95,10 +95,11 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
 
     while(k < allUnifs.length){
       val (map1,unifs) = allUnifs(k); k += 1
-      if(highlight && map1(0)(3) == 2) 
-        println(s"map1 = "+Remapper.show(map1)+s"; unifs = $unifs")
+      // if(highlight && map1(0)(3) == 2) 
+      //   println(s"map1 = "+Remapper.show(map1)+s"; unifs = $unifs")
       if(isSufficientUnif(unifs)) makePrimaryInduced(map1, unifs)
       if(!isFullUnif(unifs)) makeSecondaryInduced(map1, unifs)
+      recycle(map1)
     } // end of while loop iterating over unifs
     (result,result2)
   }

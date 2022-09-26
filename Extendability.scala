@@ -226,21 +226,24 @@ class Extendability(views: ViewSet){
         if(cpt1 != null){
           // test if cpt1 is a renaming of st under an extension of map
           var map2 = Unification.unify(map, cpt1, st)
+// Use extendToUnify above
           if(singleRef) found = map2 != null
           else if(map2 != null){
 // FIXME: I'm not sure this is correct when we have some excluded refs.
             // Check that all components referenced by pCpt in pre are matched
-            // by a corresponding component in cv1.  map2 != null if true for
+            // by a corresponding component in cv1.  ok if true for
             // all components so far.
-            var k = 1
-            while(k < pLen && map2 != null){
+            var k = 1; var ok = true
+            while(k < pLen && ok /*map2 != null*/){
               if(pRefs(k) != null){
 // FIXME: do those components correspond if there are excluded refs?
-                map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
+                // map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
+                ok = Unification.extendToUnify(map2, cv1.components(k), pRefs(k))
               }
               k += 1
             } // end of inner while
-            found = map2 != null
+            found = ok // map2 != null
+            Pools.returnRemappingRows(map2)
           } // end of if(map2 != null)
         } // end of if(cpt1 != null)
         else assert(singleRef) 

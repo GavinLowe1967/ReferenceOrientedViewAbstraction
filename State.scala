@@ -16,6 +16,10 @@ class InsufficientIdentitiesException extends Exception
   */
 class State(val family: Family, val cs: ControlState, 
             val ids: Array[Identity]){
+  /** The index of this in MyTrieStateMap.allStates.  Set by
+    * MyTrieStateMap.addToArray.  */
+  var index = -1
+
   /** The number of parameters of this. */
   def length = ids.length
 
@@ -292,58 +296,6 @@ object State{
   private val MaxIds = 8
 
   private type IdArray = Array[Identity]
-
-/*
-  /** Maximum number of IdArrays of each size to store. */
-  private val PoolSize = 40
-
-  /** Pool for IdArrays of size size. */
-  private class IdentityArrayPool(size: Int){
-    private var buff = new Array[IdArray](PoolSize)
-    private var count = 0
-    /* buff[0..count) stores IdArrays for re-use. */
-
-    /** Add ids to this pool. */
-    @inline def add(ids: IdArray) =
-      if(count < PoolSize){ buff(count) = ids; count += 1 }
-
-    /** Get an IdArray, either from the pool or a new one. */
-    @inline def get: IdArray = 
-      if(count > 0){ count -= 1; buff(count) }
-      else new IdArray(size) 
-        // Profiler.count("IdArray pool get fail "+size)
-  }
-
-  /** Pool for IdArrays of size 0. */
-  private object IdentityArrayPool0 extends IdentityArrayPool(0){
-    // We always give the following IdArray.
-    private val theIdArray = new IdArray(0)
-
-    @inline override def add(ids: IdArray) = {}
-
-    @inline override def get: IdArray = theIdArray
-  }
-
-  /** Supply of Array[Identity]s, to prevent GC churning.  
-    * Entry len contains a supply of Array[Identity]s of length len.  */
-  private object ThreadLocalIdentityArraySupply
-      extends ThreadLocal[Array[IdentityArrayPool]]{
-    // Initialise to size MaxIds+1, as this is normally enough.  FIXME
-    override def initialValue() =
-      Array.tabulate(MaxIds+1)(size => 
-        if(size == 0) IdentityArrayPool0 else new IdentityArrayPool(size))
-  }
-
-  /** Get an Array[Identity] of size len, reusing a previous one if possible. */
-  @inline def getIdentityArray(len: Int): Array[Identity] = /*if(false)*/{
-    val pools = ThreadLocalIdentityArraySupply.get; pools(len).get
-  }
-
-  /** Return ids for recycling. */
-  @inline def returnIdentityArray(ids: Array[Identity]) = /*if(false)*/{
-    val pools = ThreadLocalIdentityArraySupply.get; pools(ids.length).add(ids)
-  }
- */
 
   // ----- Variables and functions concerning states. 
 

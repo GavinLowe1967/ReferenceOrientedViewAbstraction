@@ -262,6 +262,10 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
       for(template <- newTransitionTemplates.iterator)
         transitionTemplates.add(template)
     }
+    // Thread 1 maybe does a garbage collection
+    else if(me == 1 && doGC && ply%4 == 0 && EffectOn.doPurge){
+      print("Garbage collection..."); java.lang.System.gc(); println(".  Done.")
+    }
 
     // Purges from the effectOnStore
     if(singleRef) EffectOn.purge

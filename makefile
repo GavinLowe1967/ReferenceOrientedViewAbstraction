@@ -127,7 +127,8 @@ $(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.c
 # # EffectOn and helper modules
 
 
-$(DIR)/MissingCommon.class: $(DIR)/Unification.class $(DIR)/ViewSet.class $(COLLDIR)/ShardedHashMap.class
+$(DIR)/MissingCommon.class: $(DIR)/Unification.class $(DIR)/ViewSet.class $(COLLDIR)/IntSet.class
+# $(COLLDIR)/ShardedHashMap.class
 
 $(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
 

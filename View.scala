@@ -43,7 +43,7 @@ class ReducedComponentView(
 
   /** Create hash code. */
   @inline private def mkHashCode = {
-    StateArray.mkHash(servers.hashCode, components)
+    StateArray.mkHash1(servers.hashCode, components)
     // var h = servers.hashCode
     // var i = 0; var n = components.length
     // while(i < n){ h = h*71+components(i).hashCode; i += 1 }    

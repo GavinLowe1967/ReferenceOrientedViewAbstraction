@@ -131,7 +131,7 @@ class EffectOn(
         if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
         else List()
       val newPrinc = getNewPrinc(cpts(0), unifs)
-      val newComponentsList = List(StateArray(postCpts(k), newPrinc))
+      val newComponentsList = List(StateArray(Array(postCpts(k), newPrinc)))
       processInducedInfo(
         null, cpts, unifs, null, false, crossRefs, newComponentsList)
     }
@@ -445,7 +445,7 @@ object EffectOn{
   private val PurgeQuantum = 300_000
 
   /** Is it time for another purge? */
-  private var doPurge = false
+  var doPurge = false
 
   /** Purge from the store.  Done at the end of each ply. */
   def purge = if(doPurge){

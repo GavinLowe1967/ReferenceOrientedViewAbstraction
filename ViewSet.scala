@@ -178,7 +178,7 @@ class ComponentsSet(initSize: Int = 4){
 
   /** Find the index in views corresponding to cpts. */
   @inline private def find(cpts: Array[State]): Int = 
-    find1(StateArray.mkHash(hashBase, cpts), cpts)
+    find1(StateArray.mkHash1(hashBase, cpts), cpts)
     // Note: the above is a little inefficient: all elements in this set have
     // the same cpts(0).
 

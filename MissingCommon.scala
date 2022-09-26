@@ -260,14 +260,20 @@ class MissingCommon(
     missing.toArray.sortWith(StateArray.lessThan)
   }
 
-  /** States for which MissingCommon.updateMissingCandidates has been executed
-    * on this. */
-  private var doneMissingCandidates = new OpenHashSet[State](initSize = 4) 
+  /** Representation of the States for which
+    * MissingCommon.updateMissingCandidates has been executed on this.  State
+    * st is represented by st.index+1. */
+  private var doneMissingCandidates = new collection.IntSet
+    // new scala.collection.mutable.HashSet[Int]
+  //  new OpenHashSet[Int](initSize = 4)
 // IMPROVE: smaller? 
 
   /** Called by MissingCommon.updateMissingCandidates when updating this with
     * st.  Return true if this is the first such instance for st. */
-  private def isNewUMCState(st: State): Boolean = doneMissingCandidates.add(st)
+  private def isNewUMCState(st: State): Boolean = {
+    assert(st.index >= 0)
+    doneMissingCandidates.add(st.index+1)
+  }
 
   /** States for which the loop of MissingCommon.updateMissingCandidates has
     * been executed, i.e. states instantiating c there. */
@@ -432,7 +438,8 @@ object MissingCommon{
     val pf: Int, val pId: Int
   ){
     override def hashCode = 
-      StateArray.mkHash( StateArray.mkHash((ssIndex*71+pf)*71+pId, cpts1), cpts2)
+      StateArray.mkHash1( StateArray.mkHash1((ssIndex*71+pf)*71+pId, cpts1), 
+        cpts2 )
 
     override def equals(that: Any) = that match{
       case key: Key => 
@@ -484,10 +491,10 @@ object MissingCommon{
   /** Perform a memory profile of this. */
   def memoryProfile = {
     import ox.gavin.profiling.MemoryProfiler.traverse
-    // Traverse 3 MissingCommons
-    val iter = allMCs.iterator
-    for(_ <- 0 until 3; if iter.hasNext)
-      traverse("MissingCommon", iter.next(), maxPrint = 2); println() 
+    // Traverse 5 MissingCommons
+    val iter = allMCs.valuesIterator
+    for(_ <- 0 until 5; if iter.hasNext)
+      traverse("MissingCommon", iter.next(), maxPrint = 3); println() 
     // allMCs
     println("MissingCommon.allMCs size = "+allMCs.size)
     traverse("allMCs", allMCs, maxPrint = 1); println()

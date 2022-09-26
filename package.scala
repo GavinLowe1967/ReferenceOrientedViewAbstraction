@@ -199,7 +199,10 @@ package object ViewAbstraction{
 
   /** Do we use the new way of calculating reference views in
     * TransitionTemplateExtender.extendTransitionTemplateBy? */
-  var useNewReferencingViews = true
+  var useNewReferencingViews = true 
+
+  /** Should we intermittently do explicit garbage collections? */
+  var doGC = false
 
   /** In Checker.endOfPly, do we swap the order of the "views" and "transitions
     * stages?   Used in debugging, 2022/08/29. */

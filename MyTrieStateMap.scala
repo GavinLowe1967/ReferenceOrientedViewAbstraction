@@ -78,7 +78,8 @@ class MyTrieStateMap(numCS: Int, minCS: Int) extends StateMap{
       for(i <- 1 to allStatesCount) newAllStates(i) = allStates(i)
       allStates = newAllStates
     }
-    allStatesCount += 1; allStates(allStatesCount) = st
+    allStatesCount += 1; 
+    st.index = allStatesCount; allStates(allStatesCount) = st
     allStates = allStates // volatile write; publish
     allStatesCount
   }

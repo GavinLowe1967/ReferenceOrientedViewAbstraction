@@ -148,7 +148,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
         if(include(i)){
           val st1 = StateArray.find(princIds(i), components)
           if(st1 != null)
-            result ::= new ComponentView(servers, StateArray(princ, st1))
+            result ::= new ComponentView(servers, StateArray(Array(princ, st1)))
           else otherRef = true
         }
         i += 1
@@ -156,7 +156,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       if(result.nonEmpty || otherRef) result 
       // If all the refs from newPrinc are distinguished or omitted, we need
       // to include the singleton view.
-      else List( new ComponentView(servers, StateArray(princ)) )
+      else List( new ComponentView(servers, StateArray(Array(princ))) )
     }
     else{
       var components1 = new Array[State](len); components1(0) = princ

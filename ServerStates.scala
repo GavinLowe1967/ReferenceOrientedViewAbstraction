@@ -70,7 +70,10 @@ class ServerStates(val servers: List[State]){
     if(!normalised) null
     else{
       val result = new Array[Array[Identity]](numTypes); var t = 0
-      while(t < numTypes){ result(t) = remappingMapTemplate(t).clone; t += 1 }
+      while(t < numTypes){ 
+        result(t) = Pools.cloneRow(remappingMapTemplate(t)) //.clone; 
+        t += 1
+      }
       result
     }
   }
