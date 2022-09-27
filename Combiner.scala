@@ -183,9 +183,8 @@ object Combiner{
   }
 
   /** Extend map0 to all elements of cpts except cpts(i), consistently with map0
-    * and otherArgs, and then apply each such renaming to cpts.  
-    * 
-    * Pre: cpts.length > 1. */
+    * and otherArgs, and then apply each such renaming to cpts.  This is
+    * currently used only in testing.  Pre: cpts.length > 1. */
   protected[CombinerP] def remapRest(
     map0: RemappingMap, otherArgs: OtherArgMap, cpts: Array[State], i: Int)
       : Array[Array[State]] = {

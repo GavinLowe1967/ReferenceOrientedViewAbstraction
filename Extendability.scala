@@ -116,7 +116,8 @@ class Extendability(views: ViewSet){
     if(highlight) println("compatibleWith")
     val servers = pre.servers; val components = pre.components
     // Remap st so it can be the principal component with servers.
-    val st1 = Remapper.remapState(servers.remappingMap, servers.nextArgMap, st)
+    //val st1 = Remapper.remapState(servers.remappingMap, servers.nextArgMap, st)
+    val st1 = Remapper.remapToPrincipal(servers, st)
     // IMPROVE: compare with Remapper.remapToPrincipal(servers, st)
 
     // Create map as identity function on `server` ids and mapping `st1` back
@@ -142,9 +143,6 @@ class Extendability(views: ViewSet){
       }
       j += 1
     } 
-    // for(f <- 0 until numTypes)
-    //   assert(otherArgs(f).forall(id => !map1(f).contains(id)),
-    //     Remapper.show(map1)+"\n"+Remapper.show(otherArgs)+"\n"+pre+"\n"+st)
 
     // Get cache corresponding to components, map1 and otherArgs.
     val cache = compatibleWithCache.get( 
@@ -171,7 +169,8 @@ class Extendability(views: ViewSet){
           // if(highlight) println(s"compatibleWith: $cv1; found = $found")
           cache.add(cpts1,found)
       } // end of match
-    } // end of while ... match
+    } // end of while
+    Pools.returnRemappingRows(map1)
     found
   }
 

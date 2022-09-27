@@ -666,7 +666,7 @@ object Remapper{
 
   /** Remap st so that it can be the principal component in a view with
     * servers. */
-  def remapToPrincipal(servers: ServerStates, st: State): State = {
+  @inline def remapToPrincipal(servers: ServerStates, st: State): State = {
     // IMPROVE: could use a smaller remappingMap
     val map = servers.remappingMap
     val res = remapState(map, servers.nextArgMap, st)

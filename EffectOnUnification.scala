@@ -22,6 +22,8 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
    * |  |--addIdsFromNewRef
    * |--extendUnif
    * |  |--Unification.combine1
+   * 
+   * Following is dead
    * |--extendUnifSingleRef                    (~95% of time with lazySet)
    *    |--EffectOnUnification.remapToCreateCrossRefs  (~25%)
    *    |--getOtherArgsBitMapForSingleRef              (~12%)
@@ -110,8 +112,8 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
     * state, and id is a parameter of c1 in the post state that might
     * reference c2. We will subsequently form secondary induced transitions
     * with c1 as the principal component, referencing c2 (renamed). */
-  private val c2Refs: List[(Int,Identity)] =
-    if(singleRef) getCrossReferences() else List[(Int,Identity)]()
+  // private val c2Refs: List[(Int,Identity)] =
+  //   if(singleRef) ??? /*getCrossReferences()*/ else List[(Int,Identity)]()
 // IMPROVE: consider omitted references here
 
   import Unification.UnificationList // = List[(Int,Int)]
@@ -175,8 +177,8 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
   def apply(): (CombineResult1, CombineResult2) = {
     // IMPROVE: some of the initial calculations depends only on pre and post, so
     // could be stored with the transition.
-    val princRenames = c2Refs.map(_._2) // normally empty; sometimes singleton
-    require(singleRef || princRenames.isEmpty)
+    //val princRenames = c2Refs.map(_._2) // normally empty; sometimes singleton
+    //require(singleRef || princRenames.isEmpty)
     val changedServers = servers != post.servers
     //val map0 = servers.remappingMap1(cv.getParamsBound)
     // All params in post.servers but not in pre.servers, as a bitmap// .
@@ -192,18 +194,17 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
       //if(highlight) println(s"*unifs = $unifs, map1 = "+Remapper.show(map1)) 
       // Does this create a cross reference from a secondary component to the
       // principal of cv (with singleRef)?
-      val acquiredCrossRef = princRenames.contains(map1(cvpf)(cvpid))
+      //val acquiredCrossRef = false // IMPROVEprincRenames.contains(map1(cvpf)(cvpid))
       // Do we need to consider this combination?  Described in optimisations
       // in the paper.  For singleRef, it describes when it is necessary to
       // consider primary induced transitions.
-      val sufficientUnif = 
-        isSufficientUnif(changedServers, unifs, acquiredCrossRef)
+      val sufficientUnif = isSufficientUnif(changedServers, unifs) //, acquiredCrossRef)
       //if(highlight) 
       //  println(s"sufficientUnif = $sufficientUnif; c2Refs = $c2Refs")
-      if(c2Refs.nonEmpty || sufficientUnif){
-        val otherArgsBitMap = mkOtherArgsBitMap(/*newServerIds,*/ unifs)
-        if(singleRef) 
-          extendUnifSingleRef(unifs, map1, otherArgsBitMap, sufficientUnif)
+      if(/*c2Refs.nonEmpty || */ sufficientUnif){
+        val otherArgsBitMap = mkOtherArgsBitMap(unifs)
+        if(singleRef) ???
+        //  extendUnifSingleRef(unifs, map1, otherArgsBitMap, sufficientUnif)
         else extendUnif(unifs, map1, otherArgsBitMap)
       }
     } // end of while loop
@@ -224,11 +225,9 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
     * unify with a component that does change state. 
     *  **** Different for singleRef
     * @param changedServers did the servers change state?
-    * @paral unifs the list of unifications made.
-    * @param acquiredCrossRef with singleRef, has a secondary component acquired 
-    * a reference to the principal of cv? */
+    * @paral unifs the list of unifications made. */
   @inline private def isSufficientUnif(
-    changedServers: Boolean, unifs: UnificationList, acquiredCrossRef: Boolean)
+    changedServers: Boolean, unifs: UnificationList)
       : Boolean = {
     // Is there a unification with a component that changes state?
     @inline def changingUnif = {
@@ -329,7 +328,7 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
       map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, result)
   } // end of extendUnif
 
-
+/*
   /** Extend a unification in the case of singleRef.  Extend otherArgsBitMap0 so
     * that if a component of cv gets a reference to a component c of preCpts,
     * then the parameters of c are included in otherArgsBitMap.  Then create
@@ -371,9 +370,9 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
       StateArray.removeParamsFromBitMap(preCpts, otherArgsBitMap)
       // Create primary induced transitions.
       if(sufficientUnif){
-        val res0 = new ArrayBuffer[RemappingMap]
-        Unification.getCombiningMaps(
-          map1, otherArgs, otherArgsBitMap, nextArg, cpts, res0)
+        val res0 = Unification.getCombiningMaps(
+          map1, otherArgs, otherArgsBitMap, nextArg, cpts)
+// IPROVE: recycle res0 when done
         var j = 0
         while(j < res0.length){
           val map11 = res0(j); j += 1
@@ -512,6 +511,7 @@ if(false){
       }
     }
   }
+ */
 
   /** Bitmap showing which components changed state between preCpts and
     * postCpts. */
@@ -530,6 +530,7 @@ if(false){
 // cv with pre.principal as principal, and c2 as secondary component?  This
 // assumes pre.principal has a reference to c2, which seems reasonable.
 
+/*
   /** Identify secondary components that can gain a reference to a component of
     * type cvpf (the type of cv.principal.family).  All pairs (i,id) (with i
     * >= 1) such that the i'th component c1 changes state between preCpts and
@@ -557,7 +558,9 @@ if(false){
     if(false) println(s"getCrossReferences: $result")
     result
   }
+ */
 
+/*
   /** All ways of extending map (over cpts) so that an identity in cpts matches
     * a non-identity parameter in preCpts, or a non-identity parameter in
     * preCpts matches an identity in cpts; but no identity should map to an
@@ -605,6 +608,7 @@ if(false){
     rec(List[MatchingTuple](), 0, 0, 0)
     result
   }
+ */
 
   /** Cross product of ps1 and ps2. */
   def crossProduct(ps1: List[(Int,Int)], ps2 : List[(Int,Int)]) = 
