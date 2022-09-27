@@ -85,9 +85,8 @@ object Remapper{
     same
   }
 
-  /** Produce a new RemappingMap, extending map0 so (f,id) maps to id1.
-    * Note: the resulting map shares some entries with map0, so neither should 
-    * be mutated.  Pre: this does not make the map non-injective. */
+  /** Produce a new RemappingMap, extending map0 so (f,id) maps to id1.  Pre:
+    * this does not make the map non-injective. */
   def extendMap(
     map0: RemappingMap, f: Family, id: Identity, id1: Identity)
       : RemappingMap = {
@@ -105,8 +104,15 @@ object Remapper{
     val result = new Array[Array[Int]](numTypes)
     var t = 0
     while(t < numTypes){
-      if(t != f) result(t) = map0(t)
-      else{ result(t) = map0(f).clone; result(t)(id) = id1 }
+      result(t) = Pools.cloneRow(map0(t))
+      if(t == f) result(t)(id) = id1
+      // Note: previous version allowed the resulting map to share some
+      // entries with map0, so neither could be mutated or recycled.
+      // if(t != f) result(t) = map0(t)
+      // else{ 
+      //   result(t) = Pools.cloneRow(map0(f)) //map0(f).clone;
+      //   result(t)(id) = id1
+      // }
       t += 1
     }
     result
@@ -611,8 +617,12 @@ object Remapper{
   /** Remap components so they are in normal form based on servers.  Pre:
     * servers are normalised. */
   @inline def remapComponents(servers: ServerStates, components: Array[State])
-      : Array[State] = 
-    remapStates(servers.remappingMap, servers.nextArgMap, components)
+      : Array[State] = {
+    val map = servers.remappingMap
+    val res = remapStates(map, servers.nextArgMap, components)
+    Pools.returnRemappingRows(map)
+    res
+  }
 
   /** Make a ComponentView from servers, principal and others, remapping to
     * canonical form. */
@@ -658,6 +668,9 @@ object Remapper{
     * servers. */
   def remapToPrincipal(servers: ServerStates, st: State): State = {
     // IMPROVE: could use a smaller remappingMap
-    remapState(servers.remappingMap, servers.nextArgMap, st)
+    val map = servers.remappingMap
+    val res = remapState(map, servers.nextArgMap, st)
+    Pools.returnRemappingRows(map)
+    res
   }
 }

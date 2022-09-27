@@ -69,6 +69,8 @@ class ServerStates(val servers: List[State]){
   def remappingMap: RemappingMap = {
     if(!normalised) null
     else{
+      // Note: can't use Remapper.cloneMap here, because this is compiled
+      // first.  IMPROVE
       val result = new Array[Array[Identity]](numTypes); var t = 0
       while(t < numTypes){ 
         result(t) = Pools.cloneRow(remappingMapTemplate(t)) //.clone; 

@@ -260,17 +260,18 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   // =========== Combining maps
 
   /** Maps used in combining with this.  */
-  private var map: RemappingMap = servers.remappingMap 
+  //private var map: RemappingMap = servers.remappingMap 
   // Note: map is null if servers is not normalised. 
   private var nextArg: NextArgMap = null 
-  private var otherArgs: OtherArgMap = null
+  //private var otherArgs: OtherArgMap = null
 
   /** Initialise the above maps.  Pre: this is normalised; this won't always
     * hold if this is the post of a transition. */
   @inline private def initMaps() = {
     nextArg = servers.nextArgMap  // The next fresh parameters
     // Parameters used in components but not the servers
-    otherArgs = Array.fill(numTypes)(List[Identity]()); var cix = 0
+    // otherArgs = Array.fill(numTypes)(List[Identity]()); 
+    var cix = 0
     // Iterate through params of components
     while(cix < components.length){
       val c = components(cix); val ids = c.ids; val typeMap = c.typeMap
@@ -278,7 +279,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       while(i < ids.length){
         val f = typeMap(i); val id = ids(i); 
         assert(id <= nextArg(f), this)
-        if(id == nextArg(f)){ otherArgs(f) ::= id; nextArg(f) += 1 }
+        if(id == nextArg(f)){ /*otherArgs(f) ::= id;*/ nextArg(f) += 1 }
         i += 1
       }
       cix += 1
@@ -301,7 +302,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   /** Get a (fresh) NextArgMap. */
   def getNextArgMap: NextArgMap = synchronized{
-    if(otherArgs == null) initMaps()
+    if(nextArg == null) initMaps()
     nextArg.clone
   }
 

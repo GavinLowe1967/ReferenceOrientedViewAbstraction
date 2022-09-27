@@ -122,7 +122,9 @@ class ConsistentStateFinder(system: SystemP.System){
           if(!renamedState.representableInScript)
             throw UnrepresentableException(renamedState)
           renamedStates(i) = renamedState; i += 1
+          Pools.returnRemappingRows(map)
         }
+        // Note: map0 might be included in maps, so can't be recycled as-is
         mapCache += (st, pid, servers, preCptsL) -> renamedStates
         renamedStates
     }

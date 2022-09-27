@@ -192,7 +192,7 @@ class Extendability(views: ViewSet){
     // Find if pCpt's reference to st should be included
     val includeInfo = State.getIncludeInfo(pCpt.cs)
     val includeRef = includeInfo == null || includeInfo(stIx)
-    // Rename pCpt to be principal component
+    // Rename pCpt to be principal component (map recycled below)
     val map = servers.remappingMap; val nextArgs = servers.nextArgMap
     val pCptR = Remapper.remapState(map, nextArgs, pCpt)
     // st.id gets renamed to stIdR
@@ -224,9 +224,9 @@ class Extendability(views: ViewSet){
         // extension of map. Find component with identity (stF, stIdR) in cv1
         val cpt1 = cv1.find(stF, stIdR) // StateArray.find(cv1.components, stF, stIdR)
         if(cpt1 != null){
-          // test if cpt1 is a renaming of st under an extension of map
+          // test if cpt1 is a renaming of st under an extension of map. (map2
+          // recycled below.)  Note: new map for each cv1.
           var map2 = Unification.unify(map, cpt1, st)
-// Use extendToUnify above
           if(singleRef) found = map2 != null
           else if(map2 != null){
 // FIXME: I'm not sure this is correct when we have some excluded refs.
@@ -242,8 +242,7 @@ class Extendability(views: ViewSet){
               }
               k += 1
             } // end of inner while
-            found = ok // map2 != null
-            Pools.returnRemappingRows(map2)
+            found = ok /* map2 != null */ ; Pools.returnRemappingRows(map2)
           } // end of if(map2 != null)
         } // end of if(cpt1 != null)
         else assert(singleRef) 
@@ -253,6 +252,7 @@ class Extendability(views: ViewSet){
         // to match.
         found = true
     } // end of while(iter.hasNext && !found)
+    Pools.returnRemappingRows(map)  
     if(found) cv1 else null
   }
 
