@@ -70,7 +70,7 @@ object Pools{
     // assert(size < rowPoolSize(me).length, size)
     val index = rowPoolSize(me)(size)-1
     if(index >= 0){ rowPoolSize(me)(size) = index; rowPool(me)(size)(index) }
-    else new Array[Int](size) // Array.fill(size)(-1)
+    else new Array[Int](size) 
   }
 
   /** Return the rows of map to the row pool. */
@@ -81,12 +81,11 @@ object Pools{
       Profiler.count(s"Pools.returnRemappingRow")
       val index = rowPoolSize(me)(size)
       if(index < RowPoolCapacity){
-        // Clear row
-        // var j = 0; while(j < size){ row(j) = -1; j += 1 }
         rowPool(me)(size)(index) = row; rowPoolSize(me)(size) = index+1
       }
       else Profiler.count(s"Pools.returnRemappingRow failed")
     }
+    returnRemappingMap(map)
   }
 
   /** Clone row. */
@@ -95,6 +94,45 @@ object Pools{
     while(j < row.size){ newRow(j) = row(j); j += 1 }
     newRow
   }
+
+  // -------------------------------------------- A pool for RemappingMaps
+
+  /** Maximum number of RemappingMaps stored per worker. */
+  private val MapPoolCapacity = 50
+
+  /** A pool of RemappingMaps. */
+  private var mapPool: Array[Pool[RemappingMap]] = null
+
+  /** The number of RemappingMaps stored for each worker. */
+  private var mapPoolSize: Array[Int] = null
+
+  /** Get a RemappingMap. */
+  def getRemappingMap: RemappingMap = {
+    val me = ThreadID.get
+    Profiler.count(s"Pools.getRemappingMap")
+    val index = mapPoolSize(me)-1
+    if(index >= 0){ mapPoolSize(me) = index; mapPool(me)(index) }
+    else new Array[Array[Int]](numTypes)
+  }
+
+  /** Return map to the pool. */
+  @inline private def returnRemappingMap(map: RemappingMap) = {
+    val me = ThreadID.get
+    Profiler.count(s"Pools.returnRemappingMap")
+    val index = mapPoolSize(me)
+    if(index < MapPoolCapacity){
+      mapPool(me)(index) = map; mapPoolSize(me) = index+1
+    }
+    else Profiler.count(s"Pools.returnRemappingMap failed")
+  }
+
+  /** Produce a (deep) clone of map. */
+  @inline def cloneMap(map: RemappingMap): RemappingMap = {
+    val map1 = getRemappingMap; var t = 0 
+    while(t < numTypes){ map1(t) = cloneRow(map(t)); t += 1 }
+    map1
+  }
+
 
   // -------------------------------------------------------
 
@@ -105,6 +143,9 @@ object Pools{
     maxRowSize = 2*typeSizes.max+2
     rowPool = Array.fill(numWorkers,maxRowSize+1)(new Pool[Row](RowPoolCapacity))
     rowPoolSize = Array.fill(numWorkers,maxRowSize+1)(0)
+    // RemappingMaps
+    mapPool = Array.fill(numWorkers)(new Pool[RemappingMap](MapPoolCapacity))
+    mapPoolSize = Array.fill(numWorkers)(0)
     // bitmaps
     bitmapPool = Array.fill(numWorkers)(new Pool[BitMap](BMPoolCapacity))
     bitmapPoolSize = Array.fill(numWorkers)(0)

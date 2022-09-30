@@ -48,7 +48,7 @@ $(DIR)/MyTrieStateMap.class $(DIR)/StateHashMap.class: $(DIR)/StateMap.class
 
 $(DIR)/MyStateMap.class: $(DIR)/MyTrieStateMap.class $(DIR)/StateHashMap.class
 
-$(DIR)/ServerStates.class: $(DIR)/State.class $(COLLDIR)/MyHashMap.class
+$(DIR)/ServerStates.class: $(DIR)/State.class $(COLLDIR)/MyHashMap.class $(DIR)/Pools.class
 
 # FDR interaction
 
@@ -134,12 +134,23 @@ $(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
 
 $(DIR)/MissingInfoStore.class: $(COLLDIR)/ShardedHashSet.class $(DIR)/MissingInfo.class 
 
-$(DIR)/EffectOnStore.class: $(DIR)/MissingInfoStore.class 
+$(DIR)/EffectOnStore.class: $(DIR)/MissingInfoStore.class	\
+  $(COLLDIR)/OpenHashSet.class $(COLLDIR)/ShardedHashMap.class
+
+# New EffectOn store
+
+$(DIR)/MissingCrossReferences.class: $(DIR)/ComponentView.class	\
+  $(DIR)/ViewSet.class $(DIR)/Transition.class
+
+$(DIR)/MissingCommonWrapper.class: $(DIR)/MissingCommon.class $(DIR)/MissingCrossReferences.class
+
+$(DIR)/NewEffectOnStore.class: $(DIR)/MissingCommonWrapper.class
 
 $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 
-$(DIR)/EffectOn.class: $(DIR)/EffectOnStore.class				\
-  $(DIR)/EffectOnUnification.class $(DIR)/SingleRefEffectOnUnification.class
+$(DIR)/EffectOn.class: $(DIR)/NewEffectOnStore.class	\
+  $(DIR)/EffectOnStore.class $(DIR)/EffectOnUnification.class	\
+  $(DIR)/SingleRefEffectOnUnification.class
 
 # Extending of transition templates
 

@@ -85,8 +85,12 @@ class MissingInfo(
 
   assert(missingCommon.length <= 2, 
     "missingCommon.length = "+missingCommon.length)
-  assert(missingViews.length <= 9, "missingViews.length = "+missingViews.length)
-  // FIXME: latter not true in general.  I don't think the former is, either
+  // FIXME: not true in general
+  assert(missingViews.length <= 12, "missingViews.length = "+missingViews.length+
+    "missingViews =\n  "+missingViews.mkString("\n  ")+
+    s"trans.pre = ${trans.pre}\ncv = $cv\nnewCpts = "+StateArray.show(newCpts))
+  // At most, a reference from each component of pre to each component of cv,
+  // and vice versa: 3*2*2.
 
   /* Initially we try to discharge the obligations represented by missingCommon.
    * mcIndex represents the next MissingCommon to consider; mcDone gives true
@@ -96,10 +100,21 @@ class MissingInfo(
   // Remove empty array, to reduce memory usage.
   if(missingCommon.isEmpty) missingCommon = null
 
+  /** Variable encapsulating various small Ints and flags. */
+  private var state = 0
+
+  import MissingInfo.{
+    getMcIndex, incrementedMcIndex, getMvIndex, incrementedMvIndex, 
+    NewViewFoundMask, TransferredMask, NotAddedMask}
+
   /** Index of the first non-null entry in missingCommon, or
     * missingCommon.length if all are null.  Invariant:
     * missingCommon[0..mcIndex).forall(_ == null). */
-  private var mcIndex = 0
+  @inline private def mcIndex = getMcIndex(state)
+
+  /** Increment the index of the first non-null entry in missingCommon. */
+  @inline private def incMcIndex = state = incrementedMcIndex(state)
+
 
   import MissingInfo.LogEntry
 
@@ -135,17 +150,17 @@ class MissingInfo(
     }
 
     require(missingCommon(mcIndex) == null)
-    mcIndex += 1;  logAdvanceMC
+    incMcIndex;  logAdvanceMC
     if(mcIndex < missingCommon.length){ // consider next 
       assert(mcIndex == 1 && missingCommon.length == 2)
       val mc = missingCommon(mcIndex)
       if(mc == null){ // this one is also done
-        mcIndex += 1; logAdvanceMC; allMCDone(); 
+        incMcIndex; logAdvanceMC; allMCDone(); 
       } 
       else{
         val vb = mc.updateMissingViews(views)
         if(vb == null){  // and now this is done
-          assert(mc.done); mcNull(mcIndex); mcIndex += 1; allMCDone(); 
+          assert(mc.done); mcNull(mcIndex); incMcIndex; allMCDone(); 
         }
         else{ rehashMC(); vb }
       }
@@ -172,26 +187,34 @@ class MissingInfo(
   /** Index of first non-null missingView.  Once all MissingCommon are complete,
     * this will be registered against missingViews(mvIndex) in
     * EffectOnStore.store.  */
-  private var mvIndex = 0
+  //private var mvIndex = 0
+  @inline private def mvIndex = getMvIndex(state)
+
+  /** Increment the index of the first non-null missingView. */
+  @inline private def incMvIndex = state = incrementedMvIndex(state)
 
   /** The first missing view, against which this should be registered once all
     * the MissingCommon are done. */
   def missingHead = synchronized{ missingViews(mvIndex) }
 
   /** Has newView been found already? */
-  private var newViewFound = false
+  // private var newViewFound = false
+  @inline private def newViewFound = (state & NewViewFoundMask) != 0
 
   /** Record that newView has already been seen, so this is redundant. */
   def markNewViewFound = synchronized{
     // log(MissingInfo.MarkNewViewFound)
     // if(highlight) println(s"markNewViewFound:\n$this")
-    newViewFound = true
+    // newViewFound = true
+    state |= NewViewFoundMask
   }
 
   /** Does views contain newView?  Store the result. */
   def isNewViewFound(views: ViewSet) = synchronized{
     newViewFound ||
-    (if(views.contains(newView)){ newViewFound = true; true } else false)
+    (if(views.contains(newView)){ 
+      state |= NewViewFoundMask /*newViewFound = true*/; true } 
+    else false)
   }
 
   /** Is this complete? */
@@ -199,7 +222,10 @@ class MissingInfo(
     synchronized{ mcDone && mvIndex == missingViews.length || newViewFound }
 
   /** Has this been put into the mcDoneStore? */
-  @volatile var transferred = false
+  // @volatile var transferred = false
+  @inline def transferred = synchronized{ (state & TransferredMask) != 0 }
+
+  @inline def setTransferred = synchronized{ state |= TransferredMask }
 
   /** Update the MissingCommon entries in this, based on cv being a possible
     * match to the first clause of the obligation.  cv is expected to be a
@@ -282,7 +308,7 @@ class MissingInfo(
     //   (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))))
     while(mvIndex < missingViews.length && 
       (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))){
-      missingViews(mvIndex) = null; mvIndex += 1
+      missingViews(mvIndex) = null; incMvIndex // mvIndex += 1
     }
     rehashMV()
   }
@@ -301,18 +327,19 @@ class MissingInfo(
       missingViews(mvIndex) == cv,
       s"mvIndex = $mvIndex, cv = $cv, missingViews = \n"+
         missingViews.mkString("\n"))
-    missingViews(mvIndex) = null; mvIndex += 1
+    missingViews(mvIndex) = null; incMvIndex // mvIndex += 1
     updateMissingViews(views)
   }
 
-  private var notAdded = false
+  // private var notAdded = false
+  @inline private def notAdded = (state & NotAddedMask) != 0
 
   /** Record that an attempt to add this to a Store in EffectOnStore failed,
     * because an equivalent MissingInfo was already there.  This means that
     * the expected invariant might not hold: missingCommon values in this may
     * still retain a view that is in the current view set.  This affects the
     * check in sanityCheck below. */
-  def setNotAdded = synchronized{ notAdded = true }
+  def setNotAdded = synchronized{ state |= NotAddedMask }
 
   /** Check that we have nulled-out all done MissingCommons. */
   def sanity1 = 
@@ -444,6 +471,30 @@ class MissingInfo(
 
 /** Companion object. */
 object MissingInfo{
+  /** Bit masks used in MissingInfo objects. */
+  private val ByteMask = 255
+
+  /* We use the bottom byte for McIndex, and the next byle for MvIndex */
+
+  /** Index of the first non-null entry in missingCommon corresponding to
+    * state. */
+  @inline private def getMcIndex(state: Int) = state & ByteMask
+
+  /** New state corresponding to incrementing the index of the first non-null
+    * entry in missingCommon corresponding to state. */
+  @inline private def incrementedMcIndex(state: Int) = state+1
+
+  /** Index of first non-null missingView corresponding to state. */
+  @inline private def getMvIndex(state: Int) = (state>>8) & ByteMask
+
+  /** New state corresponding to incrementing the index of first non-null
+    * missingView corresponding to state. */
+  @inline private def incrementedMvIndex(state: Int) = state+256
+
+  private val NewViewFoundMask = 1<<17
+  private val TransferredMask = 1 << 18
+  private val NotAddedMask = 1 << 19
+
   /** A hash of newView and the non-null entries in missingCommon[start..). */
   @inline def hashMC(newView: ReducedComponentView,
     missingCommon: Array[MissingCommon], start: Int)

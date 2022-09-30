@@ -29,9 +29,10 @@ object Remapper{
 
   /** Produce a (deep) clone of map. */
   @inline def cloneMap(map: RemappingMap): RemappingMap = {
-    val map1 = new Array[Array[Int]](numTypes); var t = 0
-    while(t < numTypes){ map1(t) = Pools.cloneRow(map(t)); t += 1 }
-    map1
+    Pools.cloneMap(map)
+    // val map1 = Pools.getRemappingMap; var t = 0 
+    // while(t < numTypes){ map1(t) = Pools.cloneRow(map(t)); t += 1 }
+    // map1
   }
 
   /** The size for the remapping map for type t.  */
@@ -48,8 +49,8 @@ object Remapper{
     * RemappingMaps created by the same thread should not be in use at the
     * same time. */
   @inline def newRemappingMap: RemappingMap = {
-    Profiler.count("newRemappingMap")
-    val map1 = new Array[Array[Int]](numTypes); var t = 0
+    // Profiler.count("newRemappingMap")
+    val map1 = Pools.getRemappingMap; var t = 0
     while(t < numTypes){ map1(t) = remappingMapTemplate(t).clone; t += 1 }
     map1
   }
@@ -101,8 +102,7 @@ object Remapper{
         i += 1
       }
     }
-    val result = new Array[Array[Int]](numTypes)
-    var t = 0
+    val result = Pools.getRemappingMap; var t = 0
     while(t < numTypes){
       result(t) = Pools.cloneRow(map0(t))
       if(t == f) result(t)(id) = id1

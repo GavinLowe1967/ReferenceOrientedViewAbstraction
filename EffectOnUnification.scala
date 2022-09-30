@@ -106,33 +106,17 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
   private val cvPositionMap: Array[Array[List[(Int,Int)]]] = 
     mkPositionMap(cv.getParamsBound, cpts)
 
-  /** In the case of singleRef, secondary components of the transition that
-    * might gain a reference to c2 = cv.principal (without unification): all
-    * pairs (i,id) (i >= 1) such that the i'th component c1 of pre changes
-    * state, and id is a parameter of c1 in the post state that might
-    * reference c2. We will subsequently form secondary induced transitions
-    * with c1 as the principal component, referencing c2 (renamed). */
-  // private val c2Refs: List[(Int,Identity)] =
-  //   if(singleRef) ??? /*getCrossReferences()*/ else List[(Int,Identity)]()
-// IMPROVE: consider omitted references here
-
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
 
   // A representation of map |> post.servers
   import ServersReducedMap.ReducedMap 
 
-  type CombineResult1 = 
+  type CombineResult = 
     ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
 
-  /** The part of the result corresponding to secondary induced transitions.
-    * The Int field is the index of the component in pre/post that gains
-    * access to cv.principal. */
-  type CombineResult2 = ArrayBuffer[(Array[State], UnificationList, Int)]
-
-  /** Variables in which we build up the result. */
-  private val result = new CombineResult1
-  private val result2 = new CombineResult2
+  /** Variable in which we build up the result. */
+  private val result = new CombineResult
 
   /** A NextArgMap, containing values greater than anything in pre or post. */
   private val nextArg: NextArgMap = pre.getNextArgMap
@@ -174,17 +158,10 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
     * 
     * @return remapped state, paired with a UnificationList that contains
     * (j,i) whenever cv.components(j) unifies with pre.components(i).  */
-  def apply(): (CombineResult1, CombineResult2) = {
+  def apply(): CombineResult = {
     // IMPROVE: some of the initial calculations depends only on pre and post, so
     // could be stored with the transition.
-    //val princRenames = c2Refs.map(_._2) // normally empty; sometimes singleton
-    //require(singleRef || princRenames.isEmpty)
     val changedServers = servers != post.servers
-    //val map0 = servers.remappingMap1(cv.getParamsBound)
-    // All params in post.servers but not in pre.servers, as a bitmap// .
-    // val newServerIds: Array[Array[Boolean]] = 
-    //   ServerStates.newParamsBitMap(servers, post.servers)
-
     // Get all ways of unifying pre and cv. 
     val allUs = Unification.allUnifs(pre, cv) // cpts)
     // assert(allUs.distinct.length == allUs.length)
@@ -192,31 +169,21 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
     while(ix < allUs.length){
       val (map1, unifs) = allUs(ix); ix += 1
       //if(highlight) println(s"*unifs = $unifs, map1 = "+Remapper.show(map1)) 
-      // Does this create a cross reference from a secondary component to the
-      // principal of cv (with singleRef)?
-      //val acquiredCrossRef = false // IMPROVEprincRenames.contains(map1(cvpf)(cvpid))
       // Do we need to consider this combination?  Described in optimisations
-      // in the paper.  For singleRef, it describes when it is necessary to
-      // consider primary induced transitions.
-      val sufficientUnif = isSufficientUnif(changedServers, unifs) //, acquiredCrossRef)
-      //if(highlight) 
-      //  println(s"sufficientUnif = $sufficientUnif; c2Refs = $c2Refs")
-      if(/*c2Refs.nonEmpty || */ sufficientUnif){
+      // in the paper. 
+      val sufficientUnif = isSufficientUnif(changedServers, unifs)
+      if(sufficientUnif){
         val otherArgsBitMap = mkOtherArgsBitMap(unifs)
-        if(singleRef) ???
-        //  extendUnifSingleRef(unifs, map1, otherArgsBitMap, sufficientUnif)
-        else extendUnif(unifs, map1, otherArgsBitMap)
+        extendUnif(unifs, map1, otherArgsBitMap)
       }
     } // end of while loop
-
-    (result, result2)
+    result
   }
 
 // IMPROVE: do we need all of unifs?
 // IMPROVE, try to identify second case for sufficientUnifs within allUnifs,
 // by trying to unify components that change state first.
 // IMPROVE: can we share work between the calls to extendUnif? 
-
 
   /** Test if the current combination in combine needs to be considered.  Either
     * (1) the servers changed, and either (a) we have some unification, or (b)
@@ -240,23 +207,6 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
 
     if(trans.serverGetsNewId || changingUnif) true
     else changedServers && cv.addDoneInduced(postServers)
-
-    // Profiler.count("isSufficientUnif "+res); res
-
-    // Note: it's important to perform the call to addDoneInduced only if the
-    // earlier tests gave false.
-
-/* old version
-    if(changedServers)// {
-    //   if(changingUnif) true else cv.addDoneInduced(postServers, unifs)
-    // }
-      unifs.nonEmpty || cv.addDoneInduced(postServers)
-      // Note, this can't be strengthened to
-      // changingUnif || effectOnChangedServersCache.add((cv, postServers))
-      // If there are two different ways of performing unification with a 
-      // component that doesn't change state, this will find just one of them.
-    else changingUnif
- */
   }
 
   /** Create a bit map corresponding to an OtherArgMap and containing all
@@ -265,10 +215,9 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
     * (pre.)servers; (3) in post.cpts for a component to which cv.principal
     * gains a reference; But excluding parameters of servers in all cases.  */
   @inline private 
-  def mkOtherArgsBitMap(/*newServerIds: BitMap,*/ unifs: UnificationList): BitMap = {
+  def mkOtherArgsBitMap(unifs: UnificationList): BitMap = {
     // (1) parameters in newServerIds
     val otherArgsBitMap = ServerStates.newParamsBitMap(servers, post.servers)
-    //newServerIds.map(_.clone);
     var us = unifs
     while(us.nonEmpty){
       val (j, i) = us.head; us = us.tail
@@ -328,191 +277,6 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
       map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, result)
   } // end of extendUnif
 
-/*
-  /** Extend a unification in the case of singleRef.  Extend otherArgsBitMap0 so
-    * that if a component of cv gets a reference to a component c of preCpts,
-    * then the parameters of c are included in otherArgsBitMap.  Then create
-    * induced transitions.   */
-// IMPROVE: not all of these are needed for secondary induced transitions
-  @inline private def extendUnifSingleRef(
-    unifs: UnificationList, map0: RemappingMap, otherArgsBitMap0: BitMap,
-    sufficientUnif: Boolean)
-  = {
-    require(singleRef)
-    // Extend map0 to consider all combinations of mapping an identity in cpts
-    // to match a non-identity parameter in preCpts, or a non-identity
-    // parameter in preCpts to match an identity in cpts (but not matching any
-    // identities); this includes the case of mapping no such parameters.
-    // Each resulting map (map1 below) is paired with a list of tuples
-    // ((i1,j1), (i2,j2)) indicating that parameter j2 of cpts(i2) is mapped
-    // to match paramter j1 of preCpts(i1) (precisely one of j1 and j2 will be
-    // 0).
-    val crossRefs = 
-      // if(false)
-      //   EffectOnUnification.remapToCreateCrossRefs(preCpts, cpts, map0)
-      // else
-        newRemapToCreateCrossRefs(map0)
-    //if(highlight) 
-    //  println("extendUnifSingleRef; crossRefs length = "+crossRefs.length)
-    var i = 0
-    while(i < crossRefs.length){
-      val (map1, tuples) = crossRefs(i); i += 1
-      // if(highlight) println(s"tuples = $tuples, map1 = "+Remapper.show(map1))
-      // Profiler.count("tuples size "+tuples.length) -- mostly 0 or 1
-      // Get other arg BitMap for this case. 
-      val otherArgsBitMap = getOtherArgsBitMapForSingleRef(
-        map1, otherArgsBitMap0, tuples)
-      // Convert to OtherArgMap
-      val otherArgs = Remapper.makeOtherArgMap(otherArgsBitMap)
-      // if(highlight) println("otherArgs = "+otherArgs.mkString("; "))
-      // Values that identities can be mapped to: values in otherArgs, but not
-      // parameters in preCpts; update otherArgsBitMap to record.
-      StateArray.removeParamsFromBitMap(preCpts, otherArgsBitMap)
-      // Create primary induced transitions.
-      if(sufficientUnif){
-        val res0 = Unification.getCombiningMaps(
-          map1, otherArgs, otherArgsBitMap, nextArg, cpts)
-// IPROVE: recycle res0 when done
-        var j = 0
-        while(j < res0.length){
-          val map11 = res0(j); j += 1
-          // assert(!(j until res0.length).exists(i =>  
-          //   (0 until numTypes).forall(t => map11(t).sameElements(res0(i)(t)))))
-          val reducedMapInfo: ReducedMap = 
-            if(unifs.isEmpty) Remapper.rangeRestrictTo(map11, postServers)
-            else null
-          if(unifs.nonEmpty || 
-            !cv.containsDoneInducedPostServersRemaps(
-              postServers, reducedMapInfo)){
-            val newCpts = Remapper.applyRemapping(map11, cpts)
-// IMPROVE
-if(false){
-  val matches = result.filter{ case (_,newCpts2,unifs2,_) => 
-    newCpts2.sameElements(newCpts) && unifs2 == unifs }
-  assert(matches.isEmpty,
-    s"\nnewCpts = "+StateArray.show(newCpts)+s"; unifs = $unifs\n"+
-      "map1 = "+Remapper.show(map1)+"; otherArgs = "+otherArgs.mkString("; ")+
-      "; map11 = "+Remapper.show(map11)+s"; tuples = $tuples\n"+
-      s"crossRefs = "+crossRefs.map{ case (mapX,tuples2) => 
-        "("+Remapper.show(mapX)+"; "+tuples2+")" }.mkString("; ")+
-      s"\nresult = "+result.map{ case (mapX,newCpts2,unifs2,_) =>
-        Remapper.show(mapX)+"; "+StateArray.show(newCpts2)+"; "+unifs2 }
-      .mkString("\n  "))
-} 
-            //if(highlight) println("Adding "+StateArray.show(newCpts))
-            result += ((map11, newCpts, unifs, reducedMapInfo))
-          }
-        }
-      } // end of if(sufficientUnif)
-      makeSecondaryInducedTransitions(map1, otherArgs, otherArgsBitMap, unifs)
-    } // end of outer for loop.
-  } // end of extendUnifSingleRef
-
-  /** Extend otherArgsBitMap0.  Add parameters of components c of preCpts such
-    * that a component of map1(cv) has a reference to c, or vice versa; such
-    * components c are identified by the first index in an element of tuples.
-    * Also remove values in ran map1, and all identities in preCpts. */
-  @inline private def getOtherArgsBitMapForSingleRef(
-    map1: RemappingMap, otherArgsBitMap0: BitMap, 
-    tuples: List[((Int,Int),(Int,Int))])
-      : BitMap = {
-    // Clone, to avoid interference between different iterations.
-    val otherArgsBitMap = otherArgsBitMap0.map(_.clone)
-    // Indices of components of preCpts for which we have added the parameters
-    val doneIndices = new Array[Boolean](preCpts.length) 
-    var tups = tuples
-    while(tups.nonEmpty){
-      val i1 = tups.head._1._1; tups = tups.tail
-      //assert(i1 < preCpts.length, s"pre = $pre\n cv = $cv\ntuples = $tuples")
-      if(!doneIndices(i1)){
-        doneIndices(i1) = true 
-        preCpts(i1).addIdsToBitMap(otherArgsBitMap, servers.idsBitMap, 1)
-      }
-    }
-    // }
-    // Remove identities of components in preCpts
-    var i = 0
-    while(i < preCpts.length){
-      val (t,id) = preCpts(i).componentProcessIdentity; i += 1
-      otherArgsBitMap(t)(id) = false
-    }
-
-    // IMPROVE: we need only map parameters of cpts(i2) like this, where
-    // i2 is the relevant index in the current tuple.
-    // for(cpt <- preCpts) cpt.addIdsToBitMap(otherArgsBitMap, servers.numParams)
-    // Remove values in ran map1
-    Remapper.removeFromBitMap(map1, otherArgsBitMap)
-    otherArgsBitMap
-  }
-
-  /** Create information about secondary induced transitions, and add them to
-    * result2.  For each (k,p) in c2Refs, try to map cv.principal's identity
-    * to p, so c = postCpts(k) has a reference to cv.principal in p.  Remap
-    * according to map1, otherArgs, otherArgsBitMap, nextArg, but also mapping
-    * parameters to parameters of c. */
-  @inline private def makeSecondaryInducedTransitions( 
-    map1: RemappingMap, otherArgs0: OtherArgMap, otherArgsBitMap0: BitMap,  
-    unifs: UnificationList)
-  = {
-    //if(highlight) println("makeSecondaryInducedTransitions")
-    // IMPROVE
-    for(f <- 0 until numTypes; id <- otherArgs0(f); 
-        id1 <- 0 until map1(f).length)
-      assert(map1(f)(id1) != id)
-    /* Build remappings for secondary induced transitions corresponding to
-     * component k acquiring a reference to cv.principal in parameter id. */
-    @inline def mkSecondaryRemaps(k: Int, id: Int) = {
-      // if(highlight) println(s"mkSecondaryRemaps($k, $id)")
-      // clone otherArgs0, otherArgsBitMap, removing (cvpf,id)
-      val otherArgs = new Array[List[Identity]](numTypes); var f = 0
-      while(f < numTypes){
-        if(f == cvpf) otherArgs(f) = otherArgs0(f).filter(_ != id)
-        else otherArgs(f) = otherArgs0(f)
-        f += 1
-      }
-      val otherArgsBitMap = otherArgsBitMap0.map(_.clone)
-      otherArgsBitMap(cvpf)(id) = false
-      require(map1(cvpf)(cvpid) == id && 
-        postCpts(k).processIdentities.contains((cvpf,id)))
-      // For each other parameter of postCpts(k), if not in ran map1, add to
-      // otherArgs, and to otherArgsBitMap if not an identity in postCpts.
-      for((t,id1) <- postCpts(k).processIdentities)
-        if(id1 != id && !isDistinguished(id1) && 
-            !contains(map1(t),id1) && !contains(otherArgs(t),id1)){
-          otherArgs(t) ::= id1
-          if(StateArray.findIndex(postCpts, t, id1) < 0)
-            otherArgsBitMap(t)(id1) = true
-        }
-      val tempRes = new CombineResult
-      for(f <- 0 until numTypes; id <- otherArgs(f);
-          id1 <- 0 until map1(f).length)
-        assert(map1(f)(id1) != id, 
-          Remapper.show(map1)+"\n"+otherArgs.mkString(";"))
-      // if(highlight) println(Remapper.show(otherArgs))
-      Unification.combine1(
-        map1, otherArgs, otherArgsBitMap, nextArg, unifs, cpts, tempRes)
-      for((_, newSts, us, _) <- tempRes){ // IMPROVE
-        //if(highlight) println(s"adding (${StateArray.show(newSts)}, $us, $k)")
-        assert(us eq unifs); StateArray.checkDistinct(newSts)
-        result2 += ((newSts, us, k))
-      }
-    } // end of mkSecondaryRemaps
-
-    for((k,p) <- c2Refs){
-      //if(highlight)
-      //  println(s"k = $k, p = $p, map1(cvpf)(cvpid) = "+map1(cvpf)(cvpid))
-      // Can we map (cvpf,cvpid) to p?
-      if(map1(cvpf)(cvpid) == p) mkSecondaryRemaps(k, p)
-      else if(map1(cvpf)(cvpid) < 0 && !contains(map1(cvpf), p) && 
-          !contains(preMatchingIds, p)){
-        // Consider mapping cvpid to p (and backtrack)
-        map1(cvpf)(cvpid) = p; // assert(!otherArgs0(cvpf).contains(p))
-        mkSecondaryRemaps(k, p); map1(cvpf)(cvpid) = -1
-      }
-    }
-  }
- */
-
   /** Bitmap showing which components changed state between preCpts and
     * postCpts. */
   @inline private 
@@ -524,95 +288,9 @@ if(false){
     changedStateBitMap
   }
 
-// IMPROVE: in the calculation of c2Refs, I think we can omit params of
-// pre.servers other than cv.principal's identity.
-// IMPROVE: could we have more simply achieved the effect of c2Refs by using
-// cv with pre.principal as principal, and c2 as secondary component?  This
-// assumes pre.principal has a reference to c2, which seems reasonable.
-
-/*
-  /** Identify secondary components that can gain a reference to a component of
-    * type cvpf (the type of cv.principal.family).  All pairs (i,id) (with i
-    * >= 1) such that the i'th component c1 changes state between preCpts and
-    * postCpts, and id is a new included non-distinguished parameter of c1 of
-    * family cvpf in the post state. */
-  @inline private def getCrossReferences(): List[(Int,Identity)] = {
-    require(singleRef)
-    var result = List[(Int,Identity)](); var i = 1
-    while(i < preCpts.length){
-      if(preCpts(i) != postCpts(i)){
-        val c1 = postCpts(i); val c1Params = c1.ids; var j = 1
-        while(j < c1Params.length){
-          if(c1.includeParam(j) && c1.typeMap(j) == cvpf){
-            val p = c1Params(j)
-            // Check: non-distiguished, not an id in preCpts, new param in c1
-            if(!isDistinguished(p) && !preCpts(i).hasIncludedParam(cvpf,p))
-// IMPROVE: think about above; should it be hasParam? 
-              result ::= (i, p)
-          }
-          j += 1
-        } // end of inner while
-      }
-      i += 1
-    } // end of outer while
-    if(false) println(s"getCrossReferences: $result")
-    result
-  }
- */
-
-/*
-  /** All ways of extending map (over cpts) so that an identity in cpts matches
-    * a non-identity parameter in preCpts, or a non-identity parameter in
-    * preCpts matches an identity in cpts; but no identity should map to an
-    * identity.
-    * @return the resulting map, together with a list of tuples
-    * ((i1,j1), (i2,j2)) indicating that parameter j2 of cpts(i2) is mapped to
-    * match parameter j1 of preCpts(i1); precisely one of j1 and j2 will be
-    * 0. */
-  def newRemapToCreateCrossRefs(map: RemappingMap)
-      : ArrayBuffer[(RemappingMap, List[MatchingTuple])] = {
-    val result = new ArrayBuffer[(RemappingMap, List[MatchingTuple])]
-    // Bitmap showing the range of map
-    val inRangeBitMap = Remapper.rangeBitMap(map)
-
-    /* Perform renamings starting with parameter (t,x) mapping to (t,y).  
-     * Consider cases in lexicographic order of (t,x,y).  All updates to map
-     * and inRangeBitMap are backtracked. */
-    def rec(tuples: List[MatchingTuple], t: Type, x: EventInt, y: EventInt)
-        : Unit =
-      if(t == numTypes) // finished this branch
-        result += ((Remapper.cloneMap(map), tuples))
-      else if(x == map(t).size) rec(tuples, t+1, 0, 0) // move to next type
-      else if(y == prePositionMap(t).size)  
-        rec(tuples, t, x+1, 0) // Move to next param of cv
-    else{
-      // try to map (t,x) -> (t,y)
-      if(map(t)(x) < 0 && !inRangeBitMap(t)(y) && 
-        // Precisely one of (t,x), (t,y) is an identity
-        (cvIds.contains((t,x)) ^ preIds.contains((t,y)))){
-        map(t)(x) = y; inRangeBitMap(t)(y) = true // temporary update
-        val newTuples = 
-          crossProduct(prePositionMap(t)(y), cvPositionMap(t)(x)) ++ tuples
-        rec(newTuples, t, x, y+1)
-        map(t)(x) = -1; inRangeBitMap(t)(y) = false  // backtrack (*)
-      }
-      // Also just advance (whether or not we did the if).  If already have
-      // (t,x) -> (t,y), add relevant tuples here.
-      val newTuples = 
-        if(map(t)(x) == y) 
-          crossProduct(prePositionMap(t)(y), cvPositionMap(t)(x)) ++ tuples
-        else tuples
-      rec(newTuples, t, x, y+1)
-    }
-
-    rec(List[MatchingTuple](), 0, 0, 0)
-    result
-  }
- */
-
-  /** Cross product of ps1 and ps2. */
-  def crossProduct(ps1: List[(Int,Int)], ps2 : List[(Int,Int)]) = 
-    for(p1 <- ps1; p2 <- ps2) yield (p1,p2)
+  // /** Cross product of ps1 and ps2. */
+  // def crossProduct(ps1: List[(Int,Int)], ps2 : List[(Int,Int)]) = 
+  //   for(p1 <- ps1; p2 <- ps2) yield (p1,p2)
 
 }
 

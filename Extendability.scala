@@ -196,8 +196,6 @@ class Extendability(views: ViewSet){
     val pCptR = Remapper.remapState(map, nextArgs, pCpt)
     // st.id gets renamed to stIdR
     val stIdR = map(stF)(stId)
-    // Check pCpt references st, i.e. precondition.
-    //assert(pCptR.processIdentities(stIx) == (stF,stIdR))
     // Find other components of pre that are referenced by pCpt, and included
     // in views with pCpt as principal.
     val pRefs = new Array[State](pLen); var i = 0
@@ -221,7 +219,7 @@ class Extendability(views: ViewSet){
       if(includeRef){
         // Test if cv1 contains a component that is a renaming of st under an
         // extension of map. Find component with identity (stF, stIdR) in cv1
-        val cpt1 = cv1.find(stF, stIdR) // StateArray.find(cv1.components, stF, stIdR)
+        val cpt1 = cv1.find(stF, stIdR)
         if(cpt1 != null){
           // test if cpt1 is a renaming of st under an extension of map. (map2
           // recycled below.)  Note: new map for each cv1.
@@ -233,15 +231,14 @@ class Extendability(views: ViewSet){
             // by a corresponding component in cv1.  ok if true for
             // all components so far.
             var k = 1; var ok = true
-            while(k < pLen && ok /*map2 != null*/){
+            while(k < pLen && ok){
               if(pRefs(k) != null){
 // FIXME: do those components correspond if there are excluded refs?
-                // map2 = Unification.unify(map2, cv1.components(k), pRefs(k))
                 ok = Unification.extendToUnify(map2, cv1.components(k), pRefs(k))
               }
               k += 1
             } // end of inner while
-            found = ok /* map2 != null */ ; Pools.returnRemappingRows(map2)
+            found = ok; Pools.returnRemappingRows(map2)
           } // end of if(map2 != null)
         } // end of if(cpt1 != null)
         else assert(singleRef) 

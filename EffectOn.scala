@@ -16,9 +16,14 @@ class EffectOn(
    * apply
    * |--getCrossReferences
    * |--EffectOnUnification.apply/SingleRefEffectOnUnification.apply
-   * |--processInducedInfo
-   * |  |--checkCompatibleMissing
-   * |  |--missingCrossRefs
+   * |--processInduced
+   * |  |--getCrossRefs
+   * |  |--processInducedInfo
+   * |     |--checkCompatibleMissing
+   * |     |--EffectOn.effectOnStore.add
+   * |--processSecondaryInduced
+   * |  |--getCrossRefs
+   * |  |--processInducedInfo (as above)
    */
 
   import EffectOn.{getCrossRefs,commonMissingRefs}
@@ -74,12 +79,15 @@ class EffectOn(
       // Int) is similar for secondary induced transitions, where the final
       // component is the index of preCpts/postCpts that gains a reference to
       // cv.principal.
-      val (inducedInfo, secondaryInduced): (InducedInfo, SecondaryInducedInfo) =
-        if(singleRef) new SingleRefEffectOnUnification(trans,cv)()
-        else EffectOnUnification.combine(trans, cv)
-      //if(highlight) println("inducedInfo.length == "+inducedInfo.length)
-      processInduced(inducedInfo)
-      processSecondaryInduced(secondaryInduced)
+      if(singleRef){
+        val (inducedInfo, secondaryInduced): (InducedInfo,SecondaryInducedInfo) =
+          new SingleRefEffectOnUnification(trans,cv)()
+        processInduced(inducedInfo); processSecondaryInduced(secondaryInduced)
+      }
+      else{
+        val inducedInfo: InducedInfo = EffectOnUnification.combine(trans, cv)
+        processInduced(inducedInfo)
+      }
     }
     // else if(highlight)
     //   println(s"Not sufficient unifs: "+cv.containsDoneInduced(post.servers))
@@ -114,7 +122,7 @@ class EffectOn(
         // if(hl || false && highlight)
         //   println("newComponentList: "+newComponentsList.map(StateArray.show))
         processInducedInfo(
-          map, cpts, unifs, reducedMapInfo, true, crossRefs, newComponentsList)
+          cpts, unifs, reducedMapInfo, true, crossRefs, newComponentsList)
       }
       Pools.returnRemappingRows(map)
     } // end of while loop
@@ -133,35 +141,35 @@ class EffectOn(
       val newPrinc = getNewPrinc(cpts(0), unifs)
       val newComponentsList = List(StateArray(Array(postCpts(k), newPrinc)))
       processInducedInfo(
-        null, cpts, unifs, null, false, crossRefs, newComponentsList)
+        /*null,*/ cpts, unifs, null, false, crossRefs, newComponentsList)
     }
   }
 
   /** Create induced transition producing views with post.servers and each
     * element of newComponentsList.  The transition is induced by pre -e->
-    * post acting on cv, with unifications unifs; cv.cpts is remapped by map
+    * post acting on cv, with unifications unifs; cv.cpts is remapped
     * to produce cpts.  Add result to nextNewViews.
     * 
     * This function would live better inside apply; but that function is too
     * large.  Most other parameters are as there (most are used only for
     * setting creation information or textual output).
     * @param isPrimary are we creating a primary transition?
-    * @param reducedMap a representation of map |> post.servers. */
+    * @param reducedMap a representation of the RemappingMap |> post.servers. */
   @inline private 
   def processInducedInfo(
-    map: RemappingMap, cpts: Array[State], unifs: UnificationList, 
+    cpts: Array[State], unifs: UnificationList, 
     reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
     newComponentsList: List[Array[State]])
       : Unit = {
     // assert(cpts.map(_.cs).sameElements(cv.components.map(_.cs)))
     Profiler.count(s"processInducedInfo $isPrimary")
     // IMPROVE
-    for(cpts <- newComponentsList) ComponentView0.checkValid(pre.servers, cpts)
+    //for(cpts <- newComponentsList) ComponentView0.checkValid(pre.servers, cpts)
     // StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
-    val highlight1 = highlight && map(0).sameElements(Array(0,1,3,2))
-    if(highlight1) 
-      println("processInducedInfo: "+unifs+"; "+Remapper.show(map)+
-        "; cpts = "+StateArray.show(cpts))
+    // val highlight1 = highlight && map(0).sameElements(Array(0,1,3,2))
+    // if(highlight1) 
+    //   println("processInducedInfo: "+unifs+"; "+ // Remapper.show(map)+
+    //     "; cpts = "+StateArray.show(cpts))
 
     /* Record this induced transition if singleRef and primary, and (1) if
      * newEffectOn, no acquired references, (2) otherwise no unifs. */
@@ -222,9 +230,8 @@ class EffectOn(
         // Profiler.count("ReducedComponentView: EffectOn")
         filter(!views.contains(_))
     for(newComponents <- newComponentsList){
-      if(highlight1) 
-        println(s"unifs = $unifs; newComponents = "+
-          StateArray.show(newComponents))
+      // if(highlight1) println(s"unifs = $unifs; newComponents = "+
+      //     StateArray.show(newComponents))
       val nv = Remapper.mkComponentView(post.servers, newComponents)
       Profiler.count("newViewCount") 
       if(!views.contains(nv)){
@@ -246,8 +253,8 @@ class EffectOn(
           }
         } // end of if(missing.isEmpty && nextNewViews.add(nv))
         else if(missing.nonEmpty || missingCommons.nonEmpty){
-          if(highlight1) 
-            println(s"missing = $missing\nmissingCommons = $missingCommons")
+          // if(highlight1) 
+            // println(s"missing = $missing\nmissingCommons = $missingCommons")
           // Note: we create nv eagerly, even if missing is non-empty: this
           // might not be the most efficient approach.  Note also that the
           // missingCommons may be shared.
@@ -280,6 +287,9 @@ class EffectOn(
   /** Test whether, if the principal components of cpts1 and cpts2 both have a
     * reference to the same missing component then there is a way of
     * instantiating that component, consistent with the current set of views.
+    * Here cpts1 corresponds to the pre-state of a transition, and cpts2 to
+    * the view acted upon.
+    * 
     * Pre: servers || cpts1 is in normal form.
     * @return the identities of all such missing components. */ 
   private def checkCompatibleMissing(

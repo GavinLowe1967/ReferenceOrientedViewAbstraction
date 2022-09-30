@@ -6,8 +6,6 @@ import ox.gavin.profiling.Profiler
 
 /** Class that extends a result-defining map to a full mapping. */
 class RemappingExtender(trans: Transition, cv: ComponentView){
-//  pre: Concretization, post: Concretization, cv: ComponentView){
-
   /* Relationship of main functions.
    * makeExtensions
    * |--makeExtensions1
@@ -18,7 +16,10 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
    *    |--findLinkages
    *    |--mapUndefinedToFresh
    *    |--extendForLinkage
-   *    |  |--extendMapOverComponent (also visible externally)
+   *       |--extendMapByIndex
+   * 
+   * extendMapOverComponent 
+   *   (called from SingleRefEffectOnUnification.makeSecondaryInduced)
    */
 
   Profiler.count("RemappingExtender")
@@ -34,7 +35,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   @inline private def preCptIds = pre.cptIdsBitMap 
   @inline private def cptIds = cv.cptIdsBitMap 
 
-  @inline private def preParamSizes = pre.getNextArgMap
+  //@inline private def  preParamSizes = pre.getNextArgMap
 
   /** Temporary test to help with debugging.  Might this be the instance causing
     * problems? */
@@ -44,22 +45,13 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       preCpts(0).cs == 23 && preCpts(1).cs == 15 && 
       cpts(0).cs == 24 && cpts(1).cs == 11 && cpts(0).ids(2) == 2
 
-  /** A NextArgMap, containing values greater than anything in pre or post. */
-  //private val nextArg: NextArgMap = trans.getNextArgMap
-  // pre.getNextArgMap
-  // post.updateNextArgMap(nextArg)
-
-  /** All parameters of components of pre, indexed by type. */
-  //private val allPreParams: Array[List[Identity]] = 
-  //  Remapper.makeOtherArgMap(pre.paramsBitMap)
-
   import Unification.UnificationList // = List[(Int,Int)]
 
   /** Representation of a linkage.  A pair (i, j) represents a linkage between
     * cpts(i) and preCpts(j). */
   private type Linkage = (Int,Int)
 
-  private def recycle(map: RemappingMap) = Pools.returnRemappingRows(map)
+  @inline private def recycle(map: RemappingMap) = Pools.returnRemappingRows(map)
 
   /** Find a linkage for part (b) implied by rdMap, excluding those already in
     * doneB; or null if none exists.  A pair (i, j) such that for some
@@ -128,7 +120,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   private def findLinkagesC(unifs: UnificationList, rdMap: RemappingMap)
       : ArrayBuffer[Parameter] = {
     val result = new ArrayBuffer[Parameter]
-    // Linkages for condition (c).  Iterate through the parameters of
+    // Linkages for condition (c).  Iterate through parameters of
     // cv.principal.
     val cvPrincParams = cv.principal.processIdentities; var i = 1
     while(i <  cvPrincParams.length){
@@ -183,40 +175,28 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     }
     // if(highlight) println("otherArgs = "+otherArgs.mkString("; "))
     //println("extendForLinkage: "+otherArgs.mkString("; "))
-    // if(true)
-    if(false) extendMapOverComponent(rdMap, c1, otherArgs)
-    else{
-      // For each non-distinguished parameter (t,x) of c1, the values (t,y)
-      // that (t,x) can be mapped to: elements of otherArgs(t) such that for
-      // each (ii,jj) in doneB, if (t,x) is a parameter of cv.cpts(ii), then
-      // (t,y) is not a parameter of preCpts(jj); and not mapping an identity
-      // to an identity.  Indexed following the indices of parameters in c1.
-      val candidates = new Array[List[Identity]](c1.length)
-      for(ix <- 0 until c1.length){
-        val (t,x) = c1.processIdentity(ix)
-        // Can (t,x) be mapped to (t,y)? 
-        @inline def respects(y: Identity) = {
-          var db = doneB; var ok = !(cptIds(t)(x) && preCptIds(t)(y))
-          while(db.nonEmpty && ok){
-            val (ii,jj) = db.head; db = db.tail
-            if(cpts(ii).hasParam(t,x) && preCpts(jj).hasParam(t,y)) ok = false
-          }
-          ok
+    // if(false) extendMapOverComponent(rdMap, c1, otherArgs)    else{
+    // For each non-distinguished parameter (t,x) of c1, the values (t,y) that
+    // (t,x) can be mapped to: elements of otherArgs(t) such that for each
+    // (ii,jj) in doneB, if (t,x) is a parameter of cv.cpts(ii), then (t,y) is
+    // not a parameter of preCpts(jj); and not mapping an identity to an
+    // identity.  Indexed following the indices of parameters in c1.
+    val candidates = new Array[List[Identity]](c1.length)
+    for(ix <- 0 until c1.length){
+      val (t,x) = c1.processIdentity(ix)
+      // Can (t,x) be mapped to (t,y)?
+      @inline def respects(y: Identity) = {
+        var db = doneB; var ok = !(cptIds(t)(x) && preCptIds(t)(y))
+        while(db.nonEmpty && ok){
+          val (ii,jj) = db.head; db = db.tail
+          if(cpts(ii).hasParam(t,x) && preCpts(jj).hasParam(t,y)) ok = false
         }
-        if(!isDistinguished(x) && rdMap(t)(x) < 0)
-          candidates(ix) = otherArgs(t).filter(respects)
-      } // end of for loop over ix
-      extendMapByIndex(rdMap, c1, candidates)
-    }
-    // Note: the latter gives ~14% fewer maps for lazySet with bound 48. 
-
-    // assert(oldRes.length >= newRes.length, 
-    //   s"oldRes = "+oldRes.map(Remapper.show).mkString("\n  ")+
-    //     "\nnewRes = "+newRes.map(Remapper.show).mkString("\n  ")+
-    //     s"\ndoneB = $doneB; c1 = $c1; c2 = $c2; "+
-    //     "\n cpts = "+StateArray.show(cpts)+
-    //     "\npreCpts = "+StateArray.show(preCpts))
-    // newRes
+        ok
+      }
+      if(!isDistinguished(x) && rdMap(t)(x) < 0)
+        candidates(ix) = otherArgs(t).filter(respects)
+    } // end of for loop over ix
+    extendMapByIndex(rdMap, c1, candidates)
   }
 
   /** Extend map over the parameters of c in all possible ways, mapping the
@@ -226,7 +206,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     map: RemappingMap, c: State, candidates: Array[List[Identity]])
       : ArrayBuffer[RemappingMap] = {
     val result = new ArrayBuffer[RemappingMap] // builds result
-    val addedParams = Pools.getBitMap // newBitMap  // Parameters that we have added to map
+    val addedParams = Pools.getBitMap  // Parameters that we have added to map
 
     /* Extend map over parameters of c from index ix onwards. */
     def rec(ix: Int): Unit = {
@@ -258,59 +238,6 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rec(0); Pools.returnBitMap(addedParams); result
   }
 
-
-  /** Find all consistent extensions of map over the parameters of c, mapping
-    * each parameter to an element of otherArgs, or not.  Each such map is
-    * fresh.  map is mutated but changes rolled back.*/
-  def extendMapOverComponent(map: RemappingMap, c: State, otherArgs: OtherArgMap)
-      : ArrayBuffer[RemappingMap] = {
-    val extendedMaps = new ArrayBuffer[RemappingMap]
-    extendMapOverComponent1(map, c, otherArgs, extendedMaps)
-    extendedMaps
-  }
-
-  /** Find all consistent extensions of map over the parameters of c, mapping
-    * each parameter to an element of otherArgs, or not.  Add all such to
-    * result.  Each such map is fresh.  map is mutated but changes rolled
-    * back. */
-  private def extendMapOverComponent1(
-    map: RemappingMap, c: State, otherArgs: OtherArgMap, 
-    result: ArrayBuffer[RemappingMap]) 
-  = {
-    val cParams = c.processIdentities
-
-    /* Extend map over params of c1 from ix onwards, based on otherArgs. */
-    def rec(ix: Int): Unit = {
-      if(ix == c.length) result += Remapper.cloneMap(map)
-      else{
-        val (t,id0) = cParams(ix)
-        if(!isDistinguished(id0) && map(t)(id0) < 0){
-          val isId = cptIds(t)(id0)  // Is this an identity?
-          // map (t,id0) to each element of otherArgs(t)
-          var toDoIds = otherArgs(t); var doneIds = List[Identity]()
-          // Inv: reverse(doneIds) ++ toDoIds = otherArgs(t)
-          while(toDoIds.nonEmpty){
-            val id1 = toDoIds.head; toDoIds = toDoIds.tail
-            // Don't map an identity to an identity
-            if(!(isId && preCptIds(t)(id1))){
-              otherArgs(t) = append1(doneIds, toDoIds) // temporary update (*)
-              map(t)(id0) = id1  // temporary update (+)
-              rec(ix+1)
-              map(t)(id0) = -1   // backtrack (+)
-            }
-            doneIds ::= id1 // order doesn't matter
-          } // end of while loop
-          otherArgs(t) = doneIds // undo (*)
-        } // end of if(!isDistinguished ... )
-        // Also don't map (t,i) to anything
-        rec(ix+1)
-      }
-    } // end of rec
-
-// // IMPROVE: if otherArgs is empty, just add rdMap
-    rec(0)
-  }
-
   /** Implementation of allExtensions from the paper.  All extensions of rdMap,
     * mapping undefined parameters to an arbitrary parameter of pre, or the
     * next fresh parameter, but not to parameters of resultRelevantParams, and
@@ -319,6 +246,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     resultRelevantParams: BitMap, rdMap: RemappingMap, 
     doneB: List[Linkage], extensions: ArrayBuffer[RemappingMap])
   = {
+    Profiler.count("allExtensions")
     // All parameters that each parameter can be mapped to
     val candidates = getCandidatesMap(resultRelevantParams, rdMap, doneB)
     // Build all extensions of rdMap, mapping each parameter to each element
@@ -340,6 +268,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rdMap: RemappingMap, candidates: Array[Array[List[Identity]]]) 
       : ArrayBuffer[RemappingMap] = {
     val result = new ArrayBuffer[RemappingMap]
+    val preParamSizes = pre.getNextArgMap
     // bitmap showing which parameters of pre have been used in the current
     // mapping.  Calls to rec mutate this but backtrack the updates.
     val used = Array.tabulate(numTypes)(t => 
@@ -389,8 +318,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     val candidates = Array.tabulate(numTypes)(t => 
       Array.tabulate(rdMap(t).length)(p => 
         if(rdMap(t)(p) < 0) 
-          if(cptIds(t)(p)) nonIds(t) // otherArgs(t).filter(p1 => !preCptIds(t)(p1))
-          else otherArgs(t)
+          if(cptIds(t)(p)) nonIds(t) else otherArgs(t)
         else List() 
       ))
     // For each (i,j) in doneB, for each param (t,x) of cv.cpts(i),
@@ -407,9 +335,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   /** Implementation of makeExtensions from the paper.  Create all required
     * extensions of result-defining map rdMap.  Note: rdMap may be mutated and
     * included in the result; otherwise it is recycled. */
-  def makeExtensions(
-    unifs: UnificationList, resultRelevantParams: BitMap, rdMap: RemappingMap, 
-    isPrimary: Boolean)
+  def makeExtensions(unifs: UnificationList, resultRelevantParams: BitMap, 
+    rdMap: RemappingMap, isPrimary: Boolean)
       : ArrayBuffer[RemappingMap] = {
     val extensions = new ArrayBuffer[RemappingMap] 
     makeExtensions1(
@@ -420,7 +347,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   /** Implementation of makeExtensions from the paper.  Create all required
     * extensions of result-defining map rdMap.  Add all such to extensions.
     * doneB gives the instances of condition (b) that we have dealt with so
-    * far.  Note: rdMap may be mutated and might be included in result. */
+    * far.  Note: rdMap may be mutated and might be included in result; but
+    * otherwise should be recycled. */
   private def makeExtensions1(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, doneB: List[Linkage], 
@@ -450,13 +378,9 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
         // FIXME: need to respect doneB below
         val extendedMaps = 
           extendForLinkage(rdMap, resultRelevantParams, i, j, isPrimary, doneB)
-        // if(highlight) 
-        //   println("extendedMaps: "+extendedMaps.map(Remapper.show(_)))
         var k = 0
         while(k < extendedMaps.length){
-          // Profiler.count("makeExtensions1 iter")
           val eMap = extendedMaps(k); k += 1
-          // if(highlight) println("eMap = "+Remapper.show(eMap))
           makeExtensions1(unifs, resultRelevantParams, eMap, 
             (i,j)::doneB, isPrimary, extensions)
         }
@@ -471,6 +395,47 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
    * cv.  Each might or might not add the mapping N1 -> N2, so there are two
    * ways to get this mapping.  It's not clear whether this is worthwhile.
    * There might still be repetitions arising within allExtensions.  */
+
+
+  /** Find all consistent extensions of map over the parameters of c, mapping
+    * each parameter to an element of otherArgs, or not.  Each such map is
+    * fresh.  map is mutated but changes rolled back.*/
+  def extendMapOverComponent(map: RemappingMap, c: State, otherArgs: OtherArgMap)
+      : ArrayBuffer[RemappingMap] = {
+    val result = new ArrayBuffer[RemappingMap]
+    val cParams = c.processIdentities
+
+    /* Extend map over params of c1 from ix onwards, based on otherArgs. */
+    def rec(ix: Int): Unit = {
+      if(ix == c.length) result += Remapper.cloneMap(map)
+      else{
+        val (t,id0) = cParams(ix)
+        if(!isDistinguished(id0) && map(t)(id0) < 0){
+          val isId = cptIds(t)(id0)  // Is this an identity?
+          // map (t,id0) to each element of otherArgs(t)
+          var toDoIds = otherArgs(t); var doneIds = List[Identity]()
+          // Inv: reverse(doneIds) ++ toDoIds = otherArgs(t)
+          while(toDoIds.nonEmpty){
+            val id1 = toDoIds.head; toDoIds = toDoIds.tail
+            // Don't map an identity to an identity
+            if(!(isId && preCptIds(t)(id1))){
+              otherArgs(t) = append1(doneIds, toDoIds) // temporary update (*)
+              map(t)(id0) = id1  // temporary update (+)
+              rec(ix+1)
+              map(t)(id0) = -1   // backtrack (+)
+            }
+            doneIds ::= id1 // order doesn't matter
+          } // end of while loop
+          otherArgs(t) = doneIds // undo (*)
+        } // end of if(!isDistinguished ... )
+        // Also don't map (t,i) to anything
+        rec(ix+1)
+      }
+    } // end of rec
+
+// // IMPROVE: if otherArgs is empty, just add rdMap
+    rec(0); result
+  }
 
   // ========= Hooks for testing
 

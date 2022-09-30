@@ -8,14 +8,16 @@ import collection.OpenHashSet
 import MissingCommon.Cpts // = Array[State]
 
 /** The representation of the obligation to find a component state c with
-  * identity pid such that (1) servers || cpts1(0) || c is in the ViewSet; (2)
-  * servers || cpts2(0) || c is in the ViewSet; (3) if c has a reference to a
-  * secondary component c2 of cpts1 or cpts2, or vice versa, then servers || c
-  * || c2 is in ViewSet (modulo renaming).  This corresponds to condition (c)
-  * in the definition of induced transitions with restricted views. */
+  * identity pid = (family,id) such that (1) servers || cpts1(0) || c is in
+  * the ViewSet; (2) servers || cpts2(0) || c is in the ViewSet; (3) if c has
+  * a reference to a secondary component c2 of cpts1 or cpts2, or vice versa,
+  * then servers || c || c2 is in ViewSet (modulo renaming).  This corresponds
+  * to condition (c) in the definition of induced transitions with restricted
+  * views.  Here cpts1 corresponds to the pre-state of a transition, and cpts2
+  * to the view acted upon. */
 class MissingCommon(
     val servers: ServerStates, val cpts1: Cpts, val cpts2: Cpts,
-    val pid: ProcessIdentity){
+    val family: Int, val id: Int){
 
 // IMPROVE
   // assert(cpts1.eq(StateArray(cpts1))); assert(cpts2.eq(StateArray(cpts2)))
@@ -33,6 +35,8 @@ class MissingCommon(
    * 
    * done, missingHeads, matches, sanityCheck, compare, size
    */
+
+  @inline private def pid = (family, id)
 
   @inline private def princ1 = cpts1(0)
 
@@ -75,8 +79,16 @@ class MissingCommon(
    * the current ply.  The MissingInfo object containing this object will be
    * registered against those first elements in the EffectOnStore. */
 
+  import MissingCommon.{DoneMask,CountedMask}
+
+  /** Variable encapsulating some flags. */
+  private var flags = 0
+
   /** Is this constraint satisfied? */
-  private var isDone = false
+  @inline private def isDone = (flags & DoneMask) != 0
+
+  /** Record that this constraint is satisfied. */
+  @inline private def setDoneFlag = flags = (flags | DoneMask)
 
   /** Is this constraint satisfied? */
   @inline def done = synchronized{ isDone }
@@ -93,7 +105,7 @@ class MissingCommon(
   /** Record that this is now done.  Also clear missingCandidates and
     * doneMissingCandidates to reclaim memory. */
   private def setDone = { 
-    isDone = true; missingCandidates = null
+    setDoneFlag /*isDone = true*/; missingCandidates = null
     doneMissingCandidates = null // ; log(SetDoneMC)
   }
 
@@ -162,7 +174,7 @@ class MissingCommon(
     if(!done){
       val cpt1 = cv.components(1)
       val vb = new CptsBuffer
-      if(cpt1.hasPID(pid)){
+      if(cpt1.hasPID(family,id)){
         // Remap cpt1 to a normal form
         val cpt1Norm = Remapper.remapWRT(servers, cpts1, cpts2, cpt1) 
         if(updateMissingCandidates(cpt1Norm, views, vb)){ 
@@ -190,7 +202,7 @@ class MissingCommon(
   def updateMissingCandidates(cpt1: State, views: ViewSet, vb: CptsBuffer)
       : Boolean = {
     //if(highlight) println(s"updateMissingCandidates($cpt1) $pid")
-    require(!done && cpt1.hasPID(pid))
+    require(!done && cpt1.hasPID(family,id))
     if(isNewUMCState(cpt1)){
       // All relevant renamings of cpt1: identity on params of servers and
       // princ1, but otherwise either to other params of cpts2 or to fresh
@@ -378,23 +390,26 @@ class MissingCommon(
         val cmp2 = StateArray.compare(cpts2, that.cpts2)
         if(cmp2 != 0) cmp2
         else{
-          val familyDiff = pid._1 - that.pid._1
+          val familyDiff = family - that.family // pid._1 - that.pid._1
           if(familyDiff != 0) familyDiff
-          else pid._2 - that.pid._2
+          else id - that.id //  pid._2 - that.pid._2
         }
       }
     }
   }
 
   /** Has this been counted for profiling purposes? */
-  private var counted = false
+  @inline private def counted = (flags & CountedMask) != 0
+
+  /** Record that this has been counted. */
+  @inline private def setCounted = flags = (flags | CountedMask)
 
   /** A measure of the size of this: the number of ComponentViews stored.  If
     * size has already been called, then return 0 to avoid double-counting. */
   def size = {
     if(counted || missingCandidates == null) 0
     else{
-      counted = true; var i = 0; var size = 0
+      setCounted /*counted = true*/; var i = 0; var size = 0
       while(i < missingCandidates.length){
         size += missingCandidates(i).length; i += 1
       }
@@ -505,8 +520,16 @@ object MissingCommon{
   /** Reset ready for a new check. */
   def reset =  allMCs = new MissingCommonStore
 
+  /** Bit masks used for extracting state from the `flags` of a
+    * MissingCommon. */
+  private val DoneMask = 1
+
+  private val CountedMask = 2
+
+
   /** A MissingCommon object, corresponding to servers, cpts1, cpts2 and pid, or
-    * null if the obligation is already satisfied.
+    * null if the obligation is already satisfied.  Here cpts1 corresponds to
+    * the pre-state of a transition, and cpts2 to the view acted upon.
     * 
     * For each component state c with identity pid such that servers ||
     * cpts1(0) || c is in views, missingCandidates contains the list of Views
@@ -529,7 +552,7 @@ object MissingCommon{
         Profiler.count("old MissingCommon")
         if(mc.done) null else mc 
       case None => 
-        val mc = new MissingCommon(servers, cpts1, cpts2, pid)
+        val mc = new MissingCommon(servers, cpts1, cpts2, pid._1, pid._2)
         Profiler.count("new MissingCommon")
         val ab = new CptsBuffer; val princ1 = cpts1(0); var found = false
         // All component states c with identity pid such that views contains
@@ -568,7 +591,9 @@ object MissingCommon{
 
   /** For a MissingCommon corresponding to servers, cpts1 and cpts2, given that
     * c is a component with identity pid that satisfies condition (1), find
-    * those components that are required for conditions (2) and (3). */
+    * those components that are required for conditions (2) and (3).  Here
+    * cpts1 corresponds to the pre-state of a transition, and cpts2 to the
+    * view acted upon. */
   @inline def requiredCpts(
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State], c: State)
       : ArrayBuffer[Array[State]] = {
@@ -584,7 +609,9 @@ object MissingCommon{
     while(j < c.length){
       if(c.includeParam(j)){
         val pid2 = c.processIdentities(j)
+//if(false){
         val c2 = StateArray.find(pid2, cpts2); if(c2 != null) add(Array(c, c2))
+//}
         val c1 = StateArray.find(pid2, cpts1); if(c1 != null) add(Array(c, c1))
       }
       j += 1

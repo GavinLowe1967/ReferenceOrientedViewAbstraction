@@ -96,7 +96,7 @@ class SimpleEffectOnStore extends EffectOnStore{
 
   /** A set of MissingInfos. */
   // type MissingInfoSet =  HashSet[MissingInfo] 
-  type MissingInfoSet =  OpenHashSet[MissingInfo]
+  type MissingInfoSet = OpenHashSet[MissingInfo]
 
   @inline def mkMissingInfoSet = 
     new OpenHashSet[MissingInfo](initSize = 8, ThresholdRatio = 0.6F)
@@ -125,10 +125,14 @@ class SimpleEffectOnStore extends EffectOnStore{
   private val mcDoneStore = new Store(shards = powerOfTwoAtLeast(numWorkers*8))
 
   /** Information used to identify whether a new view can be used to instantiate
-    * c in clause (1) of the obligation of a MissingCommon.  For each mi:
-    * MissingInfo in the abstract set, and for each
+    * c in clause (1) of the obligation of a MissingCommon.  
+    * 
+    * For each mi: MissingInfo in the abstract set, and for each
     * MissingCommon(servers,cpts,_,_) in mi.missingCommon,
-    * candidateForMCStore(servers,cpts(0)) contains mi. */
+    * candidateForMCStore(servers,cpts(0)) contains mi.
+    * 
+    * Given a new view v, we match against (v.servers,v.principal), and try to
+    * use v.components(1) to instantiate c. */
   private val candidateForMCStore = 
     new ShardedHashMap[(ServerStates, State), MissingInfoSet](
       shards = powerOfTwoAtLeast(numWorkers*8))
@@ -207,7 +211,7 @@ class SimpleEffectOnStore extends EffectOnStore{
       // Doing this test when missingCommon.nonEmpty does very little 
       Profiler.count("add: MissingInfo not added ")
     else if(missingCommon.isEmpty){
-      assert(missing.nonEmpty); missingInfo.transferred = true
+      assert(missing.nonEmpty); missingInfo.setTransferred //transferred = true
       addToStore(mcDoneStore, missingInfo.missingHead, missingInfo)
     }
     else{
@@ -265,7 +269,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     require(mi.mcDone); require(mi.missingViewsUpdated(views))
     if(mi.done) maybeAdd(mi, buff)
     else{
-      mi.transferred = true
+      mi.setTransferred // transferred = true
       // addToStore(mcDoneStore, mi.missingHead, mi)
       maybeAddToStore(mcDoneStore, mi.missingHead, mi)
       // IMPROVE: remove elsewhere
@@ -291,29 +295,34 @@ class SimpleEffectOnStore extends EffectOnStore{
             // on mis first; retry.
             ok = false 
           else{
-            for(mi <- mis.iterator) mi.synchronized{
+            val iter = mis.iterator
+            while(iter.hasNext){
+              val mi = iter.next()
+              mi.synchronized{
+            // for(mi <- mis.iterator) mi.synchronized{
               // mi.log(MissingInfo.CCFMCIter(cv))
-              if(mi.mcDone) assert(mi.done || mi.transferred)
-              else if(views.contains(mi.newView)) mi.markNewViewFound
-              else{
-                if(MISFlag) MissingInfoStore.remove(mi)
-                val vb: CptsBuffer = mi.updateMissingCommon(cv, views) //, key
-                if(vb == null){
-                  if(mi.done) maybeAdd(mi, result)
-                  else{ assert(mi.mcDone); mcDone(mi, views, result) }
-                }
-                else if(!MISFlag || MissingInfoStore.add(mi)){
-                  // Register mi against each view in vb, and retain
-                  for(cpts <- vb){
-                    val rcv = ReducedComponentView(cv.servers, cpts)
-                    // Profiler.count("ReducedComponentView: completeCandidateForMC")
-                    // mi.log(MissingInfo.McNotDoneStore(rcv, ply))
-                    addToStore(mcNotDoneStore, rcv, mi)
+                if(mi.mcDone) assert(mi.done || mi.transferred)
+                else if(views.contains(mi.newView)) mi.markNewViewFound
+                else{
+                  if(MISFlag) MissingInfoStore.remove(mi)
+                  val vb: CptsBuffer = mi.updateMissingCommon(cv, views) //, key
+                  if(vb == null){
+                    if(mi.done) maybeAdd(mi, result)
+                    else{ assert(mi.mcDone); mcDone(mi, views, result) }
                   }
-                  if(!newMis.add(mi)) mi.setNotAdded
+                  else if(!MISFlag || MissingInfoStore.add(mi)){
+                    // Register mi against each view in vb, and retain
+                    for(cpts <- vb){
+                      val rcv = ReducedComponentView(cv.servers, cpts)
+                      // Profiler.count("ReducedComponentView: completeCandidateForMC")
+                    // mi.log(MissingInfo.McNotDoneStore(rcv, ply))
+                      addToStore(mcNotDoneStore, rcv, mi)
+                    }
+                    if(!newMis.add(mi)) mi.setNotAdded
+                  }
                 }
-              }
-            } // end of mi.synchronized / for loop
+              }// end of mi.synchronized
+            } // end of while loop
             // Update candidateForMCStore
             val ok1 =
               if(newMis.nonEmpty) 

@@ -66,19 +66,19 @@ class ServerStates(val servers: List[State]){
 
   /** A (fresh) RemappingMap, representing the identity on the parameters of 
     * this; or null if this is not normalised. */
-  def remappingMap: RemappingMap = {
-    if(!normalised) null
-    else{
-      // Note: can't use Remapper.cloneMap here, because this is compiled
-      // first.  IMPROVE
-      val result = new Array[Array[Identity]](numTypes); var t = 0
-      while(t < numTypes){ 
-        result(t) = Pools.cloneRow(remappingMapTemplate(t)) //.clone; 
-        t += 1
-      }
-      result
-    }
-  }
+  def remappingMap: RemappingMap = 
+    if(!normalised) null else Pools.cloneMap(remappingMapTemplate)
+  // {
+  //     // Note: can't use Remapper.cloneMap here, because this is compiled
+  //     // first.  IMPROVE
+  //     val result = Pools.getRemappingMap 
+  //     var t = 0
+  //     while(t < numTypes){ 
+  //       result(t) = Pools.cloneRow(remappingMapTemplate(t)) //.clone; 
+  //       t += 1
+  //     }
+  //     result
+  //   }
 
   /** A (fresh) RemappingMap, of size `size(t)` for each t, representing the
     * identity on the parameters of this. 
@@ -87,14 +87,12 @@ class ServerStates(val servers: List[State]){
     * called from SingleRefEffectOnUnification.apply and
     * EffectOnUnification.apply. */
   def remappingMap1(size: Array[Int]): RemappingMap = {
-    //Profiler.count("ServerStates.remappingMap1")
     require(normalised)
     // Note: we aim to do no new memory allocation here.
-    val result = ServerStates.remappingMapStore; var t = 0
-    // val result = new Array[Array[Identity]](numTypes); var t = 0
+    val result = Pools.getRemappingMap // ServerStates.remappingMapStore; 
+    var t = 0
     while(t < numTypes){
       result(t) = ServerStates.getRemappingMapRow(t, size(t)) 
-      // new Array[Identity](size(t))
       var i = 0
       while(i < paramsBound(t)){ result(t)(i) = i; i += 1 }
       while(i < size(t)){ result(t)(i) = -1; i += 1 }
@@ -175,28 +173,22 @@ object ServerStates{
     * 
     * Note: each should be used in only one way at a time.  In a concurrent
     * implementation, these would need to be thread-local. */
-  private[this] val remappingMapRowStore = 
-    if(false)
-      Array.tabulate(numTypes)(t => new Array[Array[Int]](2*typeSizes(t)))
-    else null 
+  // private[this] val remappingMapRowStore = 
+  //   if(false)
+  //     Array.tabulate(numTypes)(t => new Array[Array[Int]](2*typeSizes(t)))
+  //   else null 
 
   /** Get a rows of a RemappingMap, for type t and size size. 
     * 
     * Note: each result should be used in only one way at a time.  */
   private def getRemappingMapRow(t: Int, size: Int) = 
-  if(false){
-    if(remappingMapRowStore(t)(size) == null)
-      remappingMapRowStore(t)(size) = new Array[Identity](size)
-    remappingMapRowStore(t)(size)
-  }
-  else Pools.getRemappingRow(size) // new Array[Identity](size)
-  // IMPROVE: reuse
+    Pools.getRemappingRow(size) 
 
   /** A RemappingMap, used in remappingMap1(size).
     * 
     * Note: this should be used in only one way at a time.  In a concurrent
     * implementation, these would need to be thread-local. */
-  private def remappingMapStore = new Array[Array[Identity]](numTypes)
+  //private def remappingMapStore = new Array[Array[Identity]](numTypes)
   // IMPROVE: reuse
 }
 

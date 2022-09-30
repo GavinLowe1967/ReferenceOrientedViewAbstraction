@@ -4,8 +4,9 @@ import ox.gavin.profiling.Profiler
 import RemapperP.Remapper
 import scala.collection.mutable.{ArrayBuffer}
 
-// FIXME: there's a lot of repeated code between here and EffectOnUnification
+// FIXME: there's repeated code between here and EffectOnUnification
 
+/** Get information concerning transitions induced by trans working on cv. */
 class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   /* Relationship of main functions.
    * apply
@@ -35,7 +36,6 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   private val pre = trans.pre; private val post = trans.post
   private val servers = pre.servers
   require(servers == cv.servers && servers.isNormalised)
-  private val postServers = post.servers
 
   private val preCpts = pre.components; private val postCpts = post.components
   require(preCpts.length == postCpts.length)
@@ -43,9 +43,6 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   // if(debugging) StateArray.checkDistinct(cpts)
   // ID of principal of cv
   private val (cvpf, cvpid) = cv.principal.componentProcessIdentity
-  // IDs of components in pre, cv
-  private val preCptIds = pre.cptIdsBitMap 
-  private val cptIds = cv.cptIdsBitMap //  cptIds 
 
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
@@ -56,21 +53,20 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   // Types of the result
   import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo}
 
+  import SingleRefEffectOnUnification.isEmpty
+
   /** Variables in which we build up the result. */
   private val result = new InducedInfo
-  private val result2 = new SecondaryInducedInfo // CombineResult2
+  private val result2 = new SecondaryInducedInfo 
 
   /** The object responsible for extending result-defining mappings. */
   val remappingExtender = new RemappingExtender(trans,cv)
-
-  /** Bit map indicating which components have changed state. */
-  // private val changedStateBitMap = trans.changedStateBitMap _
 
   /** Which secondary components can gain a reference to cv.principal?  All
     * pairs (i,p1) such that pre.components(i) changes state in the transition
     * (with (i>0), and p1 is a new parameter of post.components(i), of the
     * same type as cv.principal.id, and not matching and parameter of pre. */
-  private val acquiredRefs: List[(Int,Parameter)] = trans.acquiredRefs(cvpf)
+  private def acquiredRefs: List[(Int,Parameter)] = trans.acquiredRefs(cvpf)
 
   val highlight = 
     Transition.highlight(trans) && {
@@ -85,14 +81,10 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
 
   // =======================================================
 
-  /** The main function. */
+  /** The main function.  */
   def apply(): (InducedInfo, SecondaryInducedInfo) = {
-    // val map0 = cv.getRemappingMap // 
-    // Profiler.count("SREOU.apply")
     if(highlight) println(s"SREOU.apply($trans,\n  $cv)")
-    val allUnifs = Unification.allUnifs(pre, cv) 
-    var k = 0
-
+    val allUnifs = Unification.allUnifs(pre, cv); var k = 0
     while(k < allUnifs.length){
       val (map1,unifs) = allUnifs(k); k += 1
       // if(highlight && map1(0)(3) == 2) 
@@ -111,14 +103,12 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   /** Try to create primary induced transitions based on map1 and unifs. */
   @inline private 
   def makePrimaryInduced(map1: RemappingMap, unifs: UnificationList) = {
-    // val hl = highlight && map1(0)(3) == 2 // N4 -> N3
-    // if(hl) println("makePrimaryInduced("+Remapper.show(map1)+s", $unifs)")
+    val postServers = post.servers
     // Result-relevant parameters: parameters to map params of cv to, in order
     // to create result-defining map.
     val otherArgsBitMap = mkOtherArgsMap(map1, unifs)
     // if(highlight) println("otherArgsBitMap = "+
     //   otherArgsBitMap.map(_.mkString("<", ", ", ">")).mkString("; "))
-    // Profiler.count("SREOU.apply-iter")
     // Primary result-defining maps
     val rdMaps =
       // If there are no new parameters, then the only result-defining map is
@@ -155,28 +145,13 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
           !trans.doesPrincipalAcquireRef(unifs) && 
             cv.containsDoneInducedPostServersRemaps(
               postServers, reducedMapInfo, postUnified)
-        else unifs.isEmpty && // old version; this might be better
+        else unifs.isEmpty && // current version
           cv.containsDoneInducedPostServersRemaps(postServers, reducedMapInfo) )
-      // if(hl)
-      //   println("rdMap = "+Remapper.show(rdMap)+s"; duplicated = $duplicated")
       if(!duplicated)
         makePrimaryExtension(unifs, otherArgsBitMap, rdMap, reducedMapInfo)
       // Note: rdMap is included in result or recycled by above.
     }
   }
-
-  /** Does otherArgs represent the empty set? */
-  @inline private def isEmpty(otherArgs: BitMap) = {
-    var t = 0; var empty = true
-    while(t < numTypes && empty){
-      var i = 0; val len = otherArgs(t).length
-      while(i < len && !otherArgs(t)(i)) i += 1
-      empty = i == len; t += 1
-    }
-    empty
-  }
-  // IMPROVE: this result could be calculated within makeOtherArgsMap.  But
-  // this doesn't seem to be a big cost.
 
   /** Does unifs give sufficient unifications such that it might produce a new
     * view via a primary induced transition?  */
@@ -246,6 +221,8 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
   private def extendToRDMap(map: RemappingMap, resultRelevantParams: BitMap)
       : ArrayBuffer[RemappingMap] = {
     Profiler.count("extendToRDMap")
+    // IDs of components in pre, cv
+    val preCptIds = pre.cptIdsBitMap; val cptIds = cv.cptIdsBitMap
     // val otherArgs = Remapper.makeOtherArgMap(resultRelevantParams)
     // Find upper bound on resultRelevantParams(t) for each t
     val bounds = new Array[Int](numTypes); var t = 0
@@ -295,9 +272,9 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, reducedMapInfo: ReducedMap)
   = {
-    val hl = highlight && rdMap(0).sameElements(Array(0,-1,-1,2,3))
-    if(hl) println(s"makePrimaryExtension(unifs = $unifs, "+
-      "rdMap = "+Remapper.show(rdMap))
+    // val hl = highlight && rdMap(0).sameElements(Array(0,-1,-1,2,3))
+    // if(hl) println(s"makePrimaryExtension(unifs = $unifs, "+
+    //   "rdMap = "+Remapper.show(rdMap))
     Profiler.count("makePrimaryExtension")
     val extensions = 
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, true)
@@ -363,6 +340,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     * reference is used to create views. */ 
   private def getSecondaryInfo(map1: RemappingMap)
       : ArrayBuffer[(RemappingMap, Int)] = {
+    val preCptIds = pre.cptIdsBitMap
     val result = new ArrayBuffer[(RemappingMap, Int)]; var ar = acquiredRefs
     while(ar.nonEmpty){
       val (i,(t,id)) = ar.head; ar = ar.tail
@@ -444,12 +422,32 @@ object SingleRefEffectOnUnification{
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
 
-  /** The part of the result relating to primary induced transitions. */
+  /** The part of the result relating to primary induced transitions.  Each
+    * tuple (map, newCpts, unifs, reducedMap) indicates that renaming cv
+    * according to map produces a view with components, and unifications
+    * corresponding to unifs; reducedMap is the reduced version of map. */
+// IMPROVE: map isn't used, other than being recycled
   type InducedInfo = 
     ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
 
   /** The part of the result corresponding to secondary induced transitions.
-    * The Int field is the index of the component in pre/post that gains
-    * access to cv.principal. */
+    * Each tuple (newCpts, unifs, i) represents that cpts is remapped to
+    * produce newCpts with unifications unifs, and that the ith component of
+    * the transition gains a reference to cv.principal. */
   type SecondaryInducedInfo = ArrayBuffer[(Array[State], UnificationList, Int)]
+
+
+  /** Does otherArgs represent the empty set? */
+  @inline private def isEmpty(otherArgs: BitMap) = {
+    var t = 0; var empty = true
+    while(t < numTypes && empty){
+      var i = 0; val len = otherArgs(t).length
+      while(i < len && !otherArgs(t)(i)) i += 1
+      empty = i == len; t += 1
+    }
+    empty
+  }
+  // IMPROVE: this result could be calculated within makeOtherArgsMap.  But
+  // this doesn't seem to be a big cost.
+
 }

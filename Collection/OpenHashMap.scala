@@ -1,6 +1,6 @@
 package ViewAbstraction.collection
 
-import ViewAbstraction.{hashOf,checkPow2,numThreads}
+import ViewAbstraction.{hashOf,checkPow2}
 
 class OpenHashMap[A: scala.reflect.ClassTag, B: scala.reflect.ClassTag](
   initSize: Int = 16, ThresholdRatio: Float = 0.5F){
