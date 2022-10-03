@@ -9,7 +9,7 @@ import scala.collection.mutable.{ArrayBuffer,HashSet}
 class EffectOnUnification(trans: Transition,  cv: ComponentView){
   require(!singleRef) // require(!newEffectOn)
 
-  import Unification.CombineResult 
+  import Unification.CombineResult
     // = ArrayBuffer[(RemappingMap, Array[State], UnificationList)]
   import EffectOnUnification.MatchingTuple
 
@@ -110,13 +110,15 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
 
   // A representation of map |> post.servers
-  import ServersReducedMap.ReducedMap 
+  // import ServersReducedMap.ReducedMap 
 
-  type CombineResult = 
-    ArrayBuffer[(RemappingMap, /*Array[State],*/ UnificationList, ReducedMap)]
+  //private type Linkages =  List[RemappingExtender.Linkage]
+
+  import EffectOnUnification.InducedInfo 
+   // ArrayBuffer[(RemappingMap, UnificationList, ReducedMap)]
 
   /** Variable in which we build up the result. */
-  private val result = new CombineResult
+  private val result = new InducedInfo
 
   /** A NextArgMap, containing values greater than anything in pre or post. */
   private val nextArg: NextArgMap = pre.getNextArgMap
@@ -158,7 +160,7 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
     * 
     * @return remapped state, paired with a UnificationList that contains
     * (j,i) whenever cv.components(j) unifies with pre.components(i).  */
-  def apply(): CombineResult = {
+  def apply(): InducedInfo = {
     // IMPROVE: some of the initial calculations depends only on pre and post, so
     // could be stored with the transition.
     val changedServers = servers != post.servers
@@ -288,16 +290,18 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
     changedStateBitMap
   }
 
-  // /** Cross product of ps1 and ps2. */
-  // def crossProduct(ps1: List[(Int,Int)], ps2 : List[(Int,Int)]) = 
-  //   for(p1 <- ps1; p2 <- ps2) yield (p1,p2)
-
 }
 
 // ==================================================================
 
 object EffectOnUnification{
-  def combine(trans: Transition, cv: ComponentView) = 
+  import Unification.UnificationList // = List[(Int,Int)]
+  // Contains (i,j) if cpts(i) is unified with preCpts(j)
+
+  /** The result of apply on a companion. */
+  type InducedInfo = ArrayBuffer[(RemappingMap, UnificationList)]
+
+  def combine(trans: Transition, cv: ComponentView): InducedInfo = 
     new EffectOnUnification(trans, cv)()
 
   /** A tuple in a remapping from cpts to preCpts.  Each tuple ((i1,j1),(i2,j2))
@@ -305,162 +309,49 @@ object EffectOnUnification{
     * of preCpts(i1).  Precisely one of j1 and j2 equals 0. */
   type MatchingTuple = ((Int,Int), (Int, Int))
 
-// IMPROVE: I think we only use i1.
 
-// IMPROVE: I think there's some redundancy in what follows.  Maybe restrict
-// to i1 components, and remove duplicates.  cf old assertion in
-// EffectOn.apply line 100.
+  // /** Bit map (indexed by component number, param number) showing which
+  //   * parameters of preCpts can be mapped onto within remapToCreateCrossRefs:
+  //   * all identities; and non-identities those that are not distinguished, and
+  //   * do not match any identity in preCpts. */
+  // @inline private def getRangeBitMap(preCpts: Array[State]): BitMap = {
+  //   val preIds = Array.tabulate(preCpts.length)(
+  //     i => preCpts(i).componentProcessIdentity)
+  //   val rangeBitMap = new Array[Array[Boolean]](preCpts.length); var i = 0
+  //   while(i < preCpts.length){
+  //     val cpt = preCpts(i); rangeBitMap(i) = new Array[Boolean](cpt.length)
+  //     rangeBitMap(i)(0) = true; var j = 0 // IMPROVE: j = 1?
+  //     while(j < cpt.length){
+  //       val (t,p) = cpt.processIdentity(j)
+  //       if(!isDistinguished(p) && !preIds.contains((t,p))){
+  //         rangeBitMap(i)(j) = true; assert(j != 0)
+  //       }
+  //       j += 1
+  //     } // end of inner while
+  //     i += 1
+  //   } // end of outer while
+  //   rangeBitMap
+  // }
 
-/*
-  /** All ways of extending map (over cpts) so that an identity in cpts matches
-    * a non-identity parameter in preCpts, or a non-identity parameter in
-    * preCpts matches an identity in cpts; but no identity should map to an
-    * identity.
-    * @return the resulting map, together with a list of tuples
-    * ((i1,j1), (i2,j2)) indicating that parameter j2 of cpts(i2) is mapped to
-    * match parameter j1 of preCpts(i1); precisely one of j1 and j2 will be
-    * 0. */
-  private def remapToCreateCrossRefs(
-    preCpts: Array[State], cpts: Array[State], map: RemappingMap)
-      : ArrayBuffer[(RemappingMap, List[MatchingTuple])] = {
-    val highlight = false // IMPROVE
 
-    // Bit maps (indexed by component number, param number) showing which
-    // parameters of cpts can be mapped and which components of preCpts can be
-    // mapped onto: all identities; and non-identities those that are not
-    // distinguished, and do not match any identity in cpts, resp preCpts.
-    val domBitMap = getDomBitMap(cpts); val rangeBitMap = getRangeBitMap(preCpts)
-    val result = new ArrayBuffer[(RemappingMap, List[MatchingTuple])]
-    // Bitmap showing the range of map
-    val inRangeBitMap = Remapper.rangeBitMap(map)
-    // if(highlight){
-    //   println("domBitMap = "+domBitMap.map(_.mkString(", ")).mkString("; "))
-    //   println("rangeBitMap = "+rangeBitMap.map(_.mkString(", ")).mkString("; "))
-    // }
-
-    // Next component of preCpts(i1) to try mapping on to.  The minimum j in
-    // [j1 .. preCpts(i1).length) s.t. rangeBitMap(i1)(j); or
-    // preCpts(i1).length if there is no such.
-    @inline def advanceInPreCpts(i1: Int, j1: Int) = {
-      var j = j1
-      while(j < preCpts(i1).length && !rangeBitMap(i1)(j)) j += 1
-      j
-    }
-    // Next component of cpts(i2) to try mapping.  The minimum j in [j2
-    // .. cpts(i2).length) s.t. domBitMap(i2)(j); or cpts(i2).length if there
-    // is no such.
-    @inline def advanceInCpts(i2: Int, j2: Int) = {
-      var j = j2
-      while(j < cpts(i2).length && !domBitMap(i2)(j)) j += 1
-      j
-    }
-
-    /* Consider extending map and tuples so as to map parameter j2 of cpts(i2) to
-     * match parameter j1 of preCpts(i1); then continue, considering
-     * parameters in lexicographic order.  All updates to map are backtracked.
-     * Pre: (1) Exactly one of j1 and j2 is 0.  (2) rangeBitMap(i1)(j1), or one
-     * of i1, j1 is out of range. */
-    def rec(tuples: List[MatchingTuple], i1: Int, j1: Int, i2: Int, j2: Int)
-        : Unit = {
-      assert((j1 == 0) ^ (j2 == 0), s"j1 = $j1; j2 = $j2")
-      assert(i1 == preCpts.length || j1 == preCpts(i1).length ||
-        rangeBitMap(i1)(j1))
-      assert(i2 == cpts.length || j2 == cpts(i2).length || domBitMap(i2)(j2), 
-        s"i1 = $i1, j1 = $j1, i2 = $i2, j2 = $j2")
-      if(i1 == preCpts.length)  // finished this branch
-        result += ((Remapper.cloneMap(map), tuples))
-      // Various cases of advancing
-      else if(j1 == preCpts(i1).length) // Move to next cpt of preCpts
-        rec(tuples, i1+1, 0, 0, advanceInCpts(0,1))
-      else if(i2 == cpts.length) 
-        // At end of cpts; advance to next parameter in preCpts(i1) that can
-        // be mapped to.
-        rec(tuples, i1, advanceInPreCpts(i1,j1+1), 0, 0) 
-      else if(j2 == cpts(i2).length){ // advance to next component of cpts
-        if(i2+1 == cpts.length) rec(tuples, i1, advanceInPreCpts(i1,j1+1), 0, 0)
-        else rec(tuples, i1, j1, i2+1, if(j1 == 0) advanceInCpts(i2+1,1) else 0)
-      }
-      else{
-        assert(domBitMap(i2)(j2))
-        // Try to map id2 to match id1
-        val id1 = preCpts(i1).ids(j1); val id2 = cpts(i2).ids(j2)
-        val t = preCpts(i1).typeMap(j1)
-        assert(!isDistinguished(id1) && !isDistinguished(id2))
-        if(t == cpts(i2).typeMap(j2) && map(t)(id2) < 0 && 
-          !inRangeBitMap(t)(id1) ){
-          map(t)(id2) = id1; inRangeBitMap(t)(id1) = true // temporary update (*)
-          val newTuples = ((i1,j1),(i2,j2))::tuples
-          // Advance
-          if(j1 == 0) rec(newTuples, i1, j1, i2, advanceInCpts(i2, j2+1))
-          else rec(newTuples, i1, j1, i2+1, 0)
-          map(t)(id2) = -1; inRangeBitMap(t)(id1) = false  // backtrack (*)
-        }
-        // Also just advance (whether or not we did the if).  If already
-        // matched, add tuple here.
-        val newTuples = 
-          if(t == cpts(i2).typeMap(j2) && map(t)(id2) == id1)
-            ((i1,j1),(i2,j2))::tuples
-          else tuples
-        if(j1 == 0) rec(newTuples, i1, j1, i2, advanceInCpts(i2, j2+1))
-        else rec(newTuples, i1, j1, i2+1, 0)
-      }
-    } // end of rec
-
-    val j1 =  advanceInPreCpts(0,0)
-    rec(List[MatchingTuple](), 0, j1, 0, if(j1 == 0) advanceInCpts(0,1) else 0)
-    result
-  }
- */
-
-  /** Bit map (indexed by component number, param number) showing which
-    * parameters of preCpts can be mapped onto within remapToCreateCrossRefs:
-    * all identities; and non-identities those that are not distinguished, and
-    * do not match any identity in preCpts. */
-  @inline private def getRangeBitMap(preCpts: Array[State]): BitMap = {
-    val preIds = Array.tabulate(preCpts.length)(
-      i => preCpts(i).componentProcessIdentity)
-    val rangeBitMap = new Array[Array[Boolean]](preCpts.length); var i = 0
-    while(i < preCpts.length){
-      val cpt = preCpts(i); rangeBitMap(i) = new Array[Boolean](cpt.length)
-      rangeBitMap(i)(0) = true; var j = 0 // IMPROVE: j = 1?
-      while(j < cpt.length){
-        val (t,p) = cpt.processIdentity(j)
-        if(!isDistinguished(p) && !preIds.contains((t,p))){
-          rangeBitMap(i)(j) = true; assert(j != 0)
-        }
-        j += 1
-      } // end of inner while
-      i += 1
-    } // end of outer while
-    rangeBitMap
-  }
-
-  /** Map (indexed by component number, param number) showing which parameters
-    * of preCpts can be mapped onto within remapToCreateCrossRefs: a value
-    * of 0 represents that it cannot be mapped onto; a value of 1 represents
-    * that it can be mapped, but that this is not the first instance of the
-    * parameter, so it can be mapped onto only if the earlier instance was
-    * mapped onto; */
-  //@inline def getRangeMap(preCpts: Array[State]): Array[Array[Int]] = ???
-
-  /** Similar bit map for cpts, showing which params can be mapped: all
-    * identities; and all non-identities that are not distinguished, and do
-    * not match any identity in cpts. */
-  @inline private def getDomBitMap(cpts: Array[State]): BitMap = {
-    val ids = Array.tabulate(cpts.length)(i => cpts(i).componentProcessIdentity)
-    val domBitMap = new Array[Array[Boolean]](cpts.length); var i = 0
-    while(i < cpts.length){
-      val cpt = cpts(i); domBitMap(i) = new Array[Boolean](cpt.length)
-      domBitMap(i)(0) = true; var j = 0
-      while(j < cpt.length){
-        val (t,p) = cpt.processIdentity(j)
-        if(!isDistinguished(p) && !ids.contains((t,p))) domBitMap(i)(j) = true
-        j += 1
-      } // end of inner while
-      i += 1
-    } // end of outer while
-    domBitMap
-  }
+  // /** Similar bit map for cpts, showing which params can be mapped: all
+  //   * identities; and all non-identities that are not distinguished, and do
+  //   * not match any identity in cpts. */
+  // @inline private def getDomBitMap(cpts: Array[State]): BitMap = {
+  //   val ids = Array.tabulate(cpts.length)(i => cpts(i).componentProcessIdentity)
+  //   val domBitMap = new Array[Array[Boolean]](cpts.length); var i = 0
+  //   while(i < cpts.length){
+  //     val cpt = cpts(i); domBitMap(i) = new Array[Boolean](cpt.length)
+  //     domBitMap(i)(0) = true; var j = 0
+  //     while(j < cpt.length){
+  //       val (t,p) = cpt.processIdentity(j)
+  //       if(!isDistinguished(p) && !ids.contains((t,p))) domBitMap(i)(j) = true
+  //       j += 1
+  //     } // end of inner while
+  //     i += 1
+  //   } // end of outer while
+  //   domBitMap
+  // }
 
   /** Hooks for testing. */
   trait Tester{
@@ -468,3 +359,6 @@ object EffectOnUnification{
     //   EffectOnUnification.remapToCreateCrossRefs _ 
   }
 }
+
+// =======================================================
+

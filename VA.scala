@@ -174,6 +174,8 @@ object VA{
         else{ fname = fn; i += 1 }
     }
     assert(fname.nonEmpty || testing || testSuite, "no filename specified")
+    if(useNewEffectOnStore) 
+      assert(singleRef, "--newEffectOnStore can be used only with --singleRef")
     // println("numThreads = "+numThreads)
     println("numWorkers = "+numWorkers)
     // IMPROVE: we don't want both numWorkers and numThreads

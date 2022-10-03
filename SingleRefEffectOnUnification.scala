@@ -279,12 +279,9 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     val extensions = 
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, true)
     // Note: recycles or returns rdMap
-    for(map1 <- extensions){
+    for((map1,doneB) <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
-      //val newCpts = Remapper.applyRemapping(map1, cpts)
-      // if(hl) println("map1 = "+Remapper.show(map1)+
-      //   "\nnewCpts = "+StateArray.show(newCpts))
-      result += ((map1, /*newCpts,*/ unifs, reducedMapInfo))
+      result += ((map1, doneB, unifs, reducedMapInfo))
     }
   }
 
@@ -324,12 +321,9 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     val extensions = 
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, false)
     // Note: the above recycles rdMap or includes it in result
-    for(map1 <- extensions){
+    for((map1,doneB) <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
-      // val newCpts = Remapper.applyRemapping(map1, cpts)
-      // if(showTransitions) println("newCpts = "+StateArray.show(newCpts)) 
-      result2 += ((map1, /*newCpts,*/ unifs, ix))
-      // recycle(map1) //Pools.returnRemappingRows(map1)
+      result2 += ((map1, doneB, unifs, ix))
     }
   }
 
@@ -421,20 +415,22 @@ object SingleRefEffectOnUnification{
   import Unification.UnificationList // = List[(Int,Int)]
   // Contains (i,j) if cpts(i) is unified with preCpts(j)
 
+  import RemappingExtender.Linkage // = (Int,Int)
+
   /** The part of the result relating to primary induced transitions.  Each
-    * tuple (map, newCpts, unifs, reducedMap) indicates that renaming cv
-    * according to map produces a view with components, and unifications
-    * corresponding to unifs; reducedMap is the reduced version of map. */
+    * tuple (map, unifs, reducedMap) indicates the remapping of cv.cpts by map
+    * with unifications corresponding to unifs; reducedMap is the reduced
+    * version of map. */
 // IMPROVE: map isn't used, other than being recycled
   type InducedInfo = 
-    ArrayBuffer[(RemappingMap, /*Array[State],*/ UnificationList, ReducedMap)]
+    ArrayBuffer[(RemappingMap, List[Linkage], UnificationList, ReducedMap)]
 
   /** The part of the result corresponding to secondary induced transitions.
-    * Each tuple (map, newCpts, unifs, i) represents that cpts is remapped by
-    * map to produce newCpts with unifications unifs, and that the ith
-    * component of the transition gains a reference to cv.principal. */
+    * Each tuple (map, unifs, i) represents a remapping of cv.cpts by map with
+    * unifications unifs, and that the ith component of the transition gains a
+    * reference to cv.principal. */
   type SecondaryInducedInfo = 
-    ArrayBuffer[(RemappingMap, /*Array[State],*/ UnificationList, Int)]
+    ArrayBuffer[(RemappingMap, List[Linkage], UnificationList, Int)]
 
 
   /** Does otherArgs represent the empty set? */

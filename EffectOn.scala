@@ -19,8 +19,14 @@ class EffectOn(
    * |--processInduced
    * |  |--getCrossRefs
    * |  |--processInducedInfo
-   * |     |--checkCompatibleMissing
-   * |     |--EffectOn.effectOnStore.add
+   * |     |--processInducedInfoSingleRef
+   * |     |  |--checkCompatibleMissing
+   * |     |  |--EffectOn.effectOnStore.add
+   * |     |--processInducedInfoNewEffectOnStore
+   * |     |  |--missingCrossRefs
+   * |     |  |--EffectOn.commonMissingRefs
+   * |     |  |--EffectOn.effectOnStore.add
+   * |     |--processInducedInfoFullViews
    * |--processSecondaryInduced
    * |  |--getCrossRefs
    * |  |--processInducedInfo (as above)
@@ -82,10 +88,12 @@ class EffectOn(
       if(singleRef){
         val (inducedInfo, secondaryInduced): (InducedInfo,SecondaryInducedInfo) =
           new SingleRefEffectOnUnification(trans,cv)()
-        processInduced(inducedInfo); processSecondaryInduced(secondaryInduced)
+        processInducedSingleRef(inducedInfo); 
+        processSecondaryInduced(secondaryInduced)
       }
       else{
-        val inducedInfo: InducedInfo = EffectOnUnification.combine(trans, cv)
+        val inducedInfo: EffectOnUnification.InducedInfo = 
+          EffectOnUnification.combine(trans, cv)
         processInduced(inducedInfo)
       }
     }
@@ -93,16 +101,29 @@ class EffectOn(
     //   println(s"Not sufficient unifs: "+cv.containsDoneInduced(post.servers))
   }
 
+  /** Process the information about induced transitions with full views. */
+  @inline private 
+  def processInduced(inducedInfo: EffectOnUnification.InducedInfo) = {
+    require(!singleRef); var index = 0
+    while(index < inducedInfo.length){
+      val (map, unifs) = inducedInfo(index); index += 1
+      Profiler.count("EffectOn step "+unifs.isEmpty)
+      val cpts = Remapper.applyRemapping(map, cv.components)
+      val newPrinc = getNewPrinc(cpts(0), unifs)
+      var newComponentsList =
+        StateArray.makePostComponents(newPrinc, postCpts, cpts)
+      processInducedInfoFullViews(cpts, unifs, newComponentsList)
+      Pools.returnRemappingRows(map)
+    } // end of while loop
+  }
+
   /** Process the information about primary induced transitions. */
-  @inline private def processInduced(inducedInfo: InducedInfo) = {
+  @inline private def processInducedSingleRef(inducedInfo: InducedInfo) = {
+    assert(singleRef)
     var index = 0
     while(index < inducedInfo.length){
-      val (map, /*cpts,*/ unifs, reducedMapInfo) = inducedInfo(index); index += 1
-      // val hl = highlight && map(0).sameElements(Array(0,4,5,2,3)) &&
-      //   map(1).sameElements(Array(0,2,3))
-      // if(hl)
-      //   println(s"unifs = $unifs\ncpts = "+StateArray.show(cpts)+
-      //     "\nmap = "+Remapper.show(map))
+      val (map, linkages, unifs, reducedMapInfo) = inducedInfo(index); index += 1
+// IMPROVE: use linkages
       Profiler.count("EffectOn step "+unifs.isEmpty)
       val cpts = Remapper.applyRemapping(map, cv.components)
       // The components needed for condition (b).
@@ -129,12 +150,14 @@ class EffectOn(
     } // end of while loop
   }
 
+
   /** Process the information about secondary induced transitions. */
   @inline private 
   def processSecondaryInduced(secondaryInduced: SecondaryInducedInfo)  = {
     var index = 0
     while(index < secondaryInduced.length){
-      val (map, /*cpts,*/ unifs, k) = secondaryInduced(index); index += 1
+      val (map, linkages, unifs, k) = secondaryInduced(index); index += 1
+// IMPROVE: use linkages
       val cpts = Remapper.applyRemapping(map, cv.components)
       // assert(cpts == cpts1)
       Profiler.count("SecondaryInduced")
@@ -145,7 +168,6 @@ class EffectOn(
       val newComponentsList = List(StateArray(Array(postCpts(k), newPrinc)))
       processInducedInfo(
         map, cpts, unifs, null, false, crossRefs, newComponentsList)
-// IMPROVE: recycle map
     }
   }
 
@@ -161,10 +183,10 @@ class EffectOn(
     * @param reducedMap a representation of the RemappingMap |> post.servers. */
   @inline private 
   def processInducedInfo(map: RemappingMap, cpts: Array[State], 
-    unifs: UnificationList,
-    reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
-    newComponentsList: List[Array[State]])
+    unifs: UnificationList, reducedMap: ReducedMap, isPrimary: Boolean, 
+    crossRefs: List[Array[State]], newComponentsList: List[Array[State]])
       : Unit = {
+    assert(singleRef)
     // assert(cpts.map(_.cs).sameElements(cv.components.map(_.cs)))
     Profiler.count(s"processInducedInfo $isPrimary")
     //for(cpts <- newComponentsList) ComponentView0.checkValid(pre.servers, cpts)
@@ -173,17 +195,12 @@ class EffectOn(
     //   s"pre = $pre; cpts = "+StateArray.show(cpts))
 
     // Dispatch appropriate version
-    if(singleRef){
-      if(useNewEffectOnStore) 
-        processInducedInfoNewEffectOnStore(
-          map, cpts, unifs, reducedMap, isPrimary, crossRefs, newComponentsList)
-      else processInducedInfoSingleRef(
-        cpts, unifs, reducedMap, isPrimary, crossRefs, newComponentsList)
-    }
-    else{
-      assert(isPrimary && crossRefs.isEmpty)
-      processInducedInfoFullViews(cpts, unifs, reducedMap, newComponentsList)
-    }
+    if(useNewEffectOnStore)
+      processInducedInfoNewEffectOnStore(
+        map, cpts, unifs, reducedMap, isPrimary, crossRefs, newComponentsList)
+    else processInducedInfoSingleRef(
+      cpts, unifs, reducedMap, isPrimary, crossRefs, newComponentsList)
+// IMPROVE: recycle map
   }
 
   // ---------- Helper functions for the processInduced functions
@@ -333,7 +350,7 @@ class EffectOn(
 
   /** Process induced information in the case of full views. */
   private def processInducedInfoFullViews(
-    cpts: Array[State], unifs: UnificationList, reducedMap: ReducedMap, 
+    cpts: Array[State], unifs: UnificationList, // reducedMap: ReducedMap, 
     newComponentsList: List[Array[State]])
       : Unit = {
     require(!singleRef)
@@ -342,7 +359,7 @@ class EffectOn(
       Profiler.count("newViewCount") 
       if(!views.contains(nv)){
         if(nextNewViews.add(nv))
-          addedView(cpts, newComponents, nv, unifs, true, reducedMap)
+          addedView(cpts, newComponents, nv, unifs, true, null/*reducedMap*/)
         else // nv was in nextNewViews 
           showRedundancy(
             nextNewViews.get(nv), cpts, newComponents, nv, unifs, true)

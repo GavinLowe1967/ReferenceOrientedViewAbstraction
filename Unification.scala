@@ -166,13 +166,11 @@ object Unification{
   // A representation of map |> post.servers
   import ServersReducedMap.ReducedMap 
 
-  /** Result returned from combine1.  Each entry is of the form (map, cpts,
-    * unifs, null) where: map is a remapping map; cpts is map applied to
-    * cv.components; unifs is a UnificationList that contains (j,i) whenever
-    * cv.components(j) unifies with pre.components(i); the null is a
-    * ReducedMapInfo, not used here. */
-  type CombineResult = 
-    ArrayBuffer[(RemappingMap, /*Array[State],*/ UnificationList, ReducedMap)]
+  /** Result returned from combine1.  Each entry is of the form (map, unifs)
+    * where: map is a remapping map; and unifs is a UnificationList that
+    * contains (j,i) whenever cv.components(j) unifies with
+    * pre.components(i). */
+  type CombineResult = ArrayBuffer[(RemappingMap,  UnificationList)]
 
   /** All ways of remapping cpts, consistent with map.  Parameters not in dom
     * map can be mapped: (1) to values of otherArgs, but, in the case of
@@ -198,7 +196,7 @@ object Unification{
     }
     val maps = getCombiningMaps(map, otherArgs, bitMap, nextArg, cpts)
     for(map1 <- maps){ 
-      result += ((map1, /*Remapper.applyRemapping(map1, cpts),*/ unifs, null))
+      result += ((map1, unifs /*, null*/))
     }
   }
 

@@ -52,7 +52,8 @@ object RemappingExtenderTest{
         em(1).isEmpty)
 
     val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap,true)
-    assert(eMaps.length == 1); val eMap = eMaps(0)
+    assert(eMaps.length == 1); val (eMap,_) = eMaps(0)
+// IMPROVE: run some test on the linkages
     // Must map N1,N2 to fresh values
     assert(checkMap(eMap(0), List((N0,N0),(N1,N3),(N2,N4))) &&
       emptyMap(eMap(1)))
@@ -83,7 +84,8 @@ object RemappingExtenderTest{
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
         val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap,true)
-        assert(eMaps.length == 1); val eMap = eMaps(0); assert(emptyMap(eMap(1)))
+        assert(eMaps.length == 1); val (eMap,_) = eMaps(0); 
+        assert(emptyMap(eMap(1)))
         // Map other values to fresh
         if(n == N1)
           assert(checkMap(eMap(0), List((N0,N0), (N1,N4), (N2,N5), (N3,N6))))
@@ -138,8 +140,10 @@ object RemappingExtenderTest{
 
         val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap1,rdMap,true)
         // Other values map to fresh; again can't map N2 -> N1
-        assert(eMaps.length == 1); val eMap = eMaps(0); assert(eMap(1).isEmpty)
-        if(n == N4) assert(eMap(0).sameElements(Array(N0,N2,N4,N5)))
+        assert(eMaps.length == 1); val (eMap,_) = eMaps(0); 
+        assert(eMap(1).isEmpty)
+        if(n == N4)
+          assert(eMap(0).sameElements(Array(N0,N2,N4,N5)), Remapper.show(eMap))
         else assert(eMap(0).sameElements(Array(N0,N2,N5,N6)))
       }
     }
@@ -164,7 +168,7 @@ object RemappingExtenderTest{
           emptyMap(em(1)))
 
         val eMaps = remappingExtender.makeExtensions(unifs1,oaBitMap,rdMap,true)
-        assert(eMaps.length == 1); val eMap = eMaps(0)
+        assert(eMaps.length == 1); val (eMap,_) = eMaps(0)
         val map1List = List((N0,N0), (N1,N1), (N2,N3), (N3,if(n >= 0) n else N5))
         assert(checkMap(eMap(0), map1List) && emptyMap(eMap(1)))
       }
@@ -237,7 +241,7 @@ object RemappingExtenderTest{
             (n == N3 || List(N1,N2,N3,N4,-1).contains(em(0)(N3))) )
 
         val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap,true)
-        assert(eMaps.length == 1); val eMap = eMaps(0)
+        assert(eMaps.length == 1); val (eMap,_) = eMaps(0)
         // Maps all other params to fresh params
         assert(emptyMap(eMap(1)))
         if(n == N1)
@@ -274,7 +278,7 @@ object RemappingExtenderTest{
 
         val map1List = List((N0,N0), (N1,N1), (N2,N3), (N3,if(n >= 0) n else N6))
         val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap,true)
-        assert(eMaps.length == 1); val eMap = eMaps(0)
+        assert(eMaps.length == 1); val (eMap,_) = eMaps(0)
         assert(checkMap(eMap(0), map1List) && emptyMap(eMap(1)))
       }
     }
@@ -290,7 +294,7 @@ object RemappingExtenderTest{
 
         val map1List = List((N0,N0), (N1,if(n >= 0) n else N6), (N2,N2), (N3,N4))
         val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap,true)
-        assert(eMaps.length == 1); val eMap = eMaps(0)
+        assert(eMaps.length == 1); val (eMap,_) = eMaps(0)
         assert(checkMap(eMap(0), map1List) && emptyMap(eMap(1)))
       }
     }
@@ -325,7 +329,7 @@ object RemappingExtenderTest{
         assert(testHooks.findLinkagesC(unifs, rdMap).isEmpty)
 
         val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap,true)
-        assert(eMaps.length == 1); val eMap = eMaps(0)
+        assert(eMaps.length == 1); val (eMap,_) = eMaps(0)
         // Maps all other params to fresh params
         assert(checkMap(eMap(1), List((T0,T1))))
         if(n == N1)
@@ -359,7 +363,7 @@ object RemappingExtenderTest{
         assert(em(0).sameElements(rdMap(0)) && em(1)(T0) == -1)
 
         val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap,true)
-        assert(eMaps.length == 1); val eMap = eMaps(0)
+        assert(eMaps.length == 1); val (eMap,_) = eMaps(0)
         assert(checkMap(eMap(1), List((T0,T1)))) // can't map T0 -> T0
         val map1List = List((N0,N0), (N1,N1), (N2, if(n < 0) N5 else n), (N3,N3))
         assert(checkMap(eMap(0), map1List))
@@ -397,15 +401,16 @@ object RemappingExtenderTest{
 
       val eMaps = remappingExtender.makeExtensions(unifs,oaBitMap,rdMap,true)
       if(n == N2){
-        assert(eMaps.length == 1); val eMap = eMaps(0)
+        assert(eMaps.length == 1); val (eMap,_) = eMaps(0)
         // Map T0 to fresh value
         assert(checkMap(eMap(0), List((N0,N0), (N1,N2))) &&
           checkMap(eMap(1), List((T0,T1))))
       }
       else{
-        assert(eMaps.length == 2 && eMaps.forall(eMap => 
+        assert(eMaps.length == 2 && eMaps.forall{ case(eMap,_) => 
           checkMap(eMap(1), List((T0,T1))) &&
-            List(N1,N3).exists(n1 => checkMap(eMap(0), List((N0,N0),(N1,n1))))))
+            List(N1,N3).exists(n1 => checkMap(eMap(0), List((N0,N0),(N1,n1))))
+        })
       }
     }
   }
