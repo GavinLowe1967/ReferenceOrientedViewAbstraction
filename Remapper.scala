@@ -635,6 +635,8 @@ object Remapper{
     new ComponentView(servers1, components1)
   }
 
+
+
   /** Apply map to cpt. 
     * Pre: map is defined on all parameters of cpt. */
   def applyRemappingToState(map: RemappingMap, cpt: State): State = {

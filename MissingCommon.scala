@@ -511,7 +511,7 @@ object MissingCommon{
     for(_ <- 0 until 5; if iter.hasNext)
       traverse("MissingCommon", iter.next(), maxPrint = 3); println() 
     // allMCs
-    println("MissingCommon.allMCs size = "+allMCs.size)
+    println("MissingCommon.allMCs size = "+printInt(allMCs.size))
     traverse("allMCs", allMCs, maxPrint = 1); println()
     // the rest
     traverse("MissingCommon", this, maxPrint = 1); println()

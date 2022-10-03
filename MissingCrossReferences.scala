@@ -42,10 +42,11 @@ class InducedTransitionInfo(
     v
   }
 
-  override def toString = 
+  override def toString = {
     s"$trans\n operating on $cv\n induces $cv \n== "+
-      s"(${trans.pre.servers}, ${StateArray.show(oldCpts)})\n -> "
+      s"(${trans.pre.servers}, ${StateArray.show(oldCpts)})\n -> "+
       s"(${trans.post.servers}, ${StateArray.show(newCpts)})\n== $newView"
+  }
 }
 
 // ==================================================================
@@ -58,33 +59,19 @@ class InducedTransitionInfo(
 class MissingCrossReferences(
   val inducedTrans: InducedTransitionInfo,
   missingViews: Array[ReducedComponentView],
+  map: RemappingMap, 
   val commonMissingPids: Array[ProcessIdentity]
 ){
+  assert(missingViews.forall(_ != null)) 
+  // Check sorted
+  for(i <- 0 until missingViews.length-1) 
+    assert(missingViews(i).compare(missingViews(i+1)) < 0)
 
   assert(missingViews.length <= 12, "missingViews.length = "+missingViews.length)
   // At most, a reference from each component of pre to each component of cv,
   // and vice versa: 3*2*2.
 
-  /** Sort missingViews.  Also replace duplicates by null. */ 
-  @inline private def sort() = {
-    // Use insertion sort, as the array is small.
-    var i = 1 // Inv: sorted missingViews[0..i)
-    while(i < missingViews.length){
-      val mv = missingViews(i); var j = i; i += 1
-      // Inv missingViews[j+1..i) > mv; missingViews(j) is a duplicate or
-      // equals mv, so missingViews[0..j)++missingViews[j+1..i)++[mv] is a
-      // permutation of missingViews[0..i) at the start of this iteration.
-      while(j > 0 && 
-          (missingViews(j-1) == null || mv.compare(missingViews(j-1)) < 0)){
-        missingViews(j) = missingViews(j-1); j -= 1
-      }
-      // Copy mv into position, unless duplicted by missingViews(j-1)
-      if(j == 0 || missingViews(j-1) != mv) missingViews(j) = mv
-      else missingViews(j) = null
-    }
-  }
-
-  sort()
+  @inline def isNewViewFound(views: ViewSet) = inducedTrans.isNewViewFound(views)
 
   /** Index of the next element of missingViews needed. */
   private var mvIndex = 0
@@ -113,3 +100,28 @@ class MissingCrossReferences(
 
 }
 
+// =======================================================
+
+object MissingCrossReferences{
+  /** Sort missingViews, removing duplicates. */
+  def sort(missingViews: Array[ReducedComponentView])
+      : Array[ReducedComponentView] = {
+    // Use insertion sort, as the array is small.
+    var i = 1 // Inv: sorted missingViews[0..i)
+    while(i < missingViews.length){
+      val mv = missingViews(i); var j = i; i += 1; assert(mv != null)
+      // Inv missingViews[j+1..i) > mv; missingViews(j) is a duplicate or
+      // equals mv, so missingViews[0..j)++missingViews[j+1..i)++[mv] is a
+      // permutation of missingViews[0..i) at the start of this iteration.
+      while(j > 0 && 
+          (missingViews(j-1) == null || mv.compare(missingViews(j-1)) < 0)){
+        missingViews(j) = missingViews(j-1); j -= 1
+      }
+      // Copy mv into position, unless duplicted by missingViews(j-1)
+      if(j == 0 || missingViews(j-1) != mv) missingViews(j) = mv
+      else missingViews(j) = null
+    }
+    // IMPROVE following
+    missingViews.filter(_ != null)
+  }
+}

@@ -8,6 +8,7 @@ object SingleRefEffectOnUnificationTest{
   import TestStates._
   import TestUtils._
   import SingleRefEffectOnUnificationTest2.{mkUnifs,test4,test5,mkTrans}
+  import Remapper.applyRemapping
 
   /** Test based on (servers(N0); Th(T0,N1), Nd_A(N1,N2)) -> 
     *     (servers(N1); Th'(T0,N1), Nd_A(N1,N2)
@@ -40,8 +41,10 @@ object SingleRefEffectOnUnificationTest{
 
     // Overall result
     val (result,result1) = sreou()
-    assert(result.length == 1 && result1.isEmpty &&
-      result(0)._2.sameElements(Array(bNode(N3,N4), cNode(N4,Null))))
+    assert(result.length == 1 && result1.isEmpty && {
+      val states = applyRemapping(result(0)._1, cv.components)
+      /*result(0)._2*/states.sameElements(Array(bNode(N3,N4), cNode(N4,Null)))
+    })
   }
 
   /* Test based on (fixed(N0); Th(T0, N1, N2), Nd_A(N1, N3)) ->
@@ -118,14 +121,20 @@ object SingleRefEffectOnUnificationTest{
     )
     assert(result.length == expected.length)
     for(exp <- expected) 
-      assert(result.exists(tuple => exp.sameElements(tuple._2)))
+      assert(result.exists(tuple => {
+        val states = applyRemapping(tuple._1, cv.components)
+        exp.sameElements(states/*tuple._2*/)
+      }))
     // Expected from result1
     val expected1 = List(
       Array(aNode(N2,N4), bNode(N4,N5)), Array(aNode(N2,N5), bNode(N5,N6))
     )
     assert(result1.length == expected1.length)
     for(exp <- expected1) 
-      assert(result1.exists(tuple => exp.sameElements(tuple._1)))
+      assert(result1.exists(tuple => {
+        val states = applyRemapping(tuple._1, cv.components)
+        exp.sameElements(states /*tuple._1*/)
+      }))
   }
 
 
@@ -207,7 +216,10 @@ object SingleRefEffectOnUnificationTest{
     )
     assert(result.length == expected.length)
     for(exp <- expected) 
-      assert(result.exists(tuple => exp.sameElements(tuple._2)))
+      assert(result.exists(tuple => {
+        val states = applyRemapping(tuple._1, cv.components)
+        exp.sameElements(states/*tuple._2*/)
+      }))
     assert(result1.isEmpty)
   }
 

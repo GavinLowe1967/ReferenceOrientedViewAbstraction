@@ -162,6 +162,7 @@ object VA{
       case "--doSanityCheck" => doSanityCheck = true; i += 1
       case "--reportEffectOn" => reportEffectOn = true; i += 1
       case "--useOldReferencingViews" => useNewReferencingViews = false; i += 1
+      case "--useNewEffectOnStore" => useNewEffectOnStore = true; i += 1
       case "--doGC" => doGC = true; i += 1
       // case "--swapEndOfPly" => swappedEndOfPly = true; i += 1
       // case "--newEffectOn" => newEffectOn = true; i += 1

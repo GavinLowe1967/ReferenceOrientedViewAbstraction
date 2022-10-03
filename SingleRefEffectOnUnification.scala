@@ -281,10 +281,10 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     // Note: recycles or returns rdMap
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
-      val newCpts = Remapper.applyRemapping(map1, cpts)
+      //val newCpts = Remapper.applyRemapping(map1, cpts)
       // if(hl) println("map1 = "+Remapper.show(map1)+
       //   "\nnewCpts = "+StateArray.show(newCpts))
-      result += ((map1, newCpts, unifs, reducedMapInfo))
+      result += ((map1, /*newCpts,*/ unifs, reducedMapInfo))
     }
   }
 
@@ -324,13 +324,12 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     val extensions = 
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, false)
     // Note: the above recycles rdMap or includes it in result
-// FIXME: this seems to give repeats
     for(map1 <- extensions){
       if(debugging) assert(Remapper.isInjective(map1))
-      val newCpts = Remapper.applyRemapping(map1, cpts)
-      if(showTransitions) println("newCpts = "+StateArray.show(newCpts)) 
-      result2 += ((newCpts, unifs, ix))
-      recycle(map1) //Pools.returnRemappingRows(map1)
+      // val newCpts = Remapper.applyRemapping(map1, cpts)
+      // if(showTransitions) println("newCpts = "+StateArray.show(newCpts)) 
+      result2 += ((map1, /*newCpts,*/ unifs, ix))
+      // recycle(map1) //Pools.returnRemappingRows(map1)
     }
   }
 
@@ -428,13 +427,14 @@ object SingleRefEffectOnUnification{
     * corresponding to unifs; reducedMap is the reduced version of map. */
 // IMPROVE: map isn't used, other than being recycled
   type InducedInfo = 
-    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
+    ArrayBuffer[(RemappingMap, /*Array[State],*/ UnificationList, ReducedMap)]
 
   /** The part of the result corresponding to secondary induced transitions.
-    * Each tuple (newCpts, unifs, i) represents that cpts is remapped to
-    * produce newCpts with unifications unifs, and that the ith component of
-    * the transition gains a reference to cv.principal. */
-  type SecondaryInducedInfo = ArrayBuffer[(Array[State], UnificationList, Int)]
+    * Each tuple (map, newCpts, unifs, i) represents that cpts is remapped by
+    * map to produce newCpts with unifications unifs, and that the ith
+    * component of the transition gains a reference to cv.principal. */
+  type SecondaryInducedInfo = 
+    ArrayBuffer[(RemappingMap, /*Array[State],*/ UnificationList, Int)]
 
 
   /** Does otherArgs represent the empty set? */

@@ -8,6 +8,7 @@ import scala.collection.mutable.ArrayBuffer
 object SingleRefEffectOnUnificationTest2{
   import TestStates._
   import TestUtils._
+  import Remapper.applyRemapping
 
   def mkTrans(pre: Concretization, post: Concretization) = 
     new Transition(pre,-1,post)
@@ -84,7 +85,10 @@ object SingleRefEffectOnUnificationTest2{
     )
     assert(result.length == expected.length)
     for(exp <- expected) 
-      assert(result.exists(tuple => exp.sameElements(tuple._2)))
+      assert(result.exists(tuple => {
+        val states = applyRemapping(tuple._1, cv.components)
+        exp.sameElements(states/*tuple._2*/)
+      }))
     assert(result1.isEmpty)
   }
 
@@ -126,7 +130,10 @@ object SingleRefEffectOnUnificationTest2{
     )
     assert(result.length == expected.length)
     for(exp <- expected) 
-      assert(result.exists(tuple => exp.sameElements(tuple._2)))
+      assert(result.exists(tuple => {
+        val states = applyRemapping(tuple._1, cv.components)        
+        exp.sameElements(states/*tuple._2*/)
+      }))
     assert(result1.isEmpty)
   }
 

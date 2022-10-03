@@ -5,10 +5,13 @@ import scala.collection.mutable.ArrayBuffer
 class MissingCommonWrapper(
   val inducedTrans: InducedTransitionInfo,
   commonMissingPids: Array[ProcessIdentity]
+// IMPROVE: set commonMissingPids = null if empty
 ){
   def servers = inducedTrans.servers
 
   def prePrincipal = inducedTrans.prePrincipal
+
+  @inline def isNewViewFound(views: ViewSet) = inducedTrans.isNewViewFound(views)
 
   /** Index into commonMissingPids. */
   private var pidsIndex = 0
@@ -44,6 +47,7 @@ class MissingCommonWrapper(
     * be registered, namely missingHeads; or null if this is now done. */
   def updateWithNewMatch(cv: ComponentView, views: ViewSet)
       : CptsBuffer = synchronized{
+    require(!done)
     val buff = mc.updateWithNewMatch(cv, views)
     if(buff == null) advance1(views) else buff
   }

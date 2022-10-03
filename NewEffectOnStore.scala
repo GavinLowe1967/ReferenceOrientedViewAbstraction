@@ -74,11 +74,11 @@ class NewEffectOnStore{
     * condition (b). */
   def add(
     inducedTrans: InducedTransitionInfo, missing: Array[ReducedComponentView],
-    commonMissingPids: Array[ProcessIdentity])
+    map: RemappingMap, commonMissingPids: Array[ProcessIdentity])
       : Unit = {
     require(missing.nonEmpty)
     val missingCrossRefs = 
-      new MissingCrossReferences(inducedTrans, missing, commonMissingPids)
+      new MissingCrossReferences(inducedTrans, missing, map, commonMissingPids)
     val missingHead = missingCrossRefs.missingHead 
     addToStore(missingCrossRefStore, missingHead, missingCrossRefs)
   } 
@@ -100,6 +100,7 @@ class NewEffectOnStore{
     * there. */
   @inline private 
   def maybeAdd(inducedTrans: InducedTransitionInfo, buff: ViewBuffer) = {
+    inducedTrans.markNewViewFound
     val v = inducedTrans.get
     if(!buff.contains(v)) buff += v else Profiler.count("maybeAdd repeat")
   }
@@ -115,7 +116,7 @@ class NewEffectOnStore{
         // Note: cv < mcr.missingHead, so the MissingCrossRefSets are locked
         // in increasing order of their associated keys.
         for(mcr <- mcrs.iterator) mcr.synchronized{
-          if(!mcr.done){
+          if(!mcr.done && !mcr.isNewViewFound(views)){
             mcr.updateMissingViewsBy(cv, views)
             if(mcr.done){
               // Now deal with common missing references: add to relevant stores.
@@ -130,6 +131,7 @@ class NewEffectOnStore{
           // if mcr.done, we can ignore it
         } // end of iteration over mcrs/mcr.synchronized
       }
+// IMPROVE: move some operations outside the synchronized blocks
       // Note: if an addMissingCrossRef reads and checks the mapping cv ->
       // mcrs before this function removes cv, then this function will see the
       // effect of that add (because of the locking of mcrs).  There cannot be
@@ -139,7 +141,6 @@ class NewEffectOnStore{
     }
   }
 
-// IMPROVE: purge if the newView has been found
 
   /** If mcw is now done, add the resulting views to result; otherwise register
     * against each element of cb. */
@@ -153,7 +154,6 @@ class NewEffectOnStore{
     }
   }
 
-
   /** Try to complete values in missingCommonStore based on having found cv. */
   private def completeMissingCommons(
     cv: ComponentView, views: ViewSet, result: ViewBuffer)
@@ -162,7 +162,7 @@ class NewEffectOnStore{
       case Some(mcws) => mcws.synchronized{
         for(mcw <- mcws.iterator) mcw.synchronized{
           assert(mcw.servers == cv.servers)
-          if(!mcw.done){
+          if(!mcw.done && !mcw.isNewViewFound(views)){
             val cb = mcw.updateMissingViews(views); updateMCW(mcw, cb, result)
           }
         }
@@ -180,14 +180,16 @@ class NewEffectOnStore{
     candidateForMCStore.get(key) match{
       case Some(mcws) => 
         var done = false
-        while(!done) mcws.synchronized{
+        mcws.synchronized{
           if(mapsto(candidateForMCStore, key, mcws)){
             val newMCWs = mkSet[MissingCommonWrapper] // values to retain
             done = true
             for(mcw <- mcws.iterator) mcw.synchronized{
-              val cb = mcw.updateWithNewMatch(cv, views)
-              updateMCW(mcw, cb, result)
-              if(!mcw.done) newMCWs.add(mcw)
+              if(!mcw.done && !mcw.isNewViewFound(views)){
+                val cb = mcw.updateWithNewMatch(cv, views)
+                updateMCW(mcw, cb, result)
+                if(!mcw.done) newMCWs.add(mcw)
+              }
             }
             // Update the mapping for key
             val ok = 
@@ -196,9 +198,12 @@ class NewEffectOnStore{
               else candidateForMCStore.removeIfEquals(key, mcws)
             assert(ok)
           }
-          else // this raced with another operation, so retry
-            Profiler.count("completeCandidateForMC retry")
-        } // end of while loop/mcws.synchronized block
+        } // end of mcws.synchronized block
+
+        if(!done){ // this raced with another operation, so retry
+          Profiler.count("completeCandidateForMC retry")
+          completeCandidateForMC(cv, views, result)
+        }
 
       case None => {}
     }
@@ -215,4 +220,56 @@ class NewEffectOnStore{
     result
   }
 
+  // -------------------------------------------------------
+  // Administrative functions
+
+  /** Report on the size of store. */
+  def reportStore[A, B <: AnyRef](store: ShardedHashMap[A, OpenHashSet[B]])
+    (implicit tag: ClassTag[B])
+  = {
+    var keys = 0; var data = 0L
+    for((_,set) <- store.iterator){ keys += 1; data += set.size }
+    println(printInt(keys)+" keys; "+printLong(data)+" values")
+  }
+
+  /** Report on the size of the stores. */
+  def report = {
+    print("missingCrossRefStore: "); reportStore(missingCrossRefStore)
+    print("missingCommonStore: "); reportStore(missingCommonStore)
+    print("candidateForMCStore: "); reportStore(candidateForMCStore)
+  }
+
+  /** Perform a memory profile of this. */
+  def memoryProfile = {
+    import ox.gavin.profiling.MemoryProfiler.traverse
+    // profile MissingCommon, MissingInfoStore
+    MissingCommon.memoryProfile
+
+    // traverse N MissingCrossReferences
+    val N = 3
+    val setIter = missingCrossRefStore.valuesIterator; var count = 0
+    while(count < N && setIter.hasNext){
+      val set: OpenHashSet[MissingCrossReferences] = setIter.next()
+      val iter = set.iterator
+      while(count < N && iter.hasNext){
+        traverse("MissingCrossReferences", iter.next(), maxPrint = 1); count += 1
+      }
+    }
+    print("missingCrossRefStore: "); reportStore(missingCrossRefStore)
+    traverse("missingCrossRefStore", missingCrossRefStore); println()
+
+    // Traverse N MissingCommonWrappers
+    val setIter1 = missingCommonStore.valuesIterator;  count = 0
+    while(count < N && setIter1.hasNext){
+      val set: OpenHashSet[MissingCommonWrapper] = setIter1.next()
+      val iter = set.iterator
+      while(count < N && iter.hasNext){
+        traverse("MissingCommonWrapper", iter.next(), maxPrint = 1); count += 1
+      }
+    }
+    print("missingCommonStore: "); reportStore(missingCommonStore)
+    traverse("missingCommonStore", missingCommonStore); println()
+    print("candidateForMCStore: "); reportStore(candidateForMCStore)
+    traverse("candidateForMCStore", candidateForMCStore); println()
+  }
 }

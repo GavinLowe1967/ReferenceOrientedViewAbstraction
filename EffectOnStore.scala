@@ -203,7 +203,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     // the previous ply.
     for(mc <- missingCommon) assert(!mc.done)
     val mcArray = missingCommon.toArray
-    val nv1 = ReducedComponentView(nv.servers, nv.components)
+    val nv1 = nv.asReducedComponentView //ReducedComponentView(nv.servers, nv.components)
     // Profiler.count("ReducedComponentView: EffectOnStore.add")
     val missingInfo = new MissingInfo(nv1, missing.toArray, mcArray, 
       trans, oldCpts, cv, newCpts)

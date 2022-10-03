@@ -197,6 +197,8 @@ package object ViewAbstraction{
   /** Do we report the size of the EffectOnStore? */
   var reportEffectOn = false
 
+  var useNewEffectOnStore = false
+
   /** Do we use the new way of calculating reference views in
     * TransitionTemplateExtender.extendTransitionTemplateBy? */
   var useNewReferencingViews = true 

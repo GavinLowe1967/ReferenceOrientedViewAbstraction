@@ -113,7 +113,7 @@ class EffectOnUnification(trans: Transition,  cv: ComponentView){
   import ServersReducedMap.ReducedMap 
 
   type CombineResult = 
-    ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
+    ArrayBuffer[(RemappingMap, /*Array[State],*/ UnificationList, ReducedMap)]
 
   /** Variable in which we build up the result. */
   private val result = new CombineResult

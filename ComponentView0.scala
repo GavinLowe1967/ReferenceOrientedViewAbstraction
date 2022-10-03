@@ -15,6 +15,8 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
 
   Profiler.count("ComponentView0") // 179M with lazySetNoJoined.csp!
 
+  def asReducedComponentView = ReducedComponentView(servers, components)
+
   // Check this is a valid view.
   ComponentView0.checkValid(servers, components)
 

@@ -21,6 +21,7 @@ class ScalaInstrumentation{
       case "--singleRef" => singleRef = true; i += 1
       case "--bound" => bound = args(i+1).toInt; i += 2
       case "--numWorkers" => numWorkers = args(i+1).toInt; i += 2
+      case "--useNewEffectOnStore" => ViewAbstraction.useNewEffectOnStore = true; i += 1
       case fn => fname = fn; i += 1
     }
 
