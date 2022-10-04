@@ -187,7 +187,7 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
       else sysAbsViews.iterator(t.preServers)
     while(iter.hasNext){ 
       val cv = iter.next()
-      new EffectOn(t, cv, nextNewViews)()
+      effectOn(t, cv, nextNewViews) // new EffectOn(t, cv, nextNewViews)()
       // if(highlight) println(cv)
     }
   }
@@ -202,7 +202,7 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
 /*    assert(t.mightGiveSufficientUnifs(cv) || 
           cv.containsDoneInduced(t.post.servers),
         s"t = $t;\n cv = $cv\n"+cv.containsDoneInduced(t.post.servers)) */
-      new EffectOn(t, cv, nextNewViews)()
+      effectOn(t, cv, nextNewViews) // new EffectOn(t, cv, nextNewViews)()
     }
   }
 

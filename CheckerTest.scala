@@ -24,7 +24,9 @@ class CheckerTest(system: SystemP.System, numWorkers: Int)
 
     def effectOn(pre: Concretization, e: EventInt, post: Concretization, 
         cv: ComponentView) = {
-      val ef = new EffectOn(new Transition(pre, e, post), cv, nextNewViews)()
+      val trans = new Transition(pre, e, post)
+      if(singleRef) new SingleRefEffectOn (trans, cv, nextNewViews)()
+      else new EffectOn(trans, cv, nextNewViews)()
     }
 
     def mkCV(servers: ServerStates, princ: State, others: Array[State]) = {
