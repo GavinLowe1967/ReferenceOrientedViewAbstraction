@@ -18,15 +18,16 @@ class EffectOn(
    * |--EffectOnUnification.apply/SingleRefEffectOnUnification.apply
    * |--processInduced
    * |  |--getCrossRefs
-   * |  |--processInducedInfo
+   * |  |--processInducedInfoFullViews
+   * |--processInducedSingleRef
+   * |  |-processInducedInfo
    * |     |--processInducedInfoSingleRef
    * |     |  |--checkCompatibleMissing
    * |     |  |--EffectOn.effectOnStore.add
    * |     |--processInducedInfoNewEffectOnStore
-   * |     |  |--missingCrossRefs
-   * |     |  |--EffectOn.commonMissingRefs
-   * |     |  |--EffectOn.effectOnStore.add
-   * |     |--processInducedInfoFullViews
+   * |        |--missingCrossRefs
+   * |        |--EffectOn.commonMissingRefs
+   * |        |--EffectOn.effectOnStore.add
    * |--processSecondaryInduced
    * |  |--getCrossRefs
    * |  |--processInducedInfo (as above)
@@ -39,6 +40,9 @@ class EffectOn(
   import ServersReducedMap.ReducedMap 
 
   import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo}
+
+  import RemappingExtender.Linkage
+
   // InducedInfo = 
   //   ArrayBuffer[(RemappingMap, Array[State], UnificationList, ReducedMap)]
   // SecondaryInducedInfo = ArrayBuffer[(Array[State], UnificationList, Int)]
@@ -61,6 +65,8 @@ class EffectOn(
 
   require(pre.servers == cv.servers) // && pre.sameComponentPids(post)
 
+  override def toString = s"EffectOn($trans, $cv)"
+
   /** What does cpt get mapped to given unifications unifs? */
   private def getNewPrinc(cpt: State, unifs: UnificationList): State = {
     var us = unifs; while(us.nonEmpty && us.head._1 != 0) us = us.tail
@@ -68,6 +74,8 @@ class EffectOn(
   }
   
   import EffectOn.views
+
+  private var sreou: SingleRefEffectOnUnification = null
 
   /** The effect of the transition t on cv.  Create extra views caused by the
     * way the transition changes cv, and add them to nextNewViews. */
@@ -77,7 +85,6 @@ class EffectOn(
     // transitions.  This captures over about 25% of cases with lazySet.csp,
     // bound 44; nearly all other cases have servers that change state.
     if(trans.mightGiveSufficientUnifs(cv)){
-      // if(highlight) println("mightGiveSufficientUnifs")
       // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList,
       // ReducedMap)] is a set of tuples (pi, pi(cv.cpts), unifs, reducedMap)
       // where pi is a unification function corresponding to
@@ -86,19 +93,18 @@ class EffectOn(
       // component is the index of preCpts/postCpts that gains a reference to
       // cv.principal.
       if(singleRef){
+        sreou = new SingleRefEffectOnUnification(trans,cv)
         val (inducedInfo, secondaryInduced): (InducedInfo,SecondaryInducedInfo) =
-          new SingleRefEffectOnUnification(trans,cv)()
+          sreou()
         processInducedSingleRef(inducedInfo); 
         processSecondaryInduced(secondaryInduced)
       }
-      else{
+      else{ // full views
         val inducedInfo: EffectOnUnification.InducedInfo = 
           EffectOnUnification.combine(trans, cv)
         processInduced(inducedInfo)
       }
     }
-    // else if(highlight)
-    //   println(s"Not sufficient unifs: "+cv.containsDoneInduced(post.servers))
   }
 
   /** Process the information about induced transitions with full views. */
@@ -117,19 +123,29 @@ class EffectOn(
     } // end of while loop
   }
 
+  /** Make cpts, by applying map to cv.components.  If useNewEffectOnStore, map
+    * undefined values in map to fresh values. */
+  @inline private def mkComponents(map: RemappingMap): Array[State] = 
+    if(useNewEffectOnStore){
+      val map1 = Remapper.cloneMap(map)
+      Remapper.mapUndefinedToFresh(map1, trans.getNextArgMap)
+      val cs = Remapper.applyRemapping(map1, cv.components)
+      Pools.returnRemappingRows(map1); cs
+    }
+    else Remapper.applyRemapping(map, cv.components)
+
   /** Process the information about primary induced transitions. */
   @inline private def processInducedSingleRef(inducedInfo: InducedInfo) = {
     assert(singleRef)
     var index = 0
     while(index < inducedInfo.length){
-      val (map, linkages, unifs, reducedMapInfo) = inducedInfo(index); index += 1
-// IMPROVE: use linkages
+      val (map, rrParams, linkages, unifs, reducedMapInfo) = inducedInfo(index);
+      index += 1
       Profiler.count("EffectOn step "+unifs.isEmpty)
-      val cpts = Remapper.applyRemapping(map, cv.components)
+      val cpts = mkComponents(map)
       // The components needed for condition (b).
       val crossRefs: List[Array[State]] =
-        if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
-        else List()
+        getCrossRefs(pre.servers, cpts, pre.components)
       if(unifs.nonEmpty || reducedMapInfo == null ||
           !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs)){
         val newPrinc = getNewPrinc(cpts(0), unifs)
@@ -141,10 +157,8 @@ class EffectOn(
         // else{
         var newComponentsList =
           StateArray.makePostComponents(newPrinc, postCpts, cpts)
-        // if(hl || false && highlight)
-        //   println("newComponentList: "+newComponentsList.map(StateArray.show))
-        processInducedInfo(
-          map, cpts, unifs, reducedMapInfo, true, crossRefs, newComponentsList)
+        processInducedInfo(map, cpts, unifs, reducedMapInfo, true, crossRefs, 
+          newComponentsList, rrParams, linkages)
       }
       Pools.returnRemappingRows(map)
     } // end of while loop
@@ -156,18 +170,16 @@ class EffectOn(
   def processSecondaryInduced(secondaryInduced: SecondaryInducedInfo)  = {
     var index = 0
     while(index < secondaryInduced.length){
-      val (map, linkages, unifs, k) = secondaryInduced(index); index += 1
-// IMPROVE: use linkages
-      val cpts = Remapper.applyRemapping(map, cv.components)
-      // assert(cpts == cpts1)
+      val (map, rrParams, linkages, unifs, k) = secondaryInduced(index); 
+      index += 1
+      val cpts = mkComponents(map) 
       Profiler.count("SecondaryInduced")
       val crossRefs: List[Array[State]] =
-        if(singleRef) getCrossRefs(pre.servers, cpts, pre.components)
-        else List()
+        getCrossRefs(pre.servers, cpts, pre.components)
       val newPrinc = getNewPrinc(cpts(0), unifs)
       val newComponentsList = List(StateArray(Array(postCpts(k), newPrinc)))
-      processInducedInfo(
-        map, cpts, unifs, null, false, crossRefs, newComponentsList)
+      processInducedInfo(map, cpts, unifs, null, false, crossRefs, 
+        newComponentsList, rrParams, linkages)
     }
   }
 
@@ -184,20 +196,25 @@ class EffectOn(
   @inline private 
   def processInducedInfo(map: RemappingMap, cpts: Array[State], 
     unifs: UnificationList, reducedMap: ReducedMap, isPrimary: Boolean, 
-    crossRefs: List[Array[State]], newComponentsList: List[Array[State]])
+    crossRefs: List[Array[State]], newComponentsList: List[Array[State]],
+    rrParams: BitMap, linkages: List[Linkage])
       : Unit = {
     assert(singleRef)
-    // assert(cpts.map(_.cs).sameElements(cv.components.map(_.cs)))
     Profiler.count(s"processInducedInfo $isPrimary")
+    // assert(cpts.map(_.cs).sameElements(cv.components.map(_.cs)))
     //for(cpts <- newComponentsList) ComponentView0.checkValid(pre.servers, cpts)
     // StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
     // assert(!pre.components.sameElements(cpts),
     //   s"pre = $pre; cpts = "+StateArray.show(cpts))
 
     // Dispatch appropriate version
-    if(useNewEffectOnStore)
-      processInducedInfoNewEffectOnStore(
-        map, cpts, unifs, reducedMap, isPrimary, crossRefs, newComponentsList)
+    if(useNewEffectOnStore){
+      // All completions of map
+      val allCompletions = sreou.allCompletions(rrParams, map, linkages)
+      for(map1 <- allCompletions)
+        processInducedInfoNewEffectOnStore(
+          map1, cpts, unifs, reducedMap, isPrimary, crossRefs, newComponentsList)
+    }
     else processInducedInfoSingleRef(
       cpts, unifs, reducedMap, isPrimary, crossRefs, newComponentsList)
 // IMPROVE: recycle map
@@ -546,13 +563,26 @@ object EffectOn{
     } // end of outer if
   }
 
-  /** Get a representation of the cross references between cpts1 and cpts2,
+  /** Get (the components of) the cross reference views between cpts1 and cpts2,
     * needed for condition (b). */
   @inline def getCrossRefs(
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
       : List[Array[State]] = {
     assert(singleRef)
     StateArray.crossRefs(cpts1, cpts2).map(Remapper.remapComponents(servers,_))
+  }
+
+  /** Get (the components of) the cross reference views between map(cpts1) and
+    * cpts2, needed for condition (b).  map might be undefined on some
+    * components of cpts1: only consider those states of cpts1 where the map
+    * is fully defined. */
+  @inline private def getCrossRefs1(servers: ServerStates, 
+    cpts1: Array[State], cpts2: Array[State], map: RemappingMap)
+      : List[Array[State]] = {
+    val cpts1Renamed = 
+      cpts1.filter(Remapper.isDefinedOver(map, _)).
+        map(Remapper.applyRemappingToState(map,_))
+    getCrossRefs(servers, cpts1Renamed, cpts2)
   }
 
   /** All common included missing references from cpts1 and cpts2. */

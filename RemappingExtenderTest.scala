@@ -8,7 +8,7 @@ object RemappingExtenderTest{
   import TestStates._
   import TestUtils._
   import Unification.UnificationList // = List[(Int,Int)]
-
+/*
   private def showCandMap(candMap: Array[Array[List[Identity]]]): String = 
     candMap.map(_.mkString(", ")).mkString("; ")
 
@@ -414,12 +414,13 @@ object RemappingExtenderTest{
       }
     }
   }
+ */
 
   /** Main function. */
   def apply() = {
     singleRef = true
     println("===RemappingExtenderTest===")
-    test1; test2; test3; test4; test5
+//    test1; test2; test3; test4; test5
   }
 
 }

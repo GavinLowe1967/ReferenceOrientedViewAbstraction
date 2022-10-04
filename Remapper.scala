@@ -435,19 +435,17 @@ object Remapper{
     newOtherArgs
   }
 
-  // /** An OtherArgMap, contaiing all the parameters in states that are not mapped
-  //   * by map. */
-  // def otherArgsFromStates(map: RemappingMap, states: Array[State])
-  //     : OtherArgMap = {
-  //   val otherArgs = newOtherArgMap; var i = 0
-  //   while(i < states.length){
-  //     val st = states(i); val ids = st.ids; val typeMap = st.typeMap; var j = 0
-  //     while(j < ids.length){
-  //       val f = typeMap(j); val id = ids(j)
-  //       if(!isDistinguished(id) && map(f)(id) < 0){
+  /** Extend map, mapping all undefined values to fresh values, as given by
+    * nextArg. */
+  @inline def mapUndefinedToFresh(map: RemappingMap, nextArg: NextArgMap) = {
+    for(t <- 0 until numTypes){
+      var next = nextArg(t)
+      for(i <- 0 until map(t).length)
+        if(map(t)(i) < 0){ map(t)(i) = next; next += 1 }
+    }
+  }
 
-  //   }
-  // }
+
 
   // ======================================================= Helper functions
 
@@ -635,6 +633,17 @@ object Remapper{
     new ComponentView(servers1, components1)
   }
 
+  /** Is map defined over all the parameters of cpt? */
+  def isDefinedOver(map: RemappingMap, cpt: State): Boolean = {
+    val ids = cpt.ids; val len = ids.length; val typeMap = cpt.typeMap
+    var i = 0; var ok = true
+    while(i < len && ok){
+      val id = ids(i)
+      if(!isDistinguished(id) && map(typeMap(i))(id) < 0) ok = false
+      i += 1
+    }
+    ok
+  }
 
 
   /** Apply map to cpt. 

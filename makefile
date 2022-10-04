@@ -152,6 +152,8 @@ $(DIR)/EffectOn.class: $(DIR)/NewEffectOnStore.class	\
   $(DIR)/EffectOnStore.class $(DIR)/EffectOnUnification.class	\
   $(DIR)/SingleRefEffectOnUnification.class
 
+$(DIR)/SingleRefEffectOn.class: $(DIR)/EffectOn.class
+
 # Extending of transition templates
 
 $(DIR)/CompatibleWithCache.class: $(DIR)/BasicHashMap.class
@@ -174,7 +176,7 @@ $(DIR)/Debugger.class: $(DIR)/SystemP/System.class $(DIR)/EffectOn.class
 
 $(DIR)/CheckerState.class: $(DIR)/TransitionSet.class		\
   $(DIR)/NewTransitionSet.class $(DIR)/Unification.class	\
-  $(DIR)/EffectOn.class $(DIR)/TransitionTemplateExtender.class
+  $(DIR)/SingleRefEffectOn.class $(DIR)/TransitionTemplateExtender.class
 
 $(DIR)/Checker.class: $(DIR)/CheckerState.class $(DIR)/Debugger.class	\
   $(DIR)/Barrier.class $(DIR)/Concurrency.class
