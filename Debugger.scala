@@ -177,19 +177,20 @@ class Debugger(
       val preCpts = pre.components; val cpts1 = cv1.components
       val prePrinc = preCpts(0)
 
+// FIXME: below only when singleRef
       // Find the missing views required for condition (b). 
       // val crossRefs =
       //   EffectOn.getCrossRefs(servers, cv1.components, pre.components)
       // println("crossRefs = "+crossRefs.map(StateArray.show))
       val missing: List[ComponentView] =
-        EffectOn.getCrossRefs(servers, cpts1, preCpts)
+        SingleRefEffectOn.getCrossRefs(servers, cpts1, preCpts)
           .map(new ComponentView(servers, _))
       println(s"missing = "+missing.mkString(",\n  "))
       options ++= missing
 
       // Find the missing views required for condition (c).
       // Identities of common missing components
-      val commonMissing =  EffectOn.commonMissingRefs(cpts1, preCpts)
+      val commonMissing =  SingleRefEffectOn.commonMissingRefs(cpts1, preCpts)
       println(s"Common missing component identities: "+
         commonMissing.map(getScriptName).mkString(", "))
       for(pid <- commonMissing){

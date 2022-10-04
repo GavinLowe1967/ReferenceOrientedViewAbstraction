@@ -18,7 +18,7 @@ class SingleRefEffectOn(
   import Unification.UnificationList //  = List[(Int,Int)]
   import RemappingExtender.Linkage
   import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo}
-  import EffectOn.{getCrossRefs,commonMissingRefs}
+  import SingleRefEffectOn.{getCrossRefs,commonMissingRefs,effectOnStore,newEffectOnStore}
   import EffectOn.views
 
   //private var sreou: SingleRefEffectOnUnification = null
@@ -159,7 +159,7 @@ class SingleRefEffectOn(
             cpts, newComponents, nv, unifs, isPrimary, reducedMap)
         }
         else{ // missing.nonEmpty || missingCommons.nonEmpty 
-          EffectOn.effectOnStore.add(missing, missingCommons, nv, trans,
+          effectOnStore.add(missing, missingCommons, nv, trans,
             cpts, cv, newComponents)
           // Note: the missingCommons may be shared.
           nv.setCreationInfoIndirect(trans, cpts, cv, newComponents)
@@ -189,8 +189,7 @@ class SingleRefEffectOn(
     val missing: Array[ReducedComponentView] = 
       MissingCrossReferences.sort(missingCrossRefs(crossRefs).toArray)
     // The common missing references for condition (c)
-    val commonMissingPids = 
-      EffectOn.commonMissingRefs(pre.components, cpts).toArray
+    val commonMissingPids =  commonMissingRefs(pre.components, cpts).toArray
     
     for(newCpts <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newCpts)
@@ -207,12 +206,12 @@ class SingleRefEffectOn(
               cpts, newCpts, nv, unifs, isPrimary, reducedMap)
           }
           else{
-            EffectOn.newEffectOnStore.add(mcw)
+            newEffectOnStore.add(mcw)
           }
         } // end of if(missing.isEmpty)
         else{
           // Add a MissingCrossReferences to the store
-          EffectOn.newEffectOnStore.add(inducedTrans, missing, map, commonMissingPids)
+          newEffectOnStore.add(inducedTrans, missing, map, commonMissingPids)
           if(isPrimary && unifs.isEmpty && commonMissingPids.isEmpty){
 // IMPROVE make the MissingCommon and test if empty ??
             cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
@@ -309,5 +308,171 @@ class SingleRefEffectOn(
     missingCommons
   }
 
+}
 
+
+// =======================================================
+
+object SingleRefEffectOn{
+
+  /** A mapping showing which component views might be added later.
+    * Abstractly it stores tuples (missing, missingCommon, nv) such that:
+    * missing is a set of views; missingCommon is a set of (ServerStates, State,
+    * State, ProcessIdentity) tuples; and nv is a view.  If
+    * 
+    * (1) all the views in missing are added; and
+    * 
+    * (2) views are added so all elements of missingCommon satisfy
+    * hasCommonRef; i.e. for each (servers, princ1, princ2, pid) in
+    * missingCommon, there is a component state c with identity pid such that
+    * servers || princ1 || c and servers || princ2 || c are both in sysAbsViews
+    * (up to renaming);
+    * 
+    * then nv can also be added.
+    * 
+    * Tuples are added to the store in apply when a transition is prevented
+    * because relevant views are not yet in the store.  completeDelayed
+    * subsequently tries to complete the transitions.  */
+  var effectOnStore: EffectOnStore = 
+    if(singleRef && !useNewEffectOnStore) new SimpleEffectOnStore else null
+
+  var newEffectOnStore: NewEffectOnStore =
+    if(singleRef && useNewEffectOnStore) new NewEffectOnStore else null
+
+
+  def reset = { 
+    if(singleRef){
+      if(useNewEffectOnStore) newEffectOnStore = new NewEffectOnStore
+      else effectOnStore = new SimpleEffectOnStore
+    }
+    lastPurgeViewCount = 0L; doPurge = false
+  }
+
+
+
+  import EffectOn.{views}
+
+  /* --------- Purging of effectOnStore.
+   * This is done according to certain heuristics. */
+
+  /** The number of views when last we did a purge. */
+  private var lastPurgeViewCount = 0L
+
+  /** Only purge if at least purgeQuantum views have been added since the last
+    * round of purges. */
+  private val PurgeQuantum = 300_000
+
+  /** Is it time for another purge? */
+  var doPurge = false
+
+  /** Purge from the store.  Done at the end of each ply. */
+  def purge = if(doPurge){
+    if(ply%4 == 0) effectOnStore.purgeCandidateForMCStore(views)
+    else if(ply%4 == 1) effectOnStore.purgeMCNotDone(views)
+    else if(ply%4 == 2) effectOnStore.purgeMCDone(views)
+    else if(ply%4 == 3) MissingCommon.purgeMCs()
+  }
+
+  /** Prepare for the next purge.  Called at the start of each ply by worker
+    * 0. */
+  def prepareForPurge = if(ply%4 == 0){
+    // We'll do purges only if enough views have been found since the last
+    // round: at least PurgeQuantum and one third of the total.
+    val viewCount = views.size; val newViewCount = viewCount-lastPurgeViewCount
+    if(newViewCount >= PurgeQuantum && 3*newViewCount >= viewCount){
+      println("Preparing for purge")
+      doPurge = true; lastPurgeViewCount = viewCount
+      effectOnStore.prepareForPurge; MissingCommon.prepareForPurge
+    }
+    else doPurge = false
+  }
+
+  /** If cv completes a delayed transition in effectOnStore, then complete it. */
+  def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
+  = {
+    val newViews =
+      if(useNewEffectOnStore) newEffectOnStore.complete(cv, views)
+      else effectOnStore.complete(cv, views)
+    // if(highlight(cv)) println(s"completeDelayed($cv)")
+    for(nv <- newViews){
+      if(showTransitions || ComponentView0.highlight(nv)) 
+        println(s"Adding $nv\n from completeDelayed($cv)")
+      tryAddView(nv, nextNewViews)
+    }
+  }
+
+  /** Add mi.nextNewViews to nextNewViews. */
+  @inline private 
+  def tryAddView(nv: ComponentView, nextNewViews: MyHashSet[ComponentView]) = {
+    // require(mi.done); val nv = mi.newView
+    if(nextNewViews.add(nv)){
+      if(showTransitions || ComponentView0.highlight(nv)){
+        val (trans, cpts, cv, newComponents) = nv.getCreationIngredients
+        println(s"Adding via completeDelayed \n"+
+          s"$trans induces \n"+
+          EffectOnStore.showInduced(
+            cv, cpts, trans.post.servers, newComponents, nv))
+      }
+      if(!nv.representableInScript){
+        val (trans, cpts, cv, newComponents) = nv.getCreationIngredients
+        println("Not enough identities in script to combine transition\n"+
+          s"$trans and\n$cv.  Produced view\n"+nv.toString0)
+        sys.exit()
+      }
+    } // end of outer if
+  }
+
+  /** Get (the components of) the cross reference views between cpts1 and cpts2,
+    * needed for condition (b). */
+  @inline def getCrossRefs(
+    servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
+      : List[Array[State]] = {
+    assert(singleRef)
+    StateArray.crossRefs(cpts1, cpts2).map(Remapper.remapComponents(servers,_))
+  }
+
+  /** Get (the components of) the cross reference views between map(cpts1) and
+    * cpts2, needed for condition (b).  map might be undefined on some
+    * components of cpts1: only consider those states of cpts1 where the map
+    * is fully defined. */
+  @inline private def getCrossRefs1(servers: ServerStates, 
+    cpts1: Array[State], cpts2: Array[State], map: RemappingMap)
+      : List[Array[State]] = {
+    val cpts1Renamed = 
+      cpts1.filter(Remapper.isDefinedOver(map, _)).
+        map(Remapper.applyRemappingToState(map,_))
+    getCrossRefs(servers, cpts1Renamed, cpts2)
+  }
+
+  /** All common included missing references from cpts1 and cpts2. */
+  @inline def commonMissingRefs(cpts1: Array[State], cpts2: Array[State])
+      : List[ProcessIdentity] = {
+    var missingRefs1: List[ProcessIdentity] = StateArray.missingRefs(cpts1)
+    val missingRefs2: List[ProcessIdentity] = StateArray.missingRefs(cpts2)
+    // The common missing references
+    var missingCRefs = List[ProcessIdentity]()
+    while(missingRefs1.nonEmpty){
+      val pid = missingRefs1.head; missingRefs1 = missingRefs1.tail
+      if(contains(missingRefs2, pid)) missingCRefs ::= pid
+    }
+    missingCRefs
+  }
+
+  /* --------- Supervisory functions. */
+
+  def sanityCheck = effectOnStore.sanityCheck(views)
+
+  def report = 
+    if(useNewEffectOnStore) newEffectOnStore.report else effectOnStore.report
+
+  /** Perform a memory profile of this. */
+  def memoryProfile = {
+    import ox.gavin.profiling.MemoryProfiler.traverse
+    if(effectOnStore != null){
+      effectOnStore.report; println()
+      effectOnStore.memoryProfile
+    }
+    if(newEffectOnStore != null) newEffectOnStore.memoryProfile
+    traverse("SingleRefEffectOn", this, maxPrint = 1, ignore = List("System"))
+  }
 }
