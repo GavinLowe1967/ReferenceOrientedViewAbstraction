@@ -264,6 +264,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       Profiler.count("allCompletions - add")
     }
     completions
+
+// IMPROVE: recycle rdMap ???
   }
 
   /** Implementation of allExtensions from the paper.  All extensions of rdMap,
@@ -383,13 +385,24 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rdMap: RemappingMap, isPrimary: Boolean)
       : ExtensionsInfo = {
     val extensions = new ExtensionsInfo
-    if(false && useNewEffectOnStore)
+// FIXME
+    if(useNewEffectOnStore){
       makeExtensionsNew(
         unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
-    else
+if(false) // create all completions here
+      extensions.flatMap{ case (map, rrParams, linkages) =>
+        assert(rrParams eq resultRelevantParams)
+        allCompletions(rrParams, map, linkages).map( map1 =>
+          (map1, rrParams, linkages)
+        )}
+else extensions
+      // The above should be equivalent to makeExtensions1
+    }
+    else{
       makeExtensions1(
         unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
-    extensions
+      extensions
+    }
   }
 
   /** Implementation of makeExtensions from the paper.  Create all required

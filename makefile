@@ -148,11 +148,13 @@ $(DIR)/NewEffectOnStore.class: $(DIR)/MissingCommonWrapper.class
 
 $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 
-$(DIR)/EffectOn.class: $(DIR)/NewEffectOnStore.class	\
-  $(DIR)/EffectOnStore.class $(DIR)/EffectOnUnification.class	\
-  $(DIR)/SingleRefEffectOnUnification.class
+$(DIR)/EffectOn.class: $(DIR)/EffectOnUnification.class
+# $(DIR)/NewEffectOnStore.class	 $(DIR)/EffectOnStore.class 	
+# $(DIR)/SingleRefEffectOnUnification.class
 
-$(DIR)/SingleRefEffectOn.class: $(DIR)/EffectOn.class
+$(DIR)/SingleRefEffectOn.class: $(DIR)/EffectOn.class		\
+  $(DIR)/NewEffectOnStore.class $(DIR)/EffectOnStore.class \
+  $(DIR)/SingleRefEffectOnUnification.class
 
 # Extending of transition templates
 
