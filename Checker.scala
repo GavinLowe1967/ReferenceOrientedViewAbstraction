@@ -66,7 +66,9 @@ class Checker(system: SystemP.System, numWorkers: Int){
     // Following are expensive and verbose so normally disabled
     if(singleRef && doSanityCheck && bound == Int.MaxValue) 
       SingleRefEffectOn.sanityCheck
-    if(singleRef && reportEffectOn) SingleRefEffectOn.report
+    if(singleRef && reportEffectOn){
+      if(useNewEffectOnStore) NewEffectOn.report else SingleRefEffectOn.report
+    }
     checkerState.endOfCheck
     println(s"#ServerStates = ${ServerStates.count}")
     println(s"#States = ${MyStateMap.stateCount}")
@@ -118,8 +120,12 @@ class Checker(system: SystemP.System, numWorkers: Int){
               case 2 =>    // Effect of previous transition templates
                 checkerState.instantiateTransitiontemplates(view)
               case 0 =>
-                if(singleRef) SingleRefEffectOn.completeDelayed(
+                if(singleRef){
+                  if(useNewEffectOnStore)
+                    NewEffectOn.completeDelayed(view, checkerState.nextNewViews)
+                  else SingleRefEffectOn.completeDelayed(
                     view, checkerState.nextNewViews)
+                }
             } // end of match
           }
           else donePly = true
@@ -176,7 +182,11 @@ class Checker(system: SystemP.System, numWorkers: Int){
     // traverse("transitionTemplateExtender", transitionTemplateExtender, 
     //   maxPrint = 1, ignore = List("System"))
     // println()
-    if(singleRef) SingleRefEffectOn.memoryProfile; println()
+    if(singleRef){
+      if(useNewEffectOnStore) NewEffectOn.memoryProfile
+      else SingleRefEffectOn.memoryProfile
+      println()
+    }
     traverse("checker", this, maxPrint = 1, ignore = List("System")); println()
     // Below here should be trivial
     traverse("CompatibleWithCache", CompatibleWithCache, maxPrint = 0)

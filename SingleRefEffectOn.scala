@@ -37,19 +37,18 @@ class SingleRefEffectOn(
   import Unification.UnificationList //  = List[(Int,Int)]
   import RemappingExtender.Linkage
   import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo}
-  import SingleRefEffectOn.{getCrossRefs, commonMissingRefs, effectOnStore,
-    newEffectOnStore}
+  import SingleRefEffectOn.{getCrossRefs, commonMissingRefs, effectOnStore}
   import EffectOn.views
 
-  private var sreou: SingleRefEffectOnUnification = null
+  protected var sreou: SingleRefEffectOnUnification = null
 
   /** The effect of the transition t on cv.  Create extra views caused by the
     * way the transition changes cv, and add them to nextNewViews. */
   override def apply() : Unit = {
+    assert(!useNewEffectOnStore)
     // Early bail-out if servers don't change, no chance of unification with
     // components that change state, and no chance of secondary induced
-    // transitions.  This captures over about 25% of cases with lazySet.csp,
-    // bound 44; nearly all other cases have servers that change state.
+    // transitions.  
     if(trans.mightGiveSufficientUnifs(cv)){
       // inducedInfo: ArrayBuffer[(RemappingMap, Array[State], UnificationList,
       // ReducedMap)] is a set of tuples (pi, pi(cv.cpts), unifs, reducedMap)
@@ -61,27 +60,21 @@ class SingleRefEffectOn(
       sreou = new SingleRefEffectOnUnification(trans,cv)
       val (inducedInfo, secondaryInduced): (InducedInfo,SecondaryInducedInfo) =
         sreou()
-      if(useNewEffectOnStore){
-        processPrimaryInducedNewEffectOnStore(inducedInfo)
-        processSecondaryInducedNewEffectOnStore(secondaryInduced)
-      }
-      else{
-        processPrimaryInduced(inducedInfo);
-        processSecondaryInduced(secondaryInduced)
-      }
+      processPrimaryInduced(inducedInfo);
+      processSecondaryInduced(secondaryInduced)
     }
   }
 
-  /** Make cpts, by applying map to cv.components.  If useNewEffectOnStore, map
-    * undefined values in map to fresh values. */
-  @inline private def mkComponents(map: RemappingMap): Array[State] = 
-    if(useNewEffectOnStore){
-      val map1 = Remapper.cloneMap(map)
-      Remapper.mapUndefinedToFresh(map1, trans.getNextArgMap)
-      val cs = Remapper.applyRemapping(map1, cv.components)
-      Pools.returnRemappingRows(map1); cs
-    }
-    else Remapper.applyRemapping(map, cv.components)
+  // /** Make cpts, by applying map to cv.components.  If useNewEffectOnStore, map
+  //   * undefined values in map to fresh values. */
+  // @inline protected def mkComponents(map: RemappingMap): Array[State] = 
+  //   if(useNewEffectOnStore){
+  //     val map1 = Remapper.cloneMap(map)
+  //     Remapper.mapUndefinedToFresh(map1, trans.getNextArgMap)
+  //     val cs = Remapper.applyRemapping(map1, cv.components)
+  //     Pools.returnRemappingRows(map1); cs
+  //   }
+  //   else Remapper.applyRemapping(map, cv.components)
 
   /** Process the information about primary induced transitions. */
   @inline private def processPrimaryInduced(inducedInfo: InducedInfo) = {
@@ -106,9 +99,7 @@ class SingleRefEffectOn(
         // else{
         var newComponentsList =
           StateArray.makePostComponents(newPrinc, postCpts, cpts)
-        // processInducedInfo(map, cpts, unifs, reducedMapInfo, true, crossRefs, 
-        //   newComponentsList, rrParams, linkages)
-        processInducedInfo1(cpts, unifs, reducedMapInfo, true, crossRefs, 
+        processInducedInfo(cpts, unifs, reducedMapInfo, true, crossRefs, 
           newComponentsList)
 
       }
@@ -124,61 +115,32 @@ class SingleRefEffectOn(
     while(index < secondaryInduced.length){
       val (map, rrParams, linkages, unifs, k) = secondaryInduced(index); 
       index += 1
-      val cpts = mkComponents(map) 
+      val cpts = Remapper.applyRemapping(map, cv.components) //mkComponents(map) 
       // assert(cptsX.sameElements(cpts))
       Profiler.count("SecondaryInduced")
       val crossRefs: List[Array[State]] =
         getCrossRefs(pre.servers, cpts, pre.components)
       val newPrinc = getNewPrinc(cpts(0), unifs)
       val newComponentsList = List(StateArray(Array(postCpts(k), newPrinc)))
-      // processInducedInfo(map, cpts, unifs, null, false, crossRefs, 
-      //   newComponentsList, rrParams, linkages)
-      processInducedInfo1(cpts, unifs, null, false, crossRefs, 
+      processInducedInfo(cpts, unifs, null, false, crossRefs, 
         newComponentsList)
     }
   }
 
   /** Create induced transition producing views with post.servers and each
     * element of newComponentsList.  The transition is induced by pre -e->
-    * post acting on cv, with unifications unifs; cv.cpts is remapped
-    * to produce cpts.  Add result to nextNewViews.
+    * post acting on cv, with unifications unifs; cv.cpts is remapped to
+    * produce cpts.  This creates cross references for condition (b)
+    * corresponding to crossRefs.  The induced transition, if possible, will
+    * produce views corresponding to newComponentList. Add result to
+    * nextNewViews.
     * 
     * This function would live better inside apply; but that function is too
     * large.  Most other parameters are as there (most are used only for
     * setting creation information or textual output).
     * @param isPrimary are we creating a primary transition?
     * @param reducedMap a representation of the RemappingMap |> post.servers. */
-//   @inline private 
-//   def processInducedInfo(map: RemappingMap, cpts: Array[State], 
-//     unifs: UnificationList, reducedMap: ReducedMap, isPrimary: Boolean, 
-//     crossRefs: List[Array[State]], newComponentsList: List[Array[State]],
-//     rrParams: BitMap, linkages: List[Linkage])
-//       : Unit = {
-//     assert(singleRef)
-//     Profiler.count(s"processInducedInfo $isPrimary")
-//     // assert(cpts.map(_.cs).sameElements(cv.components.map(_.cs)))
-//     //for(cpts <- newComponentsList) ComponentView0.checkValid(pre.servers, cpts)
-//     // StateArray.checkDistinct(cpts); assert(cpts.length==cv.components.length)
-//     // assert(!pre.components.sameElements(cpts),
-//     //   s"pre = $pre; cpts = "+StateArray.show(cpts))
-
-//     // Dispatch appropriate version
-//     if(useNewEffectOnStore){
-//       // All completions of map
-// // FIXME
-//       val allCompletions = 
-//         if(true) List(map) else sreou.allCompletions(rrParams, map, linkages)
-//       for(map1 <- allCompletions)
-//         processInducedInfoNewEffectOnStore(
-//           map1, cpts, unifs, reducedMap, isPrimary, crossRefs, newComponentsList)
-//     }
-//     else processInducedInfo1(
-//       cpts, unifs, reducedMap, isPrimary, crossRefs, newComponentsList)
-// // IMPROVE: recycle map
-//   }
-
-  /** Process induced information, using the old EffectOnStore. */
-  @inline private def processInducedInfo1(
+  @inline private def processInducedInfo(
     cpts: Array[State], unifs: UnificationList, reducedMap: ReducedMap,
     isPrimary: Boolean, crossRefs: List[Array[State]],
     newComponentsList: List[Array[State]])
@@ -220,38 +182,38 @@ class SingleRefEffectOn(
 
   // ----------------- Versions for NewEffectOnStore
 
-  /** Process the information about primary induced transitions. */
-  @inline private 
-  def processPrimaryInducedNewEffectOnStore(inducedInfo: InducedInfo) = {
-    assert(singleRef && useNewEffectOnStore)
-    var index = 0
-    while(index < inducedInfo.length){
-      val (mapX, rrParams, linkages, unifs, reducedMapInfo) = inducedInfo(index);
-      index += 1
-//FIXME
-      val allCompletions = 
-        if(false) List(mapX) else sreou.allCompletions(rrParams, mapX, linkages)
-for(map <- allCompletions){
-      Profiler.count("EffectOn step "+unifs.isEmpty)
-      val cpts = mkComponents(map)
-      // The components needed for condition (b).
-      val crossRefs: List[Array[State]] =
-        getCrossRefs(pre.servers, cpts, pre.components)
-      if(unifs.nonEmpty || reducedMapInfo == null ||
-          !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs)){
-        val newPrinc = getNewPrinc(cpts(0), unifs)
-        var newComponentsList =
-          StateArray.makePostComponents(newPrinc, postCpts, cpts)
-        processInducedInfoNewEffectOnStore(
-          map, cpts, unifs, reducedMapInfo, true, crossRefs,
-          newComponentsList) // , rrParams, linkages)
-        // processInducedInfo(map, cpts, unifs, reducedMapInfo, true, crossRefs, 
-        //   newComponentsList, rrParams, linkages)
-      }
-      Pools.returnRemappingRows(map)
-}
-    } // end of while loop
-  }
+//   /** Process the information about primary induced transitions. */
+//   @inline protected 
+//   def processPrimaryInducedNewEffectOnStore(inducedInfo: InducedInfo) = {
+//     assert(singleRef && useNewEffectOnStore)
+//     var index = 0
+//     while(index < inducedInfo.length){
+//       val (mapX, rrParams, linkages, unifs, reducedMapInfo) = inducedInfo(index);
+//       index += 1
+// //FIXME
+//       val allCompletions = 
+//         if(false) List(mapX) else sreou.allCompletions(rrParams, mapX, linkages)
+// for(map <- allCompletions){
+//       Profiler.count("EffectOn step "+unifs.isEmpty)
+//       val cpts = mkComponents(map)
+//       // The components needed for condition (b).
+//       val crossRefs: List[Array[State]] =
+//         getCrossRefs(pre.servers, cpts, pre.components)
+//       if(unifs.nonEmpty || reducedMapInfo == null ||
+//           !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs)){
+//         val newPrinc = getNewPrinc(cpts(0), unifs)
+//         var newComponentsList =
+//           StateArray.makePostComponents(newPrinc, postCpts, cpts)
+//         processInducedInfoNewEffectOnStore(
+//           map, cpts, unifs, reducedMapInfo, true, crossRefs,
+//           newComponentsList) // , rrParams, linkages)
+//         // processInducedInfo(map, cpts, unifs, reducedMapInfo, true, crossRefs, 
+//         //   newComponentsList, rrParams, linkages)
+//       }
+//       Pools.returnRemappingRows(map)
+// }
+//     } // end of while loop
+//   }
 
       // assert(crossRefs.length == crossRefsX.length,
       //   s"\n$trans\ntrans.getNextArgMap = "+trans.getNextArgMap.mkString(",")+
@@ -266,84 +228,84 @@ for(map <- allCompletions){
       //     "\nmapX = "+Remapper.show(mapX)+"\ncptsX = "+StateArray.show(cptsX)+
       //     "\nmap = "+Remapper.show(map)+"\ncpts = "+StateArray.show(cpts))
 
-  /** Process the information about secondary induced transitions. */
-  @inline private def processSecondaryInducedNewEffectOnStore(
-    secondaryInduced: SecondaryInducedInfo)
-  = {
-    require(useNewEffectOnStore)
-    var index = 0
-    while(index < secondaryInduced.length){
-      val (mapX, rrParams, linkages, unifs, k) = secondaryInduced(index); 
-      index += 1
-      val allCompletions = 
-        if(false) List(mapX) else sreou.allCompletions(rrParams, mapX, linkages)
-for(map <- allCompletions){
-      val cpts = mkComponents(map) 
-      Profiler.count("SecondaryInduced")
-      val crossRefs: List[Array[State]] =
-        getCrossRefs(pre.servers, cpts, pre.components)
-      val newPrinc = getNewPrinc(cpts(0), unifs)
-      val newComponentsList = List(StateArray(Array(postCpts(k), newPrinc)))
-      processInducedInfoNewEffectOnStore(
-        map, cpts, unifs, null, false, crossRefs, newComponentsList) 
-        // , rrParams, linkages)
-      // processInducedInfo(map, cpts, unifs, null, false, crossRefs, 
-      //   newComponentsList, rrParams, linkages)
-}
-    }
-  }
+//   /** Process the information about secondary induced transitions. */
+//   @inline protected def processSecondaryInducedNewEffectOnStore(
+//     secondaryInduced: SecondaryInducedInfo)
+//   = {
+//     require(useNewEffectOnStore)
+//     var index = 0
+//     while(index < secondaryInduced.length){
+//       val (mapX, rrParams, linkages, unifs, k) = secondaryInduced(index); 
+//       index += 1
+//       val allCompletions = 
+//         if(false) List(mapX) else sreou.allCompletions(rrParams, mapX, linkages)
+// for(map <- allCompletions){
+//       val cpts = mkComponents(map) 
+//       Profiler.count("SecondaryInduced")
+//       val crossRefs: List[Array[State]] =
+//         getCrossRefs(pre.servers, cpts, pre.components)
+//       val newPrinc = getNewPrinc(cpts(0), unifs)
+//       val newComponentsList = List(StateArray(Array(postCpts(k), newPrinc)))
+//       processInducedInfoNewEffectOnStore(
+//         map, cpts, unifs, null, false, crossRefs, newComponentsList) 
+//         // , rrParams, linkages)
+//       // processInducedInfo(map, cpts, unifs, null, false, crossRefs, 
+//       //   newComponentsList, rrParams, linkages)
+// }
+//     }
+//   }
 
 
-  /** Process induced information in the case of singleRef and using the
-    * NewEffectOnStore. */
-  @inline protected 
-  def processInducedInfoNewEffectOnStore(
-    map: RemappingMap, cpts: Array[State], unifs: UnificationList,
-    reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
-    newComponentsList: List[Array[State]])
-      : Unit = {
-    require(singleRef && useNewEffectOnStore)
-    // The cross reference views required for condition (b)
-    val missing: Array[ReducedComponentView] = 
-      MissingCrossReferences.sort(missingCrossRefs(crossRefs).toArray)
-    // The common missing references for condition (c)
-    val commonMissingPids =  commonMissingRefs(pre.components, cpts).toArray
+//   /** Process induced information in the case of singleRef and using the
+//     * NewEffectOnStore. */
+//   @inline protected 
+//   def processInducedInfoNewEffectOnStore(
+//     map: RemappingMap, cpts: Array[State], unifs: UnificationList,
+//     reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
+//     newComponentsList: List[Array[State]])
+//       : Unit = {
+//     require(singleRef && useNewEffectOnStore)
+//     // The cross reference views required for condition (b)
+//     val missing: Array[ReducedComponentView] = 
+//       MissingCrossReferences.sort(missingCrossRefs(crossRefs).toArray)
+//     // The common missing references for condition (c)
+//     val commonMissingPids =  commonMissingRefs(pre.components, cpts).toArray
     
-    for(newCpts <- newComponentsList){
-      val nv = Remapper.mkComponentView(post.servers, newCpts)
-      if(!views.contains(nv)){
-        val inducedTrans = new InducedTransitionInfo(nv.asReducedComponentView, 
-          trans, cpts, cv, newCpts)
+//     for(newCpts <- newComponentsList){
+//       val nv = Remapper.mkComponentView(post.servers, newCpts)
+//       if(!views.contains(nv)){
+//         val inducedTrans = new InducedTransitionInfo(nv.asReducedComponentView, 
+//           trans, cpts, cv, newCpts)
 
-        if(missing.isEmpty){
-          val mcw = MissingCommonWrapper(inducedTrans, commonMissingPids, views)
-          if(mcw == null){          // can fire transition
-            if(nextNewViews.add(nv))
-              addedView(cpts, newCpts, nv, unifs, isPrimary, reducedMap)
-            else recordInducedRedundant(
-              cpts, newCpts, nv, unifs, isPrimary, reducedMap)
-          }
-          else newEffectOnStore.add(mcw)
-        } // end of if(missing.isEmpty)
-        else{
-          // Add a MissingCrossReferences to the store
-          newEffectOnStore.add(inducedTrans, missing, map, commonMissingPids)
-          if(isPrimary && unifs.isEmpty && commonMissingPids.isEmpty){
-// IMPROVE make the MissingCommon and test if empty ??
-            cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
-          }
-        }
-      }
-      else // views already contains nv
-        recordInducedRedundant(cpts, newCpts, nv, unifs, isPrimary, reducedMap)
-    } // end of for loop
-  }
+//         if(missing.isEmpty){
+//           val mcw = MissingCommonWrapper(inducedTrans, commonMissingPids, views)
+//           if(mcw == null){          // can fire transition
+//             if(nextNewViews.add(nv))
+//               addedView(cpts, newCpts, nv, unifs, isPrimary, reducedMap)
+//             else recordInducedRedundant(
+//               cpts, newCpts, nv, unifs, isPrimary, reducedMap)
+//           }
+//           else newEffectOnStore.add(mcw)
+//         } // end of if(missing.isEmpty)
+//         else{
+//           // Add a MissingCrossReferences to the store
+//           newEffectOnStore.add(inducedTrans, missing, map, commonMissingPids)
+//           if(isPrimary && unifs.isEmpty && commonMissingPids.isEmpty){
+// // IMPROVE make the MissingCommon and test if empty ??
+//             cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
+//           }
+//         }
+//       }
+//       else // views already contains nv
+//         recordInducedRedundant(cpts, newCpts, nv, unifs, isPrimary, reducedMap)
+//     } // end of for loop
+//   }
 
   // ---------- Generic helper functions
 
   /** Actions performed when a new view has been added to the view set,
     * principally setting the creation information. */
-  @inline private def addedView(
+  @inline protected def addedView(
     cpts: Array[State], newComponents: Array[State], nv: ComponentView,
     unifs: UnificationList, isPrimary: Boolean, reducedMap: ReducedMap)
   = {
@@ -379,7 +341,7 @@ for(map <- allCompletions){
   }
  
   /** Record the induced transition, and show it was redundant. */
-  @inline private def recordInducedRedundant(
+  @inline protected def recordInducedRedundant(
     cpts: Array[State], newComponents: Array[State], nv: ComponentView,
     unifs: UnificationList, isPrimary: Boolean, reducedMap: ReducedMap)
   = {
@@ -391,7 +353,7 @@ for(map <- allCompletions){
   // ------------------------------ Helper functions for conditions (b) and (c)
 
   /** The missing cross reference views required for condition (b). */
-  @inline private def missingCrossRefs(crossRefs: List[Array[State]])
+  @inline protected def missingCrossRefs(crossRefs: List[Array[State]])
       : List[ReducedComponentView] =
     crossRefs.map{ cpts => ReducedComponentView(pre.servers, cpts) }.
       filter(!views.contains(_))
@@ -437,6 +399,8 @@ for(map <- allCompletions){
 // =======================================================
 
 object SingleRefEffectOn{
+  @inline private def guard = singleRef && !useNewEffectOnStore
+
   /* Overview of main functions.
    * 
    * completeDelayed
@@ -470,13 +434,15 @@ object SingleRefEffectOn{
   var effectOnStore: EffectOnStore = 
     if(singleRef && !useNewEffectOnStore) new SimpleEffectOnStore else null
 
-  var newEffectOnStore: NewEffectOnStore =
-    if(singleRef && useNewEffectOnStore) new NewEffectOnStore else null
+  //var newEffectOnStore: NewEffectOnStore = null
+//    if(singleRef && useNewEffectOnStore) new NewEffectOnStore else null
 
   def reset = { 
-    if(singleRef){
-      if(useNewEffectOnStore) newEffectOnStore = new NewEffectOnStore
-      else effectOnStore = new SimpleEffectOnStore
+    if(guard){
+//    if(singleRef){
+      //if(useNewEffectOnStore) newEffectOnStore = new NewEffectOnStore
+      //else 
+      effectOnStore = new SimpleEffectOnStore
     }
     lastPurgeViewCount = 0L; doPurge = false
   }
@@ -486,9 +452,11 @@ object SingleRefEffectOn{
   /** If cv completes a delayed transition in effectOnStore, then complete it. */
   def completeDelayed(cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
   = {
+    require(guard)
     val newViews =
-      if(useNewEffectOnStore) newEffectOnStore.complete(cv, views)
-      else effectOnStore.complete(cv, views)
+      //if(useNewEffectOnStore) newEffectOnStore.complete(cv, views)
+      //else
+      effectOnStore.complete(cv, views)
     // if(highlight(cv)) println(s"completeDelayed($cv)")
     for(nv <- newViews){
       if(showTransitions || ComponentView0.highlight(nv)) 
@@ -498,7 +466,7 @@ object SingleRefEffectOn{
   }
 
   /** Add mi.nextNewViews to nextNewViews. */
-  @inline private 
+  @inline // private 
   def tryAddView(nv: ComponentView, nextNewViews: MyHashSet[ComponentView]) = {
     // require(mi.done); val nv = mi.newView
     if(nextNewViews.add(nv)){
@@ -596,17 +564,21 @@ object SingleRefEffectOn{
 
   def sanityCheck = effectOnStore.sanityCheck(views)
 
-  def report = 
-    if(useNewEffectOnStore) newEffectOnStore.report else effectOnStore.report
+  def report = {
+    require(guard)
+    //if(useNewEffectOnStore) newEffectOnStore.report else 
+    effectOnStore.report
+  }
 
   /** Perform a memory profile of this. */
   def memoryProfile = {
+    require(guard)
     import ox.gavin.profiling.MemoryProfiler.traverse
-    if(effectOnStore != null){
+    //if(effectOnStore != null){
       effectOnStore.report; println()
       effectOnStore.memoryProfile
-    }
-    if(newEffectOnStore != null) newEffectOnStore.memoryProfile
+    //}
+    //if(newEffectOnStore != null) newEffectOnStore.memoryProfile
     traverse("SingleRefEffectOn", this, maxPrint = 1, ignore = List("System"))
   }
 }

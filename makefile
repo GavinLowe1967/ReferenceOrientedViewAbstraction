@@ -149,12 +149,12 @@ $(DIR)/NewEffectOnStore.class: $(DIR)/MissingCommonWrapper.class
 $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 
 $(DIR)/EffectOn.class: $(DIR)/EffectOnUnification.class
-# $(DIR)/NewEffectOnStore.class	 $(DIR)/EffectOnStore.class 	
-# $(DIR)/SingleRefEffectOnUnification.class
 
 $(DIR)/SingleRefEffectOn.class: $(DIR)/EffectOn.class		\
   $(DIR)/NewEffectOnStore.class $(DIR)/EffectOnStore.class \
   $(DIR)/SingleRefEffectOnUnification.class
+
+$(DIR)/NewEffectOn.class: $(DIR)/SingleRefEffectOn.class
 
 # Extending of transition templates
 
@@ -178,7 +178,8 @@ $(DIR)/Debugger.class: $(DIR)/SystemP/System.class $(DIR)/EffectOn.class
 
 $(DIR)/CheckerState.class: $(DIR)/TransitionSet.class		\
   $(DIR)/NewTransitionSet.class $(DIR)/Unification.class	\
-  $(DIR)/SingleRefEffectOn.class $(DIR)/TransitionTemplateExtender.class
+  $(DIR)/SingleRefEffectOn.class $(DIR)/NewEffectOn.class	\
+  $(DIR)/TransitionTemplateExtender.class
 
 $(DIR)/Checker.class: $(DIR)/CheckerState.class $(DIR)/Debugger.class	\
   $(DIR)/Barrier.class $(DIR)/Concurrency.class

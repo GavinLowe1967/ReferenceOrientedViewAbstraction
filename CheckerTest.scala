@@ -25,7 +25,10 @@ class CheckerTest(system: SystemP.System, numWorkers: Int)
     def effectOn(pre: Concretization, e: EventInt, post: Concretization, 
         cv: ComponentView) = {
       val trans = new Transition(pre, e, post)
-      if(singleRef) new SingleRefEffectOn (trans, cv, nextNewViews)()
+      if(singleRef){
+        if(useNewEffectOnStore) new NewEffectOn(trans, cv, nextNewViews)()
+        else new SingleRefEffectOn(trans, cv, nextNewViews)()
+      }
       else new EffectOn(trans, cv, nextNewViews)()
     }
 

@@ -170,9 +170,13 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
 
   // ========= Effect of transitions on other views
 
+  /** Calculate the effect of transition t on view cv. */
   @inline private def effectOn(
       t: Transition, cv: ComponentView, nextNewViews: MyHashSet[ComponentView]) =
-    if(singleRef) new SingleRefEffectOn(t, cv, nextNewViews)()
+    if(singleRef){
+      if(useNewEffectOnStore) new NewEffectOn(t, cv, nextNewViews)()
+      else new SingleRefEffectOn(t, cv, nextNewViews)()
+    }
     else new EffectOn(t, cv, nextNewViews)()
 
   /** Effect on other views of a transition t.  For every view v1 in
