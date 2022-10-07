@@ -51,6 +51,8 @@ class InducedTransitionInfo(
 
 // ==================================================================
 
+import RemappingExtender.CandidatesMap
+
 /** Information about missing cross references.  missingViews contains
   * component views that are necessary to satisfy condition (b) of the induced
   * transition corresponding to inducedTrans: all must be added to the
@@ -59,10 +61,10 @@ class InducedTransitionInfo(
 class MissingCrossReferences(
   val inducedTrans: InducedTransitionInfo,
   missingViews: Array[ReducedComponentView],
-  map: RemappingMap, 
+  map: RemappingMap, candidates: CandidatesMap,
   val commonMissingPids: Array[ProcessIdentity]
 ){
-  assert(missingViews.forall(_ != null)) 
+  assert(missingViews.nonEmpty && missingViews.forall(_ != null)) 
   // Check sorted
   for(i <- 0 until missingViews.length-1) 
     assert(missingViews(i).compare(missingViews(i+1)) < 0)

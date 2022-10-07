@@ -7,6 +7,8 @@ import scala.reflect.ClassTag
 class NewEffectOnStore{
   require(singleRef)
 
+  import RemappingExtender.CandidatesMap
+
   import MissingCommonWrapper.{Cpts,CptsBuffer}
   // Array[State], Iterable[Cpts], resp
 
@@ -69,16 +71,8 @@ class NewEffectOnStore{
     }
   }
 
-  /** Store information about an induced transition corresponding to
-    * `inducedTrans`, and requiring the views `missing` in order to satisfy
-    * condition (b). */
-  def add(
-    inducedTrans: InducedTransitionInfo, missing: Array[ReducedComponentView],
-    map: RemappingMap, commonMissingPids: Array[ProcessIdentity])
-      : Unit = {
-    require(missing.nonEmpty)
-    val missingCrossRefs = 
-      new MissingCrossReferences(inducedTrans, missing, map, commonMissingPids)
+  /** Store missingCommonRefs in the missingCommonRefStore. */
+  def add(missingCrossRefs: MissingCrossReferences): Unit = {
     val missingHead = missingCrossRefs.missingHead 
     addToStore(missingCrossRefStore, missingHead, missingCrossRefs)
   } 
@@ -118,14 +112,7 @@ class NewEffectOnStore{
         for(mcr <- mcrs.iterator) mcr.synchronized{
           if(!mcr.done && !mcr.isNewViewFound(views)){
             mcr.updateMissingViewsBy(cv, views)
-            if(mcr.done){
-              // Now deal with common missing references: add to relevant stores.
-// IMPROVE: calculate the commonMissingPids here, rather than earlier
-              val mcw = MissingCommonWrapper(
-                mcr.inducedTrans, mcr.commonMissingPids, views)
-              if(mcw != null) add(mcw)
-              else maybeAdd(mcr.inducedTrans, result) // can fire transition
-            }
+            if(mcr.done) doneMissingCrossRefs(mcr, views, result)
             else addToStore(missingCrossRefStore, mcr.missingHead, mcr)
           }
           // if mcr.done, we can ignore it
@@ -139,6 +126,20 @@ class NewEffectOnStore{
 
       case None => {}
     }
+  }
+
+  /** Deal with a MissingCrossReferences object that is done: either create and
+    * store a corresponding MissingCommonWrapper, or fire the transition. */
+  @inline private def doneMissingCrossRefs(
+    mcr: MissingCrossReferences, views: ViewSet, result: ViewBuffer)
+  = {
+    require(mcr.done)
+    // Now deal with common missing references: add to relevant stores.
+// IMPROVE: calculate the commonMissingPids here, rather than earlier
+    val mcw = MissingCommonWrapper(
+      mcr.inducedTrans, mcr.commonMissingPids, views)
+    if(mcw != null) add(mcw)
+    else maybeAdd(mcr.inducedTrans, result) // can fire transition
   }
 
 

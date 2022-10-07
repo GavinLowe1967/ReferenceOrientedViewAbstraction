@@ -150,11 +150,11 @@ $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 
 $(DIR)/EffectOn.class: $(DIR)/EffectOnUnification.class
 
-$(DIR)/SingleRefEffectOn.class: $(DIR)/EffectOn.class		\
-  $(DIR)/NewEffectOnStore.class $(DIR)/EffectOnStore.class \
-  $(DIR)/SingleRefEffectOnUnification.class
+$(DIR)/SingleRefEffectOn.class: $(DIR)/EffectOn.class			\
+   $(DIR)/EffectOnStore.class $(DIR)/SingleRefEffectOnUnification.class
 
-$(DIR)/NewEffectOn.class: $(DIR)/SingleRefEffectOn.class
+$(DIR)/NewEffectOn.class: $(DIR)/SingleRefEffectOn.class	\
+  $(DIR)/NewEffectOnStore.class
 
 # Extending of transition templates
 
