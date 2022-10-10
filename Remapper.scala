@@ -436,7 +436,7 @@ object Remapper{
   }
 
   /** Extend map, mapping all undefined values to fresh values, as given by
-    * nextArg. */
+    * nextArg.  Note: nextArg is not changed. */
   @inline def mapUndefinedToFresh(map: RemappingMap, nextArg: NextArgMap) = {
     for(t <- 0 until numTypes){
       var next = nextArg(t)

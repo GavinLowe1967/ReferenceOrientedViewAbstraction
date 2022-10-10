@@ -38,8 +38,6 @@ class NewEffectOn(
   import NewEffectOn.{newEffectOnStore}
   import EffectOn.views
 
-  private var sreou: SingleRefEffectOnUnification = null
-
   /** The effect of the transition t on cv.  Create extra views caused by the
     * way the transition changes cv, and add them to nextNewViews. */
   override def apply() : Unit = {
@@ -47,9 +45,9 @@ class NewEffectOn(
     // components that change state, and no chance of secondary induced
     // transitions.  
     if(trans.mightGiveSufficientUnifs(cv)){
-      sreou = new SingleRefEffectOnUnification(trans,cv)
+      //val sreou = new SingleRefEffectOnUnification(trans,cv)
       val (inducedInfo, secondaryInduced): (InducedInfo,SecondaryInducedInfo) =
-        sreou()
+        new SingleRefEffectOnUnification(trans,cv)()
       processPrimaryInduced(inducedInfo)
       processSecondaryInduced(secondaryInduced)
     }

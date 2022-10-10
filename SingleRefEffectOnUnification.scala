@@ -372,15 +372,6 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     otherArgsBitMap
   }
 
-/*
-  def allCompletions(rdMap: RemappingMap, candidates: CandidatesMap)
-      : ArrayBuffer[RemappingMap] = 
-    remappingExtender.allCompletions(rdMap, candidates)
- */
-  // def allCompletions(
-  //   resultRelevantParams: BitMap, rdMap: RemappingMap, doneB: List[Linkage])
-  //     : ArrayBuffer[RemappingMap] = 
-  //   remappingExtender.allCompletions(resultRelevantParams, rdMap, doneB)
 
   // ========= Hooks for testing
 

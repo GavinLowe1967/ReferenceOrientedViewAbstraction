@@ -249,6 +249,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rec(0); Pools.returnBitMap(addedParams); result
   }
 
+/*
   /** All completions of rdMap, mapping undefined parameters to an arbitrary
     * parameter of pre, or the next fresh parameter, but not to parameters of
     * resultRelevantParams, and only consistently with doneB. */
@@ -258,26 +259,6 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     // All parameters that each parameter can be mapped to
     val candidates = getCandidatesMap(resultRelevantParams, rdMap, doneB)
     RemappingExtender.allCompletions(rdMap, candidates, trans)
-// IMPROVE: recycle rdMap ???
-  }
-
-/*
-  /** All completions of rdMap, mapping undefined parameters to an element of
-    * the corresponding entry in candidates. */
-  def allCompletions(rdMap: RemappingMap, candidates: CandidatesMap)
-      : ArrayBuffer[RemappingMap] = {
-    val completions = new ArrayBuffer[RemappingMap]
-    // Build all completions of rdMap, mapping each parameter to each element
-    // of candidates(x), or not, injectively.
-    val eMaps = RemappingExtender.extendMapToCandidates(rdMap, candidates, pre.getNextArgMap)
-    // Map remainder to fresh variables, and add to completions.
-    var i = 0
-    while(i < eMaps.length){
-      val eMap = eMaps(i); i += 1
-      mapUndefinedToFresh(eMap);  completions += eMap
-      Profiler.count("allCompletions - add")
-    }
-    completions
 // IMPROVE: recycle rdMap ???
   }
  */
@@ -459,7 +440,7 @@ else extensions
       val newLinkage = findLinkage(unifs, rdMap, doneB) 
       if(newLinkage == null){ 
         mapUndefinedToFresh(rdMap)   // map remaining params to fresh
-        maybeAdd(extensions, rdMap) // , resultRelevantParams, doneB)
+        maybeAdd(extensions, rdMap) 
         // Add to extensions if not there already
       }
       else{
@@ -586,12 +567,6 @@ object RemappingExtender{
     * parameters can be mapped. */
   type ExtensionsInfo = ArrayBuffer[(RemappingMap, CandidatesMap)]
 
-  // /** The result returned by makeExtensions.  Each element is a triple (map,
-  //   * resultRelevantParams, doneB), where resultRelevantParams and doneB are
-  //   * as in the functions. */
-  //type ExtensionsInfo = ArrayBuffer[(RemappingMap, BitMap, List[Linkage])]
-
-
   /** Extend rdMap, mapping each parameter (t,p) to each element of
     * candidates(t)(p), or not.  Each map is fresh.  rdMap is mutated, but all
     * changes are backtracked.  */
@@ -634,19 +609,20 @@ object RemappingExtender{
     rdMap: RemappingMap, candidates: CandidatesMap, trans: Transition)
       : ArrayBuffer[RemappingMap] = {
     val completions = new ArrayBuffer[RemappingMap]
+    val nextArgMap = trans.getNextArgMap // IMPROVE: don't clone
     // Build all completions of rdMap, mapping each parameter to each element
     // of candidates(x), or not, injectively.
-    val eMaps = extendMapToCandidates(rdMap, candidates, trans.pre.getNextArgMap)
+    val eMaps = extendMapToCandidates(rdMap, candidates, nextArgMap)
     // Map remainder to fresh variables, and add to completions.
     var i = 0
     while(i < eMaps.length){
       val eMap = eMaps(i); i += 1
-      Remapper.mapUndefinedToFresh(eMap, trans.getNextArgMap)
+      // Note: do not need fresh nextArgMap for each iteration
+      Remapper.mapUndefinedToFresh(eMap, nextArgMap)
       completions += eMap
       Profiler.count("allCompletions - add")
     }
     completions
-// IMPROVE: share the trans.getNextArgMaps?
 // IMPROVE: recycle rdMap ???
   }
 
