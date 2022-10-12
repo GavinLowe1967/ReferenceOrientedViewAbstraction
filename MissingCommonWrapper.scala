@@ -1,12 +1,15 @@
 package ViewAbstraction
 
 import scala.collection.mutable.ArrayBuffer
+import RemapperP.Remapper
 
 class MissingCommonWrapper(
   val inducedTrans: InducedTransitionInfo,
   commonMissingPids: Array[ProcessIdentity]
 // IMPROVE: set commonMissingPids = null if empty
 ){
+  require(inducedTrans.cpts != null)
+
   def servers = inducedTrans.servers
 
   def prePrincipal = inducedTrans.prePrincipal
@@ -90,12 +93,31 @@ object MissingCommonWrapper{
     * components against which it should be registered. */
   type CptsBuffer = Iterable[Cpts]
 
+  /** Produce a MissingCommonWrapper corresponding to inducedTrans and
+    * commonMissingPids; if all required views are in `views` then return
+    * null. */
   def apply(inducedTrans: InducedTransitionInfo, 
     commonMissingPids: Array[ProcessIdentity], views: ViewSet)
       : MissingCommonWrapper = {
     val mcw = new MissingCommonWrapper(inducedTrans, commonMissingPids)
     val missingHeads = mcw.init(views)
     if(mcw.done) null else mcw
+  }
+
+  import SingleRefEffectOnUnification.commonMissingRefs
+
+  /** Produce a MissingCommonWrapper corresponding to renaming the base view in
+    * inducedTrans by map; if all required views are in `views` then return
+    * null. */
+  def fromMap(
+    map: RemappingMap, inducedTrans: InducedTransitionInfo, views: ViewSet)
+      : MissingCommonWrapper = {
+    val cptsRenamed = Remapper.applyRemapping(map, inducedTrans.cv.components)
+    val commonMissingPids =
+      commonMissingRefs(inducedTrans.preCpts, cptsRenamed).toArray
+
+// FIXME: need new inducedTrans, setting cpts
+    MissingCommonWrapper(inducedTrans, commonMissingPids, views)
   }
 
 }

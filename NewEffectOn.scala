@@ -33,8 +33,8 @@ class NewEffectOn(
   import ServersReducedMap.ReducedMap 
   import Unification.UnificationList //  = List[(Int,Int)]
   import RemappingExtender.{CandidatesMap}
-  import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo}
-  import SingleRefEffectOn.{getCrossRefs, commonMissingRefs}
+  import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo, commonMissingRefs}
+  import SingleRefEffectOn.{getCrossRefs}
   import NewEffectOn.{newEffectOnStore}
   import EffectOn.views
 
@@ -104,28 +104,40 @@ class NewEffectOn(
     }
   }
 
+ def processInducedInfo(
+    map: RemappingMap, cpts: Array[State], unifs: UnificationList,
+    reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
+    newComponentsList: List[Array[State]], candidates: CandidatesMap) 
+     : Unit =
+   if(lazyNewEffectOnStore) 
+     processInducedInfoLazy(map, cpts, unifs, reducedMap, isPrimary, crossRefs,
+       newComponentsList, candidates)
+   else 
+     processInducedInfoOld(map, cpts, unifs, reducedMap, isPrimary, crossRefs,
+       newComponentsList, candidates)
+
   /** Process induced information. */
 // IMPROVE comment
   @inline protected 
-  def processInducedInfo(
+  def processInducedInfoOld(
     map: RemappingMap, cpts: Array[State], unifs: UnificationList,
     reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
     newComponentsList: List[Array[State]], candidates: CandidatesMap)
       : Unit = {
-    require(singleRef && useNewEffectOnStore)
+// NOTE: several of the parameters are unused
+    require(singleRef && useNewEffectOnStore && !lazyNewEffectOnStore)
     // The cross reference views required for condition (b)
-    val missing: Array[ReducedComponentView] = 
-      MissingCrossReferences.sort(missingCrossRefs(crossRefs).toArray)
+    // val missing: Array[ReducedComponentView] = 
+    //   MissingCrossReferences.sort(missingCrossRefs(crossRefs).toArray)
     
     for(newCpts <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newCpts)
       if(!views.contains(nv)){
-// FIXME
         val allCompletions =
-          if(false) List(map) else RemappingExtender.allCompletions(map, candidates,trans)
+          RemappingExtender.allCompletions(map, candidates,trans)
         for(map1 <- allCompletions){
           val cpts1 =  Remapper.applyRemapping(map1, cv.components)
-          val crossRefs1 =  getCrossRefs(pre.servers, cpts1, pre.components)
+          val crossRefs1 = getCrossRefs(pre.servers, cpts1, pre.components)
           // assert(crossRefs.length == crossRefs1.length)
           // for(i <- 0 until crossRefs.length)
           //   assert(crossRefs(i).sameElements(crossRefs1(i)))
@@ -134,10 +146,9 @@ class NewEffectOn(
           val inducedTrans = new InducedTransitionInfo(nv.asReducedComponentView,
             trans, cpts1, cv, newCpts)
           // The common missing references for condition (c)
-          val commonMissingPids =
-            commonMissingRefs(pre.components, cpts1).toArray
-// Note: using missing here is incorrect, as that won't consider cross
-// references created by the extension
+          val commonMissingPids = 
+            if(lazyNewEffectOnStore) null 
+            else commonMissingRefs(pre.components, cpts1).toArray
           if(missing1.isEmpty){ // condition (b) satisfied
             val mcw =
               MissingCommonWrapper(inducedTrans, commonMissingPids, views)
@@ -154,15 +165,66 @@ class NewEffectOn(
             val missingCrossRefs = new MissingCrossReferences(
               inducedTrans, missing1, map1, candidates, commonMissingPids)
             newEffectOnStore.add(missingCrossRefs)
-            if(isPrimary && unifs.isEmpty && commonMissingPids.isEmpty){
+            if(isPrimary && unifs.isEmpty && commonMissingPids.isEmpty)
               cv.addConditionBInduced(post.servers, reducedMap, crossRefs1)
-            }
           }
-        } // end of for loop
+        } // end of inner for loop
       }
       else // views already contains nv
         recordInducedRedundant(cpts, newCpts, nv, unifs, isPrimary, reducedMap)
     } // end of for loop
+  }
+
+
+  @inline protected 
+  def processInducedInfoLazy(
+    map: RemappingMap, cpts: Array[State], unifs: UnificationList,
+    reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
+    newComponentsList: List[Array[State]], candidates: CandidatesMap)
+      : Unit = {
+// IMPROVE: several params not used
+    require(singleRef && useNewEffectOnStore && lazyNewEffectOnStore)
+    // The cross reference views required for condition (b) implied by map
+    val missing: Array[ReducedComponentView] = 
+      MissingCrossReferences.sort(missingCrossRefs(crossRefs).toArray)
+    
+    for(newCpts <- newComponentsList){
+      val nv = Remapper.mkComponentView(post.servers, newCpts)
+      if(!views.contains(nv)){
+        if(missing.isEmpty){ // condition (b) satisfied            
+          for(map1 <- RemappingExtender.allCompletions(map, candidates,trans)){
+// FIXME: we also need to know if any of the completions creates a new cross
+// reference.
+            val cpts1 = mkComponents(map1)
+            val inducedTrans = new InducedTransitionInfo(
+              nv.asReducedComponentView, trans, cpts1, cv, newCpts)
+            val mcw = MissingCommonWrapper.fromMap(map1, inducedTrans, views)
+            if(mcw == null){          // can fire transition
+              if(nextNewViews.add(nv))
+                addedView(cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
+              else recordInducedRedundant(
+                cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
+            }
+            else newEffectOnStore.add(mcw)
+          } // end of inner for loop
+        } // end of if(missing.isEmpty)
+        else{
+          val inducedTrans = new InducedTransitionInfo(nv.asReducedComponentView,
+            trans, null, cv, newCpts)
+          // Add a MissingCrossReferences to the store.  Note: map is cloned to
+          // prevent sharing, as it's sometimes mutated.
+          val missingCrossRefs = new MissingCrossReferences(
+            inducedTrans, missing, Remapper.cloneMap(map), candidates, null)
+          newEffectOnStore.add(missingCrossRefs)
+          if(isPrimary && unifs.isEmpty && false){
+// IMPROVE
+            cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
+          }
+        }
+      }
+      else // views already contains nv
+        recordInducedRedundant(cpts, newCpts, nv, unifs, isPrimary, reducedMap)
+    } // end of outer for loop
   }
 
   // ------------------------------------------------------- Helper functions

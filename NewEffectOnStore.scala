@@ -1,5 +1,6 @@
 package ViewAbstraction
 import collection.{OpenHashSet,ShardedHashMap}
+import RemapperP.Remapper
 import ox.gavin.profiling.Profiler
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
@@ -8,6 +9,7 @@ class NewEffectOnStore{
   require(singleRef)
 
   import RemappingExtender.CandidatesMap
+  import SingleRefEffectOnUnification.commonMissingRefs
 
   import MissingCommonWrapper.{Cpts,CptsBuffer}
   // Array[State], Iterable[Cpts], resp
@@ -134,12 +136,31 @@ class NewEffectOnStore{
     mcr: MissingCrossReferences, views: ViewSet, result: ViewBuffer)
   = {
     require(mcr.done)
+    val inducedTrans = mcr.inducedTrans
+// IMPROVE
+if(!lazyNewEffectOnStore){
     // Now deal with common missing references: add to relevant stores.
 // IMPROVE: calculate the commonMissingPids here, rather than earlier
-    val mcw = MissingCommonWrapper(
-      mcr.inducedTrans, mcr.commonMissingPids, views)
+    val mcw = MissingCommonWrapper(inducedTrans, mcr.commonMissingPids, views)
     if(mcw != null) add(mcw)
-    else maybeAdd(mcr.inducedTrans, result) // can fire transition
+    else maybeAdd(inducedTrans, result) // can fire transition
+}
+else{
+  mcr.checkMap
+  for(map <- mcr.allCompletions){
+    // Instantiate oldCpts in inducedTrans
+    val cpts = Remapper.applyRemapping(map, inducedTrans.cv.components)
+    val newInducedTrans = inducedTrans.extend(cpts)
+    val mcw = MissingCommonWrapper.fromMap(map, newInducedTrans, views)
+    // val commonMissingPids =
+    //   commonMissingRefs(inducedTrans.preCpts, cpts).toArray
+    // val mcw = MissingCommonWrapper(inducedTrans, commonMissingPids, views)
+    if(mcw != null) add(mcw)
+    else maybeAdd(newInducedTrans, result) // can fire transition
+// FIXME: we also need to know if any of the completions creates a new cross
+// reference.
+  }
+}
   }
 
 

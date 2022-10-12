@@ -74,7 +74,8 @@ object Pools{
   }
 
   /** Return the rows of map to the row pool. */
-  def returnRemappingRows(map: RemappingMap) = {
+  def returnRemappingRows(map: RemappingMap): Unit = {
+    // return
     val me = ThreadID.get; var i = 0
     while(i < map.length){
       val row = map(i); i += 1; val size = row.size

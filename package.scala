@@ -197,7 +197,13 @@ package object ViewAbstraction{
   /** Do we report the size of the EffectOnStore? */
   var reportEffectOn = false
 
+  /** Are we using NewEffectOnStore? */
   var useNewEffectOnStore = false
+
+  /** Are we using NewEffectOnStore "lazily", initially working with partial
+    * maps, and extending to full maps only if/when all cross reference views
+    * are found? */
+  var lazyNewEffectOnStore =  false
 
   /** Do we use the new way of calculating reference views in
     * TransitionTemplateExtender.extendTransitionTemplateBy? */

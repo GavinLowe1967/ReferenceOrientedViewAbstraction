@@ -443,8 +443,6 @@ object SingleRefEffectOnUnification{
     * component of the transition gains a reference to cv.principal. */
   type SecondaryInducedInfo = 
     ArrayBuffer[(RemappingMap, CandidatesMap, UnificationList, Int)]
- //   ArrayBuffer[(RemappingMap, BitMap, List[Linkage], UnificationList, Int)]
-
 
   /** Does otherArgs represent the empty set? */
   @inline private def isEmpty(otherArgs: BitMap) = {
@@ -458,5 +456,20 @@ object SingleRefEffectOnUnification{
   }
   // IMPROVE: this result could be calculated within makeOtherArgsMap.  But
   // this doesn't seem to be a big cost.
+
+
+  /** All common included missing references from cpts1 and cpts2. */
+  @inline def commonMissingRefs(cpts1: Array[State], cpts2: Array[State])
+      : List[ProcessIdentity] = {
+    var missingRefs1: List[ProcessIdentity] = StateArray.missingRefs(cpts1)
+    val missingRefs2: List[ProcessIdentity] = StateArray.missingRefs(cpts2)
+    // The common missing references
+    var missingCRefs = List[ProcessIdentity]()
+    while(missingRefs1.nonEmpty){
+      val pid = missingRefs1.head; missingRefs1 = missingRefs1.tail
+      if(contains(missingRefs2, pid)) missingCRefs ::= pid
+    }
+    missingCRefs
+  }
 
 }

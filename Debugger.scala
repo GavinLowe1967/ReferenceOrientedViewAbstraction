@@ -190,7 +190,8 @@ class Debugger(
 
       // Find the missing views required for condition (c).
       // Identities of common missing components
-      val commonMissing =  SingleRefEffectOn.commonMissingRefs(cpts1, preCpts)
+      val commonMissing = 
+        SingleRefEffectOnUnification.commonMissingRefs(cpts1, preCpts)
       println(s"Common missing component identities: "+
         commonMissing.map(getScriptName).mkString(", "))
       for(pid <- commonMissing){

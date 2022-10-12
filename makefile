@@ -144,7 +144,7 @@ $(DIR)/MissingCrossReferences.class: $(DIR)/ComponentView.class	\
 
 $(DIR)/MissingCommonWrapper.class: $(DIR)/MissingCommon.class $(DIR)/MissingCrossReferences.class
 
-$(DIR)/NewEffectOnStore.class: $(DIR)/MissingCommonWrapper.class
+$(DIR)/NewEffectOnStore.class: $(DIR)/MissingCommonWrapper.class $(DIR)/SingleRefEffectOnUnification.class
 
 $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 
@@ -174,7 +174,7 @@ $(DIR)/TransitionTemplateExtender.class: $(DIR)/Transition.class	\
 
 # # Checker and main program
 
-$(DIR)/Debugger.class: $(DIR)/SystemP/System.class $(DIR)/EffectOn.class
+$(DIR)/Debugger.class: $(DIR)/SystemP/System.class $(DIR)/EffectOn.class $(DIR)/NewEffectOn.class
 
 $(DIR)/CheckerState.class: $(DIR)/TransitionSet.class		\
   $(DIR)/NewTransitionSet.class $(DIR)/Unification.class	\

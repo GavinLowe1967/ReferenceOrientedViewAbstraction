@@ -1,11 +1,13 @@
 package ViewAbstraction
 
+import scala.collection.mutable.ArrayBuffer
+
 /** Information about an induced transition.  This corresponds to transition
   * trans = pre -e-> post inducing
   * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView.*/
 class InducedTransitionInfo(
-  newView: ReducedComponentView, trans: Transition,
-  oldCpts: Array[State], cv: ComponentView, newCpts: Array[State]
+  newView: ReducedComponentView, val trans: Transition,
+  oldCpts: Array[State], val cv: ComponentView, newCpts: Array[State]
 ){
   require(trans.pre.components.length <= 3 && cv.components.length <= 2)
   require(trans.pre.servers == cv.servers)
@@ -42,6 +44,13 @@ class InducedTransitionInfo(
     v
   }
 
+  /** An InducedTransitionInfo extending this, instantiating oldCpts with
+    * cpts. */
+  def extend(cpts: Array[State]) = {
+    require(lazyNewEffectOnStore && oldCpts == null)
+    new InducedTransitionInfo(newView, trans, cpts, cv, newCpts)
+  }
+
   override def toString = {
     s"$trans\n operating on $cv\n induces $cv \n== "+
       s"(${trans.pre.servers}, ${StateArray.show(oldCpts)})\n -> "+
@@ -52,6 +61,7 @@ class InducedTransitionInfo(
 // ==================================================================
 
 import RemappingExtender.CandidatesMap
+import RemapperP.Remapper
 
 /** Information about missing cross references.  missingViews contains
   * component views that are necessary to satisfy condition (b) of the induced
@@ -68,10 +78,17 @@ class MissingCrossReferences(
   // Check sorted
   for(i <- 0 until missingViews.length-1) 
     assert(missingViews(i).compare(missingViews(i+1)) < 0)
-
-  assert(missingViews.length <= 12, "missingViews.length = "+missingViews.length)
   // At most, a reference from each component of pre to each component of cv,
-  // and vice versa: 3*2*2.
+  // and vice versa: 3*2*2:
+  assert(missingViews.length <= 12, "missingViews.length = "+missingViews.length)
+
+  /** Check that map is defined over cv. */
+  def checkMap = 
+    for(t <- 0 until numTypes)
+      require(map(t).length == inducedTrans.cv.getParamsBound(t),
+        "\n map = "+Remapper.show(map)+"\ncv = "+inducedTrans.cv)
+
+  checkMap
 
   @inline def isNewViewFound(views: ViewSet) = inducedTrans.isNewViewFound(views)
 
@@ -97,6 +114,14 @@ class MissingCrossReferences(
       (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))
     )
       mvIndex += 1
+  }
+
+  /** All total maps associated with this. */
+  def allCompletions: ArrayBuffer[RemappingMap] = synchronized{
+    // val map1 = RemapperP.Remapper.cloneMap(map)
+    // I don't think cloning is necessary.  map is private to this, and
+    // protected by the synchronized block
+    RemappingExtender.allCompletions(map, candidates, inducedTrans.trans)
   }
 
 
@@ -126,4 +151,8 @@ object MissingCrossReferences{
     // IMPROVE following
     missingViews.filter(_ != null)
   }
+
+
+
+
 }

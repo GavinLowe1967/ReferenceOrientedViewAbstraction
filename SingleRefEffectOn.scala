@@ -29,8 +29,8 @@ class SingleRefEffectOn(
 
   import ServersReducedMap.ReducedMap 
   import Unification.UnificationList //  = List[(Int,Int)]
-  import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo}
-  import SingleRefEffectOn.{getCrossRefs, commonMissingRefs, effectOnStore}
+  import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo, commonMissingRefs}
+  import SingleRefEffectOn.{getCrossRefs, effectOnStore}
   import EffectOn.views
 
   /** The effect of the transition t on cv.  Create extra views caused by the
@@ -343,19 +343,19 @@ object SingleRefEffectOn{
     StateArray.crossRefs(cpts1, cpts2).map(Remapper.remapComponents(servers,_))
   }
 
-  /** All common included missing references from cpts1 and cpts2. */
-  @inline def commonMissingRefs(cpts1: Array[State], cpts2: Array[State])
-      : List[ProcessIdentity] = {
-    var missingRefs1: List[ProcessIdentity] = StateArray.missingRefs(cpts1)
-    val missingRefs2: List[ProcessIdentity] = StateArray.missingRefs(cpts2)
-    // The common missing references
-    var missingCRefs = List[ProcessIdentity]()
-    while(missingRefs1.nonEmpty){
-      val pid = missingRefs1.head; missingRefs1 = missingRefs1.tail
-      if(contains(missingRefs2, pid)) missingCRefs ::= pid
-    }
-    missingCRefs
-  }
+  // /** All common included missing references from cpts1 and cpts2. */
+  // @inline def commonMissingRefs(cpts1: Array[State], cpts2: Array[State])
+  //     : List[ProcessIdentity] = {
+  //   var missingRefs1: List[ProcessIdentity] = StateArray.missingRefs(cpts1)
+  //   val missingRefs2: List[ProcessIdentity] = StateArray.missingRefs(cpts2)
+  //   // The common missing references
+  //   var missingCRefs = List[ProcessIdentity]()
+  //   while(missingRefs1.nonEmpty){
+  //     val pid = missingRefs1.head; missingRefs1 = missingRefs1.tail
+  //     if(contains(missingRefs2, pid)) missingCRefs ::= pid
+  //   }
+  //   missingCRefs
+  // }
 
   /* --------- Purging of effectOnStore.
    * This is done according to certain heuristics. */
