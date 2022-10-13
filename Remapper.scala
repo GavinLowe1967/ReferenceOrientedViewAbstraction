@@ -626,12 +626,19 @@ object Remapper{
     * canonical form. */
   @inline def mkComponentView(
     servers: ServerStates, components: Array[State]) = {
-    assert(components.forall(_ != null)) // IMPROVE
+    // assert(components.forall(_ != null)) // IMPROVE
     val (servers1, map, nextArg) = remapServerStates(servers)
     val components1 = remapStates(map, nextArg, components)
     Pools.returnRemappingRows(map)
     new ComponentView(servers1, components1)
   }
+
+  /** A ReducedComponentView containing servers and a remapped version of
+    * components. */
+  @inline def mkReducedComponentView(
+    servers: ServerStates, components: Array[State]) = 
+    ReducedComponentView(servers, remapComponents(servers, components))
+
 
   /** Is map defined over all the parameters of cpt? */
   def isDefinedOver(map: RemappingMap, cpt: State): Boolean = {

@@ -1,6 +1,7 @@
 package ViewAbstraction
 
 import scala.collection.mutable.ArrayBuffer
+import RemapperP.Remapper
 
 /** Information about an induced transition.  This corresponds to transition
   * trans = pre -e-> post inducing
@@ -47,14 +48,108 @@ class InducedTransitionInfo(
   /** An InducedTransitionInfo extending this, instantiating oldCpts with
     * cpts. */
   def extend(cpts: Array[State]) = {
-    require(lazyNewEffectOnStore && oldCpts == null)
+    require(lazyNewEffectOnStore && 
+      (oldCpts == null || oldCpts.sameElements(cpts)))
     new InducedTransitionInfo(newView, trans, cpts, cv, newCpts)
   }
+
+  /** The common missing references associated with this. */
+  def commonMissingRefs =
+    SingleRefEffectOnUnification.commonMissingRefs(preCpts, oldCpts).toArray
+
+  // import InducedTransitionInfo.{EmptyReducedComponentView,newCrossRefs}
+
+  // /** The new missing cross reference views 
+  //   * formed by extending map0 so as to produce cpts1. */
+  // @inline private 
+  // def newMissingCrossRefs(
+  //   map0: RemappingMap, cpts1: Array[State], views: ViewSet)
+  //     : Array[ReducedComponentView] = {
+  //   // The components corresponding to the new cross references
+  //   val newCRs = newCrossRefs(map0, cpts1, preCpts)
+  //   if(newCRs.nonEmpty){
+  //     // extending the previous map has created new cross references, so
+  //     // add another MissingCrossReferences object
+  //     // println(
+  //     //   "old map = "+Remapper.show(map0)+ // "\nmap = "+Remapper.show(map)+
+  //     //     "\noriginal cpts = "+StateArray.show(inducedTrans.cv.components)+
+  //     //     "\ncpts = "+StateArray.show(cpts)+
+  //     //     "\npreCpts = "+StateArray.show(inducedTrans.preCpts)+
+  //     //     "\nnewCRs = "+newCRs.map(StateArray.show).mkString("; "))
+  //     val crossRefViews = // the views for the new  cross refs
+  //       newCRs.map(Remapper.mkReducedComponentView(servers,_))
+  //     MissingCrossReferences.sort(crossRefViews.filter(!views.contains(_)))
+  //   }
+  //   else EmptyReducedComponentView // Array[ReducedComponentView]()
+  // }
 
   override def toString = {
     s"$trans\n operating on $cv\n induces $cv \n== "+
       s"(${trans.pre.servers}, ${StateArray.show(oldCpts)})\n -> "+
       s"(${trans.post.servers}, ${StateArray.show(newCpts)})\n== $newView"
+  }
+}
+
+// =======================================================
+
+object InducedTransitionInfo{
+  /** Shared empty result from newMissingCrossRefs. */
+  private val EmptyReducedComponentView = Array[ReducedComponentView]()
+
+  /** The new missing cross reference views corresponding to inducedTrans,
+    * formed by extending map0 so as to produce cpts1. */
+  def newMissingCrossRefs(inducedTrans: InducedTransitionInfo, 
+    map0: RemappingMap, cpts1: Array[State], views: ViewSet)
+      : Array[ReducedComponentView] = {
+    // The components corresponding to the new cross references
+    val newCRs = newCrossRefs(map0, cpts1, inducedTrans.preCpts)
+    if(newCRs.nonEmpty){
+      // extending the previous map has created new cross references, so
+      // add another MissingCrossReferences object
+      // println(
+      //   "old map = "+Remapper.show(map0)+ // "\nmap = "+Remapper.show(map)+
+      //     "\noriginal cpts = "+StateArray.show(inducedTrans.cv.components)+
+      //     "\ncpts = "+StateArray.show(cpts)+
+      //     "\npreCpts = "+StateArray.show(inducedTrans.preCpts)+
+      //     "\nnewCRs = "+newCRs.map(StateArray.show).mkString("; "))
+      val crossRefViews = // the views for the new  cross refs
+        newCRs.map(Remapper.mkReducedComponentView(inducedTrans.servers,_))
+      MissingCrossReferences.sort(crossRefViews.filter(!views.contains(_)))
+    }
+    else EmptyReducedComponentView // Array[ReducedComponentView]()
+  }
+
+
+  /** Cross references between cpts and preCpts, or vice versa, where the
+    * relevant parameter of cpts is not in the range of map.  Here cpts is
+    * created by an extension of map, so any such cross reference was caused
+    * by map being extended. */
+  @inline private 
+  def newCrossRefs(map: RemappingMap, cpts: Array[State], preCpts: Array[State])
+      : Array[Array[State]] = {
+    /* Is pid in the range of map? */
+    @inline def inMap(pid: ProcessIdentity) = map(pid._1).contains(pid._2)
+    var result = List[Array[State]](); var i = 0
+    while(i < cpts.length){
+      val c1 = cpts(i); i += 1
+      val newId = !inMap(c1.componentProcessIdentity) // cross refs to c1 are new
+      if(! contains(preCpts, c1)){
+        var j = 0
+        while(j < preCpts.length){
+          val c2 = preCpts(j); j += 1
+          if(! contains(cpts, c2)){
+            // Cross reference from cpts to preCpts
+            if(c1.hasIncludedParam(c2.family, c2.id) &&
+                !inMap(c2.componentProcessIdentity))
+              result ::= StateArray(Array(c1,c2))
+            // Cross reference from preCpts to cpts
+            if(newId && c2.hasIncludedParam(c1.family, c1.id))
+              result ::= StateArray(Array(c2,c1))
+          }
+        }
+      }
+    }
+    result.toArray
   }
 }
 
@@ -67,11 +162,13 @@ import RemapperP.Remapper
   * component views that are necessary to satisfy condition (b) of the induced
   * transition corresponding to inducedTrans: all must be added to the
   * ViewSet. commonMissingPids is the common missing identities for condition
-  * (c). */
+  * (c).  The view in inducedTrans was produced by renaming via map.
+  * candidates stores values that undefined values in map might be mapped to;
+  * but might be null if map is total.*/
 class MissingCrossReferences(
   val inducedTrans: InducedTransitionInfo,
   missingViews: Array[ReducedComponentView],
-  map: RemappingMap, candidates: CandidatesMap,
+  val map: RemappingMap, candidates: CandidatesMap,
   val commonMissingPids: Array[ProcessIdentity]
 ){
   assert(missingViews.nonEmpty && missingViews.forall(_ != null)) 
@@ -118,10 +215,16 @@ class MissingCrossReferences(
 
   /** All total maps associated with this. */
   def allCompletions: ArrayBuffer[RemappingMap] = synchronized{
+    if(candidates == null){
+      // map should be total in this case
+      for(t <- 0 until numTypes; i <- 0 until map(t).length) 
+        assert(map(t)(i) >= 0)
+      ArrayBuffer(map)
+    }
     // val map1 = RemapperP.Remapper.cloneMap(map)
     // I don't think cloning is necessary.  map is private to this, and
     // protected by the synchronized block
-    RemappingExtender.allCompletions(map, candidates, inducedTrans.trans)
+    else RemappingExtender.allCompletions(map, candidates, inducedTrans.trans)
   }
 
 

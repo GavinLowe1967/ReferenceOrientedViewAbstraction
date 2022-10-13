@@ -109,15 +109,20 @@ object MissingCommonWrapper{
   /** Produce a MissingCommonWrapper corresponding to renaming the base view in
     * inducedTrans by map; if all required views are in `views` then return
     * null. */
-  def fromMap(
-    map: RemappingMap, inducedTrans: InducedTransitionInfo, views: ViewSet)
-      : MissingCommonWrapper = {
-    val cptsRenamed = Remapper.applyRemapping(map, inducedTrans.cv.components)
-    val commonMissingPids =
-      commonMissingRefs(inducedTrans.preCpts, cptsRenamed).toArray
+  // def fromMap(
+  //   map: RemappingMap, inducedTrans: InducedTransitionInfo, views: ViewSet)
+  //     : MissingCommonWrapper = {
+  //   val cptsRenamed = Remapper.applyRemapping(map, inducedTrans.cv.components)
+  //   val commonMissingPids =
+  //     commonMissingRefs(inducedTrans.preCpts, cptsRenamed).toArray
+  //   MissingCommonWrapper(inducedTrans, commonMissingPids, views)
+  // }
 
-// FIXME: need new inducedTrans, setting cpts
-    MissingCommonWrapper(inducedTrans, commonMissingPids, views)
+  def apply(inducedTrans: InducedTransitionInfo, views: ViewSet)
+      : MissingCommonWrapper = {
+    // val commonMissingPids =
+    //   commonMissingRefs(inducedTrans.preCpts, inducedTrans.oldCpts).toArray
+    MissingCommonWrapper(inducedTrans, inducedTrans.commonMissingRefs, views)
   }
 
 }

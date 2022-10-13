@@ -244,7 +244,7 @@ object StateArray{
   def crossRefs(cpts1: Array[State], cpts2: Array[State])
       : List[Array[State]] = {
     require(singleRef)
-    if(CrossRefFlag){
+    if(CrossRefFlag){ // currently true
       var result = List[Array[State]](); var i = 0
       while(i < cpts1.length){
         val c1 = cpts1(i); i += 1

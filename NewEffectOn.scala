@@ -67,7 +67,7 @@ class NewEffectOn(
       Profiler.count("EffectOn step "+unifs.isEmpty)
       val cpts = mkComponents(map)
       // The components needed for condition (b).
-      val crossRefs: List[Array[State]] = //makeCrossRefs(map)
+      val crossRefs: List[Array[State]] = 
         getCrossRefs(pre.servers, cpts, pre.components)
       if(unifs.nonEmpty || reducedMapInfo == null ||
           !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs)){
@@ -193,12 +193,12 @@ class NewEffectOn(
       if(!views.contains(nv)){
         if(missing.isEmpty){ // condition (b) satisfied            
           for(map1 <- RemappingExtender.allCompletions(map, candidates,trans)){
-// FIXME: we also need to know if any of the completions creates a new cross
-// reference.
-            val cpts1 = mkComponents(map1)
+// FIXME: we also need to know if map1 creates a new cross reference.
+            val cpts1 = Remapper.applyRemapping(map1, cv.components) 
             val inducedTrans = new InducedTransitionInfo(
               nv.asReducedComponentView, trans, cpts1, cv, newCpts)
-            val mcw = MissingCommonWrapper.fromMap(map1, inducedTrans, views)
+            val mcw = MissingCommonWrapper(inducedTrans, views)
+              // MissingCommonWrapper.fromMap(map1, inducedTrans, views)
             if(mcw == null){          // can fire transition
               if(nextNewViews.add(nv))
                 addedView(cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
