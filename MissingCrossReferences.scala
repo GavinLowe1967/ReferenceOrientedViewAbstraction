@@ -57,31 +57,6 @@ class InducedTransitionInfo(
   def commonMissingRefs =
     SingleRefEffectOnUnification.commonMissingRefs(preCpts, oldCpts).toArray
 
-  // import InducedTransitionInfo.{EmptyReducedComponentView,newCrossRefs}
-
-  // /** The new missing cross reference views 
-  //   * formed by extending map0 so as to produce cpts1. */
-  // @inline private 
-  // def newMissingCrossRefs(
-  //   map0: RemappingMap, cpts1: Array[State], views: ViewSet)
-  //     : Array[ReducedComponentView] = {
-  //   // The components corresponding to the new cross references
-  //   val newCRs = newCrossRefs(map0, cpts1, preCpts)
-  //   if(newCRs.nonEmpty){
-  //     // extending the previous map has created new cross references, so
-  //     // add another MissingCrossReferences object
-  //     // println(
-  //     //   "old map = "+Remapper.show(map0)+ // "\nmap = "+Remapper.show(map)+
-  //     //     "\noriginal cpts = "+StateArray.show(inducedTrans.cv.components)+
-  //     //     "\ncpts = "+StateArray.show(cpts)+
-  //     //     "\npreCpts = "+StateArray.show(inducedTrans.preCpts)+
-  //     //     "\nnewCRs = "+newCRs.map(StateArray.show).mkString("; "))
-  //     val crossRefViews = // the views for the new  cross refs
-  //       newCRs.map(Remapper.mkReducedComponentView(servers,_))
-  //     MissingCrossReferences.sort(crossRefViews.filter(!views.contains(_)))
-  //   }
-  //   else EmptyReducedComponentView // Array[ReducedComponentView]()
-  // }
 
   override def toString = {
     s"$trans\n operating on $cv\n induces $cv \n== "+
@@ -100,25 +75,26 @@ object InducedTransitionInfo{
     * formed by extending map0 so as to produce cpts1. */
   def newMissingCrossRefs(inducedTrans: InducedTransitionInfo, 
     map0: RemappingMap, cpts1: Array[State], views: ViewSet)
+      : Array[ReducedComponentView] = 
+    newMissingCrossRefs(
+      map0, inducedTrans.servers, cpts1, inducedTrans.preCpts, views)
+ 
+  /** The new missing cross reference views caused by extending map0 so as to
+    * produce cpts1.  This corresponds to a transition starting with
+    * (servers,preCpts), acting on (servers,cpts1). */
+  def newMissingCrossRefs(map0: RemappingMap, servers: ServerStates,
+    cpts1: Array[State], preCpts: Array[State], views: ViewSet)
       : Array[ReducedComponentView] = {
     // The components corresponding to the new cross references
-    val newCRs = newCrossRefs(map0, cpts1, inducedTrans.preCpts)
+    val newCRs = newCrossRefs(map0, cpts1, preCpts)
     if(newCRs.nonEmpty){
-      // extending the previous map has created new cross references, so
-      // add another MissingCrossReferences object
-      // println(
-      //   "old map = "+Remapper.show(map0)+ // "\nmap = "+Remapper.show(map)+
-      //     "\noriginal cpts = "+StateArray.show(inducedTrans.cv.components)+
-      //     "\ncpts = "+StateArray.show(cpts)+
-      //     "\npreCpts = "+StateArray.show(inducedTrans.preCpts)+
-      //     "\nnewCRs = "+newCRs.map(StateArray.show).mkString("; "))
+      // extending the previous map has created new cross references
       val crossRefViews = // the views for the new  cross refs
-        newCRs.map(Remapper.mkReducedComponentView(inducedTrans.servers,_))
+        newCRs.map(Remapper.mkReducedComponentView(servers,_))
       MissingCrossReferences.sort(crossRefViews.filter(!views.contains(_)))
     }
     else EmptyReducedComponentView // Array[ReducedComponentView]()
   }
-
 
   /** Cross references between cpts and preCpts, or vice versa, where the
     * relevant parameter of cpts is not in the range of map.  Here cpts is

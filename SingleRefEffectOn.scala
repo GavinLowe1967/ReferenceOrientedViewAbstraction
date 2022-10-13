@@ -178,7 +178,7 @@ class SingleRefEffectOn(
 
   /** Record this induced transition if singleRef and primary, and (1) if
    ** newEffectOn, no acquired references, (2) otherwise no unifs. */
-  @inline private 
+  @inline protected
   def recordInduced(unifs: UnificationList, reducedMap: ReducedMap) = {
     assert(singleRef)
     // IMPROVE: repeats work from SingleRefEffectOnUnification:

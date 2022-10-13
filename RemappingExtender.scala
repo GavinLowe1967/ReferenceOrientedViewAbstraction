@@ -9,7 +9,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   /* Relationship of main functions.
    * makeExtensions
    * |--makeExtensions1
-   * |  |--findLinkagesC
+   * |  |--RemappingExtender.anyLinkageC
    * |  |--allExtensions
    * |  |  |--extendMapToCandidates
    * |  |  |--mapUndefinedToFresh
@@ -135,26 +135,26 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   }
 
   /** Linkages for condition (c).  All missing references of cv.principal that
-    * map under rdMap to a missing reference of pre.principal. */
-  private def findLinkagesC(unifs: UnificationList, rdMap: RemappingMap)
-      : ArrayBuffer[Parameter] = {
+    * map under rdMap to a missing reference of pre.principal. 
+    * 
+    * Note: not currently used. */
+  private def findLinkagesC(rdMap: RemappingMap): ArrayBuffer[Parameter] = {
     val result = new ArrayBuffer[Parameter]
     // Linkages for condition (c).  Iterate through parameters of
     // cv.principal.
     val cvPrincParams = cv.principal.processIdentities; var i = 1
     while(i <  cvPrincParams.length){
       val (t,id) = cvPrincParams(i); i += 1
+      // Is id a missing parameter for cv?
       if(!isDistinguished(id) && !cptIds(t)(id)){
         val id1 = rdMap(t)(id)
-        // Are id and id1 missing parameters for cv, pre, respectively?
+        // Is id1 a missing parameter for pre?
         if(id1 >= 0 && preCpts(0).processIdentities.contains((t,id1)) &&
             !preCptIds(t)(id1))
           result += ((t,id))
       }
     }
-
     result
-    // IMPROVE: use bitmaps for parameters
   }
 
   /** Extend map to map all undefined values to distinct fresh values. */
@@ -359,8 +359,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     require(!useNewEffectOnStore)
     // if(highlight)println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
     //   s"; doneB = $doneB")
-    val linkagesC = findLinkagesC(unifs, rdMap)
-    if(linkagesC.nonEmpty){
+    val linkagesC = RemappingExtender.anyLinkageC(rdMap, cv, pre)
+    if(linkagesC){
       allExtensions(resultRelevantParams, rdMap, doneB, extensions)
       recycle(rdMap)
     }
@@ -473,7 +473,6 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     val findLinkagesC = outer.findLinkagesC _
 
     val getCandidatesMap = outer.getCandidatesMap _
-
   }
 }
 
@@ -551,5 +550,28 @@ object RemappingExtender{
     }
     completions
   }
+
+  /** Is there any linkage for condition (c), corresponding to rdMap? */
+  @inline 
+  def anyLinkageC(rdMap: RemappingMap, cv: ComponentView, pre: Concretization)
+      : Boolean = {
+    val cptIds = cv.cptIdsBitMap; val preCptIds = pre.cptIdsBitMap 
+    val prePrincParams = pre.components(0).processIdentities
+    val cvPrincParams = cv.principal.processIdentities
+    // Iterate through parameters of cv.principal.
+    var i = 1; var found = false
+    while(i < cvPrincParams.length && !found){
+      val (t,id) = cvPrincParams(i); i += 1
+      // Is id a missing parameter for cv?
+      if(!isDistinguished(id) && !cptIds(t)(id)){
+        val id1 = rdMap(t)(id)
+        // Is id1 a missing parameter for pre?
+        if(id1 >= 0 && prePrincParams.contains((t,id1)) && !preCptIds(t)(id1))
+          found = true
+      }
+    }
+    found
+  }
+
 
 }
