@@ -111,16 +111,25 @@ class NewEffectOnStore{
       case Some (mcrs) => mcrs.synchronized{
         // Note: cv < mcr.missingHead, so the MissingCrossRefSets are locked
         // in increasing order of their associated keys.
-        for(mcr <- mcrs.iterator) mcr.synchronized{
-          if(!mcr.done && !mcr.isNewViewFound(views)){
-            mcr.updateMissingViewsBy(cv, views)
+        for(mcr <- mcrs.iterator){
+          var flag = false
+          mcr.synchronized{
+            if(!mcr.done && !mcr.isNewViewFound(views)){
+              mcr.updateMissingViewsBy(cv, views); flag = true
+              // if(mcr.done) doneMissingCrossRefs(mcr, views, result)
+              // else addToStore(missingCrossRefStore, mcr.missingHead, mcr)
+            }
+            // if mcr.done, we can ignore it
+          } // end of mcr.synchronized block
+          if(flag){
             if(mcr.done) doneMissingCrossRefs(mcr, views, result)
             else addToStore(missingCrossRefStore, mcr.missingHead, mcr)
           }
-          // if mcr.done, we can ignore it
         } // end of iteration over mcrs/mcr.synchronized
       }
-// IMPROVE: move some operations outside the synchronized blocks
+// IMPROVE: could store those mcr that we update, and then do the "if(flag)"
+// part outside the mcrs.synchronized block
+ 
       // Note: if an addMissingCrossRef reads and checks the mapping cv ->
       // mcrs before this function removes cv, then this function will see the
       // effect of that add (because of the locking of mcrs).  There cannot be
@@ -148,7 +157,7 @@ class NewEffectOnStore{
       else maybeAdd(inducedTrans, result) // can fire transition
     }
     else{
-      mcr.checkMap // IMPROVE
+      // mcr.checkMap
       for(map <- mcr.allCompletions){
         // Instantiate oldCpts in inducedTrans
         val cpts = Remapper.applyRemapping(map, inducedTrans.cv.components)

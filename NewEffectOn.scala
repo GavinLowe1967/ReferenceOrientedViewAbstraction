@@ -32,7 +32,7 @@ class NewEffectOn(
 
   import ServersReducedMap.ReducedMap 
   import Unification.UnificationList //  = List[(Int,Int)]
-  import RemappingExtender.{CandidatesMap}
+  import RemappingExtender.{CandidatesMap,allCompletions}
   import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo, commonMissingRefs}
   import SingleRefEffectOn.{getCrossRefs}
   import InducedTransitionInfo.newMissingCrossRefs
@@ -121,17 +121,16 @@ class NewEffectOn(
     newComponentsList: List[Array[State]], candidates: CandidatesMap)
       : Unit = {
     require(singleRef && useNewEffectOnStore && !lazyNewEffectOnStore)
-    val allCompletions = RemappingExtender.allCompletions(map, candidates, trans)
+    // all completons of map; initialised lazily 
+    var allComps: ArrayBuffer[RemappingMap] = null
 
     for(newCpts <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newCpts)
       if(!views.contains(nv)){
-        for(map1 <- allCompletions){
+        if(allComps == null) allComps = allCompletions(map, candidates, cv, trans)
+        for(map1 <- allComps){
           val cpts1 =  Remapper.applyRemapping(map1, cv.components)
           val crossRefs1 = getCrossRefs(pre.servers, cpts1, pre.components)
-          // assert(crossRefs.length == crossRefs1.length)
-          // for(i <- 0 until crossRefs.length)
-          //   assert(crossRefs(i).sameElements(crossRefs1(i)))
           val missing1: Array[ReducedComponentView] =
             MissingCrossReferences.sort(missingCrossRefs(crossRefs1).toArray)
           val inducedTrans = new InducedTransitionInfo(nv.asReducedComponentView,
@@ -141,8 +140,7 @@ class NewEffectOn(
             if(lazyNewEffectOnStore) null 
             else commonMissingRefs(pre.components, cpts1).toArray
           if(missing1.isEmpty){ // condition (b) satisfied
-            val mcw =
-              MissingCommonWrapper(inducedTrans, commonMissingPids, views)
+            val mcw = MissingCommonWrapper(inducedTrans,commonMissingPids,views)
             if(mcw == null){          // can fire transition
               if(nextNewViews.add(nv))
                 addedView(cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
@@ -174,7 +172,6 @@ class NewEffectOn(
     reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
     newComponentsList: List[Array[State]], candidates: CandidatesMap)
       : Unit = {
-// IMPROVE: several params not used
     require(singleRef && useNewEffectOnStore && lazyNewEffectOnStore)
     // The cross reference views required for condition (b) implied by map
     val missing: Array[ReducedComponentView] = 
@@ -184,7 +181,7 @@ class NewEffectOn(
       val nv = Remapper.mkComponentView(post.servers, newCpts)
       if(!views.contains(nv)){
         if(missing.isEmpty){ // condition (b) satisfied            
-          for(map1 <- RemappingExtender.allCompletions(map, candidates,trans)){
+          for(map1 <- RemappingExtender.allCompletions(map, candidates, cv, trans)){
             val cpts1 = Remapper.applyRemapping(map1, cv.components) 
             val inducedTrans = new InducedTransitionInfo(
               nv.asReducedComponentView, trans, cpts1, cv, newCpts)

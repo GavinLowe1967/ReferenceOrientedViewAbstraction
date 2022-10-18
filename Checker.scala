@@ -195,7 +195,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     traverse("ComponentView", ComponentView, maxPrint = 0)
     traverse("Concretization", Concretization, maxPrint = 0)
     traverse("Concurrency", Concurrency, maxPrint = 0)
-    // traverse("EffectOn", EffectOn, maxPrint = 0)
+    traverse("EffectOn", EffectOn, maxPrint = 0, ignore = List("System"))
     traverse("EffectOnStore", EffectOnStore, maxPrint = 0)
     traverse("EffectOnUnification", EffectOnUnification, maxPrint = 0)
     traverse("FDRTransitionMap", FDRTransitionMap, maxPrint = 0)
@@ -213,7 +213,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     traverse("View", View, maxPrint = 0)
     traverse("ViewSet", ViewSet, maxPrint = 0)
     val others = List(
-      Profiler, Concretization, Debugger, EffectOn, FDRTransitionMap,
+      Profiler, Concretization, Debugger, FDRTransitionMap,
       MissingCommon, MissingInfoStore, ServerBasedViewSet, ThreadID,
       collection.IntSet, collection.LockFreeReadHashSet, 
       collection.ShardedHashMap, collection.ShardedHashSet)

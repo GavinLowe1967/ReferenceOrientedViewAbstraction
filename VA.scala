@@ -15,6 +15,7 @@ object VA{
   def check(fname: String, bound: Int, singleRefX: Boolean, numWorkersX: Int)
       : Unit = {
     singleRef = singleRefX; numWorkers = numWorkersX
+    ox.gavin.profiling.Profiler.setWorkers(numWorkers)
     system = new SystemP.System(fname); println("Created system")
     // Create and run the checker
     checker = new Checker(system, numWorkers); checker(bound = bound)

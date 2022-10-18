@@ -336,15 +336,15 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     * of getAllParams. */
   private var allParams: Array[List[Identity]] = null
 
-  /** All parameters of components, indexed by type. */
+  /** All parameters of components, indexed by type; each list is ordered. */
   def getAllParams: Array[List[Identity]] = synchronized{
     // assert(singleRef && newEffectOn) -- or also from test
     if(allParams == null){
       allParams = Array.fill(numTypes)(List[Identity]()); var f = 0
       while(f < numFamilies){
-        var i = 0; val len = paramsBitMap(f).size
-        while(i < len){ if(paramsBitMap(f)(i)) allParams(f) ::= i; i += 1 }
-        f += 1
+        var i = 0; val len = paramsBitMap(f).size; var params = List[Identity]()
+        while(i < len){ if(paramsBitMap(f)(i)) params ::= i; i += 1 }
+        allParams(f) = params.reverse; f += 1
       }
     }
     allParams

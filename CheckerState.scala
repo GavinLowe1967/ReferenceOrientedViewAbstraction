@@ -249,7 +249,7 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
     viewsBuff = new ConcurrentBuffer[ComponentView](numWorkers)
     viewShardIteratorProducer = nextNewViews.shardIteratorProducer
     transitionShardIteratorProducer = newTransitions.shardIteratorProducer
-// FIXME
+// IMPROVE: include when useNewEffectOnStore
     if(singleRef && !useNewEffectOnStore) SingleRefEffectOn.prepareForPurge
   }
 
@@ -279,7 +279,7 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
 
     // Purges from the effectOnStore
     if(singleRef && !useNewEffectOnStore) SingleRefEffectOn.purge
-// FIXME
+// IMPROVE: include when useNewEffectOnStore
 
     // Collectively copy views
     var iter = viewShardIteratorProducer.get

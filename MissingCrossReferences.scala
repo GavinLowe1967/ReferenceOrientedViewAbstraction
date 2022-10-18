@@ -200,7 +200,7 @@ class MissingCrossReferences(
     // val map1 = RemapperP.Remapper.cloneMap(map)
     // I don't think cloning is necessary.  map is private to this, and
     // protected by the synchronized block
-    else RemappingExtender.allCompletions(map, candidates, inducedTrans.trans)
+    else RemappingExtender.allCompletions(map, candidates, inducedTrans.cv, inducedTrans.trans)
   }
 
 
