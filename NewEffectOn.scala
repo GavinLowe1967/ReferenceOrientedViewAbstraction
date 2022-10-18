@@ -127,7 +127,8 @@ class NewEffectOn(
     for(newCpts <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newCpts)
       if(!views.contains(nv)){
-        if(allComps == null) allComps = allCompletions(map, candidates, cv, trans)
+        if(allComps == null) 
+          allComps = allCompletions(map, candidates, cv, trans)
         for(map1 <- allComps){
           val cpts1 =  Remapper.applyRemapping(map1, cv.components)
           val crossRefs1 = getCrossRefs(pre.servers, cpts1, pre.components)
@@ -181,7 +182,7 @@ class NewEffectOn(
       val nv = Remapper.mkComponentView(post.servers, newCpts)
       if(!views.contains(nv)){
         if(missing.isEmpty){ // condition (b) satisfied            
-          for(map1 <- RemappingExtender.allCompletions(map, candidates, cv, trans)){
+          for(map1 <- RemappingExtender.allCompletions(map,candidates,cv,trans)){
             val cpts1 = Remapper.applyRemapping(map1, cv.components) 
             val inducedTrans = new InducedTransitionInfo(
               nv.asReducedComponentView, trans, cpts1, cv, newCpts)

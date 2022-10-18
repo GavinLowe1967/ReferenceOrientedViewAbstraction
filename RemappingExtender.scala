@@ -412,8 +412,14 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       : Unit = {
     val newLinkage = findLinkage(unifs, rdMap, doneB)
     if(newLinkage == null){      // Add to extensions if not already there. 
-      val candidates = getCandidatesMap(resultRelevantParams, rdMap, doneB)
-      maybeAdd(extensions, rdMap, candidates) //resultRelevantParams, doneB)
+      if(RemappingExtender.anyLinkageC(rdMap, cv, trans.pre)){
+        val candidates = getCandidatesMap(resultRelevantParams, rdMap, doneB)
+        maybeAdd(extensions, rdMap, candidates)
+      }
+      else{
+        Remapper.mapUndefinedToFresh(rdMap, trans.getNextArgMap)
+        maybeAdd(extensions, rdMap, null)
+      }
     }
     else{
       val (i,j) = newLinkage
@@ -497,14 +503,19 @@ object RemappingExtender{
     * forming all completions. */
   type CandidatesMap = Array[Array[List[Identity]]]
 
+  /** Are map1 and map2 equal? */
   def equalCandidatesMaps(map1: CandidatesMap, map2: CandidatesMap): Boolean = {
-    var t = 0; var equal = true
-    while(t < numTypes && equal){
-      val len = map1(t).length; assert(map2(t).length == len); var i = 0
-      while(i < len && map1(t)(i) == map2(t)(i)) i += 1
-      equal = i == len; t += 1
+    if(map1 == null) map2 == null
+    else if(map2 == null) false
+    else{
+      var t = 0; var equal = true
+      while(t < numTypes && equal){
+        val len = map1(t).length; assert(map2(t).length == len); var i = 0
+        while(i < len && map1(t)(i) == map2(t)(i)) i += 1
+        equal = i == len; t += 1
+      }
+      equal
     }
-    equal
   }
 
   /** The result returned by makeExtensions.  Each element is a pair (map,
@@ -556,9 +567,17 @@ object RemappingExtender{
   def allCompletions(rdMap: RemappingMap, candidates: CandidatesMap, 
     cv: ComponentView, trans: Transition)
       : ArrayBuffer[RemappingMap] = {
-    if(anyLinkageC(rdMap, cv, trans.pre))
+// FIXME: we should need lazyNewEffectOnStore
+    require(useNewEffectOnStore) // require(lazyNewEffectOnStore)
+    if(candidates != null){
+// IMPROVE
+      assert(anyLinkageC(rdMap, cv, trans.pre))
+      // if(anyLinkageC(rdMap, cv, trans.pre))
       allCompletions1(rdMap, candidates, trans)
+    }
     else{
+// IMPROVE
+      assert(!anyLinkageC(rdMap, cv, trans.pre))
       val map1 = Remapper.cloneMap(rdMap)
       val nextArgMap = trans.getNextArgMap
       Remapper.mapUndefinedToFresh(map1, nextArgMap)
