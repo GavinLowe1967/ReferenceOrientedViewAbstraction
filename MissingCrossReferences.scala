@@ -144,7 +144,7 @@ import RemapperP.Remapper
 class MissingCrossReferences(
   val inducedTrans: InducedTransitionInfo,
   missingViews: Array[ReducedComponentView],
-  val map: RemappingMap, candidates: CandidatesMap,
+  val map: RemappingMap, val candidates: CandidatesMap,
   val commonMissingPids: Array[ProcessIdentity]
 ){
   assert(missingViews.nonEmpty && missingViews.forall(_ != null)) 
@@ -154,6 +154,15 @@ class MissingCrossReferences(
   // At most, a reference from each component of pre to each component of cv,
   // and vice versa: 3*2*2:
   assert(missingViews.length <= 12, "missingViews.length = "+missingViews.length)
+  // Certain fields are set null to save memory
+  if(lazyNewEffectOnStore){
+    assert(commonMissingPids == null)
+    if(map != null){
+      assert(inducedTrans.cpts == null && candidates != null); checkMap
+    }
+    else assert(inducedTrans.cpts != null && candidates == null)
+  }
+  else assert(inducedTrans.cpts != null && map == null && candidates == null)
 
   /** Check that map is defined over cv. */
   def checkMap = 
@@ -161,7 +170,6 @@ class MissingCrossReferences(
       require(map(t).length == inducedTrans.cv.getParamsBound(t),
         "\n map = "+Remapper.show(map)+"\ncv = "+inducedTrans.cv)
 
-  checkMap
 
   @inline def isNewViewFound(views: ViewSet) = inducedTrans.isNewViewFound(views)
 

@@ -156,29 +156,38 @@ class NewEffectOnStore{
       if(mcw != null) add(mcw)
       else maybeAdd(inducedTrans, result) // can fire transition
     }
-    else{
-      // mcr.checkMap
-      for(map <- mcr.allCompletions){
-        // Instantiate oldCpts in inducedTrans
-        val cpts = Remapper.applyRemapping(map, inducedTrans.cv.components)
-        val newInducedTrans = inducedTrans.extend(cpts)
-        // New missing cross references created by extending
-        val newMissingCRs = 
-          newMissingCrossRefs(inducedTrans, mcr.map, cpts, views)
-        if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
-          val newMCR = new MissingCrossReferences(
-            newInducedTrans, newMissingCRs, map, null, null)
-          add(newMCR)
-        }
-        else{ // consider condition (c)
-          val mcw = MissingCommonWrapper(newInducedTrans, views)
-          if(mcw != null) add(mcw)
-          else maybeAdd(newInducedTrans, result) // can fire transition
-        }
+    else if(mcr.map != null) for(map <- mcr.allCompletions){
+      // Instantiate oldCpts in inducedTrans
+      val cpts = Remapper.applyRemapping(map, inducedTrans.cv.components)
+      val newInducedTrans = inducedTrans.extend(cpts)
+      // New missing cross references created by extending
+      val newMissingCRs = newMissingCrossRefs(inducedTrans, mcr.map, cpts, views)
+      if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
+        val newMCR = new MissingCrossReferences(
+          newInducedTrans, newMissingCRs, map, null, null)
+        add(newMCR)
       }
+      else checkConditionC(newInducedTrans, views, result)
+    }
+    else{ 
+      // Previously we considered a total map, so have considered all cross
+      // references.  But condition (c) might not be satisfied if previously
+      // we extended a map which produced new missing cross references *and*
+      // common missing references.
+      assert(mcr.candidates == null && inducedTrans.cpts != null)
+      checkConditionC(inducedTrans, views, result)
     }
   }
 
+  /** Check whether inducedTrans satisfies condition (c); either store a
+    * MissingCommonWrapper or try adding the new view. */
+  @inline private def checkConditionC(
+    inducedTrans: InducedTransitionInfo, views: ViewSet, result: ViewBuffer) 
+  = {
+    val mcw = MissingCommonWrapper(inducedTrans, views)
+    if(mcw != null) add(mcw)
+    else maybeAdd(inducedTrans, result) // can fire transition
+  }
 
   /** If mcw is now done, add the resulting views to result; otherwise register
     * against each element of cb. */

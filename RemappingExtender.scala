@@ -257,7 +257,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     resultRelevantParams: BitMap, rdMap: RemappingMap, 
     doneB: List[Linkage], extensions: ExtensionsInfo)
       : Unit = {
-    require(!useNewEffectOnStore)
+    require(!lazyNewEffectOnStore) // !useNewEffectOnStore
     Profiler.count("allExtensions")
     // All parameters that each parameter can be mapped to
     val candidates = getCandidatesMap(resultRelevantParams, rdMap, doneB)
@@ -344,7 +344,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rdMap: RemappingMap, isPrimary: Boolean)
       : ExtensionsInfo = {
     val extensions = new ExtensionsInfo
-    if(useNewEffectOnStore){
+    if(lazyNewEffectOnStore){ // useNewEffectOnStore
       makeExtensionsNew(
         unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
       extensions
@@ -366,7 +366,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rdMap: RemappingMap, doneB: List[Linkage], 
     isPrimary: Boolean, extensions: ExtensionsInfo)
       : Unit = {
-    require(!useNewEffectOnStore)
+    require(!lazyNewEffectOnStore) // !useNewEffectOnStore
     // if(highlight)println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
     //   s"; doneB = $doneB")
     val linkagesC = RemappingExtender.anyLinkageC(rdMap, cv, pre)

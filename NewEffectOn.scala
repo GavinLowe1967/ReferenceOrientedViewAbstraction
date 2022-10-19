@@ -121,48 +121,39 @@ class NewEffectOn(
     newComponentsList: List[Array[State]], candidates: CandidatesMap)
       : Unit = {
     require(singleRef && useNewEffectOnStore && !lazyNewEffectOnStore)
-    // all completons of map; initialised lazily 
-    var allComps: ArrayBuffer[RemappingMap] = null
-
     for(newCpts <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newCpts)
       if(!views.contains(nv)){
-        if(allComps == null) 
-          allComps = allCompletions(map, candidates, cv, trans)
-        for(map1 <- allComps){
-          val cpts1 =  Remapper.applyRemapping(map1, cv.components)
-          val crossRefs1 = getCrossRefs(pre.servers, cpts1, pre.components)
-          val missing1: Array[ReducedComponentView] =
-            MissingCrossReferences.sort(missingCrossRefs(crossRefs1).toArray)
-          val inducedTrans = new InducedTransitionInfo(nv.asReducedComponentView,
-            trans, cpts1, cv, newCpts)
-          // The common missing references for condition (c)
-          val commonMissingPids = 
-            if(lazyNewEffectOnStore) null 
-            else commonMissingRefs(pre.components, cpts1).toArray
-          if(missing1.isEmpty){ // condition (b) satisfied
-            val mcw = MissingCommonWrapper(inducedTrans,commonMissingPids,views)
-            if(mcw == null){          // can fire transition
-              if(nextNewViews.add(nv))
-                addedView(cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
-              else recordInducedRedundant(
-                cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
-            }
-            else newEffectOnStore.add(mcw)
-          } // end of if(missing.isEmpty)
-          else{
-            // Add a MissingCrossReferences to the store
-            val missingCrossRefs = new MissingCrossReferences(
-              inducedTrans, missing1, map1, candidates, commonMissingPids)
-            newEffectOnStore.add(missingCrossRefs)
-            if(isPrimary && unifs.isEmpty && commonMissingPids.isEmpty)
-              cv.addConditionBInduced(post.servers, reducedMap, crossRefs1)
+        val cpts1 =  Remapper.applyRemapping(map, cv.components)
+        val crossRefs1 = getCrossRefs(pre.servers, cpts1, pre.components)
+        val missing1: Array[ReducedComponentView] =
+          MissingCrossReferences.sort(missingCrossRefs(crossRefs1).toArray)
+        val inducedTrans = new InducedTransitionInfo(nv.asReducedComponentView,
+          trans, cpts1, cv, newCpts)
+        // The common missing references for condition (c)
+        val commonMissingPids = commonMissingRefs(pre.components, cpts1).toArray
+        if(missing1.isEmpty){ // condition (b) satisfied
+          val mcw = MissingCommonWrapper(inducedTrans,commonMissingPids,views)
+          if(mcw == null){          // can fire transition
+            if(nextNewViews.add(nv))
+              addedView(cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
+            else recordInducedRedundant(
+              cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
           }
-        } // end of inner for loop
+          else newEffectOnStore.add(mcw)
+        } // end of if(missing.isEmpty)
+        else{
+          // Add a MissingCrossReferences to the store
+          val missingCrossRefs = new MissingCrossReferences(
+            inducedTrans, missing1, null, null, commonMissingPids)
+          //  inducedTrans, missing1, map, candidates, commonMissingPids)
+          newEffectOnStore.add(missingCrossRefs)
+          if(isPrimary && unifs.isEmpty && commonMissingPids.isEmpty)
+            cv.addConditionBInduced(post.servers, reducedMap, crossRefs1)
+        }
       }
       else // views already contains nv
         if(isPrimary) recordInduced(unifs, reducedMap)
-        //recordInducedRedundant(cpts, newCpts, nv, unifs, isPrimary, reducedMap)
     } // end of for loop
   }
 
@@ -192,7 +183,7 @@ class NewEffectOn(
             if(newMissingCRs.nonEmpty){
               // Create new MissingCrossReferences object
               val newMCR = new MissingCrossReferences(
-                inducedTrans, newMissingCRs, map1, null, null)
+                inducedTrans, newMissingCRs, null /*map1*/, null, null)
               newEffectOnStore.add(newMCR)
             }
             else{ // consider condition (c)
@@ -209,12 +200,19 @@ class NewEffectOn(
           } // end of inner for loop
         } // end of if(missing.isEmpty)
         else{
+          // If candidates == null then can calculate cpts; no need to store map
+          val cpts = 
+            if(candidates == null) Remapper.applyRemapping(map, cv.components) 
+            else null
           val inducedTrans = new InducedTransitionInfo(nv.asReducedComponentView,
-            trans, null, cv, newCpts)
+            trans, cpts, cv, newCpts)
+          // The map to store in the MissingCrossReferences.  Note: map is
+          // cloned to prevent sharing, as it's sometimes mutated.
+          val map1 = if(candidates == null) null else Remapper.cloneMap(map)
           // Add a MissingCrossReferences to the store.  Note: map is cloned to
           // prevent sharing, as it's sometimes mutated.
           val missingCrossRefs = new MissingCrossReferences(
-            inducedTrans, missing, Remapper.cloneMap(map), candidates, null)
+            inducedTrans, missing, map1, candidates, null)
           newEffectOnStore.add(missingCrossRefs)
           if(isPrimary && unifs.isEmpty &&
               !RemappingExtender.anyLinkageC(map, cv, pre))
