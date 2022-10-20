@@ -87,7 +87,9 @@ $(DIR)/Unification.class: $(REMAPPERP)/Remapper.class
 
 $(DIR)/UnificationTest.class: $(DIR)/Unification.class $(DIR)/EffectOnUnification.class 
 
-$(DIR)/RemappingExtender.class: $(DIR)/RemapperP/Remapper.class $(DIR)/Unification.class $(DIR)/Transition.class $(DIR)/Pools.class
+$(DIR)/RemappingExtender.class: $(DIR)/RemapperP/Remapper.class		\
+  $(DIR)/Unification.class $(DIR)/Transition.class $(DIR)/Pools.class	\
+  $(DIR)/CompressedCandidatesMap.class
 
 $(DIR)/RemappingExtenderTest.class: $(DIR)/RemappingExtender.class
 

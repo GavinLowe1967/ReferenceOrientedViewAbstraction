@@ -249,8 +249,10 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
     viewsBuff = new ConcurrentBuffer[ComponentView](numWorkers)
     viewShardIteratorProducer = nextNewViews.shardIteratorProducer
     transitionShardIteratorProducer = newTransitions.shardIteratorProducer
-// IMPROVE: include when useNewEffectOnStore
-    if(singleRef && !useNewEffectOnStore) SingleRefEffectOn.prepareForPurge
+    if(singleRef){
+      if(useNewEffectOnStore) NewEffectOn.prepareForPurge 
+      else SingleRefEffectOn.prepareForPurge
+    }
   }
 
   /** Add v to sysAbsViews and viewsBuff if new.  Return true if so. */
@@ -273,13 +275,15 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
         transitionTemplates.add(template)
     }
     // Thread 1 maybe does a garbage collection
+// IMPROVE: and with newEffectOnStore
     else if(me == 1 && doGC && ply%4 == 0 && SingleRefEffectOn.doPurge){
       print("Garbage collection..."); java.lang.System.gc(); println(".  Done.")
     }
 
     // Purges from the effectOnStore
-    if(singleRef && !useNewEffectOnStore) SingleRefEffectOn.purge
-// IMPROVE: include when useNewEffectOnStore
+    if(singleRef){
+      if(useNewEffectOnStore) NewEffectOn.purge else SingleRefEffectOn.purge
+    }
 
     // Collectively copy views
     var iter = viewShardIteratorProducer.get

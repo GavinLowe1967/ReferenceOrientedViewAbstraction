@@ -2,6 +2,7 @@ package ViewAbstraction
 
 import scala.collection.mutable.ArrayBuffer
 import RemapperP.Remapper
+import ox.gavin.profiling.Profiler
 
 /** Information about an induced transition.  This corresponds to transition
   * trans = pre -e-> post inducing
@@ -132,6 +133,7 @@ object InducedTransitionInfo{
 // ==================================================================
 
 import RemappingExtender.CandidatesMap
+import CompressedCandidatesMap.CompressedCandidatesMap
 import RemapperP.Remapper
 
 /** Information about missing cross references.  missingViews contains
@@ -144,7 +146,7 @@ import RemapperP.Remapper
 class MissingCrossReferences(
   val inducedTrans: InducedTransitionInfo,
   missingViews: Array[ReducedComponentView],
-  val map: RemappingMap, val candidates: CandidatesMap,
+  val map: RemappingMap, val candidates: CompressedCandidatesMap,
   val commonMissingPids: Array[ProcessIdentity]
 ){
   assert(missingViews.nonEmpty && missingViews.forall(_ != null)) 
@@ -163,6 +165,7 @@ class MissingCrossReferences(
     else assert(inducedTrans.cpts != null && candidates == null)
   }
   else assert(inducedTrans.cpts != null && map == null && candidates == null)
+  Profiler.count("MissingCrossReferences:"+(map == null))
 
   /** Check that map is defined over cv. */
   def checkMap = 
@@ -182,6 +185,11 @@ class MissingCrossReferences(
   /** Is this complete? */
   @inline def done = 
     synchronized{ mvIndex == missingViews.length || inducedTrans.isNewViewFound }
+
+  /** Is this complete? */
+  @inline def done(views: ViewSet) = synchronized{ 
+    mvIndex == missingViews.length || inducedTrans.isNewViewFound(views)
+  }
 
   /** Update missingViews and mvIndex based on the addition of cv.  cv is
     * expected to match the next missing view. */
@@ -208,7 +216,12 @@ class MissingCrossReferences(
     // val map1 = RemapperP.Remapper.cloneMap(map)
     // I don't think cloning is necessary.  map is private to this, and
     // protected by the synchronized block
-    else RemappingExtender.allCompletions(map, candidates, inducedTrans.cv, inducedTrans.trans)
+    else{
+// IMPROVE: calculate allCompletions more directly
+      val candidates1 = candidates.map(_.map(CompressedCandidatesMap.toList))
+      RemappingExtender.allCompletions(
+        map, candidates1, inducedTrans.cv, inducedTrans.trans)
+    }
   }
 
 

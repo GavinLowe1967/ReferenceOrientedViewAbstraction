@@ -270,7 +270,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     while(i < eMaps.length){
       val eMap = eMaps(i); i += 1
       mapUndefinedToFresh(eMap)
-      maybeAdd(extensions, eMap) // , resultRelevantParams, doneB)
+      maybeAdd(extensions, eMap) 
       Profiler.count("allExtensions - add")
     }
   }
@@ -309,18 +309,67 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
         candidates(t)(x) = candidates(t)(x).filter(y => !preC.hasParam(t,y))
       }
     }
+// IMPROVE
+    val cCandidates = 
+      getCompressedCandidatesMap(resultRelevantParams, rdMap, doneB)
+    for(t <- 0 until numTypes; i <- 0 until candidates(t).length)
+      assert(CompressedCandidatesMap.toList(cCandidates(t)(i)) ==
+        candidates(t)(i))
+    candidates
+  }
+
+  import CompressedCandidatesMap._
+
+  private def getCompressedCandidatesMap(
+    resultRelevantParams: BitMap, rdMap: RemappingMap, doneB: List[Linkage])
+      : CompressedCandidatesMap = {
+    val typeSizes = pre.getNextArgMap
+    // All params of pre, except those in resultRelevantParams or range rdMap 
+    val otherArgs = new Array[Candidates](numTypes)
+    // The same but excluding identities
+    val nonIds = new Array[Candidates](numTypes)
+    for(t <- 0 until numTypes){
+      var oArgs = Empty; var nIds = Empty
+      for(p <- 0 until typeSizes(t)) 
+        if(!resultRelevantParams(t)(p) && !rdMap(t).contains(p)){
+          oArgs = add(oArgs, p)
+          if(!preCptIds(t)(p)) nIds = add(nIds,p)
+        }
+      otherArgs(t) = oArgs; nonIds(t) = nIds
+    }
+    val candidates = Array.tabulate(numTypes)(t => 
+      Array.tabulate(rdMap(t).length)(p => 
+        if(rdMap(t)(p) < 0) 
+          if(cptIds(t)(p)) nonIds(t) else otherArgs(t)
+        else Empty
+      ))
+    // For each (i,j) in doneB, for each param (t,x) of cv.cpts(i),
+    // remove all parameters of preCts(j) from the list candidates(x). 
+    for((i,j) <- doneB){
+      val preC = preCpts(j); val preCIds = preC.ids
+      for((t,x) <- cpts(i).processIdentities; if !isDistinguished(x)){
+        // Remove params of preC of type t from candidate(t)(x) 
+        for(k <- 0 until preCIds.length; if preC.typeMap(k) == t){
+          val y = preCIds(k)
+          if(!isDistinguished(y))
+            candidates(t)(x) = remove(candidates(t)(x), y)
+        }
+      }
+    }
     candidates
   }
 
   @inline private def maybeAdd(
-    extensions: ExtensionsInfo, map: RemappingMap, candidatesMap: CandidatesMap)
+    extensions: ExtensionsInfo, map: RemappingMap, candidatesMap: CompressedCandidatesMap)
       : Unit = {
     /* Does extensions(i) equal (map, candidatesMap)? */
+/*
     def matches(i: Int) = {
       val (map1, cands1) = extensions(i)
       Remapper.equivalent(map, map1) &&
         RemappingExtender.equalCandidatesMaps(candidatesMap, cands1)
     }
+ */
     // Search for repetitions ... doesn't seem to happen
     // var ix = 0; while(ix < extensions.length && !matches(ix)) ix += 1 
     // if(ix == extensions.length) 
@@ -410,10 +459,15 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rdMap: RemappingMap, doneB: List[Linkage], 
     isPrimary: Boolean, extensions: ExtensionsInfo)
       : Unit = {
+    require(lazyNewEffectOnStore)
     val newLinkage = findLinkage(unifs, rdMap, doneB)
     if(newLinkage == null){      // Add to extensions if not already there. 
       if(RemappingExtender.anyLinkageC(rdMap, cv, trans.pre)){
-        val candidates = getCandidatesMap(resultRelevantParams, rdMap, doneB)
+        val candidates = getCompressedCandidatesMap(resultRelevantParams, rdMap, doneB)
+          // if(isTotal(rdMap)) null 
+          // else getCandidatesMap(resultRelevantParams, rdMap, doneB)
+// IMPROVE: following just to get count
+        isTotal(rdMap)
         maybeAdd(extensions, rdMap, candidates)
       }
       else{
@@ -433,6 +487,18 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       }
       recycle(rdMap)
     }
+  }
+
+  /** Is map total? */
+  @inline private def isTotal(map: RemappingMap): Boolean = {
+    var t = 0; var total = true
+    while(t < numTypes && total){
+      var i = 0; val len = map(t).length
+      while(i < len && map(t)(i) >= 0) i += 1
+      total = i == len; t += 1
+    }
+    Profiler.count(s"isTotal:$total")
+    total
   }
 
 
@@ -521,7 +587,9 @@ object RemappingExtender{
   /** The result returned by makeExtensions.  Each element is a pair (map,
     * candidates), where candidates gives all ways in which undefined
     * parameters can be mapped. */
-  type ExtensionsInfo = ArrayBuffer[(RemappingMap, CandidatesMap)]
+  // type ExtensionsInfo = ArrayBuffer[(RemappingMap, CandidatesMap)]
+  type ExtensionsInfo = 
+    ArrayBuffer[(RemappingMap, CompressedCandidatesMap.CompressedCandidatesMap)]
 
   /** Extend rdMap, mapping each parameter (t,p) to each element of
     * candidates(t)(p), or not.  Each map is fresh.  rdMap is mutated, but all

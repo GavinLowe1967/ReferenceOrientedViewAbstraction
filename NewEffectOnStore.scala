@@ -164,7 +164,7 @@ class NewEffectOnStore{
       val newMissingCRs = newMissingCrossRefs(inducedTrans, mcr.map, cpts, views)
       if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
         val newMCR = new MissingCrossReferences(
-          newInducedTrans, newMissingCRs, map, null, null)
+          newInducedTrans, newMissingCRs, null /*map*/, null, null)
         add(newMCR)
       }
       else checkConditionC(newInducedTrans, views, result)
@@ -267,8 +267,70 @@ class NewEffectOnStore{
     result
   }
 
-  // -------------------------------------------------------
-  // Administrative functions
+  // ================================ Purging
+
+  import ShardedHashMap.ShardIteratorProducerT
+
+  /** Object to produce iterators over the shards of missingCrossRefStore. */
+  private var missingCrossRefStoreShardIterator: ShardIteratorProducerT[
+    ReducedComponentView, OpenHashSet[MissingCrossReferences] ] 
+  = null
+
+  /** Object to produce iterators over the shards of missingCommonStore. */
+  private var missingCommonStoreShardIterator: ShardIteratorProducerT[
+    ReducedComponentView, OpenHashSet[MissingCommonWrapper] ] 
+  = null
+
+  /** Object to produce iterators over the shards of candidateForMCStore. */
+  private var candidateForMCStoreShardIterator: ShardIteratorProducerT[
+    (ServerStates, State), OpenHashSet[MissingCommonWrapper] ] 
+  = null
+
+  /** Prepare for the next calls to purge. */
+  def prepareForPurge = {
+    missingCrossRefStoreShardIterator =
+      missingCrossRefStore.shardIteratorProducer
+    missingCommonStoreShardIterator = missingCommonStore.shardIteratorProducer
+    candidateForMCStoreShardIterator = candidateForMCStore.shardIteratorProducer
+  }
+
+  /** Filter `set` according to `p`, and update `store` so that `key` maps to
+    * the new set (if non-empty). */
+  private def filter[A, B <: AnyRef]
+    (key: A, set: OpenHashSet[B], p: B => Boolean, 
+      store: ShardedHashMap[A, OpenHashSet[B]])
+    (implicit tag: ClassTag[B])
+  = {
+    val iter = set.iterator; val newSet = mkSet[B]; var changed = false
+    while(iter.hasNext){
+      val x = iter.next(); if(p(x)) newSet += x else changed = true
+    }
+    if(changed){
+      if(newSet.nonEmpty) store.replace(key, newSet) else store.remove(key)
+    }
+  }
+
+  /** Purge done items from missingCrossRefStore. */
+  def purgeMissingCrossRefStore(views: ViewSet) = {
+    // println("purgeMissingCrossRefStore")
+    def p(mcr: MissingCrossReferences) = !mcr.done(views)
+    /* Purge from the maplet rv -> mcrs. */
+    def process(
+      rv: ReducedComponentView, mcrs: OpenHashSet[MissingCrossReferences]) 
+    = filter(rv, mcrs, p _, missingCrossRefStore)
+      // val newSet = mcrs.filter(p _)
+      // if(newSet.size != mcrs.size){
+      //   if(newSet.nonEmpty) missingCrossRefStore.replace(rv, newSet)
+      //   else missingCrossRefStore.remove(rv)
+      // }
+    missingCrossRefStoreShardIterator.foreach(process)
+  }
+
+  def purgeMissingCommonStore(views: ViewSet) = {
+    ???
+  }
+
+  // ================================ Administrative functions
 
   /** Report on the size of store. */
   def reportStore[A, B <: AnyRef](store: ShardedHashMap[A, OpenHashSet[B]])
@@ -281,6 +343,7 @@ class NewEffectOnStore{
 
   /** Report on the size of the stores. */
   def report = {
+    println("allMCs: size = "+printLong(MissingCommon.allMCsSize))
     print("missingCrossRefStore: "); reportStore(missingCrossRefStore)
     print("missingCommonStore: "); reportStore(missingCommonStore)
     print("candidateForMCStore: "); reportStore(candidateForMCStore)
@@ -293,7 +356,7 @@ class NewEffectOnStore{
     MissingCommon.memoryProfile
 
     // traverse N MissingCrossReferences
-    val N = 3
+    val N = 5
     val setIter = missingCrossRefStore.valuesIterator; var count = 0
     while(count < N && setIter.hasNext){
       val set: OpenHashSet[MissingCrossReferences] = setIter.next()

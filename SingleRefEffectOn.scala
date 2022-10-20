@@ -378,18 +378,27 @@ object SingleRefEffectOn{
     else if(ply%4 == 3) MissingCommon.purgeMCs()
   }
 
-  /** Prepare for the next purge.  Called at the start of each ply by worker
-    * 0. */
-  def prepareForPurge = if(ply%4 == 0){
-    // We'll do purges only if enough views have been found since the last
-    // round: at least PurgeQuantum and one third of the total.
-    val viewCount = views.size; val newViewCount = viewCount-lastPurgeViewCount
-    if(newViewCount >= PurgeQuantum && 3*newViewCount >= viewCount){
-      println("Preparing for purge")
-      doPurge = true; lastPurgeViewCount = viewCount
+  /** Test if it's time for a purge.  */
+  def testPurge: Boolean = 
+    if(ply%4 == 0){
+      // We'll do purges only if enough views have been found since the last
+      // round: at least PurgeQuantum and one third of the total.
+      val viewCount = views.size; val newViewCount = viewCount-lastPurgeViewCount
+      if(newViewCount >= PurgeQuantum && 3*newViewCount >= viewCount){
+        println("Preparing for purge")
+        lastPurgeViewCount = viewCount; true
+      }
+      else false
+    }
+    else false
+
+  /** If it's time for the next purge, then set doPurge and prepare for it.
+    * Called at the start of each ply by worker 0. */
+  def prepareForPurge = {
+    doPurge = testPurge
+    if(doPurge){  
       effectOnStore.prepareForPurge; MissingCommon.prepareForPurge
     }
-    else doPurge = false
   }
 
   /* --------- Supervisory functions. */

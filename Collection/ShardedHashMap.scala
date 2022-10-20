@@ -375,5 +375,15 @@ object ShardedHashMap{
   /** Objects that produce iterators over the different shards. */
   trait ShardIteratorProducerT[A,B]{
     def get: Iterator[(A,B)]
+
+    /** Cooperate on applying `process` to each pair in the underlying 
+      * mapping. */ 
+    def foreach(process: (A,B) => Unit) = {
+      var shardIterator = get
+      while(shardIterator != null){
+        for((a,b) <- shardIterator) process(a,b)
+        shardIterator = get
+      }
+    }
   }
 }

@@ -450,27 +450,50 @@ class SimpleEffectOnStore extends EffectOnStore{
 
   /** Attempt to purge entries from the stores that are no longer needed. */
   def purgeCandidateForMCStore(views: ViewSet) = {
-    // Purge from candidateForMCStore
-    var shardIterator = candidateForMCStoreShardIterator.get
-    while(shardIterator != null){
-      while(shardIterator.hasNext){
-        val (key,mis) = shardIterator.next(); val misIter = mis.iterator
-        val newMis = mkMissingInfoSet; var changed = false
-        while(misIter.hasNext){
-          val mi = misIter.next()
-          if(!mi.done && !mi.getMcDone && !mi.isNewViewFound(views) &&
-              (!MISFlag || !MissingInfoStore.removeIfProperSubset(mi)) )
-            newMis += mi
-          else{ Profiler.count("candidateForMCStore.purge"); changed = true }
-        } // end of iteration over misIter
-        if(changed){
-          if(newMis.nonEmpty) candidateForMCStore.replace(key, newMis)
-          else candidateForMCStore.remove(key)
-        }
-      } // end of iteration over shardIterator
-      shardIterator = candidateForMCStoreShardIterator.get
-    } // end of outer iteration
+    /* Purge from the maplet (key -> mis). */
+    def process(key: (ServerStates, State), mis: MissingInfoSet) = {
+      val misIter = mis.iterator
+      val newMis = mkMissingInfoSet; var changed = false
+      while(misIter.hasNext){
+        val mi = misIter.next()
+        if(!mi.done && !mi.getMcDone && !mi.isNewViewFound(views) &&
+          (!MISFlag || !MissingInfoStore.removeIfProperSubset(mi)) )
+          newMis += mi
+        else{ Profiler.count("candidateForMCStore.purge"); changed = true }
+      } // end of iteration over misIter
+      if(changed){
+        if(newMis.nonEmpty) candidateForMCStore.replace(key, newMis)
+        else candidateForMCStore.remove(key)
+      }
+    }
+    candidateForMCStoreShardIterator.foreach(process)
   }
+
+  /** Attempt to purge entries from the stores that are no longer needed. */
+  // def XpurgeCandidateForMCStore(views: ViewSet) = {
+  //   // Purge from candidateForMCStore
+  //   var shardIterator = candidateForMCStoreShardIterator.get
+  //   while(shardIterator != null){
+  //     while(shardIterator.hasNext){
+  //       val (key,mis) = shardIterator.next(); val misIter = mis.iterator
+  //       val newMis = mkMissingInfoSet; var changed = false
+  //       while(misIter.hasNext){
+  //         val mi = misIter.next()
+  //         if(!mi.done && !mi.getMcDone && !mi.isNewViewFound(views) &&
+  //             (!MISFlag || !MissingInfoStore.removeIfProperSubset(mi)) )
+  //           newMis += mi
+  //         else{ Profiler.count("candidateForMCStore.purge"); changed = true }
+  //       } // end of iteration over misIter
+  //       if(changed){
+  //         if(newMis.nonEmpty) candidateForMCStore.replace(key, newMis)
+  //         else candidateForMCStore.remove(key)
+  //       }
+  //     } // end of iteration over shardIterator
+  //     shardIterator = candidateForMCStoreShardIterator.get
+  //   } // end of outer iteration
+  // }
+
+// IMPROVE: use `foreach` over the shardIterator below
 
   /** Purge from mcNotDoneStore. */
   def purgeMCNotDone(views: ViewSet) = {

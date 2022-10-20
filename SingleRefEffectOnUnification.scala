@@ -281,11 +281,10 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     val extensions = 
       remappingExtender.makeExtensions(unifs, resultRelevantParams, rdMap, true)
     // Note: recycles or returns rdMap
-    for((map1, candidates /*rrParams, doneB*/) <- extensions){
-      //assert(rrParams == resultRelevantParams)
-// IMPROVE
+    for((map1, candidates) <- extensions){
+      // IMPROVE
       if(debugging) assert(Remapper.isInjective(map1))
-      result += ((map1, candidates, /*rrParams, doneB,*/ unifs, reducedMapInfo))
+      result += ((map1, candidates,  unifs, reducedMapInfo))
     }
   }
 
@@ -426,6 +425,8 @@ object SingleRefEffectOnUnification{
 
   import  RemappingExtender.CandidatesMap
 
+  import CompressedCandidatesMap.CompressedCandidatesMap
+
   /** The part of the result relating to primary induced transitions.  Each
     * tuple (map, resultRelevantParams, doneB, unifs, reducedMap) indicates
     * the remapping of cv.cpts by map, with resultRelevantParams and doneB as
@@ -433,8 +434,8 @@ object SingleRefEffectOnUnification{
     * reducedMap is the reduced version of map. */
 // IMPROVE: map isn't used, other than being recycled
   type InducedInfo = 
-    ArrayBuffer[(RemappingMap, CandidatesMap, UnificationList, ReducedMap)]
-//    ArrayBuffer[(RemappingMap, BitMap, List[Linkage], UnificationList, ReducedMap)]
+    ArrayBuffer[(RemappingMap, CompressedCandidatesMap, UnificationList, ReducedMap)]
+    //ArrayBuffer[(RemappingMap, CandidatesMap, UnificationList, ReducedMap)]
 
   /** The part of the result corresponding to secondary induced transitions.
     * Each tuple (map, resultRelevantParams, doneB, unifs, i) represents a
@@ -442,7 +443,7 @@ object SingleRefEffectOnUnification{
     * RemappingExtender, and with unifications unifs, and that the ith
     * component of the transition gains a reference to cv.principal. */
   type SecondaryInducedInfo = 
-    ArrayBuffer[(RemappingMap, CandidatesMap, UnificationList, Int)]
+    ArrayBuffer[(RemappingMap, CompressedCandidatesMap, UnificationList, Int)]
 
   /** Does otherArgs represent the empty set? */
   @inline private def isEmpty(otherArgs: BitMap) = {

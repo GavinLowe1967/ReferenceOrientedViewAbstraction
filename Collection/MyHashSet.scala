@@ -228,6 +228,13 @@ class OpenHashSet[A <: AnyRef]( //[A: scala.reflect.ClassTag](
 
   def nonEmpty = count > 0
 
+  /** Return this filtered by p. */
+  def filter(p: A => Boolean): OpenHashSet[A] = {
+    val iter = iterator; val newSet = new OpenHashSet[A]
+    while(iter.hasNext){ val x = iter.next(); if(p(x)) newSet += x }
+    newSet
+  }
+
   def clear = {
     keys = new Array[A](initSize); hashes = new Array[Int](initSize); count = 0; 
     n = initSize; mask = n-1; threshold = initSize * ThresholdRatio

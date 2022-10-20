@@ -33,6 +33,7 @@ class NewEffectOn(
   import ServersReducedMap.ReducedMap 
   import Unification.UnificationList //  = List[(Int,Int)]
   import RemappingExtender.{CandidatesMap,allCompletions}
+  import CompressedCandidatesMap.CompressedCandidatesMap
   import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo, commonMissingRefs}
   import SingleRefEffectOn.{getCrossRefs}
   import InducedTransitionInfo.newMissingCrossRefs
@@ -104,21 +105,21 @@ class NewEffectOn(
   @inline private 
   def processInducedInfo(map: RemappingMap, unifs: UnificationList,
     reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
-    newComponentsList: List[Array[State]], candidates: CandidatesMap) 
+    newComponentsList: List[Array[State]], candidates: CompressedCandidatesMap) 
      : Unit =
    if(lazyNewEffectOnStore)
      processInducedInfoLazy(map, unifs, reducedMap, isPrimary, crossRefs,
        newComponentsList, candidates)
    else 
      processInducedInfoOld(map, unifs, reducedMap, isPrimary,
-       newComponentsList, candidates)
+       newComponentsList)
 
   /** Process induced information in the case of !lazyNewEffectOnStore.
     * Parameters are as for processInducedInfo. */
   @inline protected 
   def processInducedInfoOld(map: RemappingMap, unifs: UnificationList,
     reducedMap: ReducedMap, isPrimary: Boolean, 
-    newComponentsList: List[Array[State]], candidates: CandidatesMap)
+    newComponentsList: List[Array[State]])
       : Unit = {
     require(singleRef && useNewEffectOnStore && !lazyNewEffectOnStore)
     for(newCpts <- newComponentsList){
@@ -146,7 +147,6 @@ class NewEffectOn(
           // Add a MissingCrossReferences to the store
           val missingCrossRefs = new MissingCrossReferences(
             inducedTrans, missing1, null, null, commonMissingPids)
-          //  inducedTrans, missing1, map, candidates, commonMissingPids)
           newEffectOnStore.add(missingCrossRefs)
           if(isPrimary && unifs.isEmpty && commonMissingPids.isEmpty)
             cv.addConditionBInduced(post.servers, reducedMap, crossRefs1)
@@ -162,7 +162,7 @@ class NewEffectOn(
   @inline private def processInducedInfoLazy(
     map: RemappingMap, unifs: UnificationList,
     reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
-    newComponentsList: List[Array[State]], candidates: CandidatesMap)
+    newComponentsList: List[Array[State]], candidates: CompressedCandidatesMap)
       : Unit = {
     require(singleRef && useNewEffectOnStore && lazyNewEffectOnStore)
     // The cross reference views required for condition (b) implied by map
@@ -172,8 +172,14 @@ class NewEffectOn(
     for(newCpts <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newCpts)
       if(!views.contains(nv)){
-        if(missing.isEmpty){ // condition (b) satisfied            
-          for(map1 <- RemappingExtender.allCompletions(map,candidates,cv,trans)){
+        if(missing.isEmpty){ // condition (b) satisfied      
+// IMPROVE: calculate allCompletions more directly
+          val candidates1 = 
+            if(candidates == null) null
+            else candidates.map(_.map(CompressedCandidatesMap.toList))
+          val allComps =
+            RemappingExtender.allCompletions(map,candidates1,cv,trans)
+          for(map1 <- allComps){
             val cpts1 = Remapper.applyRemapping(map1, cv.components) 
             val inducedTrans = new InducedTransitionInfo(
               nv.asReducedComponentView, trans, cpts1, cv, newCpts)
@@ -276,6 +282,26 @@ object NewEffectOn{
       SingleRefEffectOn.tryAddView(nv, nextNewViews)
     }
   }
+
+  /** Is it time for another purge? */
+  private var doPurge = false
+
+  /** If it's time for the next purge, then set doPurge and prepare for it.
+    * Called at the start of each ply by worker 0. */
+  def prepareForPurge = {
+    doPurge = SingleRefEffectOn.testPurge
+    if(doPurge){  
+      newEffectOnStore.prepareForPurge; MissingCommon.prepareForPurge
+    }
+  }
+
+  /** Purge from the store.  Done at the end of each ply. */
+  def purge = if(doPurge){
+    if(ply%4 == 0) newEffectOnStore.purgeMissingCrossRefStore(views)
+    else if(ply%4 == 3) MissingCommon.purgeMCs()
+  }
+// IMPROVE: and other parts of newEffectOnStore
+
 
   def report = { require(guard); newEffectOnStore.report }
 
