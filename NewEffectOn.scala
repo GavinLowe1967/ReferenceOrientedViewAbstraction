@@ -146,7 +146,7 @@ class NewEffectOn(
         else{
           // Add a MissingCrossReferences to the store
           val missingCrossRefs = new MissingCrossReferences(
-            inducedTrans, missing1, null, null, commonMissingPids)
+            inducedTrans, missing1, /*null,*/ null, commonMissingPids)
           newEffectOnStore.add(missingCrossRefs)
           if(isPrimary && unifs.isEmpty && commonMissingPids.isEmpty)
             cv.addConditionBInduced(post.servers, reducedMap, crossRefs1)
@@ -189,7 +189,7 @@ class NewEffectOn(
             if(newMissingCRs.nonEmpty){
               // Create new MissingCrossReferences object
               val newMCR = new MissingCrossReferences(
-                inducedTrans, newMissingCRs, null /*map1*/, null, null)
+                inducedTrans, newMissingCRs, /*null map1*/ null, null)
               newEffectOnStore.add(newMCR)
             }
             else{ // consider condition (c)
@@ -214,11 +214,11 @@ class NewEffectOn(
             trans, cpts, cv, newCpts)
           // The map to store in the MissingCrossReferences.  Note: map is
           // cloned to prevent sharing, as it's sometimes mutated.
-          val map1 = if(candidates == null) null else Remapper.cloneMap(map)
+          //val map1 = if(candidates == null) null else Remapper.cloneMap(map)
           // Add a MissingCrossReferences to the store.  Note: map is cloned to
           // prevent sharing, as it's sometimes mutated.
           val missingCrossRefs = new MissingCrossReferences(
-            inducedTrans, missing, map1, candidates, null)
+            inducedTrans, missing,/* map1,*/ candidates, null)
           newEffectOnStore.add(missingCrossRefs)
           if(isPrimary && unifs.isEmpty &&
               !RemappingExtender.anyLinkageC(map, cv, pre))

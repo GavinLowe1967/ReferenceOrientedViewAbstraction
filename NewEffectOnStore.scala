@@ -156,18 +156,21 @@ class NewEffectOnStore{
       if(mcw != null) add(mcw)
       else maybeAdd(inducedTrans, result) // can fire transition
     }
-    else if(mcr.map != null) for(map <- mcr.allCompletions){
-      // Instantiate oldCpts in inducedTrans
-      val cpts = Remapper.applyRemapping(map, inducedTrans.cv.components)
-      val newInducedTrans = inducedTrans.extend(cpts)
-      // New missing cross references created by extending
-      val newMissingCRs = newMissingCrossRefs(inducedTrans, mcr.map, cpts, views)
-      if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
-        val newMCR = new MissingCrossReferences(
-          newInducedTrans, newMissingCRs, null /*map*/, null, null)
-        add(newMCR)
+    else if(mcr.candidates /*map*/ != null){
+      val map0 = CompressedCandidatesMap.extractMap(mcr.candidates)
+      for(map <- mcr.allCompletions){
+        // Instantiate oldCpts in inducedTrans
+        val cpts = Remapper.applyRemapping(map, inducedTrans.cv.components)
+        val newInducedTrans = inducedTrans.extend(cpts)
+        // New missing cross references created by extending
+        val newMissingCRs = newMissingCrossRefs(inducedTrans, map0 /* mcr.map*/, cpts, views)
+        if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
+          val newMCR = new MissingCrossReferences(
+            newInducedTrans, newMissingCRs, /*null map,*/ null, null)
+          add(newMCR)
+        }
+        else checkConditionC(newInducedTrans, views, result)
       }
-      else checkConditionC(newInducedTrans, views, result)
     }
     else{ 
       // Previously we considered a total map, so have considered all cross

@@ -630,27 +630,33 @@ object RemappingExtender{
     require(useNewEffectOnStore)
     if(candidates != null){
 // IMPROVE
-      assert(anyLinkageC(rdMap, cv, trans.pre))
-      val map1 = CompressedCandidatesMap.extractMap(candidates)
-      for(t <- 0 until numTypes; i <- 0 until rdMap(t).length)
-        assert(rdMap(t)(i) == map1(t)(i), 
-          "rdMap = "+Remapper.show(rdMap)+"\nmap1 = "+Remapper.show(map1)+
-            "candidates = "+
-            candidates.map(_.mkString("(", ",", ")")).mkString("; "))
-// FIXME: use map1 instead of rdMap
-      // IMPROVE: maybe work directly with candidates?
+      // assert(anyLinkageC(rdMap, cv, trans.pre))
+      val map1 = 
+        if(rdMap == null) CompressedCandidatesMap.extractMap(candidates) else rdMap
+      // for(t <- 0 until numTypes; i <- 0 until rdMap(t).length)
+      //   assert(rdMap(t)(i) == map1(t)(i), 
+      //     "rdMap = "+Remapper.show(rdMap)+"\nmap1 = "+Remapper.show(map1)+
+      //       "candidates = "+
+      //       candidates.map(_.mkString("(", ",", ")")).mkString("; "))
+// IMPROVE: maybe work directly with candidates?
       val candidates1 = candidates.map(_.map(CompressedCandidatesMap.toList))
       allCompletions1(map1 /*rdMap*/, candidates1, trans)
     }
     else{
+      // This case arises from NewEffectOn.processInducedInfoLazy, when
+      // conditions (b) and (c) are already satisfied, and we still have the
+      // map to hand.
+      assert(rdMap != null)
 // IMPROVE
       assert(!anyLinkageC(rdMap, cv, trans.pre))
+// IMPROVE: is cloning necessary?
       val map1 = Remapper.cloneMap(rdMap)
       val nextArgMap = trans.getNextArgMap
       Remapper.mapUndefinedToFresh(map1, nextArgMap)
       ArrayBuffer(map1)
     }
   }
+// IMPROVE: split to two functions? 
 
   /** All completions of rdMap, mapping undefined parameters to an element of
     * the corresponding entry in candidates.  rdMap is mutated, but all

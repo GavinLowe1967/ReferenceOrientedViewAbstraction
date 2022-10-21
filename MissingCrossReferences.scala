@@ -145,7 +145,8 @@ import RemapperP.Remapper
 class MissingCrossReferences(
   val inducedTrans: InducedTransitionInfo,
   missingViews: Array[ReducedComponentView],
-  val map: RemappingMap, val candidates: CompressedCandidatesMap,
+  // val map: RemappingMap, 
+  val candidates: CompressedCandidatesMap,
   val commonMissingPids: Array[ProcessIdentity]
 ){
   assert(missingViews.nonEmpty && missingViews.forall(_ != null)) 
@@ -158,19 +159,20 @@ class MissingCrossReferences(
   // Certain fields are set null to save memory
   if(lazyNewEffectOnStore){
     assert(commonMissingPids == null)
-    if(map != null){
-      assert(inducedTrans.cpts == null && candidates != null); checkMap
-    }
-    else assert(inducedTrans.cpts != null && candidates == null)
+    assert(inducedTrans.cpts == null ^ candidates == null)
+    // if(map != null){
+    //   assert(inducedTrans.cpts == null && candidates != null); checkMap
+    // }
+    // else assert(inducedTrans.cpts != null && candidates == null)
   }
-  else assert(inducedTrans.cpts != null && map == null && candidates == null)
-  Profiler.count("MissingCrossReferences:"+(map == null))
+  else assert(inducedTrans.cpts != null /*&& map == null*/ && candidates == null)
+  Profiler.count("MissingCrossReferences:") // +(map == null)
 
   /** Check that map is defined over cv. */
-  def checkMap = 
-    for(t <- 0 until numTypes)
-      require(map(t).length == inducedTrans.cv.getParamsBound(t),
-        "\n map = "+Remapper.show(map)+"\ncv = "+inducedTrans.cv)
+  // def checkMap = 
+  //   for(t <- 0 until numTypes)
+  //     require(map(t).length == inducedTrans.cv.getParamsBound(t),
+  //       "\n map = "+Remapper.show(map)+"\ncv = "+inducedTrans.cv)
 
 
   @inline def isNewViewFound(views: ViewSet) = inducedTrans.isNewViewFound(views)
@@ -207,10 +209,12 @@ class MissingCrossReferences(
   /** All total maps associated with this. */
   def allCompletions: ArrayBuffer[RemappingMap] = synchronized{
     if(candidates == null){
+      ??? 
+// FIXME: can't happen? 
       // map should be total in this case
-      for(t <- 0 until numTypes; i <- 0 until map(t).length) 
-        assert(map(t)(i) >= 0)
-      ArrayBuffer(map)
+      // for(t <- 0 until numTypes; i <- 0 until map(t).length) 
+      //   assert(map(t)(i) >= 0)
+      // ArrayBuffer(map)
     }
     // val map1 = RemapperP.Remapper.cloneMap(map)
     // I don't think cloning is necessary.  map is private to this, and
@@ -219,7 +223,7 @@ class MissingCrossReferences(
 // IMPROVE: calculate allCompletions more directly
       //val candidates1 = candidates.map(_.map(CompressedCandidatesMap.toList))
       RemappingExtender.allCompletions(
-        map, candidates, inducedTrans.cv, inducedTrans.trans)
+        /* map*/ null, candidates, inducedTrans.cv, inducedTrans.trans)
     }
   }
 
