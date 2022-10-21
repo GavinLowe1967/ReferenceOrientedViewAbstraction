@@ -309,12 +309,13 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
         candidates(t)(x) = candidates(t)(x).filter(y => !preC.hasParam(t,y))
       }
     }
-// IMPROVE
-    val cCandidates = 
-      getCompressedCandidatesMap(resultRelevantParams, rdMap, doneB)
-    for(t <- 0 until numTypes; i <- 0 until candidates(t).length)
-      assert(CompressedCandidatesMap.toList(cCandidates(t)(i)) ==
-        candidates(t)(i))
+    if(false){ // IMPROVE
+      val cCandidates =
+        getCompressedCandidatesMap(resultRelevantParams, rdMap, doneB)
+      for(t <- 0 until numTypes; i <- 0 until candidates(t).length)
+        assert(CompressedCandidatesMap.toList(cCandidates(t)(i)) ==
+          candidates(t)(i))
+    }
     candidates
   }
 
@@ -338,16 +339,18 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       otherArgs(t) = oArgs; nonIds(t) = nIds
     }
     val candidates = Array.tabulate(numTypes)(t => 
-      Array.tabulate(rdMap(t).length)(p => 
-        if(rdMap(t)(p) < 0) 
+      Array.tabulate(rdMap(t).length){ p =>
+        val y = rdMap(t)(p)
+        if(y < 0) 
           if(cptIds(t)(p)) nonIds(t) else otherArgs(t)
-        else Empty
-      ))
+        else fixed(y) // All extensions use y here //  Empty
+      })
     // For each (i,j) in doneB, for each param (t,x) of cv.cpts(i),
     // remove all parameters of preCts(j) from the list candidates(x). 
     for((i,j) <- doneB){
       val preC = preCpts(j); val preCIds = preC.ids
-      for((t,x) <- cpts(i).processIdentities; if !isDistinguished(x)){
+      for((t,x) <- cpts(i).processIdentities; 
+          if !isDistinguished(x) && rdMap(t)(x) < 0){
         // Remove params of preC of type t from candidate(t)(x) 
         for(k <- 0 until preCIds.length; if preC.typeMap(k) == t){
           val y = preCIds(k)
@@ -359,17 +362,15 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     candidates
   }
 
-  @inline private def maybeAdd(
-    extensions: ExtensionsInfo, map: RemappingMap, candidatesMap: CompressedCandidatesMap)
+  @inline private def maybeAdd(extensions: ExtensionsInfo,
+    map: RemappingMap, candidatesMap: CompressedCandidatesMap)
       : Unit = {
     /* Does extensions(i) equal (map, candidatesMap)? */
-/*
-    def matches(i: Int) = {
-      val (map1, cands1) = extensions(i)
-      Remapper.equivalent(map, map1) &&
-        RemappingExtender.equalCandidatesMaps(candidatesMap, cands1)
-    }
- */
+    // def matches(i: Int) = {
+    //   val (map1, cands1) = extensions(i)
+    //   Remapper.equivalent(map, map1) &&
+    //     RemappingExtender.equalCandidatesMaps(candidatesMap, cands1)
+    // }
     // Search for repetitions ... doesn't seem to happen
     // var ix = 0; while(ix < extensions.length && !matches(ix)) ix += 1 
     // if(ix == extensions.length) 
@@ -393,7 +394,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rdMap: RemappingMap, isPrimary: Boolean)
       : ExtensionsInfo = {
     val extensions = new ExtensionsInfo
-    if(lazyNewEffectOnStore){ // useNewEffectOnStore
+    if(lazyNewEffectOnStore){ 
       makeExtensionsNew(
         unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
       extensions
@@ -463,11 +464,13 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     val newLinkage = findLinkage(unifs, rdMap, doneB)
     if(newLinkage == null){      // Add to extensions if not already there. 
       if(RemappingExtender.anyLinkageC(rdMap, cv, trans.pre)){
-        val candidates = getCompressedCandidatesMap(resultRelevantParams, rdMap, doneB)
+        val candidates = 
+          getCompressedCandidatesMap(resultRelevantParams, rdMap, doneB)
+          // Following wrong, as use null to indicate noLinkageC
           // if(isTotal(rdMap)) null 
           // else getCandidatesMap(resultRelevantParams, rdMap, doneB)
-// IMPROVE: following just to get count
-        isTotal(rdMap)
+          // IMPROVE: following just to get count
+          // isTotal(rdMap)
         maybeAdd(extensions, rdMap, candidates)
       }
       else{
@@ -488,19 +491,6 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       recycle(rdMap)
     }
   }
-
-  /** Is map total? */
-  @inline private def isTotal(map: RemappingMap): Boolean = {
-    var t = 0; var total = true
-    while(t < numTypes && total){
-      var i = 0; val len = map(t).length
-      while(i < len && map(t)(i) >= 0) i += 1
-      total = i == len; t += 1
-    }
-    Profiler.count(s"isTotal:$total")
-    total
-  }
-
 
   /** Find all consistent extensions of map over the parameters of c, mapping
     * each parameter to an element of otherArgs, or not.  Each such map is
@@ -584,12 +574,13 @@ object RemappingExtender{
     }
   }
 
+  import CompressedCandidatesMap.CompressedCandidatesMap
+
   /** The result returned by makeExtensions.  Each element is a pair (map,
     * candidates), where candidates gives all ways in which undefined
     * parameters can be mapped. */
   // type ExtensionsInfo = ArrayBuffer[(RemappingMap, CandidatesMap)]
-  type ExtensionsInfo = 
-    ArrayBuffer[(RemappingMap, CompressedCandidatesMap.CompressedCandidatesMap)]
+  type ExtensionsInfo = ArrayBuffer[(RemappingMap, CompressedCandidatesMap)]
 
   /** Extend rdMap, mapping each parameter (t,p) to each element of
     * candidates(t)(p), or not.  Each map is fresh.  rdMap is mutated, but all
@@ -610,8 +601,8 @@ object RemappingExtender{
       if(t == numTypes) result += Remapper.cloneMap(rdMap)
       else if(i == rdMap(t).length) rec(t+1,0)
       else{
-        if(candidates(t)(i).nonEmpty){
-          assert(rdMap(t)(i) < 0)
+        if(rdMap(t)(i) < 0){ // if(candidates(t)(i).nonEmpty){
+          //assert(rdMap(t)(i) < 0)
           for(x <- candidates(t)(i); if !used(t)(x)){
             used(t)(x) = true             // temporary update (*)
             rdMap(t)(i) = x; rec(t,i+1)
@@ -632,16 +623,24 @@ object RemappingExtender{
     * the corresponding entry in candidates.  Otherwise, the effect of mapping
     * all undefined entries in rdMap to a fresh value.  rdMap is mutated, but
     * all changes are backtracked. */
-  def allCompletions(rdMap: RemappingMap, candidates: CandidatesMap, 
+  def allCompletions(rdMap: RemappingMap, candidates: CompressedCandidatesMap, 
     cv: ComponentView, trans: Transition)
       : ArrayBuffer[RemappingMap] = {
 // FIXME: we should need lazyNewEffectOnStore
-    require(useNewEffectOnStore) // require(lazyNewEffectOnStore)
+    require(useNewEffectOnStore)
     if(candidates != null){
 // IMPROVE
       assert(anyLinkageC(rdMap, cv, trans.pre))
-      // if(anyLinkageC(rdMap, cv, trans.pre))
-      allCompletions1(rdMap, candidates, trans)
+      val map1 = CompressedCandidatesMap.extractMap(candidates)
+      for(t <- 0 until numTypes; i <- 0 until rdMap(t).length)
+        assert(rdMap(t)(i) == map1(t)(i), 
+          "rdMap = "+Remapper.show(rdMap)+"\nmap1 = "+Remapper.show(map1)+
+            "candidates = "+
+            candidates.map(_.mkString("(", ",", ")")).mkString("; "))
+// FIXME: use map1 instead of rdMap
+      // IMPROVE: maybe work directly with candidates?
+      val candidates1 = candidates.map(_.map(CompressedCandidatesMap.toList))
+      allCompletions1(map1 /*rdMap*/, candidates1, trans)
     }
     else{
 // IMPROVE

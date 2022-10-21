@@ -144,6 +144,18 @@ object Remapper{
     result
   }
 
+  /** Is map total? */
+  @inline private def isTotal(map: RemappingMap): Boolean = {
+    var t = 0; var total = true
+    while(t < numTypes && total){
+      var i = 0; val len = map(t).length
+      while(i < len && map(t)(i) >= 0) i += 1
+      total = i == len; t += 1
+    }
+    Profiler.count(s"isTotal:$total")
+    total
+  }
+
   /** An array holding the Parameters renamed to a new value, and an array
     * holding what they get remapped to (in the same order). */
   def getFromsTos(map: RemappingMap): (Array[Parameter], Array[Parameter]) = {

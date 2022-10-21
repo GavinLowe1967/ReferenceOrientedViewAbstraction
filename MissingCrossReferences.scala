@@ -58,7 +58,6 @@ class InducedTransitionInfo(
   def commonMissingRefs =
     SingleRefEffectOnUnification.commonMissingRefs(preCpts, oldCpts).toArray
 
-
   override def toString = {
     s"$trans\n operating on $cv\n induces $cv \n== "+
       s"(${trans.pre.servers}, ${StateArray.show(oldCpts)})\n -> "+
@@ -218,9 +217,9 @@ class MissingCrossReferences(
     // protected by the synchronized block
     else{
 // IMPROVE: calculate allCompletions more directly
-      val candidates1 = candidates.map(_.map(CompressedCandidatesMap.toList))
+      //val candidates1 = candidates.map(_.map(CompressedCandidatesMap.toList))
       RemappingExtender.allCompletions(
-        map, candidates1, inducedTrans.cv, inducedTrans.trans)
+        map, candidates, inducedTrans.cv, inducedTrans.trans)
     }
   }
 

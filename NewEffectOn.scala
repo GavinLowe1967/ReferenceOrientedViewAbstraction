@@ -174,11 +174,11 @@ class NewEffectOn(
       if(!views.contains(nv)){
         if(missing.isEmpty){ // condition (b) satisfied      
 // IMPROVE: calculate allCompletions more directly
-          val candidates1 = 
-            if(candidates == null) null
-            else candidates.map(_.map(CompressedCandidatesMap.toList))
+          // val candidates1 = 
+          //   if(candidates == null) null
+          //   else candidates.map(_.map(CompressedCandidatesMap.toList))
           val allComps =
-            RemappingExtender.allCompletions(map,candidates1,cv,trans)
+            RemappingExtender.allCompletions(map, candidates, cv, trans)
           for(map1 <- allComps){
             val cpts1 = Remapper.applyRemapping(map1, cv.components) 
             val inducedTrans = new InducedTransitionInfo(
