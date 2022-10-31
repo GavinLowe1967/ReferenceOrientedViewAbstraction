@@ -389,7 +389,7 @@ DelSnip(me, v, pred, curr, succ) =
     if succ==Null then 
       decoupled.me.curr?after?v1?sig!DecoupleDelFail.v -> Thread(me)
     else 
-      setPrev.me.succ.curr -> 
+      setPrev.me.succ.pred -> -- curr -> 
       decoupled.me.curr?after?v1?sig!NoDecoupleDelFailSignal -> 
       DelSearch(me, v, pred, succ) 
   )

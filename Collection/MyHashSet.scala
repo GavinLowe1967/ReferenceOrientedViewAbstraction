@@ -127,8 +127,6 @@ class BasicHashSet[A: scala.reflect.ClassTag](initSize: Int = 16)
 
 //==================================================================
 
-
-
 /** An implementation of MyHashSet using open addressing that also stores the
   * hashes.  Not thread safe. 
   * @param initSize the initial size for the table.  Must be a power of 2.
@@ -184,6 +182,8 @@ class OpenHashSet[A <: AnyRef]( //[A: scala.reflect.ClassTag](
     }
     else false
   }
+
+  def remove(x: A): Boolean = ???
 
   def += (x: A) = add(x)
 

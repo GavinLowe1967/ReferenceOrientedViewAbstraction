@@ -1,8 +1,6 @@
 Lock-based stack
 ================
 
-
-
 lockBasedStack.csp: correct version with three-way synchronisation.  274 -> 302
 abstractions.
 
@@ -60,6 +58,30 @@ lazySetNoJoined.csp: the standard version, without joined events.
 
 lazySetOmit.csp: same as previous, but omitting views based on prev and locker
 fields.
+
+
+Lock-Free Set
+=============
+
+lockFreeSet.csp: Basic model.  Doesn't record prev references.  Finds error.
+
+lockFreeSetPrevRefs.csp: Nodes have prev references.  Finds false error on
+step 38 caused by threads helping to decouple marked nodes.
+
+lockFreeSetNoHelping.csp: Has such helping disabled.  Succeeds!  11,289,521
+abstractions, 154 mins.
+
+*** I think lockFreeSet, lockFreeSetNoHelping have a bug: DelSnip1 does a
+    setPrev with the wrong value.
+
+lockFreeSet2: tries to ensure states doing a helping decouple store the value
+of the succ node.  Finds false error during STEP 39, #abstractions =
+12,921,120.
+
+lockFreeSet3: does similar for states decoupling a node they marked for
+deletion.  Reaches at least STEP 41, #abstractions = 12,130,519.
+
+
 
 
 Test files

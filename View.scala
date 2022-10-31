@@ -52,13 +52,15 @@ class ReducedComponentView(
 
   override def hashCode = mkHashCode
 
- /** Ordering on ReducedComponentViews.  Return a value x s.t.: x < 0 if this <
+  /** Ordering on ReducedComponentViews.  Return a value x s.t.: x < 0 if this <
     * that; x == 0 when this == that; x > 0 when this > that. */
-  def compare(that: ReducedComponentView) = {
+  @inline def compare(that: ReducedComponentView) = {
     val serverComp = servers.compare(that.servers)
     if(serverComp != 0) serverComp
     else StateArray.compare(components, that.components)
   }
+
+  def < (that: ReducedComponentView) = compare(that) < 0
 
   override def toString = s"$servers || "+components.mkString("[", " || ", "]")
 

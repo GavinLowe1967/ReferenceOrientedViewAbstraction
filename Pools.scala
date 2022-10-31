@@ -68,12 +68,15 @@ object Pools{
   /** Get a remapping row of size `size`.  Note: the initial state of the row is
     * undefined: client code is responsible for initialisation. */
   def getRemappingRow(size: Int): Row = { 
-    val me = ThreadID.get // ; assert(me < numWorkers)
+    val me = ThreadID.get 
     Profiler.count(s"Pools.getRemappingRow")
     val pIndex = indexFor(me,size); val index = rowPoolSize(pIndex)-1
     if(index >= 0){ rowPoolSize(pIndex) = index; rowPool(pIndex)(index) }
-    else new Array[Int](size)
+    else mkArray(size) // new Array[Int](size)
+// IMPROVE: above non-inlining for profiling purposes
   }
+
+  private def mkArray(size: Int) = new Array[Int](size)
 
   /** Return the rows of map to the row pool. */
   def returnRemappingRows(map: RemappingMap): Unit = {

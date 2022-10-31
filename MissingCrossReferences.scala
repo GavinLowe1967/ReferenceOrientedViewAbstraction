@@ -8,7 +8,7 @@ import ox.gavin.profiling.Profiler
   * trans = pre -e-> post inducing
   * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView.*/
 class InducedTransitionInfo(
-  newView: ReducedComponentView, val trans: Transition,
+  val newView: ReducedComponentView, val trans: Transition,
   oldCpts: Array[State], val cv: ComponentView, newCpts: Array[State]
 ){
   require(trans.pre.components.length <= 3 && cv.components.length <= 2)
@@ -135,50 +135,59 @@ import RemappingExtender.CandidatesMap
 import CompressedCandidatesMap.CompressedCandidatesMap
 import RemapperP.Remapper
 
-/** Information about missing cross references.  missingViews contains
+/** Information about missing cross references.  `missingViews` contains
   * component views that are necessary to satisfy condition (b) of the induced
   * transition corresponding to inducedTrans: all must be added to the
-  * ViewSet. commonMissingPids is the common missing identities for condition
-  * (c).  The view in inducedTrans was produced by renaming via map.
-  * candidates stores values that undefined values in map might be mapped to;
-  * but might be null if map is total.*/
+  * ViewSet. 
+  * 
+  * With lazyNewEffectOn, this corresponds to a set of remappings captured by
+  * `candidates`.  But `candidates` might be null if there are no common missing
+  * references, in which case `inducedTrans.cpts` is non-null.  Also
+  * `commonMissingPids = null` in this case.
+  * 
+  * With !lazyNewEffectOn, `commonMissingPids` is the common missing
+  * identities for condition (c).  In this case, candidates = null and
+  * `commonMissingPids != null`. */
 class MissingCrossReferences(
   val inducedTrans: InducedTransitionInfo,
-  missingViews: Array[ReducedComponentView],
-  // val map: RemappingMap, 
+  private val missingViews: Array[ReducedComponentView],
   val candidates: CompressedCandidatesMap,
   val commonMissingPids: Array[ProcessIdentity]
 ){
   assert(missingViews.nonEmpty && missingViews.forall(_ != null)) 
   // Check sorted
   for(i <- 0 until missingViews.length-1) 
-    assert(missingViews(i).compare(missingViews(i+1)) < 0)
+    assert(missingViews(i) < missingViews(i+1))
   // At most, a reference from each component of pre to each component of cv,
   // and vice versa: 3*2*2:
   assert(missingViews.length <= 12, "missingViews.length = "+missingViews.length)
   // Certain fields are set null to save memory
   if(lazyNewEffectOnStore){
     assert(commonMissingPids == null)
+    // We set cpts xor candidates
     assert(inducedTrans.cpts == null ^ candidates == null)
-    // if(map != null){
-    //   assert(inducedTrans.cpts == null && candidates != null); checkMap
-    // }
-    // else assert(inducedTrans.cpts != null && candidates == null)
+    if(candidates != null) 
+      assert(candidates.length == inducedTrans.cv.getParamsBound.sum,
+        "candidates = "+candidates.mkString(",")+"\nsizes = "+
+          inducedTrans.cv.getParamsBound.mkString(","))
   }
-  else assert(inducedTrans.cpts != null /*&& map == null*/ && candidates == null)
-  Profiler.count("MissingCrossReferences:") // +(map == null)
-
-  /** Check that map is defined over cv. */
-  // def checkMap = 
-  //   for(t <- 0 until numTypes)
-  //     require(map(t).length == inducedTrans.cv.getParamsBound(t),
-  //       "\n map = "+Remapper.show(map)+"\ncv = "+inducedTrans.cv)
-
+  else assert(inducedTrans.cpts != null  && candidates == null)
+  Profiler.count("MissingCrossReferences:"+(candidates == null)) 
 
   @inline def isNewViewFound(views: ViewSet) = inducedTrans.isNewViewFound(views)
 
+  /** Has this been superseded by another MissingCrossReferences with the same
+    * newView and a subset of the missingViews? */
+  private var superseded = false
+
+  def setSuperseded = superseded = true
+
+  def isSuperseded = superseded
+
   /** Index of the next element of missingViews needed. */
-  private var mvIndex = 0
+  private var mvIndex: Short = 0
+
+  @inline private def incMvIndex = mvIndex = (mvIndex+1).asInstanceOf[Short]
 
   /** The first missing view, against which this should be registered. */
   def missingHead = synchronized{ missingViews(mvIndex) }
@@ -199,32 +208,18 @@ class MissingCrossReferences(
     require(mvIndex < missingViews.length && missingViews(mvIndex) == cv,
       s"mvIndex = $mvIndex, cv = $cv, missingViews = \n"+
         missingViews.mkString("\n"))
-    mvIndex += 1
+    incMvIndex // mvIndex += 1
     while(mvIndex < missingViews.length && 
       (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))
     )
-      mvIndex += 1
+      incMvIndex // mvIndex += 1
   }
 
   /** All total maps associated with this. */
   def allCompletions: ArrayBuffer[RemappingMap] = synchronized{
-    if(candidates == null){
-      ??? 
-// FIXME: can't happen? 
-      // map should be total in this case
-      // for(t <- 0 until numTypes; i <- 0 until map(t).length) 
-      //   assert(map(t)(i) >= 0)
-      // ArrayBuffer(map)
-    }
-    // val map1 = RemapperP.Remapper.cloneMap(map)
-    // I don't think cloning is necessary.  map is private to this, and
-    // protected by the synchronized block
-    else{
-// IMPROVE: calculate allCompletions more directly
-      //val candidates1 = candidates.map(_.map(CompressedCandidatesMap.toList))
-      RemappingExtender.allCompletions(
-        /* map*/ null, candidates, inducedTrans.cv, inducedTrans.trans)
-    }
+    require(candidates != null)
+    RemappingExtender.allCompletions(
+      null, candidates, inducedTrans.cv, inducedTrans.trans)
   }
 
 
@@ -255,7 +250,48 @@ object MissingCrossReferences{
     missingViews.filter(_ != null)
   }
 
+  /** Result type for the compare function. */
+  type Comparison = Int
 
+  /** Possible results from compare. */
+  val Subset = 0; val Equal = 1; val Superset = 2; val Incomparable = 3
 
-
+  /** Compare the missingViews of mcr1 and mcr2.  Return Subset if those of mcr1
+    * are a subset of those for mcr2.  Similar for Equal, Superset and
+    * Incomparable. */
+// IMPROVE: pass in ViewSet, and ignore views already found
+  def compare(mcr1: MissingCrossReferences, mcr2: MissingCrossReferences)
+      : Comparison = {
+    require(mcr1.inducedTrans.newView == mcr2.inducedTrans.newView)
+    val mv1 = mcr1.missingViews; val mv2 = mcr2.missingViews
+    val len1 = mv1.length; val len2 = mv2.length
+    // Note: we use the fact that mv1, mv2 are sorted
+    var i1: Int = mcr1.mvIndex; var i2: Int = mcr2.mvIndex
+    // Inv: mv1[0..i1) == mv2[0..i2), ignoring found values
+    while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){ i1 += 1; i2 += 1 }
+    if(i1 == len1){ if(i2 == len2) Equal else Subset }
+    else if(i2 == len2) Superset
+    else if(mv1(i1) < mv2(i2)){
+      // mv1 is not a subset of mv2; test if mv2 is a subset of mv1.  Inv:
+      // mv2[0..i2) is a subset of mv1[0..i1); mv1[0..i1) < mv2[i2..len2).
+      while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
+      // Additional inv: mv1(i1) >= mv2(i2) or i1 = len1 or i2 = len2
+      while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
+        i1 += 1; i2 += 1
+        if(i2 < len2) while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
+      }
+      if(i2 == len2) Superset else Incomparable
+    }
+    else{
+      // mv2 is not a subset of mv1; test if mv1 is a subset of mv2.  Inv:
+      // mv1[0..i1) is a subset of mv2[0..i2); mv2[0..i2) < mv1[i1..len1).
+      while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
+      // Additional inv: mv2(i1) >= mv1(i1) or i1 = len1 of i2 = len2
+      while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
+        i1 += 1; i2 += 1
+        if(i1 < len1) while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
+      }
+      if(i1 == len1) Subset else Incomparable
+    }
+  }
 }

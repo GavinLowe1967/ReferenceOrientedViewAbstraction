@@ -8,12 +8,13 @@ object CompressedCandidatesMap{
   val MaxCands = 15
 
   /** The representation of the values that a particular parameter can be mapped
-    * to.  A non-negative value represents a bit map corresponding to a subset of [0..MaxCands).  A negative value x represents that the map is defined at that position, with value The representation is a bit map. */
+    * to.  A non-negative value represents a subset of [0..MaxCands) as a bit
+    * map.  A negative value x represents that the map is defined at that
+    * position, with value x with the most significant bit cleared. */
   type Candidates = Short
 
   /** The set of all values in the range [0..MaxCands). */
-  private val All: Candidates = ((1<<MaxCands)-1).asInstanceOf[Candidates] 
-  // Candidates.MaxValue
+  private val All: Candidates = ((1<<MaxCands)-1).asInstanceOf[Candidates]
 
   /** The empty set. */
   val Empty: Candidates = 0.asInstanceOf[Candidates]
@@ -68,12 +69,27 @@ object CompressedCandidatesMap{
   }
 
   /** The compressed representation of a set of RemappingMaps. */
-  type CompressedCandidatesMap = Array[Array[Candidates]]
+  type CompressedCandidatesMap = Array[Candidates]
+
+  /** An unflattened version, with separate rows corresponding to different
+    * types. */
+  type UnflattenedCandidatesMap = Array[Array[Candidates]]
 
   /** The map corresponding to candidates: for each encoding of a value x, the
     * corresponding x; otherwise undefined.  */
-  @inline def extractMap(candidates: CompressedCandidatesMap): RemappingMap = 
+  @inline def extractMap(candidates: UnflattenedCandidatesMap): RemappingMap = 
     candidates.map(_.map(cs => if(cs < 0) decodeFixed(cs) else -1))
 
+  /** Split `candidates` into separate arrays of size `sizes`. */
+  @inline def splitBy(candidates: CompressedCandidatesMap, sizes: Array[Int])
+      : UnflattenedCandidatesMap = {
+    require(candidates.length == sizes.sum)
+    val result = new Array[Array[Candidates]](sizes.length); var offset = 0
+    for(i <- 0 until sizes.length){
+      val end = offset+sizes(i); result(i) = candidates.slice(offset, end)
+      offset = end
+    }
+    result
+  }
 
 }

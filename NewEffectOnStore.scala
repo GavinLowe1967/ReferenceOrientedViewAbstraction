@@ -37,6 +37,11 @@ class NewEffectOnStore{
   private val missingCrossRefStore = 
     new Store[ReducedComponentView, MissingCrossReferences]
 
+  /** A store of MissingCrossReferneces objects for which there are no common
+    * missing references, keyed against the new views they would produce. */
+  private val byNewView = 
+    new ShardedHashMap[ReducedComponentView, ArrayBuffer[MissingCrossReferences]]
+
   /** A store of MissingCommonWrapper objects.  Each is stored against its next
     * missing view. */
   private val missingCommonStore = 
@@ -73,11 +78,79 @@ class NewEffectOnStore{
     }
   }
 
-  /** Store missingCommonRefs in the missingCommonRefStore. */
-  def add(missingCrossRefs: MissingCrossReferences): Unit = {
-    val missingHead = missingCrossRefs.missingHead 
-    addToStore(missingCrossRefStore, missingHead, missingCrossRefs)
+  /** Store missingCommonRefs in the missingCommonRefStore.  If condCSat then
+    * check that missingCrossRefs is not implied by a current value in
+    * byNewView; and if any there is implied by missingCrossRefs, then mark it
+    * as superseded.  Pre: if condCSat then condition (c) must be satisfied
+    * for missingCrossRefs. */
+  def add(missingCrossRefs: MissingCrossReferences, condCSat: Boolean): Unit = {
+    if(!condCSat || shouldStore(missingCrossRefs)){
+      val missingHead = missingCrossRefs.missingHead
+      addToStore(missingCrossRefStore, missingHead, missingCrossRefs)
+    }
   } 
+
+  /** Should mcr be stored, i.e. is it not implied by any prior
+    * MissingCrossReferences object?  Pre: this has no missing common
+    * references.  We check that no other such that would produce the same new
+    * view has a subset of the missing views.  Also any other that has a
+    * superset of mcr's missing views is marked as superseded (and removed
+    * when purging).  */
+  private def shouldStore(mcr: MissingCrossReferences): Boolean = {
+    import MissingCrossReferences.{compare,Superset,Equal,Subset}
+    val newView = mcr.inducedTrans.newView
+    var done = false; var found = false
+    // found is set to true if we find a MCR that implies mcr
+    while(!done){
+      val ab = byNewView.getOrElseUpdate(newView,
+        new ArrayBuffer[MissingCrossReferences])
+      ab.synchronized{
+        if(mapsto(byNewView, newView, ab)){ 
+          var i = 0; done = true
+          // Those MCRs not implied bymcr
+          val newAB = new ArrayBuffer[MissingCrossReferences]
+          while(i < ab.length && !found){
+            val mcr1 = ab(i); i += 1; val cmp = compare(mcr, mcr1)
+            if(cmp == Superset || cmp == Equal) found = true
+            // Test if mcr1 is superceded by mcr
+            if(cmp == Subset){ // mcr1 is superceded by mcr
+              mcr1.setSuperseded
+              Profiler.count("NewEffectOnStore.shouldStore removed old")
+            }
+            else newAB += mcr1 // retain mcr1: not superseded by mcr
+          } // end of while loop
+          if(newAB.length != ab.length){
+            if(!found) newAB += mcr
+            byNewView.replace(newView, newAB)
+          }
+          else if(!found) ab += mcr 
+          else Profiler.count("NewEffectOnStore.shouldStore false")
+        }
+        // otherwise go round the loop again
+      } // end of synchronized block
+    } // end of while loop
+    !found
+  }
+
+/*
+  /** Remove mcr from missingCrossRefStore. */
+  private def remove(mcr: MissingCrossReferences) = {
+    val missingHead = mcr.missingHead; var done = false
+    while(!done){
+      missingCrossRefStore.get(missingHead) match{
+        case Some(set) => 
+          set.synchronized{
+            if(mapsto(missingCrossRefStore, missingHead, set)){
+              set.remove(mcr); done = true 
+            }
+          }
+          // otherwise go round the loop
+        case None => // This is possible if another thread removed mcr
+          done = true
+      }
+    }
+  }
+ */
 
   /** Store mcw in missingCommonStore and candidateForMCStore. */
   def add(mcw: MissingCommonWrapper) = {
@@ -116,10 +189,8 @@ class NewEffectOnStore{
           mcr.synchronized{
             if(!mcr.done && !mcr.isNewViewFound(views)){
               mcr.updateMissingViewsBy(cv, views); flag = true
-              // if(mcr.done) doneMissingCrossRefs(mcr, views, result)
-              // else addToStore(missingCrossRefStore, mcr.missingHead, mcr)
             }
-            // if mcr.done, we can ignore it
+            // otherwise, we can ignore it
           } // end of mcr.synchronized block
           if(flag){
             if(mcr.done) doneMissingCrossRefs(mcr, views, result)
@@ -156,18 +227,21 @@ class NewEffectOnStore{
       if(mcw != null) add(mcw)
       else maybeAdd(inducedTrans, result) // can fire transition
     }
-    else if(mcr.candidates /*map*/ != null){
-      val map0 = CompressedCandidatesMap.extractMap(mcr.candidates)
+    else if(mcr.candidates != null){
+      val unflattened = CompressedCandidatesMap.splitBy(mcr.candidates, 
+        inducedTrans.cv.getParamsBound)
+      val map0 = CompressedCandidatesMap.extractMap(unflattened) //mcr.candidates)
       for(map <- mcr.allCompletions){
         // Instantiate oldCpts in inducedTrans
         val cpts = Remapper.applyRemapping(map, inducedTrans.cv.components)
         val newInducedTrans = inducedTrans.extend(cpts)
         // New missing cross references created by extending
-        val newMissingCRs = newMissingCrossRefs(inducedTrans, map0 /* mcr.map*/, cpts, views)
+        val newMissingCRs = newMissingCrossRefs(inducedTrans, map0, cpts, views)
+// IMPROVE: recycle map0? 
         if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
           val newMCR = new MissingCrossReferences(
-            newInducedTrans, newMissingCRs, /*null map,*/ null, null)
-          add(newMCR)
+            newInducedTrans, newMissingCRs, null, null)
+          add(newMCR, false)
         }
         else checkConditionC(newInducedTrans, views, result)
       }
@@ -289,12 +363,17 @@ class NewEffectOnStore{
     (ServerStates, State), OpenHashSet[MissingCommonWrapper] ] 
   = null
 
+  private var byNewViewShardIterator: ShardIteratorProducerT[
+    ReducedComponentView, ArrayBuffer[MissingCrossReferences]]
+  = null
+
   /** Prepare for the next calls to purge. */
   def prepareForPurge = {
     missingCrossRefStoreShardIterator =
       missingCrossRefStore.shardIteratorProducer
     missingCommonStoreShardIterator = missingCommonStore.shardIteratorProducer
     candidateForMCStoreShardIterator = candidateForMCStore.shardIteratorProducer
+    byNewViewShardIterator = byNewView.shardIteratorProducer
   }
 
   /** Filter `set` according to `p`, and update `store` so that `key` maps to
@@ -315,18 +394,27 @@ class NewEffectOnStore{
 
   /** Purge done items from missingCrossRefStore. */
   def purgeMissingCrossRefStore(views: ViewSet) = {
-    // println("purgeMissingCrossRefStore")
-    def p(mcr: MissingCrossReferences) = !mcr.done(views)
+    /** When is mcr retained?  When not done and not superseded. */
+    def p(mcr: MissingCrossReferences) = !mcr.done(views) && !mcr.isSuperseded
     /* Purge from the maplet rv -> mcrs. */
     def process(
       rv: ReducedComponentView, mcrs: OpenHashSet[MissingCrossReferences]) 
     = filter(rv, mcrs, p _, missingCrossRefStore)
-      // val newSet = mcrs.filter(p _)
-      // if(newSet.size != mcrs.size){
-      //   if(newSet.nonEmpty) missingCrossRefStore.replace(rv, newSet)
-      //   else missingCrossRefStore.remove(rv)
-      // }
+
     missingCrossRefStoreShardIterator.foreach(process)
+  }
+
+  /** Purge items from byNewView. Remove items where the newView is found.  */
+  def purgeByNewView(views: ViewSet) = {
+    def process(
+      nv: ReducedComponentView, ab: ArrayBuffer[MissingCrossReferences]) 
+    = 
+      if(views.contains(nv)){
+        byNewView.remove(nv)
+        Profiler.count("purgeByNewView removed")
+      }
+
+    byNewViewShardIterator.foreach(process)
   }
 
   def purgeMissingCommonStore(views: ViewSet) = {
@@ -344,10 +432,17 @@ class NewEffectOnStore{
     println(printInt(keys)+" keys; "+printLong(data)+" values")
   }
 
+  def reportByNewView() = {
+    var keys = 0; var data = 0L
+    for((_,set) <- byNewView.iterator){ keys += 1; data += set.length }
+    println(printInt(keys)+" keys; "+printLong(data)+" values")
+  }
+
   /** Report on the size of the stores. */
   def report = {
     println("allMCs: size = "+printLong(MissingCommon.allMCsSize))
     print("missingCrossRefStore: "); reportStore(missingCrossRefStore)
+    print("byNewView: "); reportByNewView()
     print("missingCommonStore: "); reportStore(missingCommonStore)
     print("candidateForMCStore: "); reportStore(candidateForMCStore)
   }
@@ -370,6 +465,17 @@ class NewEffectOnStore{
     }
     print("missingCrossRefStore: "); reportStore(missingCrossRefStore)
     traverse("missingCrossRefStore", missingCrossRefStore); println()
+    // traverse N elements of byNewView
+    val abIter = byNewView.valuesIterator; count = 0
+    while(count < N && abIter.hasNext){
+      val ab: ArrayBuffer[MissingCrossReferences] = abIter.next()
+      println("ArrayBuffer length = "+ab.length)
+      traverse("ArrayBuffer[MissingCommonReferences]", ab, maxPrint = 2)
+      count += 1
+    }
+
+    print("byNewView: "); reportByNewView()
+    traverse("byNewView", byNewView); println()
 
     // Traverse N MissingCommonWrappers
     val setIter1 = missingCommonStore.valuesIterator;  count = 0

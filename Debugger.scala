@@ -163,16 +163,20 @@ class Debugger(
       (if(rv == null) "null" 
       else rv.filter(_ != null).map(_.toString).mkString("; ")))
     if(pre != null){
-      println(s"Transition from $pre\nacting on $cv1")
-      if(cv != cv1) println(s"       == $cv")
+      println(s"Transition from $pre\nacting on $cv")
+      if(cv != cv1) println(s"       == $cv1")
     }
     // Get the options for expanding
     val options = new ArrayBuffer[ComponentView]
+    /* Add to options, avoiding repetitions. */
+    def maybeAdd(cv: ComponentView) = if(!options.contains(cv)) options += cv
+    def maybeAddList(cvs: Seq[ComponentView]) = for(cv <- cvs) maybeAdd(cv)
+
     // All views of conc.  This repeats a view seen in the previous expansion.
-    options ++= conc.toComponentView
-    if(secondary != null) options += secondary
+    maybeAddList(conc.toComponentView) // options ++= conc.toComponentView
+    if(secondary != null) maybeAdd(secondary) // options += secondary
     if(pre != null){
-      options += cv
+      maybeAdd(cv) // options += cv
       val servers = pre.servers; assert(cv.servers == servers)
       val preCpts = pre.components; val cpts1 = cv1.components
       val prePrinc = preCpts(0)
@@ -186,7 +190,7 @@ class Debugger(
         SingleRefEffectOn.getCrossRefs(servers, cpts1, preCpts)
           .map(new ComponentView(servers, _))
       println(s"missing = "+missing.mkString(",\n  "))
-      options ++= missing
+      maybeAddList(missing) // options ++= missing
 
       // Find the missing views required for condition (c).
       // Identities of common missing components
@@ -200,22 +204,24 @@ class Debugger(
         val insts = 
           //MissingCommon.allInstantiations(servers, cpts1(0), pid, sysAbsViews)
           MissingCommon.allInstantiations(servers, prePrinc, pid, sysAbsViews)
-        println("Possible states for "+getScriptName(pid)+
-          s" with $prePrinc: "+insts.mkString(", "))
+        // println("Possible states for "+getScriptName(pid)+
+        //   s" with $prePrinc: "+insts.mkString(", "))
         for(c <- insts){
           //val req = MissingCommon.requiredCpts(servers, cpts1, preCpts, c)
           val req = MissingCommon.requiredCpts(servers, preCpts, cpts1, c)
-          println(s"Required views for $c: "+
-            req.map(StateArray.show).mkString(",\n  "))
           if(req.forall(cpts => sysAbsViews.contains(servers, cpts))){
+            val req1 = Array(prePrinc, c) :: req.toList // req.prepend(Array(prePrinc, c))
+            println(s"Required views for $c: "+
+              req1.map(StateArray.show).mkString(",\n  "))
             println("  all found")
-            options += new ComponentView(servers, Array(prePrinc, c))
-            options ++= req.map(new ComponentView(servers, _))
+// IMPROVE: avoid repetitions
+            // options += new ComponentView(servers, Array(prePrinc, c))
+            maybeAddList(req1.map(new ComponentView(servers, _)))
           }
         }
       }
     }
-    if(rv != null) for(v <- rv; if v != null) options += v
+    if(rv != null) for(v <- rv; if v != null) maybeAdd(v) // options += v
     // Prompt the user for the option to explore. 
     val len = options.length
     if(len == 0) println(s"No secondary components found in $conc")

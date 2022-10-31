@@ -34,7 +34,8 @@ class NewEffectOn(
   import Unification.UnificationList //  = List[(Int,Int)]
   import RemappingExtender.{CandidatesMap,allCompletions}
   import CompressedCandidatesMap.CompressedCandidatesMap
-  import SingleRefEffectOnUnification.{InducedInfo, SecondaryInducedInfo, commonMissingRefs}
+  import SingleRefEffectOnUnification.{
+    InducedInfo, SecondaryInducedInfo, commonMissingRefs}
   import SingleRefEffectOn.{getCrossRefs}
   import InducedTransitionInfo.newMissingCrossRefs
   import NewEffectOn.{newEffectOnStore}
@@ -54,7 +55,6 @@ class NewEffectOn(
       processSecondaryInduced(secondaryInduced)
     }
   }
-
 
   /** Process the information about primary induced transitions. */
   @inline private def processPrimaryInduced(inducedInfo: InducedInfo) = {
@@ -94,6 +94,7 @@ class NewEffectOn(
       val newComponentsList = List(StateArray(Array(postCpts(k), newPrinc)))
       processInducedInfo(map, unifs, null, false, crossRefs,
         newComponentsList, candidates)
+// IMPROVE: recycle map? 
     }
   }
 
@@ -146,8 +147,8 @@ class NewEffectOn(
         else{
           // Add a MissingCrossReferences to the store
           val missingCrossRefs = new MissingCrossReferences(
-            inducedTrans, missing1, /*null,*/ null, commonMissingPids)
-          newEffectOnStore.add(missingCrossRefs)
+            inducedTrans, missing1, null, commonMissingPids)
+          newEffectOnStore.add(missingCrossRefs, commonMissingPids.isEmpty)
           if(isPrimary && unifs.isEmpty && commonMissingPids.isEmpty)
             cv.addConditionBInduced(post.servers, reducedMap, crossRefs1)
         }
@@ -168,15 +169,15 @@ class NewEffectOn(
     // The cross reference views required for condition (b) implied by map
     val missing: Array[ReducedComponentView] = 
       MissingCrossReferences.sort(missingCrossRefs(crossRefs).toArray)
+    // Is condition (c) guaranteed to be satisfied?
+    val condCSat = candidates == null
     
     for(newCpts <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newCpts)
       if(!views.contains(nv)){
-        if(missing.isEmpty){ // condition (b) satisfied      
-// IMPROVE: calculate allCompletions more directly
-          // val candidates1 = 
-          //   if(candidates == null) null
-          //   else candidates.map(_.map(CompressedCandidatesMap.toList))
+        if(missing.isEmpty){ // condition (b) satisfied  
+// IMPROVE: if candidates == null then map is complete and condition (c) is 
+// satisfied, so we can improve here.
           val allComps =
             RemappingExtender.allCompletions(map, candidates, cv, trans)
           for(map1 <- allComps){
@@ -187,10 +188,11 @@ class NewEffectOn(
             val newMissingCRs = newMissingCrossRefs(
               map, cv.servers, cpts1, trans.pre.components, views)
             if(newMissingCRs.nonEmpty){
+              assert(!condCSat)
               // Create new MissingCrossReferences object
               val newMCR = new MissingCrossReferences(
-                inducedTrans, newMissingCRs, /*null map1*/ null, null)
-              newEffectOnStore.add(newMCR)
+                inducedTrans, newMissingCRs, null, null)
+              newEffectOnStore.add(newMCR, condCSat)
             }
             else{ // consider condition (c)
               val mcw = MissingCommonWrapper(inducedTrans, views)
@@ -201,25 +203,20 @@ class NewEffectOn(
                   // recordInducedRedundant(
                   // cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
               }
-              else newEffectOnStore.add(mcw)
+              else{ assert(!condCSat); newEffectOnStore.add(mcw) }
             }
           } // end of inner for loop
         } // end of if(missing.isEmpty)
         else{
-          // If candidates == null then can calculate cpts; no need to store map
+          // If candidates == null then can calculate cpts
           val cpts = 
-            if(candidates == null) Remapper.applyRemapping(map, cv.components) 
-            else null
+            if(condCSat) Remapper.applyRemapping(map, cv.components) else null
           val inducedTrans = new InducedTransitionInfo(nv.asReducedComponentView,
             trans, cpts, cv, newCpts)
-          // The map to store in the MissingCrossReferences.  Note: map is
-          // cloned to prevent sharing, as it's sometimes mutated.
-          //val map1 = if(candidates == null) null else Remapper.cloneMap(map)
-          // Add a MissingCrossReferences to the store.  Note: map is cloned to
-          // prevent sharing, as it's sometimes mutated.
+          // Add a MissingCrossReferences to the store. 
           val missingCrossRefs = new MissingCrossReferences(
-            inducedTrans, missing,/* map1,*/ candidates, null)
-          newEffectOnStore.add(missingCrossRefs)
+            inducedTrans, missing, candidates, null)
+          newEffectOnStore.add(missingCrossRefs, condCSat)
           if(isPrimary && unifs.isEmpty &&
               !RemappingExtender.anyLinkageC(map, cv, pre))
             cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
@@ -255,8 +252,6 @@ class NewEffectOn(
     val cpts = mkComponents(map)
     getCrossRefs(pre.servers, cpts, pre.components)
   }
-
-
 }
 
 // =======================================================
@@ -264,10 +259,10 @@ class NewEffectOn(
 object NewEffectOn{
   @inline private def guard = singleRef && useNewEffectOnStore
 
-  var newEffectOnStore: NewEffectOnStore =
+  private var newEffectOnStore: NewEffectOnStore =
     if(guard) new NewEffectOnStore else null
 
-  def reset =  if(guard) newEffectOnStore = new NewEffectOnStore
+  def reset = if(guard) newEffectOnStore = new NewEffectOnStore
 
   import EffectOn.{views}
 
@@ -298,10 +293,10 @@ object NewEffectOn{
   /** Purge from the store.  Done at the end of each ply. */
   def purge = if(doPurge){
     if(ply%4 == 0) newEffectOnStore.purgeMissingCrossRefStore(views)
+    else if(ply%4 == 1) newEffectOnStore.purgeByNewView(views)
     else if(ply%4 == 3) MissingCommon.purgeMCs()
   }
 // IMPROVE: and other parts of newEffectOnStore
-
 
   def report = { require(guard); newEffectOnStore.report }
 
