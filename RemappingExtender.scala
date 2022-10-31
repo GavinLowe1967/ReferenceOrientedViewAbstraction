@@ -255,27 +255,27 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     * mapping undefined parameters to an arbitrary parameter of pre, or the
     * next fresh parameter, but not to parameters of resultRelevantParams, and
     * only consistently with doneB.  Add each to extensions. */
-  private def allExtensions(
-    resultRelevantParams: BitMap, rdMap: RemappingMap, 
-    doneB: List[Linkage], extensions: ExtensionsInfo)
-      : Unit = {
-    require(!lazyNewEffectOnStore)
-    Profiler.count("allExtensions")
-    // All parameters that each parameter can be mapped to
-    val candidates = getCandidatesMap(resultRelevantParams, rdMap, doneB)
-    // Build all extensions of rdMap, mapping each parameter to each element
-    // of candidates(x), or not, injectively.
-    val eMaps = RemappingExtender.extendMapToCandidates(
-      rdMap, candidates, pre.getNextArgMap)
-    // Map remainder to fresh variables, and add to extensions.
-    var i = 0
-    while(i < eMaps.length){
-      val eMap = eMaps(i); i += 1
-      mapUndefinedToFresh(eMap)
-      maybeAdd(extensions, eMap) 
-      Profiler.count("allExtensions - add")
-    }
-  }
+  // private def allExtensions(
+  //   resultRelevantParams: BitMap, rdMap: RemappingMap, 
+  //   doneB: List[Linkage], extensions: ExtensionsInfo)
+  //     : Unit = {
+  //   require(!lazyNewEffectOnStore)
+  //   Profiler.count("allExtensions")
+  //   // All parameters that each parameter can be mapped to
+  //   val candidates = getCandidatesMap(resultRelevantParams, rdMap, doneB)
+  //   // Build all extensions of rdMap, mapping each parameter to each element
+  //   // of candidates(x), or not, injectively.
+  //   val eMaps = RemappingExtender.extendMapToCandidates(
+  //     rdMap, candidates, pre.getNextArgMap)
+  //   // Map remainder to fresh variables, and add to extensions.
+  //   var i = 0
+  //   while(i < eMaps.length){
+  //     val eMap = eMaps(i); i += 1
+  //     mapUndefinedToFresh(eMap)
+  //     maybeAdd(extensions, eMap) 
+  //     Profiler.count("allExtensions - add")
+  //   }
+  // }
 
   /** Build map showing what each parameter of cv can be mapped to so as to be
     * consistent with rdMap (so giving List() on parameters in dom rdMap, and
@@ -396,16 +396,16 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rdMap: RemappingMap, isPrimary: Boolean)
       : ExtensionsInfo = {
     val extensions = new ExtensionsInfo
-    if(lazyNewEffectOnStore){ 
-      makeExtensionsNew(
-        unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
-      extensions
-    }
-    else{
-      makeExtensions1(
-        unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
-      extensions
-    }
+    //if(lazyNewEffectOnStore){ 
+    makeExtensionsNew(
+      unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
+    extensions
+    //}
+    //else{ ???
+      // makeExtensions1(
+      //   unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
+      // extensions
+    //}
   }
 
   /** Implementation of makeExtensions from the paper.  Create all required
@@ -413,39 +413,39 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     * doneB gives the instances of condition (b) that we have dealt with so
     * far.  Note: rdMap may be mutated and might be included in result; but
     * otherwise should be recycled. */
-  private def makeExtensions1(
-    unifs: UnificationList, resultRelevantParams: BitMap, 
-    rdMap: RemappingMap, doneB: List[Linkage], 
-    isPrimary: Boolean, extensions: ExtensionsInfo)
-      : Unit = {
-    require(!lazyNewEffectOnStore)
-    // if(highlight)println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
-    //   s"; doneB = $doneB")
-    val linkagesC = RemappingExtender.anyLinkageC(rdMap, cv, pre)
-    if(linkagesC){
-      allExtensions(resultRelevantParams, rdMap, doneB, extensions)
-      recycle(rdMap)
-    }
-    else{
-      val newLinkage = findLinkage(unifs, rdMap, doneB) 
-      if(newLinkage == null){ 
-        mapUndefinedToFresh(rdMap)   // map remaining params to fresh
-        maybeAdd(extensions, rdMap)  // Add to extensions if not there already
-      }
-      else{
-        val (i,j) = newLinkage
-        val extendedMaps = 
-          extendForLinkage(rdMap, resultRelevantParams, i, j, isPrimary, doneB)
-        var k = 0
-        while(k < extendedMaps.length){
-          val eMap = extendedMaps(k); k += 1
-          makeExtensions1(unifs, resultRelevantParams, eMap, 
-            (i,j)::doneB, isPrimary, extensions)
-        }
-        recycle(rdMap)
-      }
-    }
-  }
+  // private def makeExtensions1(
+  //   unifs: UnificationList, resultRelevantParams: BitMap, 
+  //   rdMap: RemappingMap, doneB: List[Linkage], 
+  //   isPrimary: Boolean, extensions: ExtensionsInfo)
+  //     : Unit = {
+  //   require(!lazyNewEffectOnStore)
+  //   // if(highlight)println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
+  //   //   s"; doneB = $doneB")
+  //   val linkagesC = RemappingExtender.anyLinkageC(rdMap, cv, pre)
+  //   if(linkagesC){
+  //     allExtensions(resultRelevantParams, rdMap, doneB, extensions)
+  //     recycle(rdMap)
+  //   }
+  //   else{
+  //     val newLinkage = findLinkage(unifs, rdMap, doneB) 
+  //     if(newLinkage == null){ 
+  //       mapUndefinedToFresh(rdMap)   // map remaining params to fresh
+  //       maybeAdd(extensions, rdMap)  // Add to extensions if not there already
+  //     }
+  //     else{
+  //       val (i,j) = newLinkage
+  //       val extendedMaps = 
+  //         extendForLinkage(rdMap, resultRelevantParams, i, j, isPrimary, doneB)
+  //       var k = 0
+  //       while(k < extendedMaps.length){
+  //         val eMap = extendedMaps(k); k += 1
+  //         makeExtensions1(unifs, resultRelevantParams, eMap, 
+  //           (i,j)::doneB, isPrimary, extensions)
+  //       }
+  //       recycle(rdMap)
+  //     }
+  //   }
+  // }
   /* Note, we remove repetitions above.  For example, with TrieberStack.csp 
    * pre = [32(N0) || 34()] || [23(T0,N0,N1) || 15(N1,N2)]
    * cv = [32(N0) || 34()] || [24(T0,N1,N2) || 11(N1,N2)]
@@ -461,7 +461,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rdMap: RemappingMap, doneB: List[Linkage], 
     isPrimary: Boolean, extensions: ExtensionsInfo)
       : Unit = {
-    require(lazyNewEffectOnStore)
+    // require(lazyNewEffectOnStore)
     val newLinkage = findLinkage(unifs, rdMap, doneB)
     if(newLinkage == null){      // Add to extensions if not already there. 
       if(RemappingExtender.anyLinkageC(rdMap, cv, trans.pre)){
@@ -619,7 +619,7 @@ object RemappingExtender{
   def allCompletions(rdMap: RemappingMap, candidates: CompressedCandidatesMap, 
     cv: ComponentView, trans: Transition)
       : ArrayBuffer[RemappingMap] = {
-    require(lazyNewEffectOnStore)
+    // require(lazyNewEffectOnStore)
     if(candidates != null){
       val unflattened = 
         CompressedCandidatesMap.splitBy(candidates, cv.getParamsBound)

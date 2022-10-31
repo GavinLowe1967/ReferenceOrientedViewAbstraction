@@ -141,8 +141,11 @@ $(DIR)/EffectOnStore.class: $(DIR)/MissingInfoStore.class	\
 
 # New EffectOn store
 
-$(DIR)/MissingCrossReferences.class: $(DIR)/ComponentView.class	\
-  $(DIR)/ViewSet.class $(DIR)/Transition.class $(DIR)/RemappingExtender.class
+$(DIR)/InducedTransitionInfo.class:  $(DIR)/ComponentView.class \
+  $(DIR)/Transition.class
+
+$(DIR)/MissingCrossReferences.class: $(DIR)/InducedTransitionInfo.class \
+  $(DIR)/ViewSet.class  $(DIR)/RemappingExtender.class
 
 $(DIR)/MissingCommonWrapper.class: $(DIR)/MissingCommon.class $(DIR)/MissingCrossReferences.class
 

@@ -103,12 +103,12 @@ class NewEffectOnStore{
     // found is set to true if we find a MCR that implies mcr
     while(!done){
       val ab = byNewView.getOrElseUpdate(newView,
-        new ArrayBuffer[MissingCrossReferences])
+        new ArrayBuffer[MissingCrossReferences](1))
       ab.synchronized{
         if(mapsto(byNewView, newView, ab)){ 
           var i = 0; done = true
           // Those MCRs not implied bymcr
-          val newAB = new ArrayBuffer[MissingCrossReferences]
+          val newAB = new ArrayBuffer[MissingCrossReferences](ab.length+1)
           while(i < ab.length && !found){
             val mcr1 = ab(i); i += 1; val cmp = compare(mcr, mcr1)
             if(cmp == Superset || cmp == Equal) found = true
@@ -220,14 +220,15 @@ class NewEffectOnStore{
     require(mcr.done)
     val inducedTrans = mcr.inducedTrans
 
-    if(!lazyNewEffectOnStore){
-      // Now deal with common missing references: add to relevant stores.
-      // IMPROVE: calculate the commonMissingPids here, rather than earlier
-      val mcw = MissingCommonWrapper(inducedTrans, mcr.commonMissingPids, views)
-      if(mcw != null) add(mcw)
-      else maybeAdd(inducedTrans, result) // can fire transition
-    }
-    else if(mcr.candidates != null){
+    //if(!lazyNewEffectOnStore){ ???
+//       // Now deal with common missing references: add to relevant stores.
+//       // IMPROVE: calculate the commonMissingPids here, rather than earlier
+//       val mcw = MissingCommonWrapper(inducedTrans, mcr.commonMissingPids, views)
+//       if(mcw != null) add(mcw)
+//       else maybeAdd(inducedTrans, result) // can fire transition
+    // }
+    //else 
+    if(mcr.candidates != null){
       val unflattened = CompressedCandidatesMap.splitBy(mcr.candidates, 
         inducedTrans.cv.getParamsBound)
       val map0 = CompressedCandidatesMap.extractMap(unflattened) //mcr.candidates)
@@ -239,8 +240,8 @@ class NewEffectOnStore{
         val newMissingCRs = newMissingCrossRefs(inducedTrans, map0, cpts, views)
 // IMPROVE: recycle map0? 
         if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
-          val newMCR = new MissingCrossReferences(
-            newInducedTrans, newMissingCRs, null, null)
+          val newMCR =
+            new MissingCrossReferences(newInducedTrans, newMissingCRs, null)
           add(newMCR, false)
         }
         else checkConditionC(newInducedTrans, views, result)
@@ -251,7 +252,9 @@ class NewEffectOnStore{
       // references.  But condition (c) might not be satisfied if previously
       // we extended a map which produced new missing cross references *and*
       // common missing references.
-      assert(mcr.candidates == null && inducedTrans.cpts != null)
+      assert(mcr.candidates == null && inducedTrans.cpts != null,
+        s"candidates: "+(mcr.candidates == null)+
+          "; cpts: "+(inducedTrans.cpts == null))
       checkConditionC(inducedTrans, views, result)
     }
   }

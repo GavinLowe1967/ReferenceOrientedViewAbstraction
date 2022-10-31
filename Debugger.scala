@@ -189,34 +189,36 @@ class Debugger(
       val missing: List[ComponentView] =
         SingleRefEffectOn.getCrossRefs(servers, cpts1, preCpts)
           .map(new ComponentView(servers, _))
-      println(s"missing = "+missing.mkString(",\n  "))
-      maybeAddList(missing) // options ++= missing
+      if(missing.isEmpty) println("No cross reference views.")
+      else{
+        println(s"Cross reference views: "+missing.mkString(",\n  "))
+        maybeAddList(missing) // options ++= missing
+      }
 
       // Find the missing views required for condition (c).
       // Identities of common missing components
       val commonMissing = 
         SingleRefEffectOnUnification.commonMissingRefs(cpts1, preCpts)
-      println(s"Common missing component identities: "+
-        commonMissing.map(getScriptName).mkString(", "))
-      for(pid <- commonMissing){
-        // All states instantiating pid compatible with pre.  Note, using
-        // cpts1(0) here would be wrong, since it's not in normal form.
-        val insts = 
-          //MissingCommon.allInstantiations(servers, cpts1(0), pid, sysAbsViews)
-          MissingCommon.allInstantiations(servers, prePrinc, pid, sysAbsViews)
-        // println("Possible states for "+getScriptName(pid)+
-        //   s" with $prePrinc: "+insts.mkString(", "))
-        for(c <- insts){
-          //val req = MissingCommon.requiredCpts(servers, cpts1, preCpts, c)
-          val req = MissingCommon.requiredCpts(servers, preCpts, cpts1, c)
-          if(req.forall(cpts => sysAbsViews.contains(servers, cpts))){
-            val req1 = Array(prePrinc, c) :: req.toList // req.prepend(Array(prePrinc, c))
-            println(s"Required views for $c: "+
-              req1.map(StateArray.show).mkString(",\n  "))
-            println("  all found")
-// IMPROVE: avoid repetitions
-            // options += new ComponentView(servers, Array(prePrinc, c))
-            maybeAddList(req1.map(new ComponentView(servers, _)))
+      if(commonMissing.isEmpty) println("No common missing references.")
+      else{
+        println(s"Common missing component identities: "+
+          commonMissing.map(getScriptName).mkString(", "))
+        for(pid <- commonMissing){
+          // All states instantiating pid compatible with pre.  Note, using
+          // cpts1(0) here would be wrong, since it's not in normal form.
+          val insts =
+            MissingCommon.allInstantiations(servers, prePrinc, pid, sysAbsViews)
+          // println("Possible states for "+getScriptName(pid)+
+          //   s" with $prePrinc: "+insts.mkString(", "))
+          for(c <- insts){
+            val req = MissingCommon.requiredCpts(servers, preCpts, cpts1, c)
+            if(req.forall(cpts => sysAbsViews.contains(servers, cpts))){
+              val req1 = Array(prePrinc, c) :: req.toList
+              println(s"Required views for $c: "+
+                req1.map(StateArray.show).mkString(",\n  "))
+              // println("  all found")
+              maybeAddList(req1.map(new ComponentView(servers, _)))
+            }
           }
         }
       }
