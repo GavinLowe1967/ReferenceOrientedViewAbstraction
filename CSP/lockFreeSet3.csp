@@ -1,0 +1,1008 @@
+-- @VA component process = FreeNodeR
+-- @VA component alphabet = alphaNode
+-- @VA component identity type = NodeID
+-- @VA component rename = NodeRenameMap
+-- @VA component active = false
+-- @VA component process = Thread
+-- @VA component alphabet = alphaThread
+-- @VA component identity type = ThreadID
+-- @VA component active = true
+-- @VA serversRename = ServerSet
+
+include "definitions.csp"
+
+-- A model of a lock-free set, implemented using a linked list.  This version 
+-- includes deletion, following Herlihy & Shavit, Section 9.8. 
+
+-- This version has a watchdog that observes the LPs of successful adds and
+-- deletes, and nondeterministically picks operations (at most one at a time)
+-- to track and check for correctness.
+
+-- Data held in the set.  B represents an arbitrary value, and appears at most
+-- once in the list.  A represents all values less than B; C represents all 
+-- values greater than B; each may appear multiple times.
+datatype Data = A | B | C 
+
+-- Is x>y with the ordering A < B < C?
+greater(x, y) = (x == C and y != C) or (x == B and y == A)
+
+-- Identities of nodes
+datatype NodeIDType = 
+  Null | N0 | N1 | N2 | N3 | N4  | N5 | N6  | N7  | N8 | N9 | N10
+
+NodeID = diff(NodeIDType, {Null}) -- real nodes
+
+-- Thread identities
+datatype ThreadIDType = Constr | T0 | T1  | T2 | T3
+
+-- For bound 29, 9 nodes and 3 threads are enough
+-- For bound 23, 8 nodes and 3 threads are enough
+-- For bound 21, 7 nodes and 3 threads are enough
+-- For bound 18, 6 nodes and 3 threads are enough
+
+ThreadID = diff(ThreadIDType, {Constr}) -- real threads, excluding constructor
+
+---------------------- Nodes
+
+-- initialise node to hold value and not deleted
+channel initNode : ThreadIDType . NodeID . Data . NodeIDType . NodeIDType
+
+-- Signals on getValue events.  ContainsFalseValue.v indicates that
+-- contains(v) gives false, because the traversal finds a value v1 > v.
+-- AddFail represents that an add failed because the value is already in the
+-- list (the value appears elsewhere in the event).  GetValueAtomic is used to
+-- make a getvalue and subsequent (helping) decoupling CAS atomic.
+datatype GetValueSignal = 
+  ContainsFalseValue.Data | AddFail | DelFail.Data | 
+  GetValueAtomic | GetValueNoSignal
+
+-- get the value field
+channel getValue : ThreadID . NodeID . Data . GetValueSignal
+ 
+-- Signals on getNext events.  ContainsFalseEnd.v indicates that contains(v)
+-- gives false because the traversal reaches the end of the list.
+-- DelFailEnd.v represents that a delete(v) failed, having reached the end of
+-- the list.  GetNextAtomic represents that this getNext and the subsequent
+-- getValue should be treated atomically.
+datatype GetNextSignal = 
+  ContainsFalseEnd.Data | DelFailEnd.Data | GetNextAtomic | GetNextNoSignal
+
+-- get the next field
+channel getNext : ThreadID . NodeID . NodeIDType . GetNextSignal
+
+-- The signals that can appear on a getNext event that reads next.
+getNextSignalsOf(next) = 
+  if next==Null then {|ContainsFalseEnd, GetNextNoSignal, DelFailEnd|} 
+  else {GetNextNoSignal, GetNextAtomic}
+
+-- signals on get events.  ContainsTrue.v and ContainsFalse.v represent
+-- results for contains(v), on finding the relevant node undeleted or deleted,
+-- respectively.  GetAtomic means that the get and the subsequent getValue
+-- should be atomic: this is enforced by POR.
+datatype GetSignal = 
+  ContainsTrue.Data | ContainsFalse.Data | GetAtomic | GetNoSignal
+
+-- get the next and deleted fields
+channel get : ThreadID . NodeID . NodeIDType . Bool . GetSignal
+
+-- signals that can appear on a get event with deleted field d. 
+getSignalsOf(d) = 
+  if d then {| ContainsFalse, GetNoSignal|}
+  else {| ContainsTrue, GetNoSignal, GetAtomic |}
+
+-- Signals on CAS events
+datatype CASSignal = AddLP.Data | DelLP.Data | CASDecouple | CASNoSignal 
+
+-- CAS on the next field; CAS.t.n.en.ed.ne.nd.b represents a CAS by t on n,
+-- from expected next value en and expected deleted value ed, to new next
+-- value nn and new deleted value nd,
+-- and with success indicated by b.
+channel CAS : 
+  ThreadID . NodeID . NodeIDType . {false} . NodeIDType . Bool . Bool . CASSignal
+
+distinct(n1,n2,n3) = n1 != n2 and n1 != n3 and n2 != n3
+
+-- Function to test if a CAS can actually occur in the system
+realCAS(CAS._._._.false._._.false.sig) = sig == CASNoSignal -- failed CAS
+realCAS(CAS._.n1.n2.false.n3.false.true.CASDecouple) = true -- distinct(n1,n2,n3)
+realCAS(CAS._.n1.n2.false.n3.false.true.AddLP._) = true -- distinct(n1,n2,n3)
+realCAS(CAS._.n1.n2.false.n3.true.true.DelLP._) = n2 == n3 -- and n1 != n2
+realCAS(CAS._._._.false._._.true._) = false
+-- I'm not sure it's sound to assume the commented-out checks with view
+-- abstraction.
+
+RealCAS = { e | e <- {|CAS|}, realCAS(e) }
+
+-- Signal on a decoupled event.  DecoupleAAfter.p represents a node holding A
+-- after p was decoupled.  Decouple represents a node holding B or C was
+-- decoupled.  The POR chooses between these.
+datatype DecoupleSignal = DecoupleAAfter.NodeID | Decouple
+
+-- A signal on a decouple indicating if it was a failed deletion, when
+-- decoupling at the end of the list.
+datatype DecoupleDelFailSignal = DecoupleDelFail.Data | NoDecoupleDelFailSignal
+
+-- decoupled.t.n.after.v.decSig.delFailsig is a signal from thread t to node n
+-- that it has been decoupled from the list.  v is the value in the node.  The
+-- after parameter is true if the node is decoupled after the watchdog starts
+-- tracking an operation; this is set by the watchdog.  
+channel decoupled: 
+  ThreadID . NodeID . Bool . Data . DecoupleSignal . DecoupleDelFailSignal
+
+-- Signal to thread that it has been joined to the list.
+channel joined: ThreadIDType . NodeID
+
+----- Create version via renaming
+
+channel getValueR : NodeID . Data
+
+channel getNextR : NodeID . NodeIDType
+
+-- setPrev.t.n.p sets n's prev reference to be p (by thread t).
+channel setPrev: ThreadID . NodeID . NodeIDType
+
+-- get the prev reference.  I think these are necessary to get the prev field
+-- in the state machines.  These are blocked by the POR.  
+-- FIXME: And currently blocked in the model
+channel getPrev: NodeID . NodeIDType
+
+channel getR : NodeID . NodeIDType . Bool -- GetInfo
+
+channel CASR : NodeID . NodeIDType . {false} . NodeIDType . Bool . Bool
+
+-- The value to store for prev in a node holding value when it is appearently
+-- set to newPrev.
+--storePrev(value, newPrev) = if value == C then Null else newPrev
+storePrev(value, newPrev) = newPrev
+
+FreeNodeR(me) = 
+  initNode?_!me?value?next?prev -> joined?_!me -> 
+  -- Store prev unless this is a C-Node (?)
+  NodeR(me, value, next, storePrev(value, prev), false, 0)
+
+-- A node process, identity me, holding datum value, next pointer next, prev
+-- pointer prev, and deleted flag deleted.  The prev reference is used only to
+-- support the view abstraction, and otherwise shouldn't affect the behaviour
+-- of the model.  The decoup parameter indicates whether: (0) the node thinks
+-- it has been not decoupled from the list; (1) the node thinks it has been
+-- decoupled from the list before tracking by the watchdog started; (2) the
+-- node thinks it has been decoupled from the list after tracking by the
+-- watchdog started.
+NodeR :: (NodeIDType, Data, NodeIDType, NodeIDType, Bool, Int) -> Proc
+NodeR(me, value, next, prev, deleted, decoup) = 
+  getValueR.me.value -> NodeR(me, value, next, prev, deleted, decoup)
+  []
+  getNextR.me.next -> NodeR(me, value, next, prev, deleted, decoup)
+  []
+  setPrev?t!me?newPrev -> 
+  -- Store prev only if this is not a C-Node (?)
+    NodeR(me, value, next, storePrev(value, newPrev), deleted, decoup)
+  []
+  false & getPrev!me!prev -> NodeR(me, value, next, prev, deleted, decoup)
+  []
+  getR.me.next.deleted ->  NodeR(me, value, next, prev, deleted, decoup)
+  []
+  CASR.me?en?ed?nn?nd!(en==next and ed==deleted) -> (
+    let succ = en==next and ed==deleted within
+    NodeR(me, value, if succ then nn else next, prev,
+          if succ then nd else deleted, decoup)
+  )
+  []
+  decoupled?_!me?after!value?_ -> 
+    NodeR(me, value, next, prev, deleted, 
+    if value == A then (if after then 1 else 2) else 0)
+
+-- All events of thread t that a CASR gets renamed to.  Either all
+-- corresponding elements of realCAS, or a singleton.  Note: must be
+-- non-empty.
+renamesOf(CASR.me.en.false.nn.nd.ok, t)= 
+  let opts = { e | e <- {| CAS.t.me.en.false.nn.nd.ok |}, realCAS(e) }
+  within if empty(opts) then { CAS.t.me.en.false.nn.nd.ok.CASNoSignal } else opts
+
+NodeRename(me) = Union({
+  { (getValueR.me.v, getValue.t.me.v.sig) | 
+       t <- ThreadID, v <- Data, sig <- GetValueSignal }, 
+  { (getNextR.me.next, getNext.t.me.next.sig) | 
+       t <- ThreadID, next <- NodeIDType, sig <- getNextSignalsOf(next) }, 
+  { (getR.me.next.d, get.t.me.next.d.sig) |
+      t <- ThreadID, next <- NodeIDType, d <- Bool, sig <- getSignalsOf(d) },
+  if true then
+  { (CASR.me.en.false.nn.nd.ok, e) |
+      t <- ThreadID, en <- NodeIDType, nn <- NodeIDType, nd <- Bool, ok <- Bool, 
+      e <- renamesOf(CASR.me.en.false.nn.nd.ok, t) }
+  else
+  { (CASR.me.en.false.nn.nd.ok, CAS.t.me.en.false.nn.nd.ok.sig) |
+      t <- ThreadID, en <- NodeIDType, nn <- NodeIDType, nd <- Bool, 
+      ok <- Bool, sig <- CASSignal }
+})
+
+alphaNode(me) = Union({
+  {| getValue.t.me, getNext.t.me, get.t.me, decoupled.t.me, setPrev.t.me | 
+       t <- ThreadID |},
+  { e | t <- ThreadID, e <- {| CAS.t.me |} }, -- , realCAS(e) 
+  {| initNode.t.me, joined.t.me | t <- ThreadIDType |},
+  {| getPrev.me |}
+})
+
+-- Note: the attempts to reduce the number of CAS events in alphaNode doesn't
+-- work, because it needs to include all events in the range of NodeRename,
+-- and the domain of NodeRemain needs to include all events.  It's hard to
+-- achieve both.
+
+alphaNodeChunked(me) = makeChunks_(seq(alphaNode(me)), 1000)
+
+NodeRenameSeq(me) = makeChunks_(seq(NodeRename(me)), 520)
+
+-- NodeRenameMap = mapFromList(<(n, NodeRenameSeq(n)) | n <- seq(NodeID)>)
+NodeRenameMap = mapFromList(<(n, seq(NodeRename(n))) | n <- seq(NodeID)>)
+
+NodeRenamed(me) = FreeNodeR(me)[[ e1 <- e2 | (e1, e2) <- NodeRename(me) ]]
+
+AllNodes = || id : NodeID @ [alphaNode(id)] NodeRenamed(id)
+
+---------------------- Threads
+
+-- Get the head node.  This is the first step of each operation, so is also
+-- used as a signal to the watchdog: the final field shows the corresponding
+-- value.
+channel getHead: ThreadID . NodeID . Data
+
+-- Dummy event so that the adding state holds the datum added and the next
+-- node.  It is blocked by the watchdog.
+channel dummy: ThreadID . Data . NodeIDType
+
+includeDelete = true
+-- includeDelete = false
+
+-- Main thread process
+Thread(me) = 
+  ([] v:Data @ Contains(me, v)) 
+  [] 
+  ([] v:Data @ Add(me, v))
+  []
+  includeDelete & ([] v:Data @ Delete(me, v)) 
+
+----- Contains operation
+
+Contains(me, v) = getHead.me?h!v -> ContainsSearch(me, v, h)
+
+-- Contains operation, searching from p: v does not appear in any node up to
+-- p.  Note: we need to make the getNext and the read of the datum atomic:
+-- this is enforced by POR
+ContainsSearch:: (ThreadIDType, Data, NodeIDType) -> Proc
+ContainsSearch(me, v, p) =
+  getNext.me.p?n!(if n == Null then ContainsFalseEnd.v else GetNextAtomic) -> 
+  if n != Null then ContainsSearch'(me, v, n)
+  else Thread(me) -- end of list 
+
+-- Contains searching, having reached n with n != Null.  Can perform getValue
+-- before returning token, since the value field is immutable.  Include a
+-- ContainsFalseValue signal if we read a value v1 that is treated as greater
+-- than v.
+ContainsSearch'(me, v, n) = 
+  [] v1:Data @
+    if v1 == v and v == B then
+      getValue.me.n.v1!GetValueNoSignal -> ContainsSearchFound(me, v, n)
+    else if v1 == v then -- v != B
+      getValue.me.n.v1!GetValueNoSignal -> ContainsSearchFound(me, v, n)
+      [] getValue.me.n.v1!GetValueNoSignal -> ContainsSearch(me, v, n)
+      [] getValue.me.n.v1!ContainsFalseValue.v -> Thread(me)
+    else if greater(v, v1) then
+      getValue.me.n.v1!GetValueNoSignal -> ContainsSearch(me, v, n)
+    else getValue.me.n.v1!ContainsFalseValue.v -> Thread(me)
+
+-- Contains, having found a node n (possibly deleted) containing v. 
+ContainsSearchFound(me, v, n) = 
+  get.me.n?_?d!(if d then ContainsFalse.v else ContainsTrue.v) -> Thread(me)
+
+----- Add operation
+
+Add:: (ThreadIDType, Data) -> Proc
+Add(me, v) = 
+  getHead.me?h!v -> getNext.me.h?c!GetNextNoSignal -> AddSearch(me, v, h, c)
+
+-- Searching within add.  pred is the predecessor node; curr is the
+-- current node.
+AddSearch:: (ThreadIDType, Data, NodeIDType, NodeIDType) -> Proc
+AddSearch(me, v, pred, curr) = 
+  if curr == Null then AddAdd(me, v, pred, curr, C) 
+  else 
+    get.me.curr?succ?d!(if not d then GetAtomic else GetNoSignal) -> 
+    if not d then AddTest(me, v, pred, curr, succ) 
+    else AddSnip(me, v, pred, curr, succ)
+-- Note: the get and the getValue in AddTest need to be atomic.  The POR
+-- enforces this.
+  
+-- Snip out deleted node curr.
+AddSnip(me, v, pred, curr, succ) =
+  if succ != Null then 
+    getValue.me.succ?v1!GetValueAtomic -> AddSnip1(me, v, pred, curr, succ, v1)
+  else AddSnip1(me, v, pred, curr, succ, C)
+
+-- Note: the getValue above and the CAS below occur consecutively: this is
+-- enforced by the POR
+
+AddSnip1(me, v, pred, curr, succ, v1) =
+  dummy.me.v1.succ -> AddSnip1(me, v, pred, curr, succ, v1)
+  []
+  CAS.me.pred.curr.false.succ.false?ok!
+    (if ok then CASDecouple else CASNoSignal) -> 
+  if ok then (
+    if succ != Null then 
+      setPrev.me.succ.pred -> AddSearch1(me, v, pred, curr, succ) 
+    else AddSearch1(me, v, pred, curr, succ)
+  )
+  else Add(me,v)  -- CAS failed; restart. 
+
+
+-- Signal to node it is decoupled, return token and continue searching.
+AddSearch1(me, v, pred, curr, succ) = 
+  decoupled.me.curr?_?_?sig!NoDecoupleDelFailSignal -> 
+  AddSearch(me, v, pred, succ) 
+
+-- The signals that can appear on a getValue event, when adding v, and seeing
+-- value v1.  If v and v1 are treated as equal, then the add fails.
+sigsFor(v, v1) =
+  if v1 == v then (if v == B then {AddFail} else {AddFail, GetValueNoSignal})
+  else {GetValueNoSignal}
+
+-- Test curr.datum
+AddTest(me, v, pred, curr, succ) = 
+  -- can get value before returning token, as value is immutable.
+  getValue.me.curr?v1?sig:sigsFor(v,v1) -> 
+  if sig == AddFail then Thread(me) 
+  else if v1 == v then -- v != B
+    (AddSearch(me, v, curr, succ) [] AddAdd(me, v, pred, curr, v1))
+  else if greater(v, v1) then AddSearch(me, v, curr, succ)
+  else AddAdd(me, v, pred, curr, v1) -- v < v1, add between pred and curr
+
+-- try to add between pred and curr.  v1 is the datum in curr, or is C is curr
+-- = Null.
+AddAdd(me, v, pred, curr, v1) =
+  initNode.me?new!v.curr!pred -> 
+  CAS.me.pred.curr.false.new.false?b!(if b then AddLP.v else CASNoSignal) 
+    -> -- LP if successful
+  if b then (
+    if curr != Null then setPrev.me.curr.new -> AddAddSucc(me, v, new, v1, curr)
+    else AddAddSucc(me, v, new, v1, curr)
+  )
+  else Add(me, v)  -- CAS failed; restart. 
+
+-- Adding of new holding v succeeded.  next is the node after new, which holds
+-- v1; or v1 = C if next = Null.
+AddAddSucc(me, v, new, v1, next) = 
+  dummy.me.v.next -> AddAddSucc(me, v, new, v1, next)
+  []
+  joined.me.new ->  Thread(me) 
+-- Note: above we want to capture the invariant that if new holds A, but is
+-- not lastA, then next holds A.  For this reason, we have the dummy event. 
+
+----- Delete operation
+
+Delete:: (ThreadIDType, Data) -> Proc
+Delete(me, v) = 
+  getHead.me?h!v -> 
+  getNext.me.h?c!(if c==Null then DelFailEnd.v else GetNextNoSignal) -> 
+  if c==Null then Thread(me) else DelSearch(me, v, h, c)
+
+-- Searching within delete.  pred is the predecessor node; curr!=Null is the
+-- current node.
+DelSearch:: (ThreadIDType, Data, NodeIDType, NodeIDType) -> Proc
+DelSearch(me, v, pred, curr) = 
+  get.me.curr?succ?d!GetNoSignal -> 
+  if not d then DelTest(me, v, pred, curr, succ)
+  else DelSnip(me, v, pred, curr, succ) 
+-- Note: the get and the subsequent getValue in DelTest are atomic: this is
+-- enforced by POR.
+  
+-- Snip out deleted node curr, which contains dv
+DelSnip(me, v, pred, curr, succ) =
+  if succ != Null then
+    getValue.me.succ?v1!GetValueAtomic -> DelSnip1(me, v, pred, curr, succ, v1)
+  else DelSnip1(me, v, pred, curr, succ, C)
+
+-- Note: the getValue above and the CAS below occur consecutively: this is
+-- enforced by the POR
+
+DelSnip1(me, v, pred, curr, succ, v1) = 
+  dummy.me.v1.succ -> DelSnip1(me, v, pred, curr, succ, v1) 
+  []
+  CAS.me.pred.curr.false.succ.false?ok!
+    (if ok then CASDecouple else CASNoSignal) -> 
+  if ok then (
+    if succ==Null then 
+      decoupled.me.curr?after?v1?sig!DecoupleDelFail.v -> Thread(me)
+    else 
+      setPrev.me.succ.pred -> -- curr -> 
+      decoupled.me.curr?after?v1?sig!NoDecoupleDelFailSignal -> 
+      DelSearch(me, v, pred, succ) 
+  )
+  else Delete(me, v)  -- CAS failed; restart.  (Is restarting necessary?) 
+
+-- The signals that can appear on a getValue event, when deleting v, and
+-- seeing v1, and with next node succ.  If (1) v1 is treated as greater than
+-- v, or (2) v1 is treated as less than v and succ = Null, then the deletion
+-- fails.
+delSigsFor(v,v1,succ) = 
+  if v1 == v then (
+    if v != B then { DelFail.v, GetValueNoSignal } else { GetValueNoSignal }
+  )
+  else if greater(v1, v) or succ == Null then { DelFail.v }
+  else { GetValueNoSignal }
+
+-- Test curr.datum
+DelTest(me, v, pred, curr, succ) = 
+  -- can get value before returning token
+  getValue.me.curr?v1?sig:delSigsFor(v,v1,succ) -> 
+  if sig == (DelFail.v) then Thread(me) -- DeleteFailed(me, v)
+  else if v1 == v then (
+    if v == B then DelDel(me, v, pred, curr, succ) -- found it
+    else( -- found it or keep going if not at end
+      DelDel(me, v, pred, curr, succ) 
+      [] 
+      succ != Null & DelSearch(me, v, curr, succ)
+    )
+  )
+  else DelSearch(me, v, curr, succ) -- v > v1 && succ != Null
+      
+-- Remove node curr containing v.  
+DelDel(me, v, pred, curr, succ) = 
+  -- mark curr as deleted
+  CAS.me.curr.succ.false.succ.true?ok!(if ok then DelLP.v else CASNoSignal) -> 
+  if ok then DelDecouple(me, v, pred, curr, succ)
+  else Delete(me, v)   -- CAS failed; restart.  (Is restarting necessary?)
+
+-- Uncouple curr. 
+DelDecouple(me, v, pred, curr, succ) = 
+  if succ != Null then 
+    getValue.me.succ?v1!GetValueAtomic -> 
+    DelDecouple1(me, v, pred, curr, succ, v1)
+  else DelDecouple1(me, v, pred, curr, succ, C)
+
+-- Note: the getValue above and the CAS below occur consecutively: this is
+-- enforced by the POR
+
+DelDecouple1(me, v, pred, curr, succ, v1) =
+  dummy.me.v1.succ -> DelDecouple1(me, v, pred, curr, succ, v1) 
+  []
+  CAS.me.pred.curr.false.succ.false?decoup!
+    (if decoup then CASDecouple else CASNoSignal) ->  -- unlink
+  if decoup then 
+    if succ != Null then setPrev.me.succ.pred -> DelDecoupleDone(me, v, curr) 
+    else DelDecoupleDone(me, v, curr) 
+  else Thread(me) -- CAS failed; restart
+
+-- Signal to node it is decoupled; and to watchdog that this is not a failed
+-- deletion.
+DelDecoupleDone(me, v, curr) = 
+  decoupled.me.curr?after?v1?sig!NoDecoupleDelFailSignal -> Thread(me)
+
+alphaThread(me) = Union({
+  {| getHead.me, initNode.me, getValue.me, get.me, getNext.me, setPrev.me,
+     decoupled.me, joined.me, dummy.me |},
+  { e | e <- {| CAS.me |}, realCAS(e) }
+})
+
+alphaThreadChunked(me) = makeChunks_(seq(alphaThread(me)), 1000)
+     
+AllThreads = ||| id : ThreadID @ Thread(id)
+
+---------------------- Reference to dummy header node
+
+channel initHead: NodeID
+
+Head = initHead?n -> Head1(n)
+
+Head1(n) = getHead?_!n?_ -> Head1(n)
+
+alphaHead = {| initHead, getHead |}
+
+--------------------- Watchdog
+
+channel error, done
+
+-- The watchdog keepts track of whether B is in the set, and so signals errors
+-- only relating to that value.
+
+-- error signal from NodeTracker
+channel errorNT : {B}
+
+-- LPs of contains and unsuccessful add and delete of value
+channel containsTrue, containsFalse, addFail : ThreadID . Data
+
+-- LP of unsuccessul delete.  The Bool field indicated whether we're before or
+-- after starting tracking
+channel delFail : ThreadID . Data . Bool
+
+-- LPs of adding and deleting 
+channel addR, del : Data
+
+-- Thread starting operation concerning a particular data value. 
+channel start : ThreadID . Data
+
+-- Channel to signal whether we're before or after starting tracking. 
+channel afterC: Bool
+
+Watchdog1 = WD1(false)
+
+-- The parameter isIn records whether TrackedValue is in the set.
+WD1 :: (Bool) -> Proc 
+WD1(isIn) =
+  -- LP for contains giving true; ignore here
+  containsTrue?_?v -> WD1(isIn)
+  []
+  -- post LP for contains giving false; ignore here
+  containsFalse?_?_ -> WD1(isIn)
+  []
+  -- observe t starting an operation for v; if for TrackedValue, maybe track it
+  start?t?v -> WD1(isIn) 
+  [] 
+  start?t!B -> WD1'(t, isIn) 
+  []
+  -- post LP for failing add; ignore here
+  addFail?_?_ -> WD1(isIn)
+  []
+  -- LP for v added
+  addR?v -> (if v==B then (if isIn then WDFail else WD1(true)) else WD1(isIn))
+  []
+  -- post LP for failing delete ignore here 
+  delFail?_?_!false -> WD1(isIn)
+  []
+  -- LP for v deleted
+  del?v -> (
+    if v==B then (if isIn then WD1(false) else WDFail) else WD1(isIn)
+  )
+  []
+  afterC!false -> WD1(isIn)
+  []
+  errorNT?_ -> WDFail
+
+-- Watchdog, where isIn records whether TrackedValue is currently in the set,
+-- and we are tracking thread t.
+WD1' :: (ThreadIDType, Bool) -> Proc 
+WD1'(t, isIn) = 
+  -- LP for contains; if for t, check it's correct.
+  containsTrue?t1?v -> (
+    if t == t1 then (if v == B and isIn then WDDone else WDFail)
+    else WD1'(t, isIn)
+  )
+  []
+  -- post LP for unsuccessful contains; if for t, check it's correct
+  containsFalse?t1?v -> (
+    if t == t1 then (if v != B or isIn then WDFail else WDDone)
+    else WD1'(t, isIn)
+  )
+  []
+  -- observe another thread starting; ignore this
+  start?t1?v -> WD1'(t, isIn)
+  []
+  -- LP for failing add; if for t, check it's correct
+  addFail?t1?v -> (
+    if t == t1 then (if v != B or not isIn then WDFail else WDDone)
+    else WD1'(t, isIn)
+  )
+  []
+  -- LP for add
+  addR?v -> (if v == B then (if isIn then WDFail else WDDone) else WD1'(t, isIn))
+  []
+  -- LP for failing delete; if for t, check it's correct
+  delFail?t1?v!true -> (
+    if t == t1 then (if v != B or isIn then WDFail else WDDone)
+    else WD1'(t, isIn)
+  )
+  []
+  -- LP for delete
+  del?v -> (
+    if v == B then (if isIn then WDDone else WDFail) else WD1'(t, isIn)
+  )
+  []
+  afterC!true ->  WD1'(t, isIn)
+  []
+  errorNT?_ -> WDFail
+
+WDFail = error -> STOP
+
+WDDone = done -> STOP
+
+-- Renaming on watchdog.
+WDRename = Union({
+-- contains
+  -- contains v: when t finds that n is not deleted
+  { (containsTrue.t.v, get.t.n.next.false.ContainsTrue.v) | 
+      t <- ThreadID, n <- NodeID, next <- NodeIDType, v <- Data },
+  -- doesn't contain v: when found deleted
+  { (containsFalse.t.v, get.t.n.next.true.ContainsFalse.v)  | 
+      t <- ThreadID, n <- NodeID, next <- NodeIDType,  v <- Data },
+  -- doesn't contain v: at end of list
+  { (containsFalse.t.v, getNext.t.n.Null.ContainsFalseEnd.v) |
+      t <- ThreadID, n <- NodeID, v <- Data },
+  -- doesn't contain v: found larger value.  IMPROVE: restrict v1
+  { (containsFalse.t.v, getValue.t.n.v1.ContainsFalseValue.v) |
+       t <- ThreadID, n <- NodeID, v <- Data, v1 <- Data }, 
+-- add
+  -- LP of add, on CAS
+  { (addR.v, CAS.t.p.en.false.n.false.true.AddLP.v) |
+       t <- ThreadID, v <- {B,C}, p <- NodeID, n <- NodeID, en <- NodeIDType },
+  -- failing add, when node containing v found
+  { (addFail.t.v, getValue.t.n.v.AddFail) |
+       t <- ThreadID, v <- Data, n <- NodeID },
+-- del
+  -- succesful delete, on marking CAS
+  { (del.v, CAS.t.n.next.false.next.true.true.DelLP.v) | 
+      t <- ThreadID, v <- Data, n <- NodeID, next <- NodeIDType },
+  -- failed del, finding value treated as  greater than v
+  { (delFail.t.v.after, getValue.t.n.v1.DelFail.v) | 
+       t <- ThreadID, v <- Data, after <- Bool, n <- NodeID, v1 <- Data },
+  -- failed del that corresponds with the decoupling of a node at the end of
+  -- the list
+  { (delFail.t.v.after, decoupled.t.n.after.v1.sig.DecoupleDelFail.v) |
+       t <- ThreadID, v <- Data, n <- NodeID, after <- Bool, v1 <- Data,
+       sig <- DecoupleSignal },
+  -- failed del, got to end of list
+  { (delFail.t.v.after, getNext.t.n.Null.DelFailEnd.v) |
+      t <- ThreadID, v <- Data, n <- NodeID, after <- Bool },
+-- Misc
+  -- start of invocation
+  { (start.t.v, getHead.t.n.v) | t <- ThreadID, v <- Data, n <- NodeID },
+  -- setting after field in decoupled events
+  { (afterC.after, decoupled.t.n.after.v.sig.NoDecoupleDelFailSignal) |
+      after <- Bool, t <- ThreadID, n <- NodeID, v <- Data, 
+      sig <- DecoupleSignal }
+})
+
+
+WDRenameSeq = seq(WDRename)
+
+-- Alphabet of watchdog.
+alphaWD = Union({
+  {| getHead, error, done, dummy, errorNT, decoupled |},
+  { get.t.n.next.d.sig | 
+      t <- ThreadID, n <- NodeID, next <- NodeIDType, d <- Bool,
+      sig <- {|if d then ContainsFalse else ContainsTrue|} }, 
+  {| getNext.t.n.Null.sig | 
+      t <- ThreadID, n <- NodeID, sig <- {|ContainsFalseEnd, DelFailEnd|} |},
+  { getValue.t.n.v1.sig |
+       t <- ThreadID, n <- NodeID, v <- Data, v1 <- Data,
+       sig <- {|ContainsFalseValue, AddFail, DelFail |} },
+  { CAS.t.p.en.false.n.false.true.AddLP.v |
+       t <- ThreadID, v <- {B,C}, p <- NodeID, n <- NodeID, en <- NodeIDType },
+  { CAS.t.n.next.false.next.true.true.DelLP.v | 
+      t <- ThreadID, v <- Data, n <- NodeID, next <- NodeIDType }
+})
+
+
+-------- The constructor.
+
+Constructor = 
+  initNode.Constr?n!A.Null.Null -> joined.Constr.n -> initHead.n -> STOP
+
+alphaConstr = {| initNode.Constr, joined.Constr, initHead |} 
+
+--------- Partial order reduction
+
+-- This fixed process enforces the events (initNode, CAS, joined) to be
+-- treated atomically.
+
+channel ignore
+
+-- Event that gets renamed to an adding CAS, maybe unsuccessful
+channel CASPORAdd: ThreadID . NodeID . Bool
+
+-- Event that gets renamed to a decoupling CAS.  PORSnip.t.p.n.isNull
+-- represents t removing node n, which was after p, and such that isNull
+-- indicates whether the next node is Null.
+channel PORSnip: ThreadID . NodeID . NodeID .Bool
+
+POR = 
+  -- Ensure initialisation of node, CAS and joining are atomic
+  initNode?t:ThreadID?new?_?next?_ -> CASPORAdd.t.new?b ->
+    (if b then 
+       (if next!=Null then setPrev.t.next.new -> PORJ(t, new) else PORJ(t, new))
+    else POR)
+  []
+  -- Ensure decoupling CAS and setPrev and decoupled event are atomic
+  PORSnip?t?p?n?isNull -> 
+    (if isNull then PORD(t,p,n) else PORD1(t,p,n)) 
+    -- setPrev.t?_!p -> PORD(t,p,n))
+  []
+  -- Ensure a getNext with a GetNextAtomic signal and the subsequent getValue
+  -- are atomic
+  getNext?t?_?n:NodeID!GetNextAtomic -> getValue.t.n?_ -> POR
+  []
+  -- Ensure that a get with a GetAtomic signal and the subsequent getValue are
+  -- atomic
+  get?t?n?_?_!GetAtomic -> getValue.t.n?_ -> POR 
+  [] 
+  -- Ensure a getValue with a GetValueAtomic signal is atomic with the
+  -- subsequent CAS and (if successful) setPrev and decoupled events.
+  getValue?t?s?_!GetValueAtomic -> CAS.t?p?n:NodeID!false!s!false?ok?sig -> 
+    (if sig == CASDecouple then PORD1(t,p,n) else POR)
+  []
+  -- other events
+  ignore -> POR
+
+-- Force a joined event next
+PORJ(t, new) = joined.t.new -> POR
+
+-- Force setPrev event, then signal to n that it is decoupled, with p as the
+-- predecessor
+PORD1(t,p,n) = setPrev.t?_!p -> PORD(t,p,n)
+
+-- Signal to n that it is decoupled, with p as the predecessor
+PORD(t, p, n) = 
+    decoupled.t.n?_?v1!(if v1 == A then DecoupleAAfter.p else Decouple)?_ -> 
+    POR
+
+-- CAS events that aren't decouples
+CASNonDecouples = { e | e <- RealCAS, notDecouple(e) }
+notDecouple(CAS._._._._._._._.CASDecouple) = false
+notDecouple(_) = true
+
+-- Events that POR allows outside an atomic block, but ignores; these events
+-- are mostly blocked inside atomic blocks.
+PORIgnore = Union({
+  CASNonDecouples,  {| getHead |}, 
+  { get.t.n.next.d.sig | 
+     t <- ThreadID, n <- NodeID, next <- NodeIDType, d <- Bool, 
+     sig <- diff(GetSignal,{GetAtomic}) },
+-- FIXME
+  -- {| getValue |},
+  { getValue.t.n.v.sig | 
+      t <- ThreadID, n <- NodeID, v <- Data, 
+      sig <- diff(GetValueSignal,{GetValueAtomic}) },
+  { getNext.t.p.n.sig | 
+      t <- ThreadID, p <- NodeID, n <- NodeIDType, 
+      sig <- diff(GetNextSignal,{GetNextAtomic}) }
+})
+
+PORRename = Union({
+  { (ignore, e) | e <- PORIgnore },
+  { (CASPORAdd.t.new.b, CAS.t.prev.n.false.new.false.b.sig) |
+      t <- ThreadID, new <- NodeID, b <- Bool, prev <- NodeID, n <- NodeIDType, 
+      sig <- if b then {|AddLP|} else {CASNoSignal} }, 
+  { (PORSnip.t.p.n.(s==Null), CAS.t.p.n.false.s.false.true.CASDecouple) |
+      t <- ThreadID, p <- NodeID, n <- NodeID, s <- NodeIDType }
+})
+
+PORRenameChunked = makeChunks_(seq(PORRename), 1000)
+
+alphaPOR = Union({ 
+  RealCAS,
+  {| get, getNext, getHead, decoupled, getValue, getPrev, setPrev |},
+  {| initNode.t, joined.t | t <- ThreadID |}
+})
+
+alphaPORChunked = makeChunks_(seq(alphaPOR), 1000)
+
+---------- Tracker of last A node
+
+-- Each event LATCAS.pred.new gets renamed to all events
+-- CAS._.pred._.false.new.false.true.AddLP.A
+channel LATCAS : NodeID . NodeID
+-- Each event LATdecoupled.n1.pred gets renamed to all events
+-- decoupled.t.n1.after.A.DecoupleAAfter.pred
+channel LATdecoupled : NodeID . NodeID
+
+LastATracker = initHead?n -> LastATracker1(n)
+
+LastATracker1(n) = 
+  -- Addition of new holding A after pred
+  -- CAS?_?pred?_!false?new!false!true.AddLP.A -> 
+  LATCAS?pred?new ->
+    LastATracker1(if pred==n then new else n)
+  []
+  -- Decoupling of n1 holding A after pred
+  LATdecoupled?n1?pred ->
+  --  decoupled?_?n1?_!A.DecoupleAAfter?pred?_ ->
+     LastATracker1(if n1==n then pred else n)
+
+LastATrackerRename = Union({
+  { (LATCAS.pred.new, CAS.t.pred.n.false.new.false.true.AddLP.A) |
+       t <- ThreadID, pred <- NodeID, n <- NodeIDType, new <- NodeID },
+  { (LATdecoupled.n1.pred, decoupled.t.n1.after.A.DecoupleAAfter.pred.sig) |
+       t <- ThreadID, n1 <- NodeID, after <- Bool, pred <- NodeID, 
+       sig <- DecoupleDelFailSignal }
+})
+
+alphaLastATracker = Union({
+  {|initHead|}, 
+  {CAS.t.pred.n.false.new.false.true.AddLP.A |
+     t <- ThreadID, pred <- NodeID, n <- NodeIDType, new <- NodeID},
+  {| decoupled.t.n1.after.A.DecoupleAAfter.pred |
+     t <- ThreadID, n1 <- NodeID, after <- Bool, pred <- NodeID |}
+})
+
+---------- Tracker of current B node
+
+-- There is currently no node holding B
+BNodeTracker = 
+  -- addition of node holding B
+  CAS?_?_?_!false?n!false!true!AddLP.B -> BNodeTracker'(n)
+  []
+  -- decoupling of B; shouldn't happen
+  decoupled?_?_?_!B!Decouple?_ -> NTErr(B)
+
+-- Node n is the B node
+BNodeTracker'(n) = 
+  -- decoupling of n1 holding B 
+  decoupled?_?n1?_!B!Decouple?_ -> (if n==n1 then BNodeTracker else NTErr(B))
+  []
+  -- addition of node holding B; shouldn't happen
+  CAS?_?_?_!false?n!false!true!AddLP!B -> NTErr(B) -- shouldn't happen
+
+NTErr(v) = errorNT.v -> STOP
+
+alphaBNodeTracker = Union({
+  {| decoupled.t.n1.after.B.Decouple | 
+      t <- ThreadID, n1 <- NodeID, after <- Bool |},
+  { CAS.t.p.en.false.n.false.true.AddLP.B |
+      t <- ThreadID, p <- NodeID, n <- NodeID, en <- NodeIDType },
+  {errorNT.B}
+})
+
+------------
+
+-- Process to test whether an expected error trace can happen
+
+Check = initNode.Constr?n!A.Null.Null -> joined.Constr.n -> initHead.n -> Check2
+
+-- Insert C
+Check2 = getHead?t?h.C -> getNext.t.h.Null.GetNextNoSignal ->
+   initNode.t?n!C.Null.h -> CAS.t.h.Null.false.n.false.true.AddLP.C ->
+   joined.t.n -> Check3
+
+-- Start to insert B
+Check3 = 
+  getHead?t?h!B -> getNext.t.h?n:NodeID!GetNextNoSignal ->
+  get.t.n.Null.false.GetAtomic -> getValue.t.n.C.GetValueNoSignal -> Check4
+
+-- Insert B
+Check4 = 
+  getHead?t?h!B -> getNext.t.h?n:NodeID!GetNextNoSignal ->
+  get.t.n.Null.false.GetAtomic -> getValue.t.n.C.GetValueNoSignal ->
+  initNode.t?n2!B.n.h -> CAS.t.h.n.false.n2.false.true.AddLP.B ->
+  setPrev.t.n.n2 -> joined.t.n2 -> Check5
+
+-- Insert A
+Check5 = 
+  getHead?t?h!A -> getNext.t.h?nb:NodeID!GetNextNoSignal ->
+  get.t.nb?_!false.GetAtomic -> getValue.t.nb.B.GetValueNoSignal ->
+  initNode.t?new!A.nb.h -> CAS.t.h.nb.false.new.false.true.AddLP.A ->
+  setPrev.t.nb.new -> joined.t.new -> Check6
+
+-- Insert another A
+Check6 = 
+  getHead?t?h!A -> getNext.t.h?na:NodeID!GetNextNoSignal ->
+  get.t.na?_!false.GetAtomic -> getValue.t.na.A.GetValueNoSignal ->
+  initNode.t?new!A.na.h -> CAS.t.h.na.false.new.false.true.AddLP.A ->
+  setPrev.t.na.new -> joined.t.new -> Check7(h)
+
+-- Continue with insertion of B
+Check7(h) = 
+  initNode?t:ThreadID?new!B?_!h -> 
+  -- CAS.t.h?_!false.new.false.true.AddLP.B -> 
+  CAS.t.h?_!false.new.false.false.CASNoSignal ->
+  CheckErr
+
+CheckErr = error -> STOP 
+
+alphaCheck = 
+  {| initNode, joined, initHead, getHead, getNext, CAS, error,
+     get, getValue, setPrev |}
+
+------------ All the servers
+
+ChunkSize = 5000
+
+chunkedWDRename = makeChunks_(WDRenameSeq, 500)
+
+chunkedAlphaWD = makeChunks_(seq(alphaWD), 500)
+
+ServerSet :: <(Proc, <<(Event,Event)>>, <<Event>>, Bool)>
+ServerSet = 
+  < (Head, <>, <seq(alphaHead)>, false),
+  -- Node trackers
+    (LastATracker, <seq(LastATrackerRename)>, <seq(alphaLastATracker)>, false),
+    (BNodeTracker, <>, <seq(alphaBNodeTracker)>, false),
+  -- Watchdog
+-- FIXME: include
+--(Watchdog1, <seq(WDRename)>, <seq(alphaWD)>, false),
+    (Watchdog1, chunkedWDRename, chunkedAlphaWD, false),
+  -- Check process
+  -- (Check, <>, <seq(alphaCheck)>, false), 
+  -- POR  and constructor  
+    (POR, <seq(PORRename)>, <seq(alphaPOR)>, false),
+   -- (POR, PORRenameChunked, alphaPORChunked, false),
+    (Constructor, <>, <seq(alphaConstr)>, true)
+  > 
+
+Servers = 
+  || (S, R, Alpha, _) <- set(ServerSet) @ 
+         [set(concat(Alpha))] S[[ e1 <- e2 | (e1,e2) <- set(concat(R)) ]]
+
+------------- Complete system
+
+Components =
+  let sync = union(   -- synchronisation set
+        {| getValue, getNext, get, CAS, decoupled, setPrev |},
+        {| initNode.t, joined.t | t <- ThreadID |}
+      )
+  within AllNodes [| sync |] AllThreads
+
+System =
+  let sync = Union({
+               diff(alphaWD, {|error,errorNT,done|}), 
+               {| initNode.Constr, joined.Constr, getHead |}, 
+               diff(alphaLastATracker, {|initHead|}),
+               alphaPOR
+             })
+  within Components [| sync |] Servers
+
+assert STOP [T= System \ diff(Events,{error})
+
+-- Following fails when there are no free nodes, and all threads try to do
+-- initNode.  Also fails after done.
+-- assert System :[deadlock free]
+
+-- Spec that the system deadlocks only after event done, or when all nodes are
+-- initialised.
+
+channel other -- represents all events except done, initNode
+
+Spec(n) =  -- n = # uninitialised nodes
+  done -> Spec' 
+  |~| other -> Spec(n) 
+  |~| n > 0 & initNode$_ ->  Spec(n-1) -- allows deadlock if n = 0
+
+-- done has happened; allow deadlock
+Spec' =  other -> Spec' |~| initNode$_ -> Spec' |~| STOP 
+
+SystemR =  System[[ e <- other | e <- diff(Events,{|done,initNode|}) ]]
+
+assert Spec(card(NodeID)) [FD= SystemR
+
+assert STOP [T= STOP :[symmetry reduce]:
+
+-- Try to work out where compilation is slow
+-- assert STOP [T= Components
+
+-- assert STOP [T= Servers
+
+-- assert System :[has trace [T]]: <
+--   initNode.Constr.N0.A.Null.Null, joined.Constr.N0, initHead.N0,
+--   -- add of C
+--   getHead.T0.N0.C, getNext.T0.N0.Null.GetNextNoSignal,
+--   initNode.T0.N1.C.Null.N0, CAS.T0.N0.Null.false.N1.false.true.AddLP.C,
+--   joined.T0.N1,
+--   -- start of add of B
+--   getHead.T1.N0.B, getNext.T1.N0.N1.GetNextNoSignal, 
+--   get.T1.N1.Null.false.GetAtomic, getValue.T1.N1.C.GetValueNoSignal,
+--   -- T1 into state Add(T1,C,N0,N1,C)
+--   -- Now insert B between N0 and N1
+--   getHead.T0.N0.B, getNext.T0.N0.N1.GetNextNoSignal,
+--   get.T0.N1.Null.false.GetAtomic, getValue.T0.N1.C.GetValueNoSignal,
+--   initNode.T0.N2.B.N1.N0, CAS.T0.N0.N1.false.N2.false.true.AddLP.B,
+--   setPrev.T0.N1.N2,  joined.T0.N2
+--   -- Now insert A 
+-- >
+
+
+-- As it stands, this model finds false errors.  Consider a state where the
+-- list contains a single C-node N_C after the header node N_H.  Suppose
+-- thread T is trying to insert a B, and reads N_C and its value, but is then
+-- suspended (process state AddAdd(T, B, N_H, N_C, C)).  Suppose then other
+-- threads insert a B and at least 2 As.  Then when T continues, the inserting
+-- CAS should fail.  However, the relevant view, containing T and N_H, does
+-- not capture the property that the next node is different from N_C, since
+-- N_C is not included in the view.  (The additional two As are necessary,
+-- because the model does capture the property that N_C is distinct from the
+-- last A-node and the B-node, so N_H.next has to be distinct from each of
+-- these.)
+
+-- Perhaps we can arrange for the watchdog to guess that a particular
+-- invocation is going to be such an incorrect insertion, and then remember
+-- the identity of the N_C node.  Then we have the invariant that the thread's
+-- "curr" node matches this value.
+
+-- Do we find this false error without deletions?
+
