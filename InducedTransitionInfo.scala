@@ -7,7 +7,7 @@ import RemapperP.Remapper
   * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView.*/
 class InducedTransitionInfo(
   val newView: ReducedComponentView, val trans: Transition,
-  oldCpts: Array[State], val cv: ComponentView, newCpts: Array[State]
+  oldCpts: Array[State], val cv: ComponentView // , newCpts: Array[State]
 ){
   require(trans.pre.components.length <= 3 && cv.components.length <= 2)
   require(trans.pre.servers == cv.servers)
@@ -48,7 +48,7 @@ class InducedTransitionInfo(
     * cpts. */
   def extend(cpts: Array[State]) = {
     require(oldCpts == null) //  || oldCpts.sameElements(cpts))
-    new InducedTransitionInfo(newView, trans, cpts, cv, newCpts)
+    new InducedTransitionInfo(newView, trans, cpts, cv) // , newCpts)
   }
 
   /** The common missing references associated with this. */
@@ -57,8 +57,8 @@ class InducedTransitionInfo(
 
   override def toString = {
     s"$trans\n operating on $cv\n induces $cv \n== "+
-      s"(${trans.pre.servers}, ${StateArray.show(oldCpts)})\n -> "+
-      s"(${trans.post.servers}, ${StateArray.show(newCpts)})\n== $newView"
+      s"(${trans.pre.servers}, ${StateArray.show(oldCpts)})\n -> $newView"
+    // s"(${trans.post.servers}, ${StateArray.show(newCpts)})\n== $newView"
   }
 }
 

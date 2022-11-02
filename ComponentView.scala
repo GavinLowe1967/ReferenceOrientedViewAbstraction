@@ -13,9 +13,6 @@ class ComponentView(servers: ServerStates, components: Array[State])
     this(servers, principal +: others)
   }
 
-// IMPROVE
-  //assert(components.eq(StateArray(components)))
-
   /** This view was created by the view transition creationTrans post. */
   // private var pre, post: Concretization = null
   private var creationTrans: Transition = null
@@ -65,10 +62,10 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * mkExtendedPre(trans.pre, cpts, cv) -trans.e-> 
     * mkExtendedPost(trans.post, newCpts).   */
   def setCreationInfoIndirect(
-    trans: Transition, cpts: Array[State], cv: ComponentView) // , newCpts1: Array[State])
+    trans: Transition, cpts: Array[State], cv: ComponentView)
   = synchronized{
     require(creationTrans == null && creationIngredients == null)
-    creationIngredients = (trans, cpts, cv /*, newCpts*/)
+    creationIngredients = (trans, cpts, cv)
     // Following is false.  newCpts is the new state of cpts after the
     // transition.  For secondary transitions, newCpts1 is the components with
     // the principal taken from trans.
@@ -85,7 +82,6 @@ class ComponentView(servers: ServerStates, components: Array[State])
       : Concretization = {
     val extendedPre = new Concretization(pre1.servers,
       StateArray.union(pre1.components, cpts))
-    // extendedPre.setSecondaryView(cv, null)
     extendedPre.copySecondaryAndReferencingViews(pre1)
     extendedPre
   }
@@ -105,10 +101,9 @@ class ComponentView(servers: ServerStates, components: Array[State])
   }
 
   /** Make the extended post-state by extending post1 with newCpts. */
-  private def mkExtendedPost/*(post1: Concretization, newCpts: Array[State])*/ = {
+  private def mkExtendedPost = {
     // Calculate the extended components without using newCpts. 
     val (trans, cpts, _) = creationIngredients
-    //require(trans.post == post1)
     val post1 = trans.post
     val postCpts = post1.components; val preCpts = trans.pre.components
     // Which elements of cpts need to be included?
