@@ -144,7 +144,7 @@ class SingleRefEffectOn(
           effectOnStore.add(missing, missingCommons, nv, trans,
             cpts, cv, newComponents)
           // Note: the missingCommons may be shared.
-          nv.setCreationInfoIndirect(trans, cpts, cv, newComponents)
+          nv.setCreationInfoIndirect(trans, cpts, cv) //, newComponents)
           // IMPROVE: do we need to check isPrimary here?
           if(isPrimary && unifs.isEmpty && missingCommons.isEmpty){
             cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
@@ -171,7 +171,7 @@ class SingleRefEffectOn(
     Profiler.count("addedViewCount")
     if(showTransitions || ComponentView0.highlight(nv))
       showTransition(cpts, newComponents, nv, unifs, isPrimary)
-    nv.setCreationInfoIndirect(trans, cpts, cv, newComponents)
+    nv.setCreationInfoIndirect(trans, cpts, cv) // , newComponents)
     if(singleRef && isPrimary) recordInduced(unifs, reducedMap)
     checkRepresentable(nv)
   }

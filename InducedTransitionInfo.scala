@@ -40,7 +40,7 @@ class InducedTransitionInfo(
     * information. */
   def get: ComponentView = {
     val v =  ComponentView.fromReducedComponentView(newView)
-    v.setCreationInfoIndirect(trans, oldCpts, cv, newCpts)
+    v.setCreationInfoIndirect(trans, oldCpts, cv) // , newCpts)
     v
   }
 

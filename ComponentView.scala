@@ -28,13 +28,12 @@ class ComponentView(servers: ServerStates, components: Array[State])
   }
 
   /** Ingredients for making an extended transition.  If this contains a tuple
-    * (trans, cpts, cv, newCpts) then this was created by trans operating on
+    * (trans, cpts, cv) then this was created by trans operating on
     * (trans.pre.servers, cpts) == cv, so the extended transition
-    * mkExtendedPre(trans.pre, cpts, cv) -trans.e-> mkExtendedPost(trans.post,
-    * newCpts).  We lazily avoid creating these concretizations until
-    * needed. */ 
-  private var creationIngredients: 
-      (Transition, Array[State], ComponentView /*,  Array[State]*/)  = null
+    * mkExtendedPre(trans.pre, cpts, cv) -trans.e-> mkExtendedPost.  We lazily
+    * avoid creating these concretizations until needed. */ 
+  private 
+  var creationIngredients: (Transition, Array[State], ComponentView) = null
 
   /** Get the creation information for this. */
   def getCreationInfo: (Concretization, EventInt, Concretization) = synchronized{
@@ -43,8 +42,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
       (creationTrans.pre, creationTrans.e, creationTrans.post)
     else{ 
       val (trans, cpts, cv) = creationIngredients
-      (mkExtendedPre(trans.pre, cpts, cv), trans.e,
-        mkExtendedPost/*(trans.post, newCpts)*/)
+      (mkExtendedPre(trans.pre, cpts, cv), trans.e,  mkExtendedPost)
     }
   }
 
@@ -67,7 +65,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * mkExtendedPre(trans.pre, cpts, cv) -trans.e-> 
     * mkExtendedPost(trans.post, newCpts).   */
   def setCreationInfoIndirect(
-    trans: Transition, cpts: Array[State], cv: ComponentView, newCpts1: Array[State])
+    trans: Transition, cpts: Array[State], cv: ComponentView) // , newCpts1: Array[State])
   = synchronized{
     require(creationTrans == null && creationIngredients == null)
     creationIngredients = (trans, cpts, cv /*, newCpts*/)

@@ -284,6 +284,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     for((map1, candidates) <- extensions){
       // IMPROVE
       if(debugging) assert(Remapper.isInjective(map1))
+      // if(!useNewEffectOnStore) assert(map1.forall(a => a.forall(_ >= 0)))
       result += ((map1, candidates,  unifs, reducedMapInfo))
     }
   }

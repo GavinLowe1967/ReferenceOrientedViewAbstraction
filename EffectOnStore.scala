@@ -255,8 +255,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     val nv = mi.newView
     if(!buff.contains(nv)){
       val newView = ComponentView.fromReducedComponentView(nv)
-      newView.setCreationInfoIndirect(
-        mi.trans, mi.oldCpts, mi.cv, mi.newCpts)
+      newView.setCreationInfoIndirect(mi.trans, mi.oldCpts, mi.cv) // mi.newCpts)
       buff += newView
     }
     else Profiler.count("maybeAdd repeat")

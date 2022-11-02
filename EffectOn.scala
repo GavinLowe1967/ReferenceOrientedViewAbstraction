@@ -119,7 +119,7 @@ class EffectOn(
     Profiler.count("addedViewCount")
     if(showTransitions || ComponentView0.highlight(nv))
       showTransition(cpts, newComponents, nv, unifs)
-    nv.setCreationInfoIndirect(trans, cpts, cv, newComponents)
+    nv.setCreationInfoIndirect(trans, cpts, cv) // , newComponents)
     checkRepresentable(nv)
   }
 
