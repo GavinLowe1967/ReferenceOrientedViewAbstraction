@@ -324,7 +324,7 @@ object SingleRefEffectOn{
             cv, cpts, trans.post.servers, newComponents, nv))
       }
       if(!nv.representableInScript){
-        val (trans, cpts, cv, newComponents) = nv.getCreationIngredients
+        val (trans, _, cv, _) = nv.getCreationIngredients
         println("Not enough identities in script to combine transition\n"+
           s"$trans and\n$cv.  Produced view\n"+nv.toString0)
         sys.exit()

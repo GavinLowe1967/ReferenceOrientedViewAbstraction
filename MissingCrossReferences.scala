@@ -13,19 +13,15 @@ import CompressedCandidatesMap.CompressedCandidatesMap
   * ViewSet. 
   * 
   * With lazyNewEffectOn, this corresponds to a set of remappings captured by
-  * `candidates`.  But `candidates` might be null if there are no common missing
-  * references, in which case `inducedTrans.cpts` is non-null.  Also
-  * `commonMissingPids = null` in this case.
-  * 
-  * With !lazyNewEffectOn, `commonMissingPids` is the common missing
-  * identities for condition (c).  In this case, candidates = null and
-  * `commonMissingPids != null`. */
+  * `candidates`.  In the superclass, candidates is null (and not explicitly
+  * stored, to save memory), and `inducedTrans.cpts` is non-null.  */
 class MissingCrossReferences(
   val inducedTrans: InducedTransitionInfo,
-  private val missingViews: Array[ReducedComponentView],
-  val candidates: CompressedCandidatesMap// ,
-  // val commonMissingPids: Array[ProcessIdentity]
+  private val missingViews: Array[ReducedComponentView]// ,
+  // val candidates: CompressedCandidatesMap
 ){
+  def candidates:  CompressedCandidatesMap = null
+
   assert(missingViews.nonEmpty && missingViews.forall(_ != null)) 
   // Check sorted
   for(i <- 0 until missingViews.length-1) 
@@ -33,16 +29,8 @@ class MissingCrossReferences(
   // At most, a reference from each component of pre to each component of cv,
   // and vice versa: 3*2*2:
   assert(missingViews.length <= 12, "missingViews.length = "+missingViews.length)
-  // Certain fields are set null to save memory
-  // if(lazyNewEffectOnStore){
-    // We set cpts xor candidates
+  // Certain fields are set null to save memory.  We set cpts xor candidates
   assert(inducedTrans.cpts == null ^ candidates == null)
-  if(candidates != null)
-    assert(candidates.length == inducedTrans.cv.getParamsBound.sum,
-      "candidates = "+candidates.mkString(",")+"\nsizes = "+
-        inducedTrans.cv.getParamsBound.mkString(","))
-  // }
-  // else assert(inducedTrans.cpts != null  && candidates == null)
   Profiler.count("MissingCrossReferences:"+(candidates == null)) 
 
   @inline def isNewViewFound(views: ViewSet) = inducedTrans.isNewViewFound(views)
@@ -63,14 +51,16 @@ class MissingCrossReferences(
   /** The first missing view, against which this should be registered. */
   def missingHead = synchronized{ missingViews(mvIndex) }
 
-  /** Is this complete? */
-  @inline def done = 
-    synchronized{ mvIndex == missingViews.length || inducedTrans.isNewViewFound }
+  /** Have all the required views been marked as found? */
+  @inline def allFound = mvIndex == missingViews.length
 
   /** Is this complete? */
-  @inline def done(views: ViewSet) = synchronized{ 
-    mvIndex == missingViews.length || inducedTrans.isNewViewFound(views)
-  }
+  @inline def done = 
+    synchronized{ allFound || inducedTrans.isNewViewFound }
+
+  /** Is this complete? */
+  @inline def done(views: ViewSet) = 
+    synchronized{ allFound || inducedTrans.isNewViewFound(views) }
 
   /** Update missingViews and mvIndex based on the addition of cv.  cv is
     * expected to match the next missing view. */
@@ -93,12 +83,36 @@ class MissingCrossReferences(
       null, candidates, inducedTrans.cv, inducedTrans.trans)
   }
 
+}
 
+// ==================================================================
+
+/** Information about missing cross references.  `candidates` captures a set of
+  * mappings over inducedtrans.pre.  */
+class MissingCrossReferencesCandidates(
+  inducedTrans: InducedTransitionInfo,
+  missingViews: Array[ReducedComponentView],
+  override val candidates: CompressedCandidatesMap)
+extends MissingCrossReferences(inducedTrans, missingViews){
+  require(candidates != null)
+  require(candidates.length == inducedTrans.cv.getParamsBound.sum,
+    "candidates = "+candidates.mkString(",")+"\nsizes = "+
+      inducedTrans.cv.getParamsBound.mkString(","))
 }
 
 // =======================================================
 
 object MissingCrossReferences{
+  /** Factory method. */
+  def apply(inducedTrans: InducedTransitionInfo,
+    missingViews: Array[ReducedComponentView],
+    candidates: CompressedCandidatesMap)
+      : MissingCrossReferences =
+    if(candidates == null) new MissingCrossReferences(inducedTrans, missingViews)
+    else new MissingCrossReferencesCandidates(
+      inducedTrans, missingViews, candidates)
+
+
   /** Sort missingViews, removing duplicates. */
   def sort(missingViews: Array[ReducedComponentView])
       : Array[ReducedComponentView] = {

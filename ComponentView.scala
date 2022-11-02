@@ -34,7 +34,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * newCpts).  We lazily avoid creating these concretizations until
     * needed. */ 
   private var creationIngredients: 
-      (Transition, Array[State], ComponentView,  Array[State])  = null
+      (Transition, Array[State], ComponentView /*,  Array[State]*/)  = null
 
   /** Get the creation information for this. */
   def getCreationInfo: (Concretization, EventInt, Concretization) = synchronized{
@@ -42,22 +42,24 @@ class ComponentView(servers: ServerStates, components: Array[State])
     if(creationTrans != null) 
       (creationTrans.pre, creationTrans.e, creationTrans.post)
     else{ 
-      val (trans, cpts, cv, newCpts) = creationIngredients
+      val (trans, cpts, cv) = creationIngredients
       (mkExtendedPre(trans.pre, cpts, cv), trans.e,
-        mkExtendedPost(trans.post, newCpts))
+        mkExtendedPost/*(trans.post, newCpts)*/)
     }
   }
 
   /** Get information about how this was created.  Used only in print
     * statements. */
-  def getCreationIngredients = synchronized{ creationIngredients }
+  def getCreationIngredients = synchronized{
+    val (trans,cpts,cv) = creationIngredients; (trans,cpts,cv,newCpts)
+  }
 
   /** The view on which the induced transition had an effect, and its renamed
     * version for compatibility with trans.pre. */
   def preInducedView: (Concretization, ComponentView, ComponentView) = 
     creationIngredients match{
       case null => (null, null, null)
-      case (trans, cpts, cv, _) => 
+      case (trans, cpts, cv) => 
         (trans.pre, cv, new ComponentView(trans.preServers, cpts))
     }
 
@@ -65,11 +67,17 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * mkExtendedPre(trans.pre, cpts, cv) -trans.e-> 
     * mkExtendedPost(trans.post, newCpts).   */
   def setCreationInfoIndirect(
-    trans: Transition, cpts: Array[State], cv: ComponentView, 
-    newCpts: Array[State])
+    trans: Transition, cpts: Array[State], cv: ComponentView, newCpts1: Array[State])
   = synchronized{
     require(creationTrans == null && creationIngredients == null)
-    creationIngredients = (trans, cpts, cv, newCpts)
+    creationIngredients = (trans, cpts, cv /*, newCpts*/)
+    // Following is false.  newCpts is the new state of cpts after the
+    // transition.  For secondary transitions, newCpts1 is the components with
+    // the principal taken from trans.
+    // assert(newCpts.sameElements(newCpts1), 
+    //   s"trans = $trans\ncv = $cv;\ncpts = "+StateArray.show(cpts)+
+    //     "\nnewCpts = "+StateArray.show(newCpts)+
+    //     "\nnewCpts1 = "+StateArray.show(newCpts1))
   }
 
   /** Make the extended pre-state by extending pre1 with cpts, and setting cv as
@@ -84,13 +92,44 @@ class ComponentView(servers: ServerStates, components: Array[State])
     extendedPre
   }
 
+  def newCpts: Array[State] = {
+    val (trans, cpts, _) = creationIngredients
+    val pre = trans.pre; val postCpts = trans.post.components
+    val newCs = new Array[State](cpts.length)
+    for(i <- 0 until cpts.length){
+      // Set newCs(i) to the corresponding component of post if cpts(i) is
+      // involved in the transition; otherwise cpts(i)
+      val c = cpts(i); val (t,id) = c.componentProcessIdentity
+      val j = pre.idsIndexMap(t)(id)
+      newCs(i) = if(j < 0) c else postCpts(j)
+    }
+    newCs
+  }
+
   /** Make the extended post-state by extending post1 with newCpts. */
-  private def mkExtendedPost(post1: Concretization, newCpts: Array[State]) = 
-    new Concretization(post1.servers, 
-      StateArray.union(post1.components, newCpts))
+  private def mkExtendedPost/*(post1: Concretization, newCpts: Array[State])*/ = {
+    // Calculate the extended components without using newCpts. 
+    val (trans, cpts, _) = creationIngredients
+    //require(trans.post == post1)
+    val post1 = trans.post
+    val postCpts = post1.components; val preCpts = trans.pre.components
+    // Which elements of cpts need to be included?
+    val include = cpts.filter(c => !preCpts.contains(c))
+    val extendedCpts = postCpts ++ include
+/*
+    // Now calculate from newCpts and compare
+    val extendedCpts1 = StateArray.union(postCpts, newCpts)
+    assert(extendedCpts.sameElements(extendedCpts1),
+      "cpts = "+StateArray.show(cpts)+"\npostCpts = "+StateArray.show(postCpts)+
+        "\nextendedCpts = "+StateArray.show(extendedCpts)+
+        "\nextendedCpts1 = "+StateArray.show(extendedCpts1))
+    println("ok "+StateArray.show(cpts)+(include.length == cpts.length))
+ */
+    new Concretization(post1.servers, extendedCpts)
+  }
 
   def showCreationInfo: String = creationIngredients match{
-    case (trans, cpts, cv, newCpts) => s"induced by $trans on $cv"
+    case (trans, cpts, cv) => s"induced by $trans on $cv"
     case null => s"produced by $creationTrans"
   }
 

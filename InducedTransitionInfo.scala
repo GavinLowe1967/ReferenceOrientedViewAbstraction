@@ -47,8 +47,7 @@ class InducedTransitionInfo(
   /** An InducedTransitionInfo extending this, instantiating oldCpts with
     * cpts. */
   def extend(cpts: Array[State]) = {
-    require(// lazyNewEffectOnStore && 
-      (oldCpts == null || oldCpts.sameElements(cpts)))
+    require(oldCpts == null) //  || oldCpts.sameElements(cpts))
     new InducedTransitionInfo(newView, trans, cpts, cv, newCpts)
   }
 

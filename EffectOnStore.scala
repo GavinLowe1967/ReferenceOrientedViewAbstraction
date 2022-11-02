@@ -51,7 +51,7 @@ trait EffectOnStore{
 // =======================================================
 
 object EffectOnStore{
-  /** Show an induced transition. */
+  /** Show an induced transition.  Used in SingleRefEffectOn.tryAddNewView. */
   def showInduced(cv: ComponentView0, oldCpts: Array[State], 
     postServers: ServerStates, newCpts: Array[State], nv: ReducedComponentView)
       : String = {
@@ -67,7 +67,8 @@ object EffectOnStore{
   }
   // Note, the above can look odd when cv changes state in the transition, and
   // the induced transition gets a new secondary component.  Maybe it's
-  // possible to avoid these cases.
+  // possible to avoid these cases.  Also it looks odd for secondary induced
+  // transitions.
 
 }
 

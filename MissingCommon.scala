@@ -544,7 +544,7 @@ object MissingCommon{
     servers: ServerStates, cpts1: Cpts, cpts2: Cpts, 
     pid: ProcessIdentity, views: ViewSet)
       : MissingCommon = {
-    require(singleRef && (/*lazyNewEffectOnStore ||*/ cpts2.length == 2), StateArray.show(cpts2))
+    require(singleRef && cpts2.length == 2, StateArray.show(cpts2))
     // val key = (servers, cpts1.toList++cpts2.toList, pid)
     val key = mkKey(servers, cpts1, cpts2, pid)
     getMC(key) match{

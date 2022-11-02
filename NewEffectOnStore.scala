@@ -107,17 +107,22 @@ class NewEffectOnStore{
       ab.synchronized{
         if(mapsto(byNewView, newView, ab)){ 
           var i = 0; done = true
-          // Those MCRs not implied bymcr
+          // Those MCRs not implied by mcr
           val newAB = new ArrayBuffer[MissingCrossReferences](ab.length+1)
           while(i < ab.length && !found){
             val mcr1 = ab(i); i += 1; val cmp = compare(mcr, mcr1)
-            if(cmp == Superset || cmp == Equal) found = true
-            // Test if mcr1 is superceded by mcr
-            if(cmp == Subset){ // mcr1 is superceded by mcr
-              mcr1.setSuperseded
-              Profiler.count("NewEffectOnStore.shouldStore removed old")
+            if(false && mcr1.allFound) // can purge mcr1 here
+              assert(cmp != Subset && cmp != Equal)
+            else{
+              // IMPROVE: calculate cmp here, and remove above assertion
+              if(cmp == Superset || cmp == Equal) found = true
+              // Test if mcr1 is superceded by mcr
+              if(cmp == Subset){ // mcr1 is superceded by mcr
+                mcr1.setSuperseded
+                Profiler.count("NewEffectOnStore.shouldStore removed old")
+              }
+              else newAB += mcr1 // retain mcr1: not superseded by mcr
             }
-            else newAB += mcr1 // retain mcr1: not superseded by mcr
           } // end of while loop
           if(newAB.length != ab.length){
             if(!found) newAB += mcr
@@ -219,15 +224,6 @@ class NewEffectOnStore{
   = {
     require(mcr.done)
     val inducedTrans = mcr.inducedTrans
-
-    //if(!lazyNewEffectOnStore){ ???
-//       // Now deal with common missing references: add to relevant stores.
-//       // IMPROVE: calculate the commonMissingPids here, rather than earlier
-//       val mcw = MissingCommonWrapper(inducedTrans, mcr.commonMissingPids, views)
-//       if(mcw != null) add(mcw)
-//       else maybeAdd(inducedTrans, result) // can fire transition
-    // }
-    //else 
     if(mcr.candidates != null){
       val unflattened = CompressedCandidatesMap.splitBy(mcr.candidates, 
         inducedTrans.cv.getParamsBound)
@@ -241,7 +237,7 @@ class NewEffectOnStore{
 // IMPROVE: recycle map0? 
         if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
           val newMCR =
-            new MissingCrossReferences(newInducedTrans, newMissingCRs, null)
+            new MissingCrossReferences(newInducedTrans, newMissingCRs) //, null
           add(newMCR, false)
         }
         else checkConditionC(newInducedTrans, views, result)

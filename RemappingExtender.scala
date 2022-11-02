@@ -9,30 +9,16 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   /* Relationship of main functions.
    * makeExtensions
    * |--makeExtensions1
-   * |  |--RemappingExtender.anyLinkageC
-   * |  |--allExtensions
-   * |  |  |--extendMapToCandidates
-   * |  |  |--mapUndefinedToFresh
-   * |  |--findLinkage
-   * |  |--mapUndefinedToFresh
-   * |  |--extendForLinkage
-   * |     |--extendMapByIndex
-   * |--makeExtensionsNew
    *    |--findLinkage
+   *    |--RemappingExtender.anyLinkageC
+   *    |--getCompressedCandidatesMap
+   *    |--mapUndefinedToFresh
    *    |--extendForLinkage
    *       |--extendMapByIndex
+   *       |--makeExtensionsNew
    * 
    * extendMapOverComponent 
-   *   (called from SingleRefEffectOnUnification.makeSecondaryInduced)
-   * 
-   * allCompletions
-   * |--allCompletions1
-   * |  |--CompressedCandidatesMap.extractMap
-   * |  |--CompressedCandidatesMap.toList
-   * |  |--extendMapToCandidates
-   * |  |--mapUndefinedToFresh
-   * |--mapUndefinedToFresh
-   * 
+   *   (called from SingleRefEffectOnUnification.makeSecondaryInduced) 
    */
 
   require(singleRef)
@@ -49,8 +35,6 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   // IDs of components in pre, cv
   @inline private def preCptIds = pre.cptIdsBitMap 
   @inline private def cptIds = cv.cptIdsBitMap 
-
-  //@inline private def  preParamSizes = pre.getNextArgMap
 
   /** Temporary test to help with debugging.  Might this be the instance causing
     * problems? */
@@ -142,7 +126,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   /** Linkages for condition (c).  All missing references of cv.principal that
     * map under rdMap to a missing reference of pre.principal. 
     * 
-    * Note: not currently used. */
+    * Note: not currently used (except for testing). */
   private def findLinkagesC(rdMap: RemappingMap): ArrayBuffer[Parameter] = {
     val result = new ArrayBuffer[Parameter]
     // Linkages for condition (c).  Iterate through parameters of
@@ -251,38 +235,14 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rec(0); Pools.returnBitMap(addedParams); result
   }
 
-  /** Implementation of allExtensions from the paper.  All extensions of rdMap,
-    * mapping undefined parameters to an arbitrary parameter of pre, or the
-    * next fresh parameter, but not to parameters of resultRelevantParams, and
-    * only consistently with doneB.  Add each to extensions. */
-  // private def allExtensions(
-  //   resultRelevantParams: BitMap, rdMap: RemappingMap, 
-  //   doneB: List[Linkage], extensions: ExtensionsInfo)
-  //     : Unit = {
-  //   require(!lazyNewEffectOnStore)
-  //   Profiler.count("allExtensions")
-  //   // All parameters that each parameter can be mapped to
-  //   val candidates = getCandidatesMap(resultRelevantParams, rdMap, doneB)
-  //   // Build all extensions of rdMap, mapping each parameter to each element
-  //   // of candidates(x), or not, injectively.
-  //   val eMaps = RemappingExtender.extendMapToCandidates(
-  //     rdMap, candidates, pre.getNextArgMap)
-  //   // Map remainder to fresh variables, and add to extensions.
-  //   var i = 0
-  //   while(i < eMaps.length){
-  //     val eMap = eMaps(i); i += 1
-  //     mapUndefinedToFresh(eMap)
-  //     maybeAdd(extensions, eMap) 
-  //     Profiler.count("allExtensions - add")
-  //   }
-  // }
-
   /** Build map showing what each parameter of cv can be mapped to so as to be
     * consistent with rdMap (so giving List() on parameters in dom rdMap, and
     * not mapping to an element of range rdMap) and resultRelevantParams (not
     * mapping to any such parameter) and respecting doneB (for each (i,j) in
     * doneB, not mapping any parameter of cv.cpts(i) to a component of
-    * pre.cpts(j)).  */
+    * pre.cpts(j)). 
+    * 
+    * Note: not currently used except in testing.  */
   private def getCandidatesMap(
     resultRelevantParams: BitMap, rdMap: RemappingMap, doneB: List[Linkage])
       : CandidatesMap = {
@@ -311,13 +271,6 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
         candidates(t)(x) = candidates(t)(x).filter(y => !preC.hasParam(t,y))
       }
     }
-    // if(false){ // IMPROVE
-    //   val cCandidates =
-    //     getCompressedCandidatesMap(resultRelevantParams, rdMap, doneB)
-    //   for(t <- 0 until numTypes; i <- 0 until candidates(t).length)
-    //     assert(CompressedCandidatesMap.toList(cCandidates(t)(i)) ==
-    //       candidates(t)(i))
-    // }
     candidates
   }
 
@@ -368,6 +321,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   @inline private def maybeAdd(extensions: ExtensionsInfo,
     map: RemappingMap, candidatesMap: CompressedCandidatesMap)
       : Unit = {
+    require(candidatesMap != null)
     /* Does extensions(i) equal (map, candidatesMap)? */
     // def matches(i: Int) = {
     //   val (map1, cands1) = extensions(i)
@@ -396,72 +350,21 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rdMap: RemappingMap, isPrimary: Boolean)
       : ExtensionsInfo = {
     val extensions = new ExtensionsInfo
-    //if(lazyNewEffectOnStore){ 
-    makeExtensionsNew(
+    makeExtensions1(
       unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
     extensions
-    //}
-    //else{ ???
-      // makeExtensions1(
-      //   unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
-      // extensions
-    //}
   }
 
-  /** Implementation of makeExtensions from the paper.  Create all required
-    * extensions of result-defining map rdMap.  Add all such to extensions.
-    * doneB gives the instances of condition (b) that we have dealt with so
-    * far.  Note: rdMap may be mutated and might be included in result; but
-    * otherwise should be recycled. */
-  // private def makeExtensions1(
-  //   unifs: UnificationList, resultRelevantParams: BitMap, 
-  //   rdMap: RemappingMap, doneB: List[Linkage], 
-  //   isPrimary: Boolean, extensions: ExtensionsInfo)
-  //     : Unit = {
-  //   require(!lazyNewEffectOnStore)
-  //   // if(highlight)println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
-  //   //   s"; doneB = $doneB")
-  //   val linkagesC = RemappingExtender.anyLinkageC(rdMap, cv, pre)
-  //   if(linkagesC){
-  //     allExtensions(resultRelevantParams, rdMap, doneB, extensions)
-  //     recycle(rdMap)
-  //   }
-  //   else{
-  //     val newLinkage = findLinkage(unifs, rdMap, doneB) 
-  //     if(newLinkage == null){ 
-  //       mapUndefinedToFresh(rdMap)   // map remaining params to fresh
-  //       maybeAdd(extensions, rdMap)  // Add to extensions if not there already
-  //     }
-  //     else{
-  //       val (i,j) = newLinkage
-  //       val extendedMaps = 
-  //         extendForLinkage(rdMap, resultRelevantParams, i, j, isPrimary, doneB)
-  //       var k = 0
-  //       while(k < extendedMaps.length){
-  //         val eMap = extendedMaps(k); k += 1
-  //         makeExtensions1(unifs, resultRelevantParams, eMap, 
-  //           (i,j)::doneB, isPrimary, extensions)
-  //       }
-  //       recycle(rdMap)
-  //     }
-  //   }
-  // }
-  /* Note, we remove repetitions above.  For example, with TrieberStack.csp 
-   * pre = [32(N0) || 34()] || [23(T0,N0,N1) || 15(N1,N2)]
-   * cv = [32(N0) || 34()] || [24(T0,N1,N2) || 11(N1,N2)]
-   * and N2 -> N1, we get linkages (0,0) and (1,0), from both components of
-   * cv.  Each might or might not add the mapping N1 -> N2, so there are two
-   * ways to get this mapping.  It's not clear whether this is worthwhile.
-   * There might still be repetitions arising within allExtensions.  */
-
-  /** This version is used with the NewEffectOnStore.  It doesn't consider
-    * condition (c), and doesn't map undefined parameters to fresh values. */
-  private def makeExtensionsNew(
+  /** Implementation of makeExtensions from the paper.  Create extensions
+    * necessary for considering missing cross references (condition (b)), but
+    * don't consider common missing references (condition (c) yet.  Note:
+    * rdMap may be mutated and might be included in result; but otherwise
+    * should be recycled. */
+  private def makeExtensions1(
     unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, doneB: List[Linkage], 
     isPrimary: Boolean, extensions: ExtensionsInfo)
       : Unit = {
-    // require(lazyNewEffectOnStore)
     val newLinkage = findLinkage(unifs, rdMap, doneB)
     if(newLinkage == null){      // Add to extensions if not already there. 
       if(RemappingExtender.anyLinkageC(rdMap, cv, trans.pre)){
@@ -471,7 +374,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       }
       else{
         Remapper.mapUndefinedToFresh(rdMap, trans.getNextArgMap)
-        maybeAdd(extensions, rdMap, null)
+        maybeAdd(extensions, rdMap)
       }
     }
     else{
@@ -481,7 +384,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       var k = 0
       while(k < extendedMaps.length){
         val eMap = extendedMaps(k); k += 1
-        makeExtensionsNew(unifs, resultRelevantParams, eMap,
+        makeExtensions1(unifs, resultRelevantParams, eMap,
           (i,j)::doneB, isPrimary, extensions)
       }
       recycle(rdMap)
@@ -547,6 +450,16 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
 // =======================================================
 
 object RemappingExtender{
+
+  /* allCompletions
+   * |--allCompletions1
+   * |  |--CompressedCandidatesMap.extractMap
+   * |  |--CompressedCandidatesMap.toList
+   * |  |--extendMapToCandidates
+   * |  |--mapUndefinedToFresh
+   * |--mapUndefinedToFresh
+   */
+
   /** Representation of a linkage.  A pair (i, j) represents a linkage between
     * cpts(i) and preCpts(j). */
   type Linkage = (Int,Int)
@@ -619,7 +532,6 @@ object RemappingExtender{
   def allCompletions(rdMap: RemappingMap, candidates: CompressedCandidatesMap, 
     cv: ComponentView, trans: Transition)
       : ArrayBuffer[RemappingMap] = {
-    // require(lazyNewEffectOnStore)
     if(candidates != null){
       val unflattened = 
         CompressedCandidatesMap.splitBy(candidates, cv.getParamsBound)
