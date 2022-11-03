@@ -4,13 +4,17 @@ import RemapperP.Remapper
 
 /** Information about an induced transition.  This corresponds to transition
   * trans = pre -e-> post inducing
-  * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView.*/
+  * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView.  
+  * oldCpts might be null, in which case it is set later. */
 class InducedTransitionInfo(
   val newView: ReducedComponentView, val trans: Transition,
-  oldCpts: Array[State], val cv: ComponentView // , newCpts: Array[State]
+  // oldCpts: Array[State], 
+  val cv: ComponentView
 ){
   require(trans.pre.components.length <= 3 && cv.components.length <= 2)
   require(trans.pre.servers == cv.servers)
+
+  @inline def oldCpts: Array[State] = null
 
   @inline def servers = cv.servers
 
@@ -47,8 +51,8 @@ class InducedTransitionInfo(
   /** An InducedTransitionInfo extending this, instantiating oldCpts with
     * cpts. */
   def extend(cpts: Array[State]) = {
-    require(oldCpts == null) //  || oldCpts.sameElements(cpts))
-    new InducedTransitionInfo(newView, trans, cpts, cv) // , newCpts)
+    require(oldCpts == null)
+    new InducedTransitionInfo1(newView, trans, cpts, cv) 
   }
 
   /** The common missing references associated with this. */
@@ -62,9 +66,26 @@ class InducedTransitionInfo(
   }
 }
 
+// ==================================================================
+
+class InducedTransitionInfo1(
+  newView: ReducedComponentView, trans: Transition,
+  override val oldCpts: Array[State], cv: ComponentView)
+    extends InducedTransitionInfo(newView, trans, cv){
+  require(oldCpts != null)
+}
+
 // =======================================================
 
 object InducedTransitionInfo{
+  /** Factory method. */
+  def apply(newView: ReducedComponentView, trans: Transition,
+    oldCpts: Array[State], cv: ComponentView)
+      : InducedTransitionInfo =
+    if(oldCpts != null) new InducedTransitionInfo1(newView, trans, oldCpts, cv)
+    else new InducedTransitionInfo(newView, trans, cv)
+
+
   /** Shared empty result from newMissingCrossRefs. */
   private val EmptyReducedComponentView = Array[ReducedComponentView]()
 

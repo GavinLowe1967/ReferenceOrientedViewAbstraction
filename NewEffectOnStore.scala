@@ -42,6 +42,11 @@ class NewEffectOnStore{
   private val byNewView = 
     new ShardedHashMap[ReducedComponentView, ArrayBuffer[MissingCrossReferences]]
 
+  /** Minimum size to initialise an ArrayBuffer in byNewView.  Note: when an
+    * ArrayBuffer is resized, it is to size at least 16; so a smaller initial
+    * size might lead to higher memory consumption. */
+  private val InitABSize = 8
+
   /** A store of MissingCommonWrapper objects.  Each is stored against its next
     * missing view. */
   private val missingCommonStore = 
@@ -103,12 +108,13 @@ class NewEffectOnStore{
     // found is set to true if we find a MCR that implies mcr
     while(!done){
       val ab = byNewView.getOrElseUpdate(newView,
-        new ArrayBuffer[MissingCrossReferences](1))
+        new ArrayBuffer[MissingCrossReferences](InitABSize))
       ab.synchronized{
         if(mapsto(byNewView, newView, ab)){ 
           var i = 0; done = true
           // Those MCRs not implied by mcr
-          val newAB = new ArrayBuffer[MissingCrossReferences](ab.length+1)
+          val newAB = 
+            new ArrayBuffer[MissingCrossReferences](ab.length max InitABSize)
           while(i < ab.length && !found){
             val mcr1 = ab(i); i += 1; val cmp = compare(mcr, mcr1)
             if(false && mcr1.allFound) // can purge mcr1 here

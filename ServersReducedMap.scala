@@ -27,7 +27,7 @@ object ServersReducedMap{
   def apply(servers: ServerStates, map: ReducedMap, newCpts: List[State] = null)
       : ServersReducedMap = {
     assert(newCpts == null) 
-    // Profiler.count("ServersReducedMap"+map.length)
+    Profiler.count("ServersReducedMap"+map.length)
     // With lazySet bound 44: 0 -> 6; 1 -> 2.3B; 2 -> 51.5M; 3 -> 1.6K 
     if(map.isEmpty) new ServersReducedMap0(servers/*, newCpts*/)
     else if(map.length == 1) new ServersReducedMap1(servers, map(0) /*,newCpts*/)

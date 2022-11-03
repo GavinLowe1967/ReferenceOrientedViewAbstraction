@@ -38,10 +38,10 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   private val cptsLen = components.length
 
   /** Bit map showing which parameters are in the components, if singleRef. */
-  val cptParamBitMap = newBitMap
-  if(singleRef) 
-    for(c <- components; (t,p) <- c.processIdentities; if !isDistinguished(p))
-      cptParamBitMap(t)(p) = true
+  // val cptParamBitMap = newBitMap
+  // if(singleRef) 
+  //   for(c <- components; (t,p) <- c.processIdentities; if !isDistinguished(p))
+  //     cptParamBitMap(t)(p) = true
 
   /** A bound on the values of each type. */
   private var paramsBound: Array[Int] = null 
@@ -202,8 +202,9 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * no element of the list is a subset of another.  Protected by
     * synchronized blocks. */
   private var conditionBInducedMap = 
-    if(singleRef) new OpenHashMap[ServersReducedMap, List[CrossRefInfo]]
-  // new scala.collection.mutable.HashMap[ServersReducedMap, List[CrossRefInfo]]
+    if(singleRef) 
+      new OpenHashMap[ServersReducedMap, List[CrossRefInfo]](
+        initSize = 4, ThresholdRatio = 0.6F)
     else null
 
   /** Is crossRefs1 a subset of crossRefs2? */

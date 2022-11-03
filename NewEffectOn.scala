@@ -125,7 +125,7 @@ class NewEffectOn(
             RemappingExtender.allCompletions(map, candidates, cv, trans)
           for(map1 <- allComps){
             val cpts1 = Remapper.applyRemapping(map1, cv.components) 
-            val inducedTrans = new InducedTransitionInfo(
+            val inducedTrans = new InducedTransitionInfo1(
               nv.asReducedComponentView, trans, cpts1, cv) // , newCpts)
             // New missing cross references created by extending map.  
             val newMissingCRs = newMissingCrossRefs(
@@ -155,7 +155,7 @@ class NewEffectOn(
           val cpts = 
             if(condCSat) Remapper.applyRemapping(map, cv.components) else null
           val inducedTrans = 
-            new InducedTransitionInfo(nv.asReducedComponentView, trans, cpts, cv)
+            InducedTransitionInfo(nv.asReducedComponentView, trans, cpts, cv)
           // , newCpts)
           // Add a MissingCrossReferences to the store. 
           val missingCrossRefs =

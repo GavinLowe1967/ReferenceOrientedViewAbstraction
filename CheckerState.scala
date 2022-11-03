@@ -325,7 +325,8 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
     // Traverse 3 views.  Not very useful as mostly in creationIngredients.
     val viewsIter = sysAbsViews.iterator
     for(_ <- 0 until 3; if viewsIter.hasNext){
-      traverse("ComponentView", viewsIter.next(), maxPrint = 1); println()
+      val c = viewsIter.next(); c.memoryProfile
+      // traverse("ComponentView", viewsIter.next(), maxPrint = 1); println()
     }
     traverse("sysAbsViews", sysAbsViews, maxPrint = 1); println()
     traverse("transitions", transitions, maxPrint = 0); println()

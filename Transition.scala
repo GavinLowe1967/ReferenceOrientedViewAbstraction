@@ -205,6 +205,14 @@ class Transition(
     us.nonEmpty
   }
 
+  /** Memory profile. */
+  def memoryProfile = {
+    import ox.gavin.profiling.MemoryProfiler.traverse
+    traverse("Transition pre", pre, maxPrint = 1)
+    traverse("Transition post", post, maxPrint = 1)
+    traverse("Transition", this, maxPrint = 1)
+  }
+
   // ==================================================================
   // Overriding standard things.
 
@@ -219,6 +227,8 @@ class Transition(
     (pre.hashCode ^ e) + 73*post.hashCode 
 }
 
+
+// ==================================================================
 
 object Transition{
   /* Functions used when debugging, to highlight the transition that should

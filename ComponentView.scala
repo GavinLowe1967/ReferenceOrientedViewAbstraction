@@ -130,6 +130,13 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * why so many induced transitions are redundant. */
   def inducedFrom(cv1: ComponentView) = 
     creationIngredients != null && creationIngredients._3 == cv1
+
+  def memoryProfile = {
+    import ox.gavin.profiling.MemoryProfiler.traverse
+    if(creationTrans != null) creationTrans.memoryProfile
+    else if(creationIngredients != null) creationIngredients._1.memoryProfile
+    traverse("ComponentView", this, maxPrint = 1); println()
+  }
 }
 
 // ==================================================================
