@@ -87,8 +87,7 @@ class EffectOn(
   }
 
   /** Process induced information in the case of full views. */
-  private def processInducedInfo(
-    cpts: Array[State], unifs: UnificationList, // reducedMap: ReducedMap, 
+  private def processInducedInfo(cpts: Array[State], unifs: UnificationList,
     newComponentsList: List[Array[State]])
       : Unit = {
     require(!singleRef)

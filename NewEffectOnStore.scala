@@ -233,21 +233,22 @@ class NewEffectOnStore{
     if(mcr.candidates != null){
       val unflattened = CompressedCandidatesMap.splitBy(mcr.candidates, 
         inducedTrans.cv.getParamsBound)
-      val map0 = CompressedCandidatesMap.extractMap(unflattened) //mcr.candidates)
+      val map0 = CompressedCandidatesMap.extractMap(unflattened)
       for(map <- mcr.allCompletions){
         // Instantiate oldCpts in inducedTrans
         val cpts = Remapper.applyRemapping(map, inducedTrans.cv.components)
+        Pools.returnRemappingRows(map)
         val newInducedTrans = inducedTrans.extend(cpts)
         // New missing cross references created by extending
         val newMissingCRs = newMissingCrossRefs(inducedTrans, map0, cpts, views)
-// IMPROVE: recycle map0? 
         if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
           val newMCR =
-            new MissingCrossReferences(newInducedTrans, newMissingCRs) //, null
+            new MissingCrossReferences(newInducedTrans, newMissingCRs)
           add(newMCR, false)
         }
         else checkConditionC(newInducedTrans, views, result)
       }
+      Pools.returnRemappingRows(map0)
     }
     else{ 
       // Previously we considered a total map, so have considered all cross

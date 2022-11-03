@@ -29,9 +29,10 @@ object ServersReducedMap{
     assert(newCpts == null) 
     Profiler.count("ServersReducedMap"+map.length)
     // With lazySet bound 44: 0 -> 6; 1 -> 2.3B; 2 -> 51.5M; 3 -> 1.6K 
-    if(map.isEmpty) new ServersReducedMap0(servers/*, newCpts*/)
-    else if(map.length == 1) new ServersReducedMap1(servers, map(0) /*,newCpts*/)
-    else new ServersReducedMapN(servers, map /*, newCpts*/)
+    if(map.isEmpty) new ServersReducedMap0(servers)
+    else if(map.length == 1) new ServersReducedMap1(servers, map(0))
+    else if(map.length == 2) new ServersReducedMap2(servers, map(0), map(1))
+    else new ServersReducedMapN(servers, map)
   }
 }
 
@@ -72,29 +73,46 @@ class ServersReducedMap0(
 
 /** A ServersReducedMap whose map is a single Long. */
 class ServersReducedMap1(val servers: ServerStates, val map: Long)
- //, val newCpts: List[State] = null
     extends ServersReducedMap{
   override def equals(that: Any) = that match{
     case srm: ServersReducedMap1 => 
-      srm.servers == servers && srm.map == map // && srm.newCpts == newCpts
+      srm.servers == servers && srm.map == map 
     case _: ServersReducedMap => false
   }
 
-  override def hashCode = combine(servers.hashCode, map) //^ hashCpts(newCpts)
+  override def hashCode = combine(servers.hashCode, map)
 
-  override def toString = s"ServersReducedMap1($servers, $map)" //, $newCpts
+  override def toString = s"ServersReducedMap1($servers, $map)"
 }
 
 // ==================================================================
 
-/** A ServersReducedMap whose map contains at least two Longs. */
-class ServersReducedMapN(val servers: ServerStates, val map: ReducedMap)
-  //val newCpts: List[State] = null)
+/** A ServersReducedMap whose map is two Longs. */
+class ServersReducedMap2(
+  val servers: ServerStates, val map1: Long, val map2: Long)
     extends ServersReducedMap{
   override def equals(that: Any) = that match{
+    case srm: ServersReducedMap2 => 
+      srm.servers == servers && srm.map1 == map1  && srm.map2 == map2
+    case _: ServersReducedMap => false
+  }
+
+  override def hashCode = combine(combine(servers.hashCode, map1), map2)
+
+  override def toString = s"ServersReducedMap1($servers, $map1, $map2)"
+}
+
+
+// ==================================================================
+
+/** A ServersReducedMap whose map contains at least three Longs. */
+class ServersReducedMapN(val servers: ServerStates, val map: ReducedMap)
+    extends ServersReducedMap{
+  require(map.length > 2)
+
+  override def equals(that: Any) = that match{
     case srm: ServersReducedMapN =>
-      srm.servers == servers && srm.map.sameElements(map)//  && 
-      // srm.newCpts == newCpts
+      srm.servers == servers && srm.map.sameElements(map)
     case _: ServersReducedMap => false
   }
 
@@ -105,7 +123,7 @@ class ServersReducedMapN(val servers: ServerStates, val map: ReducedMap)
     // In FP terms: foldl combine servers.hashCode map
     var h = servers.hashCode; var i = 0
     while(i < map.length){ h = combine(h, map(i)); i += 1 }
-    h // ^ hashCpts(newCpts)
+    h
   }
 
   override def toString = 

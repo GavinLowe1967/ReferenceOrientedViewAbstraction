@@ -21,11 +21,20 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   ComponentView0.checkValid(servers, components)
 
   /** Identities of components as a bit map. */
-  val cptIdsBitMap = StateArray.makeIdsBitMap(components)
+  val cptIdsBitMap = IdentitiesBitMap.makeIdsBitMap(components) // 
+
+  // val cptIdsBitMapX = StateArray.makeIdsBitMap(components)
+
+  // for(t <- 0 until numTypes; i <- 0 until typeSizes(t))
+  //   assert(IdentitiesBitMap(cptIdsBitMap,t,i) == cptIdsBitMapX(t)(i),
+  //     s"\ncptIdsBitMapX = "+
+  //       cptIdsBitMapX.map(_.mkString("(",",",")")).mkString("; ")+
+  //       s"cptIdsBitMap = $cptIdsBitMap; t = $t; i = $i") 
 
   /** For each parameter (t,i), the index of the component that has (t,i) as its
     * identity, or -1 if there is no such. */ 
   val idsIndexMap: Array[Array[Int]] = StateArray.makeIdsIndexMap(components)
+
 
   /** The component state of this with identity (f,id), or null if there is no
     * such component. */

@@ -34,7 +34,9 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
 
   // IDs of components in pre, cv
   @inline private def preCptIds = pre.cptIdsBitMap 
-  @inline private def cptIds = cv.cptIdsBitMap 
+  @inline private def cptIds(t: Type)(id: Identity) = 
+    // cv.cptIdsBitMapX(t)(id)
+    IdentitiesBitMap.get(cv.cptIdsBitMap, t, id)
 
   /** Temporary test to help with debugging.  Might this be the instance causing
     * problems? */
@@ -663,7 +665,8 @@ object RemappingExtender{
     while(i < cvPrincParams.length && !found){
       val (t,id) = cvPrincParams(i); i += 1
       // Is id a missing parameter for cv?
-      if(!isDistinguished(id) && !cptIds(t)(id)){
+      if(!isDistinguished(id) &&  !IdentitiesBitMap.get(cptIds,t,id)){
+          // !cptIds(t)(id)){
         val id1 = rdMap(t)(id)
         // Is id1 a missing parameter for pre?
         if(id1 >= 0 && prePrincParams.contains((t,id1)) && !preCptIds(t)(id1))

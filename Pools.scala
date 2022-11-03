@@ -72,8 +72,8 @@ object Pools{
     Profiler.count(s"Pools.getRemappingRow")
     val pIndex = indexFor(me,size); val index = rowPoolSize(pIndex)-1
     if(index >= 0){ rowPoolSize(pIndex) = index; rowPool(pIndex)(index) }
-    else mkArray(size) // new Array[Int](size)
-// IMPROVE: above non-inlining for profiling purposes
+    else /*mkArray(size)*/ new Array[Int](size)
+    //  non-inlining for profiling purposes
   }
 
   private def mkArray(size: Int) = new Array[Int](size)

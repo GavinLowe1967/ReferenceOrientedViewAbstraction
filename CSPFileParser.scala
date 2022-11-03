@@ -102,6 +102,7 @@ class CSPFileParser(fname: String){
     // }
     // numTypes = identityTypes.length
     setNumTypes(identityTypes.distinct.length, identityTypes.length)
+    // IdentitiesBitMap.init()
   }
 
   /** Does c represent white space? */

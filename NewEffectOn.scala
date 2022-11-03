@@ -93,10 +93,9 @@ class NewEffectOn(
       val newComponentsList = List(StateArray(Array(postCpts(k), newPrinc)))
       processInducedInfo(map, unifs, null, false, crossRefs,
         newComponentsList, candidates)
-// IMPROVE: recycle map? 
+      Pools.returnRemappingRows(map)
     }
   }
-
 
   /** Process information about an induced transition.  cv.components is renamed
     * by cross-reference-view-defining mapping map, to produce cpts,
@@ -156,7 +155,6 @@ class NewEffectOn(
             if(condCSat) Remapper.applyRemapping(map, cv.components) else null
           val inducedTrans = 
             InducedTransitionInfo(nv.asReducedComponentView, trans, cpts, cv)
-          // , newCpts)
           // Add a MissingCrossReferences to the store. 
           val missingCrossRefs =
             MissingCrossReferences(inducedTrans, missing, candidates)

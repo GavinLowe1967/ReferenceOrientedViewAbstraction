@@ -224,7 +224,8 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       : ArrayBuffer[RemappingMap] = {
     Profiler.count("extendToRDMap")
     // IDs of components in pre, cv
-    val preCptIds = pre.cptIdsBitMap; val cptIds = cv.cptIdsBitMap
+    val preCptIds = pre.cptIdsBitMap; //val cptIdsX = cv.cptIdsBitMapX 
+    val cptIds = cv.cptIdsBitMap
     // val otherArgs = Remapper.makeOtherArgMap(resultRelevantParams)
     // Find upper bound on resultRelevantParams(t) for each t
     val bounds = new Array[Int](numTypes); var t = 0
@@ -242,7 +243,11 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       else if(i == map(t).length) rec(t+1, 0) // advance
       else if(map(t)(i) >= 0) rec(t, i+1) // advance
       else{
-        val isId = cptIds(t)(i)  // Is this an identity?
+        val isId = IdentitiesBitMap(cptIds,t,i) //
+        //val isIdX = cptIdsX(t)(i)  // Is this an identity?
+        // assert(isId == isIdX, 
+        //   s"cptIdsX = "+cptIdsX.map(_.mkString("(",",",")")).mkString("; ")+
+        //   s"cptIds = $cptIds; t = $t; i = $i") 
         // map (t,i) to each element of otherArgs(t)
         var id1 = 0
         while(id1 < bounds(t)){

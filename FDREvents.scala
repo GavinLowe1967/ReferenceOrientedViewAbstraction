@@ -155,7 +155,7 @@ class FDREvents(fdrSession: FDRSession, superTypeNames: Array[String])
       distinguishedSizes(i) = superTypeSizes(i) - typeSize
       println("Supertype size = "+idRemap.size)
       println("Distinguished values = "+distinguishedSizes(i))
-      Pools.init(typeSizes)
+      Pools.init(typeSizes); // IdentitiesBitMap.init(typeSizes)
       i
   }
 

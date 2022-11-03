@@ -54,7 +54,8 @@ $(DIR)/ServerStates.class: $(DIR)/State.class $(COLLDIR)/MyHashMap.class $(DIR)/
 
 $(DIR)/FDRSession.class: $(DIR)/Concurrency.class
 
-$(DIR)/FDREvents.class:  $(DIR)/Concurrency.class $(DIR)/FDRSession.class
+$(DIR)/FDREvents.class:  $(DIR)/Concurrency.class $(DIR)/FDRSession.class  $(DIR)/Pools.class
+
 
 $(DIR)/FDRTransitionMap.class: $(DIR)/State.class $(DIR)/CSPFileParser.class	\
    $(DIR)/FDREvents.class $(DIR)/MyStateMap.class				\
@@ -69,7 +70,9 @@ $(DIR)/View.class:  $(DIR)/StateArray.class $(DIR)/ServerStates.class $(COLLDIR)
 
 # $(DIR)/MyHashSet.class:  $(DIR)/Sharding.class
 
-$(DIR)/ComponentView0.class: $(DIR)/View.class $(COLLDIR)/MyHashSet.class $(DIR)/ServersReducedMap.class $(COLLDIR)/OpenHashMap.class
+$(DIR)/ComponentView0.class: $(DIR)/View.class $(DIR)/IdentitiesBitMap.class	\
+  $(COLLDIR)/MyHashSet.class $(DIR)/ServersReducedMap.class			\
+  $(COLLDIR)/OpenHashMap.class
 
 $(DIR)/ComponentView.class: $(DIR)/ComponentView0.class
 
@@ -122,7 +125,8 @@ $(DIR)/Servers.class: $(DIR)/FDRSession.class $(COLLDIR)/MyHashMap.class	\
    $(DIR)/FDRTransitionMap.class
 
 $(DIR)/SystemP/System.class: $(DIR)/FDRTransitionMap.class		\
-  $(DIR)/Components.class $(DIR)/Servers.class $(DIR)/NewViewSet.class
+  $(DIR)/Components.class $(DIR)/Servers.class $(DIR)/NewViewSet.class	\
+  $(DIR)/IdentitiesBitMap.class
 
 $(DIR)/SystemP/SystemTest.class: $(DIR)/TestStates.class $(DIR)/SystemP/System.class
 
