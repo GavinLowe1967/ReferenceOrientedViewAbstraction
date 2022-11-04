@@ -312,8 +312,8 @@ object StateArray{
 
   /** For each (t,i), the index of the component in cpts that has (t,i) as its
     * identity, or -1 if there is no such. */
-  def makeIdsIndexMap(cpts: Array[State]): Array[Array[Int]] = {
-    val indexMap = Array.tabulate(numTypes)(t => Array.fill(typeSizes(t))(-1))
+  def makeIdsIndexMap(cpts: Array[State]): Array[Array[Byte]] = {
+    val indexMap = Array.tabulate(numTypes)(t => Array.fill(typeSizes(t))(-1.toByte))
     for(ix <- 0 until cpts.length){
       val (t,id) = cpts(ix).componentProcessIdentity
       if(id >= indexMap(t).length){
@@ -322,15 +322,15 @@ object StateArray{
       }
       // assert(id < indexMap(t).length, 
       //   s"Not enough identities in script for "+show(cpts)) // IMPROVE
-      indexMap(t)(id) = ix
+      indexMap(t)(id) = ix.toByte
     }
     indexMap
   }
 
   /** For each (t,i), the indices of the components c in cpts such that (t,i) is
     * a reference of c but not its identity (or null if there are no such). */
-  def makeRefsIndexMap(cpts: Array[State]): Array[Array[ByteBitMap.ByteBitMap]] = {
-  //def makeRefsIndexMap(cpts: Array[State]): Array[Array[List[Int]]] = {
+  def makeRefsIndexMap(cpts: Array[State])
+      : Array[Array[ByteBitMap.ByteBitMap]] = {
     val indexMap = Array.tabulate(numTypes)(t => 
       Array.fill(typeSizes(t))(List[Int]()))
     for(ix <- 0 until cpts.length){

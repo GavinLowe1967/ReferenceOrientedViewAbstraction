@@ -104,8 +104,8 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
           if(result == null){
             // All indices of components of pre that have (t,id1) as a
             // reference (or null if there are no such).
-            var refJs: ByteBitMap.ByteBitMap /*Array[Int]*/ = pre.refsIndexMap(t)(id1) 
-            if(refJs != ByteBitMap.Empty /*null*/){
+            var refJs: ByteBitMap.ByteBitMap = pre.refsIndexMap(t)(id1) 
+            if(refJs != ByteBitMap.Empty){
               // Index of component in cv with identity (t,id), or -1 if no such.
               val i = cv.idsIndexMap(t)(id)
               // If not unified, we have a linkage i->j for j in refJs
@@ -116,7 +116,6 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
                 //  val j = refJs(ix); ix += 1
                 while(iter.hasNext && result == null){
                   val j = iter.next()
-                  // val j = refJs.head; refJs = refJs.tail
                   if(!preUnifs(j) && !contains(doneB,(i,j))) result = (i,j)
                 }
               }

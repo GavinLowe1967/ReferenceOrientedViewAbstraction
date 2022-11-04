@@ -106,7 +106,7 @@ object Unification{
     val map0 = pre.servers.remappingMap1(cv.getParamsBound)
     // Map from identities to the index of the corresponding component in
     // preCpts, if any, otherwise -1.
-    val preCptsIndexMap = pre.idsIndexMap // State.indexMap(preCpts)
+    // val preCptsIndexMap = pre.idsIndexMap // State.indexMap(preCpts)
     val result = new AllUnifsResult // holds final result
 
     // Extend map and unifs to cpts[from..), adding results to results.  Each
@@ -131,7 +131,7 @@ object Unification{
               val id1 = map1(f)(id)
               // Check map not extended on (f,id), or (f,id1) doesn't match an
               // identity in preCpts
-              ok = id1 == map(f)(id) || preCptsIndexMap(f)(id1) < 0
+              ok = id1 == map(f)(id) || pre.idsIndexMap(f)(id1) < 0
               j += 1
             }
             if(ok) allUnifsRec(map1, from+1, (from,i)::unifs)
@@ -142,7 +142,7 @@ object Unification{
         // try to unify those components; but don't unify the two principals
         // if !singleRef (that would just recreate the same transition).
         val fc = c.family; val id1 = map(fc)(c.id)
-        val ix = if(id1 < 0) -1 else preCptsIndexMap(fc)(id1)
+        val ix = if(id1 < 0) -1 else pre.idsIndexMap(fc)(id1)
         if(ix >= 0){ 
           if(singleRef || from > 0 || ix > 0) tryUnify(ix)
           Pools.returnRemappingRows(map) // finished with map

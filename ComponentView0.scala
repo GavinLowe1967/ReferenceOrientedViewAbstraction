@@ -33,8 +33,8 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
 
   /** For each parameter (t,i), the index of the component that has (t,i) as its
     * identity, or -1 if there is no such. */ 
-  val idsIndexMap: Array[Array[Int]] = StateArray.makeIdsIndexMap(components)
-
+  val idsIndexMap: Array[Array[Byte]] = StateArray.makeIdsIndexMap(components)
+// IMPROVE: flatten
 
   /** The component state of this with identity (f,id), or null if there is no
     * such component. */

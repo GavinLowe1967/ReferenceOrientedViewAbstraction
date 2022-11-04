@@ -245,32 +245,29 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   /** Does this have a component with id (f,id)? */
   def hasPid(f: Family, id: Identity) = cptIdsBitMap(f)(id)
 
+  import FlatArrayMap.FlatArrayMap
+
   /** For each parameter (t,i), the index of the component that has (t,i) as its
     * identity, or -1 if there is no such. */ 
-  val idsIndexMap: Array[Array[Int]] = StateArray.makeIdsIndexMap(components)
+  //val idsIndexMapX: Array[Array[Int]] = StateArray.makeIdsIndexMap(components)
+  private val flatIdsIndexMap: FlatArrayMap[Byte] = 
+    FlatArrayMap.from2D(StateArray.makeIdsIndexMap(components))
 
-  /** For each (t,i), the indices of the components c such that (t,i) is a
-    * reference of c but not its identity (or null if there are no such). */
-  // val refsIndexMapX: Array[Array[Array[Int]]] =
-  //   StateArray.makeRefsIndexMap(components)
+  @inline def idsIndexMap(t: Type)(id: Int): Int = {
+    FlatArrayMap.get(flatIdsIndexMap, t, id)
+    //assert(res == idsIndexMapX(t)(id))
+    // res
+  }
 
   import ByteBitMap.ByteBitMap
 
   /** For each (t,i), the indices of the components c such that (t,i) is a
     * reference of c but not its identity (or null if there are no such). */
-  private val flatRefsIndexMap: FlatArrayMap.FlatArrayMap[ByteBitMap] = 
-  //private val flatRefsIndexMap: FlatArrayMap.FlatArrayMap[Array[Int]] = 
-    FlatArrayMap.from2D(StateArray.makeRefsIndexMap(components))//.map(ByteBitMap.fromArray)
+  private val flatRefsIndexMap: FlatArrayMap[ByteBitMap] = 
+    FlatArrayMap.from2D(StateArray.makeRefsIndexMap(components))
 
-  @inline def refsIndexMap(t: Type)(id: Identity): ByteBitMap /*Array[Int]*/ = {
-    //val res = 
+  @inline def refsIndexMap(t: Type)(id: Identity): ByteBitMap = 
     FlatArrayMap.get(flatRefsIndexMap, t, id)
-    // if(res == null) assert(refsIndexMapX(t)(id) == null)
-    // else assert(res.sameElements(refsIndexMapX(t)(id)))
-    // res
-  }
-
-// IMPROVE: use Byte as bit map in place of Array[Int]
 
   /** A bound on the values of each type.  IMPROVE: maybe store this. */
   def getParamsBound: Array[Int] = View.getParamsBound(servers, components)
