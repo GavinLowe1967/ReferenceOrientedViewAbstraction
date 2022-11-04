@@ -328,8 +328,9 @@ object StateArray{
   }
 
   /** For each (t,i), the indices of the components c in cpts such that (t,i) is
-    * a reference of c but not its identity. */
-  def makeRefsIndexMap(cpts: Array[State]): Array[Array[List[Int]]] = {
+    * a reference of c but not its identity (or null if there are no such). */
+  def makeRefsIndexMap(cpts: Array[State]): Array[Array[ByteBitMap.ByteBitMap]] = {
+  //def makeRefsIndexMap(cpts: Array[State]): Array[Array[List[Int]]] = {
     val indexMap = Array.tabulate(numTypes)(t => 
       Array.fill(typeSizes(t))(List[Int]()))
     for(ix <- 0 until cpts.length){
@@ -339,7 +340,8 @@ object StateArray{
         if(!isDistinguished(x) && (t != idt || x != id)) indexMap(t)(x) ::= ix
       }
     }
-    indexMap
+    indexMap.map(_.map(ByteBitMap.fromList))
+    // indexMap.map(_.map(list => if(list.isEmpty) null else list.toArray))
   }
 
   /** Remove identities of components in cpts from bitMap. */

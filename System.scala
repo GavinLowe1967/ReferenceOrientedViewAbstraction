@@ -87,8 +87,8 @@ class System(fname: String) {
   /** The size of each indexing subtype, by type number. */
   private val idSizes = typeSizes
 
-  // Pools.init(typeSizes); 
-  IdentitiesBitMap.init(typeSizes)
+  Flatten.init(typeSizes)
+  IdentitiesBitMap.init(typeSizes.sum); FlatArrayMap.init(typeSizes.sum)
 
   /** The size of each indexing subtype, by component family number. */
   private val indexingTypeSizes = 

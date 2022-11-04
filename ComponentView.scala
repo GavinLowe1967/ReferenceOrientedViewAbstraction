@@ -16,7 +16,6 @@ class ComponentView(servers: ServerStates, components: Array[State])
   /** This view was created by the view transition creationTrans post. */
   // private var pre, post: Concretization = null
   private var creationTrans: Transition = null
-  // private var e: EventInt = -1
 
   /** record that this was created by the view transition trans. */
   def setCreationTrans(trans: Transition) = synchronized{
@@ -235,12 +234,12 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     }
   }
 
-  /** Identities of components. */
-// IMPROVE: replace by cptIdsBitMap
-  val cptIds = components.map(_.componentProcessIdentity)
-
   /** Identities of components as a bit map. */
-  val cptIdsBitMap = StateArray.makeIdsBitMap(components)
+  private val cptIdsBitMapRaw =  IdentitiesBitMap.makeIdsBitMap(components)
+
+  @inline def cptIdsBitMap(f: Type)(id: Identity) = 
+    IdentitiesBitMap(cptIdsBitMapRaw, f, id)
+  // StateArray.makeIdsBitMap(components)
 // IMPROVE: do we need above given idsIndexMap?
 
   /** Does this have a component with id (f,id)? */
@@ -250,17 +249,28 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     * identity, or -1 if there is no such. */ 
   val idsIndexMap: Array[Array[Int]] = StateArray.makeIdsIndexMap(components)
 
-  /** The component state of this with identity (f,id), or null if there is no
-    * such component. */
-  // def find(f: Family, id: Identity): State = {
-  //   val ix = idsIndexMap(f)(id)
-  //   if(ix < 0) null else components(ix)
-  // }
+  /** For each (t,i), the indices of the components c such that (t,i) is a
+    * reference of c but not its identity (or null if there are no such). */
+  // val refsIndexMapX: Array[Array[Array[Int]]] =
+  //   StateArray.makeRefsIndexMap(components)
+
+  import ByteBitMap.ByteBitMap
 
   /** For each (t,i), the indices of the components c such that (t,i) is a
-    * reference of c but not its identity. */
-  val refsIndexMap: Array[Array[List[Int]]] =
-    StateArray.makeRefsIndexMap(components)
+    * reference of c but not its identity (or null if there are no such). */
+  private val flatRefsIndexMap: FlatArrayMap.FlatArrayMap[ByteBitMap] = 
+  //private val flatRefsIndexMap: FlatArrayMap.FlatArrayMap[Array[Int]] = 
+    FlatArrayMap.from2D(StateArray.makeRefsIndexMap(components))//.map(ByteBitMap.fromArray)
+
+  @inline def refsIndexMap(t: Type)(id: Identity): ByteBitMap /*Array[Int]*/ = {
+    //val res = 
+    FlatArrayMap.get(flatRefsIndexMap, t, id)
+    // if(res == null) assert(refsIndexMapX(t)(id) == null)
+    // else assert(res.sameElements(refsIndexMapX(t)(id)))
+    // res
+  }
+
+// IMPROVE: use Byte as bit map in place of Array[Int]
 
   /** A bound on the values of each type.  IMPROVE: maybe store this. */
   def getParamsBound: Array[Int] = View.getParamsBound(servers, components)
@@ -360,34 +370,57 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     while(f < numTypes){ nextArg(f) = nextArg(f) max paramsBound(f); f += 1 }
   }
 
+  import IdentitiesBitMap.{IdentitiesBitMap, Empty, set, get}
+
   /** Bit map showing which parameters are in this, if singleRef. */
-  val paramsBitMap: BitMap = 
+  private val paramsBitMapL: IdentitiesBitMap = 
     if(singleRef){
-      val pbm = newBitMap
+      var pbm = Empty
       for(c <- components++servers.servers; (t,p) <- c.processIdentities;
           if !isDistinguished(p))
-        pbm(t)(p) = true
+        set(pbm, t, p)
       pbm
     }
-    else null 
+    else Empty
+
+  @inline def paramsBitMap(t: Type)(id: Identity) = get(paramsBitMapL, t, id)
+
+  /** All parameters of type t.  The list is ordered. */
+  def getAllParams(t: Type): List[Identity] = synchronized{
+    var i = 0; val len = typeSizes(t); var params = List[Identity]()
+    while(i < len){ if(paramsBitMap(t)(i)) params ::= i; i += 1 }
+    params.reverse
+  }
+
+  // val paramsBitMap: BitMap = 
+  //   if(singleRef){
+  //     val pbm = newBitMap
+  //     for(c <- components++servers.servers; (t,p) <- c.processIdentities;
+  //         if !isDistinguished(p))
+  //       pbm(t)(p) = true
+  //     pbm
+  //   }
+  //   else null 
 
   /** All parameters of components, indexed by type.  Initialised by first call
     * of getAllParams. */
-  private var allParams: Array[List[Identity]] = null
+  //private var allParams: Array[List[Identity]] = null
 
-  /** All parameters of components, indexed by type; each list is ordered. */
-  def getAllParams: Array[List[Identity]] = synchronized{
-    // assert(singleRef && newEffectOn) -- or also from test
-    if(allParams == null){
-      allParams = Array.fill(numTypes)(List[Identity]()); var f = 0
-      while(f < numFamilies){
-        var i = 0; val len = paramsBitMap(f).size; var params = List[Identity]()
-        while(i < len){ if(paramsBitMap(f)(i)) params ::= i; i += 1 }
-        allParams(f) = params.reverse; f += 1
-      }
-    }
-    allParams
-  }
+
+  // /** All parameters of components, indexed by type; each list is ordered. */
+  // def getAllParams: Array[List[Identity]] = synchronized{
+  //   // assert(singleRef && newEffectOn) -- or also from test
+  //   if(allParams == null){
+  //     allParams = Array.fill(numTypes)(List[Identity]()); var f = 0
+  //     while(f < numFamilies){
+  //       var i = 0; val len = typeSizes(f) // paramsBitMap(f).size; 
+  //       var params = List[Identity]()
+  //       while(i < len){ if(paramsBitMap(f)(i)) params ::= i; i += 1 }
+  //       allParams(f) = params.reverse; f += 1
+  //     }
+  //   }
+  //   allParams
+  // }
 
   override def toString = 
     s"$servers || ${components.mkString("[", " || ", "]")}"

@@ -33,7 +33,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   @inline private def cpts = cv.components
 
   // IDs of components in pre, cv
-  @inline private def preCptIds = pre.cptIdsBitMap 
+  @inline private def preCptIds = pre.cptIdsBitMap _
   @inline private def cptIds(t: Type)(id: Identity) = 
     // cv.cptIdsBitMapX(t)(id)
     IdentitiesBitMap.get(cv.cptIdsBitMap, t, id)
@@ -103,15 +103,20 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
           }
           if(result == null){
             // All indices of components of pre that have (t,id1) as a
-            // reference.
-            var refJs = pre.refsIndexMap(t)(id1) 
-            if(refJs.nonEmpty){
+            // reference (or null if there are no such).
+            var refJs: ByteBitMap.ByteBitMap /*Array[Int]*/ = pre.refsIndexMap(t)(id1) 
+            if(refJs != ByteBitMap.Empty /*null*/){
               // Index of component in cv with identity (t,id), or -1 if no such.
               val i = cv.idsIndexMap(t)(id)
               // If not unified, we have a linkage i->j for j in refJs
               if(i >= 0 && !cvUnifs(i)){
-                while(refJs.nonEmpty && result == null){
-                  val j = refJs.head; refJs = refJs.tail
+                val iter = ByteBitMap.iterator(refJs)
+                // var ix = 0 // index into refJs
+                // while(ix < refJs.length /*refJs.nonEmpty*/ && result == null){
+                //  val j = refJs(ix); ix += 1
+                while(iter.hasNext && result == null){
+                  val j = iter.next()
+                  // val j = refJs.head; refJs = refJs.tail
                   if(!preUnifs(j) && !contains(doneB,(i,j))) result = (i,j)
                 }
               }
@@ -242,12 +247,11 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     * not mapping to an element of range rdMap) and resultRelevantParams (not
     * mapping to any such parameter) and respecting doneB (for each (i,j) in
     * doneB, not mapping any parameter of cv.cpts(i) to a component of
-    * pre.cpts(j)). 
-    * 
-    * Note: not currently used except in testing.  */
+    * pre.cpts(j)).   */
   private def getCandidatesMap(
     resultRelevantParams: BitMap, rdMap: RemappingMap, doneB: List[Linkage])
       : CandidatesMap = {
+    assert(singleRef && !useNewEffectOnStore)
     // All params of pre, except those in resultRelevantParams or range rdMap 
 // IMPROVE: memoise at least some of this
     val otherArgs: Array[List[Identity]] = Array.tabulate(numTypes)(t => 
@@ -657,7 +661,7 @@ object RemappingExtender{
   @inline 
   def anyLinkageC(rdMap: RemappingMap, cv: ComponentView, pre: Concretization)
       : Boolean = {
-    val cptIds = cv.cptIdsBitMap; val preCptIds = pre.cptIdsBitMap 
+    val cptIds = cv.cptIdsBitMap; // val preCptIds = pre.cptIdsBitMap 
     val prePrincParams = pre.components(0).processIdentities
     val cvPrincParams = cv.principal.processIdentities
     // Iterate through parameters of cv.principal.
@@ -669,7 +673,8 @@ object RemappingExtender{
           // !cptIds(t)(id)){
         val id1 = rdMap(t)(id)
         // Is id1 a missing parameter for pre?
-        if(id1 >= 0 && prePrincParams.contains((t,id1)) && !preCptIds(t)(id1))
+        if(id1 >= 0 && prePrincParams.contains((t,id1)) &&
+            !pre.cptIdsBitMap(t)(id1))
           found = true
       }
     }

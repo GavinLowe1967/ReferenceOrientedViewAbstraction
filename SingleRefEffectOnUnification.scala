@@ -224,8 +224,8 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       : ArrayBuffer[RemappingMap] = {
     Profiler.count("extendToRDMap")
     // IDs of components in pre, cv
-    val preCptIds = pre.cptIdsBitMap; //val cptIdsX = cv.cptIdsBitMapX 
-    val cptIds = cv.cptIdsBitMap
+    //val preCptIds = pre.cptIdsBitMap _  //val cptIdsX = cv.cptIdsBitMapX 
+    val cptIds = cv.cptIdsBitMap 
     // val otherArgs = Remapper.makeOtherArgMap(resultRelevantParams)
     // Find upper bound on resultRelevantParams(t) for each t
     val bounds = new Array[Int](numTypes); var t = 0
@@ -253,7 +253,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
         while(id1 < bounds(t)){
           if(resultRelevantParams(t)(id1)){
             // Don't map an identity to an identity
-            if(!(isId && preCptIds(t)(id1))){
+            if(!(isId && pre.cptIdsBitMap(t)(id1))){
               resultRelevantParams(t)(id1) = false
               map(t)(i) = id1            // temporary update (+)
               rec(t, i+1)
@@ -344,7 +344,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     * reference is used to create views. */ 
   private def getSecondaryInfo(map1: RemappingMap)
       : ArrayBuffer[(RemappingMap, Int)] = {
-    val preCptIds = pre.cptIdsBitMap
+    //val preCptIds = pre.cptIdsBitMap
     val result = new ArrayBuffer[(RemappingMap, Int)]; var ar = acquiredRefs
     while(ar.nonEmpty){
       val (i,(t,id)) = ar.head; ar = ar.tail
@@ -353,7 +353,8 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
       // already there; or (2) map1 is undefined on cvpid, id isn't in the
       // range, and id isn't an identity in pre (which would imply
       // unification).
-      if(id1 == id || id1 < 0 && !preCptIds(t)(id) && !map1(t).contains(id) ){
+      if(id1 == id || 
+          id1 < 0 && !pre.cptIdsBitMap(t)(id) && !map1(t).contains(id) ){
         val map2 = Remapper.cloneMap(map1); map2(cvpf)(cvpid) = id
         // map2 is recycled in makeSecondaryInfo
         result += ((map2, i))
