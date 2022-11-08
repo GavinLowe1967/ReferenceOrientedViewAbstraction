@@ -167,6 +167,23 @@ object ServerStates{
     newIds
   }
 
+  import IdentitiesBitMap.IdentitiesBitMap
+
+  def newParamsIdentitiesBitMap(pre: ServerStates, post: ServerStates)
+      : IdentitiesBitMap = {
+    require(pre.isNormalised)
+    //Profiler.count("ServerStates.newParamsBitMap:newBitMap")
+    var newIds = IdentitiesBitMap.Empty; var sts: List[State] = post.servers
+    while(sts.nonEmpty){
+      val pids = sts.head.processIdentities; sts = sts.tail; var i = 0
+      while(i < pids.length){
+        val (f,id) = pids(i); i += 1
+        if(id >= pre.paramsBound(f)) newIds = IdentitiesBitMap.set(newIds, f, id)
+      }
+    }
+    newIds
+  }
+
   /** A store for rows of RemappingMaps, used in remappingMap1(size).
     * remappingMapStore(t)(size) holds an array that can be used for row t of
     * size size of a RemappingMap.  These are initialised on demand.

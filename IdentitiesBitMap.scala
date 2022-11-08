@@ -70,6 +70,13 @@ object IdentitiesBitMap{
     }
     bm
   }
+
+  def toArrayBitMap(bm: IdentitiesBitMap): BitMap = {
+    val newIds = Array.tabulate(numTypes)(t => new Array[Boolean](typeSizes(t)))
+    for(t <- 0 until numTypes; id <- 0 until newIds(t).length)
+      if(get(bm, t, id)) newIds(t)(id) = true
+    newIds
+  }
 }
 
 // ==================================================================

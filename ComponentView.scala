@@ -1,5 +1,7 @@
 package ViewAbstraction
 
+import ox.gavin.profiling.Profiler
+
 /** A component-centric view.
   * @param servers the states of the servers
   * @param components the components, with the principal component state first.
@@ -12,6 +14,8 @@ class ComponentView(servers: ServerStates, components: Array[State])
   def this(servers: ServerStates, principal: State, others: Array[State]) = {
     this(servers, principal +: others)
   }
+
+  Profiler.count("ComponentView")
 
   /** This view was created by the view transition creationTrans post. */
   // private var pre, post: Concretization = null
@@ -153,8 +157,8 @@ object ComponentView{
 
 /** A concretization. */
 class Concretization(val servers: ServerStates, val components: Array[State]){ 
+  Profiler.count("Concretization")
 
-// IMPROVE
   //assert(components.eq(StateArray(components)))
 
   /** Make ComponentView(s) from this, with components(0) as the principal
@@ -235,7 +239,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
   }
 
   /** Identities of components as a bit map. */
-  private val cptIdsBitMapRaw =  IdentitiesBitMap.makeIdsBitMap(components)
+  private val cptIdsBitMapRaw = IdentitiesBitMap.makeIdsBitMap(components)
 
   @inline def cptIdsBitMap(f: Type)(id: Identity) = 
     IdentitiesBitMap(cptIdsBitMapRaw, f, id)
@@ -249,15 +253,11 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   /** For each parameter (t,i), the index of the component that has (t,i) as its
     * identity, or -1 if there is no such. */ 
-  //val idsIndexMapX: Array[Array[Int]] = StateArray.makeIdsIndexMap(components)
   private val flatIdsIndexMap: FlatArrayMap[Byte] = 
     FlatArrayMap.from2D(StateArray.makeIdsIndexMap(components))
 
-  @inline def idsIndexMap(t: Type)(id: Int): Int = {
+  @inline def idsIndexMap(t: Type)(id: Int): Int = 
     FlatArrayMap.get(flatIdsIndexMap, t, id)
-    //assert(res == idsIndexMapX(t)(id))
-    // res
-  }
 
   import ByteBitMap.ByteBitMap
 
@@ -305,11 +305,9 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
 
   // =========== Combining maps
 
-  /** Maps used in combining with this.  */
-  //private var map: RemappingMap = servers.remappingMap 
+  /** Map used in combining with this.  */
   // Note: map is null if servers is not normalised. 
   private var nextArg: NextArgMap = null 
-  //private var otherArgs: OtherArgMap = null
 
   /** Initialise the above maps.  Pre: this is normalised; this won't always
     * hold if this is the post of a transition. */
@@ -388,36 +386,6 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
     while(i < len){ if(paramsBitMap(t)(i)) params ::= i; i += 1 }
     params.reverse
   }
-
-  // val paramsBitMap: BitMap = 
-  //   if(singleRef){
-  //     val pbm = newBitMap
-  //     for(c <- components++servers.servers; (t,p) <- c.processIdentities;
-  //         if !isDistinguished(p))
-  //       pbm(t)(p) = true
-  //     pbm
-  //   }
-  //   else null 
-
-  /** All parameters of components, indexed by type.  Initialised by first call
-    * of getAllParams. */
-  //private var allParams: Array[List[Identity]] = null
-
-
-  // /** All parameters of components, indexed by type; each list is ordered. */
-  // def getAllParams: Array[List[Identity]] = synchronized{
-  //   // assert(singleRef && newEffectOn) -- or also from test
-  //   if(allParams == null){
-  //     allParams = Array.fill(numTypes)(List[Identity]()); var f = 0
-  //     while(f < numFamilies){
-  //       var i = 0; val len = typeSizes(f) // paramsBitMap(f).size; 
-  //       var params = List[Identity]()
-  //       while(i < len){ if(paramsBitMap(f)(i)) params ::= i; i += 1 }
-  //       allParams(f) = params.reverse; f += 1
-  //     }
-  //   }
-  //   allParams
-  // }
 
   override def toString = 
     s"$servers || ${components.mkString("[", " || ", "]")}"

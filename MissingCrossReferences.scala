@@ -17,8 +17,7 @@ import CompressedCandidatesMap.CompressedCandidatesMap
   * stored, to save memory), and `inducedTrans.cpts` is non-null.  */
 class MissingCrossReferences(
   val inducedTrans: InducedTransitionInfo,
-  private val missingViews: Array[ReducedComponentView]// ,
-  // val candidates: CompressedCandidatesMap
+  private val missingViews: Array[ReducedComponentView]
 ){
   def candidates:  CompressedCandidatesMap = null
 

@@ -6,22 +6,35 @@ import ox.gavin.profiling.Profiler
 class Transition(
   val pre: Concretization, val e: EventInt, val post: Concretization){
 
+  Profiler.count("Transition")
+
   /** The servers in the pre-state. */
-  val preServers = pre.servers
+  def preServers = pre.servers
 
   /** Do the servers change state? */
-  val changedServers = preServers != post.servers
+  def changedServers = preServers != post.servers
 
-  private val cptsLength = pre.components.length
+  private def cptsLength = pre.components.length
 
   /** Bit map indicating which components have changed state. */
-  val changedStateBitMap = { 
-    val changedStateBitMap = new Array[Boolean](cptsLength); var i = 0
+  private val changedStateBitMapB: ByteBitMap.ByteBitMap = {
+    var csbb = ByteBitMap.Empty; var i = 0
     while(i < cptsLength){
-      changedStateBitMap(i) = pre.components(i) != post.components(i); i += 1
+      if(pre.components(i) != post.components(i)) csbb = ByteBitMap.set(csbb, i)
+      i += 1
     }
-    changedStateBitMap
+    csbb
   }
+
+  // private val changedStateBitMap = { 
+  //   val changedStateBitMap = new Array[Boolean](cptsLength); var i = 0
+  //   while(i < cptsLength){
+  //     changedStateBitMap(i) = pre.components(i) != post.components(i); i += 1
+  //   }
+  //   changedStateBitMap
+  // }
+
+  def changedStateBitMap(i: Int) = ByteBitMap.get(changedStateBitMapB, i)
 
 /*
   /** Bit map indicating which components have changed state, stored as an
@@ -63,24 +76,28 @@ class Transition(
   // Things relating to parameters
 
   /** All parameters in post.servers but not in pre.servers, as a bitmap. */
-  private val newServerIds: Array[Array[Boolean]] = 
-    ServerStates.newParamsBitMap(preServers, post.servers)
+  private val newServerIds: IdentitiesBitMap.IdentitiesBitMap = 
+    ServerStates.newParamsIdentitiesBitMap(preServers, post.servers)
+  // private val newServerIds: Array[Array[Boolean]] = 
+  //   ServerStates.newParamsBitMap(preServers, post.servers)
 
   /** All parameters in post.servers but not in pre.servers, as a bitmap. */
-  def getNewServerIds: Array[Array[Boolean]] = {
-    // Note: need to clone
-    val nsi = new Array[Array[Boolean]](numTypes); var t = 0
-    while(t < numTypes){ nsi(t) = newServerIds(t).clone; t += 1 }
-    nsi
-  }
+  def getNewServerIds: Array[Array[Boolean]] =
+    IdentitiesBitMap.toArrayBitMap(newServerIds)
+  //  {
+  //   // Note: need to clone
+  //   val nsi = new Array[Array[Boolean]](numTypes); var t = 0
+  //   while(t < numTypes){ nsi(t) = newServerIds(t).clone; t += 1 }
+  //   nsi
+  // }
 
   /** Do the servers acquire any new parameter? */
   val serverGetsNewId = {
     // Search if any field of newServerIds is set
     var res = false; var t = 0
     while(t < numTypes && !res){
-      var i = 0; val len = newServerIds(t).length
-      while(i < len && !newServerIds(t)(i)) i += 1
+      var i = 0; val len = typeSizes(t) // newServerIds(t).length
+      while(i < len && !IdentitiesBitMap(newServerIds,t,i)) i += 1
       res = i < len; t += 1
     }
     res
@@ -99,8 +116,9 @@ class Transition(
     * (with (i>0), and p1 is a new parameter of post.components(i), of type t,
     * for which views are considered, and not matching any parameter of
     * pre. */
-  val acquiredRefs: Array[List[(Int,Parameter)]] = {
-    val aRefs = Array.fill(numTypes)(List[(Int,Parameter)]()); var t = 0
+  //val acquiredRefs: Array[Array[(Int,Parameter)]] = {
+  private val acquiredRefsCompressed: Array[Array[Short]] = {
+    val aRefs = Array.fill(numTypes)(List[Short]()); var t = 0
     while(t < numTypes){
       var i = 1
       while(i < cptsLength){
@@ -111,7 +129,7 @@ class Transition(
             if(postCpt.includeParam(j)){
               val p1@(t1,x) = postCpt.processIdentity(j)
               if(t1 == t && !isDistinguished(x) && !preCpt.hasParam(t,x))
-                aRefs(t) ::= (i,p1)
+                aRefs(t) ::= Transition.acquiredRefToShort(i,p1)
             }
             j += 1
           }
@@ -120,12 +138,36 @@ class Transition(
       } // end of inner while
       t += 1
     }
-    aRefs
+    aRefs.map(_.toArray)
   }
 
-  /** For each type t, could a secondary component gain a reference to a
-    * component of type t? */
-  val anyAcquiredRefs: Array[Boolean] = acquiredRefs.map(_.nonEmpty)
+
+  def acquiredRefs: Array[Array[(Int,Parameter)]] = 
+    acquiredRefsCompressed.map(_.map(Transition.shortToAcquiredRef))
+
+  /** A Byte recording information about, for each type t, could a secondary
+    * component gain a reference to a component of type t? */
+  private val anyAcquiredRefsB: ByteBitMap.ByteBitMap = {
+    var aar = ByteBitMap.Empty
+    for(t <- 0 until numTypes; if acquiredRefs(t).nonEmpty) 
+      aar = ByteBitMap.set(aar, t)
+    aar
+  }
+
+  /** An Int recording information about, for each type t, could a secondary
+    * component gain a reference to a component of type t? As used in
+    * ServerBasedViewSet.iterator. */
+  def anyAcquiredRefsInt: Int = anyAcquiredRefsB.toInt
+
+  // val anyAcquiredRefsA: Array[Boolean] = acquiredRefs.map(_.nonEmpty)
+
+  // assert(ServerBasedViewSet.boolArrayToInt(anyAcquiredRefsA) == anyAcquiredRefsInt,
+  //   s"anyAcquiredRefsA = "+anyAcquiredRefsA.mkString(",")+
+  //     "\n"+ServerBasedViewSet.boolArrayToInt(anyAcquiredRefsA)+", "+anyAcquiredRefsInt)
+
+  /** Could a secondary component gain a reference to a component of type t? */
+  def anyAcquiredRefs(t: Type) = acquiredRefs(t).nonEmpty 
+  // ByteBitMap.get(anyAcquiredRefsB, t)
 
   /** Which components change state and acquire a reference? */
   private val referenceAcquirers: Array[Boolean] = {
@@ -231,6 +273,32 @@ class Transition(
 // ==================================================================
 
 object Transition{
+  /** The number of bits used for pid in acquiredRefToShort. */
+  private val ProcessIdBits = LogMaxNumTypes+ProcessIdentityShift // 11
+
+  /** Bit mask used in acquiredRefToShort. */
+  private val PIDBitMask = (1 << ProcessIdBits) - 1
+
+  /** Maximum value for i in acquiredRefToShort. */
+  private val MaxIndex = (1 << (15-ProcessIdBits)) - 1 // 15
+
+  /** Encode the pair (i, pid) as a Short. */
+  @inline private def acquiredRefToShort(i: Int, pid: ProcessIdentity): Short = {
+    assert(i <= MaxIndex, s"i = $i, MaxIndex = $MaxIndex") // Should have i <= 3
+    ((i << ProcessIdBits) + processIdentityToShort(pid)).toShort
+  }
+
+  @inline private def shortToAcquiredRef(s: Short) = {
+    val pidBits = (s & PIDBitMask).toShort
+    (s >> ProcessIdBits, shortToProcessIdentity(pidBits))
+  }
+
+  // def check(i: Int, pid: ProcessIdentity) = 
+  //   assert(shortToAcquiredRef(acquiredRefToShort(i,pid)) == (i,pid), (i,pid))
+  // check(0,(0,0));
+  // check(MaxIndex, ((1 << LogMaxNumTypes)-1, (1 << ProcessIdentityShift)-1))
+
+
   /* Functions used when debugging, to highlight the transition that should
    * induce the missing view. */
 

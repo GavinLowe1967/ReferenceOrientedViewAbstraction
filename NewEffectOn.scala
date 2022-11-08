@@ -67,7 +67,7 @@ class NewEffectOn(
       val crossRefs: List[Array[State]] = 
         getCrossRefs(pre.servers, cpts, pre.components)
       if(unifs.nonEmpty || reducedMapInfo == null ||
-          !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs)){
+          !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs.toArray)){
         val newPrinc = getNewPrinc(cpts(0), unifs)
         var newComponentsList =
           StateArray.makePostComponents(newPrinc, postCpts, cpts)
@@ -161,7 +161,7 @@ class NewEffectOn(
           newEffectOnStore.add(missingCrossRefs, condCSat)
           if(isPrimary && unifs.isEmpty &&
               !RemappingExtender.anyLinkageC(map, cv, pre))
-            cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
+            cv.addConditionBInduced(post.servers, reducedMap, crossRefs.toArray)
         }
       }
       else // views already contains nv

@@ -242,6 +242,7 @@ class NewEffectOnStore{
         // New missing cross references created by extending
         val newMissingCRs = newMissingCrossRefs(inducedTrans, map0, cpts, views)
         if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
+          Profiler.count("New MissingCrossReferences from allCompletions")
           val newMCR =
             new MissingCrossReferences(newInducedTrans, newMissingCRs)
           add(newMCR, false)

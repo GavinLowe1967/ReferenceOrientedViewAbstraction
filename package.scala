@@ -27,6 +27,41 @@ package object ViewAbstraction{
     * and identity. */
   type ProcessIdentity = (Family, Identity)
 
+  /** Log of the maximum number of types. */ 
+  val LogMaxNumTypes = 4
+
+  /** The maximum number of types. */
+  private val MaxNumTypes = 1 << LogMaxNumTypes
+
+  // Note: Each type must have at most MaxTypeSize values, so is expressible
+  // in 7 bits.
+
+  /** Shift used in processIdentityToShort. */
+  val ProcessIdentityShift = 7
+
+  /** Bit mask used in shortToProcessIdentity, to extract the bits used for the
+    * Identity. */
+  private val ProcessIdentityMask = (1 << ProcessIdentityShift) - 1
+
+  /** Compress a ProcessIdentity into a single Short.  We use the
+    * ProcessIdentityShift least significant bits for id, the next
+    * LogMaxNumTypes for t, and don't use the sign bit.*/
+  @inline def processIdentityToShort(t: Type, id: Identity): Short =
+    ((t << ProcessIdentityShift) + id).toShort
+
+  @inline def processIdentityToShort(pid: ProcessIdentity): Short =
+    processIdentityToShort(pid._1, pid._2)
+
+  @inline def shortToProcessIdentity(s: Short): ProcessIdentity = 
+    (s >> ProcessIdentityShift, s & ProcessIdentityMask)
+
+  def check(t: Type, id: Int) = 
+    assert(shortToProcessIdentity(processIdentityToShort(t,id)) == (t,id),
+      s"t = $t, id = $id, result = "+
+        shortToProcessIdentity(processIdentityToShort(t,id)))
+  check(0,0); check(2,5); check(MaxNumTypes-1, 3); 
+  check(MaxNumTypes-1, ProcessIdentityMask)
+
   /** Control states of processes (which include all data other than
     * Identitys). */
   type ControlState = Int
@@ -258,6 +293,7 @@ package object ViewAbstraction{
     * indexed by types. */
   def setNumTypes(nt: Int, nf: Int) = {
     println("numTypes = "+nt+"; numFamilies = "+nf)
+    require(nt < MaxNumTypes, s"Too many types: maximum $MaxNumTypes allowed.")
     numTypes = nt; numFamilies = nf
     typeSizes = new Array[Int](nt)
     superTypeSizes = new Array[Int](nt)

@@ -69,7 +69,7 @@ class SingleRefEffectOn(
       val crossRefs: List[Array[State]] =
         getCrossRefs(pre.servers, cpts, pre.components)
       if(unifs.nonEmpty || reducedMapInfo == null ||
-          !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs)){
+          !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs.toArray)){
         val newPrinc = getNewPrinc(cpts(0), unifs)
         // If singleRef, the principals are unified, but the principal loses
         // the reference to the second component, we can ignore this case.  
@@ -147,7 +147,7 @@ class SingleRefEffectOn(
           nv.setCreationInfoIndirect(trans, cpts, cv) //, newComponents)
           // IMPROVE: do we need to check isPrimary here?
           if(isPrimary && unifs.isEmpty && missingCommons.isEmpty){
-            cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
+            cv.addConditionBInduced(post.servers, reducedMap, crossRefs.toArray)
           }
         }
       } // end of if(!views.contains(nv))

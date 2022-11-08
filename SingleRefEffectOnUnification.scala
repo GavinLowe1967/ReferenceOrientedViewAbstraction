@@ -68,7 +68,7 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     * pairs (i,p1) such that pre.components(i) changes state in the transition
     * (with (i>0), and p1 is a new parameter of post.components(i), of the
     * same type as cv.principal.id, and not matching and parameter of pre. */
-  private def acquiredRefs: List[(Int,Parameter)] = trans.acquiredRefs(cvpf)
+  private def acquiredRefs: Array[(Int,Parameter)] = trans.acquiredRefs(cvpf)
 
   val highlight = 
     Transition.highlight(trans) && {
@@ -344,10 +344,12 @@ class SingleRefEffectOnUnification(trans: Transition, cv: ComponentView){
     * reference is used to create views. */ 
   private def getSecondaryInfo(map1: RemappingMap)
       : ArrayBuffer[(RemappingMap, Int)] = {
-    //val preCptIds = pre.cptIdsBitMap
-    val result = new ArrayBuffer[(RemappingMap, Int)]; var ar = acquiredRefs
-    while(ar.nonEmpty){
-      val (i,(t,id)) = ar.head; ar = ar.tail
+    val result = new ArrayBuffer[(RemappingMap, Int)]
+    val aRefs = acquiredRefs; var ix = 0
+    while(ix < aRefs.length){
+      val (i,(t,id)) = aRefs(ix); ix += 1
+    //while(ar.nonEmpty){
+     // val (i,(t,id)) = ar.head; ar = ar.tail
       assert(t == cvpf); val id1 = map1(t)(cvpid)
       // Check extending map1 with cvpid -> id is consistent: either (1) it's
       // already there; or (2) map1 is undefined on cvpid, id isn't in the

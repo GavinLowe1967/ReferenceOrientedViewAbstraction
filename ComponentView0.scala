@@ -21,20 +21,21 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   ComponentView0.checkValid(servers, components)
 
   /** Identities of components as a bit map. */
-  val cptIdsBitMap = IdentitiesBitMap.makeIdsBitMap(components) // 
+  val cptIdsBitMap = IdentitiesBitMap.makeIdsBitMap(components) 
 
-  // val cptIdsBitMapX = StateArray.makeIdsBitMap(components)
-
-  // for(t <- 0 until numTypes; i <- 0 until typeSizes(t))
-  //   assert(IdentitiesBitMap(cptIdsBitMap,t,i) == cptIdsBitMapX(t)(i),
-  //     s"\ncptIdsBitMapX = "+
-  //       cptIdsBitMapX.map(_.mkString("(",",",")")).mkString("; ")+
-  //       s"cptIdsBitMap = $cptIdsBitMap; t = $t; i = $i") 
+  import FlatArrayMap.FlatArrayMap
 
   /** For each parameter (t,i), the index of the component that has (t,i) as its
     * identity, or -1 if there is no such. */ 
-  val idsIndexMap: Array[Array[Byte]] = StateArray.makeIdsIndexMap(components)
-// IMPROVE: flatten
+  private val flatIdsIndexMap: FlatArrayMap[Byte] = 
+    FlatArrayMap.from2D(StateArray.makeIdsIndexMap(components))
+  // val idsIndexMap: Array[Array[Byte]] = StateArray.makeIdsIndexMap(components)
+
+  /** The index of the component that has (t,i) as its identity, or -1 if there
+    * is no such. */ 
+  def idsIndexMap(t: Type)(id: Identity) = 
+    FlatArrayMap.get(flatIdsIndexMap, t, id)
+
 
   /** The component state of this with identity (f,id), or null if there is no
     * such component. */
@@ -90,15 +91,17 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
 
   /** Information about transitions pre -> post for which we have considered
     * induced transitions from this view, with pre.servers = this.servers !=
-    * post.servers.  The set of post.servers for such transitions. 
-    * 
-    * If not singleRef, we record all such, but only when there is no
-    * unification.  
+    * post.servers, the servers do not acquire a new reference, and no
+    * component of this changes state in the transition (as the result of a
+    * unification).  The set of post.servers for such transitions.
     * 
     * The representation is a bit map.  The ServerStates with index ssIx is
     * stored in entry indexFor(ssIx); maskFor(ssIx) provides an appropriate
-    * bit mask.  Protected by synchronized blocks.  */
-  private var doneInducedPostServersBM = new Array[Long](0)
+    * bit mask.  The array is initialised and extended lazily. Protected by
+    * synchronized blocks.  */
+  private var doneInducedPostServersBM: Array[Long] = null // new Array[Long](0)
+// IMPROVE: under some circumstances it would be better to just store the
+// indices in an Array[Int]
 
   /** The index into doneInducedPostServersBM for a ServersState with index
     * ssIx. */
@@ -118,8 +121,9 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   /** (With singleRef.) Have we previously stored some postServers with
     * postServers.index == ssIx against this?  */
   @inline def containsDoneInducedByIndex(ssIx: Int): Boolean = synchronized{
-    val ix = indexFor(ssIx)
-    ix < doneInducedPostServersBM.length && 
+    val ix = indexFor(ssIx) 
+    doneInducedPostServersBM != null &&
+      ix < doneInducedPostServersBM.length &&
       (doneInducedPostServersBM(ix) & maskFor(ssIx)) != 0
   }
 
@@ -130,12 +134,12 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     val ssIx = postServers.index; val ix = indexFor(ssIx)
     // if(ComponentView0.highlightMissing(this))
     //   println(s"$this: addDoneInduced($postServers); $ssIx; $ix")
-    if(ix >= doneInducedPostServersBM.length){
+    if(doneInducedPostServersBM == null || 
+        ix >= doneInducedPostServersBM.length){
       // Extend doneInducedPostServersBM
       val newBM = new Array[Long](ix+1)
-      // for(i <- 0 until doneInducedPostServersBM.length)
-      //   newBM(i) = doneInducedPostServersBM(i)
-      doneInducedPostServersBM.copyToArray(newBM)
+      if(doneInducedPostServersBM != null)
+        doneInducedPostServersBM.copyToArray(newBM)
       doneInducedPostServersBM = newBM
     }
     val mask = maskFor(ssIx)
@@ -197,10 +201,10 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
 
   /** A representation of the views needed for condition (b) of an induced
     * transition: the list of component states. */
-  private type CrossRefInfo = List[Array[State]]
+  private type CrossRefInfo = Array[Array[State]] // List[Array[State]]
 
   private def showCRI(crossRefs: CrossRefInfo) =
-    crossRefs.map(StateArray.show)
+    crossRefs.map(StateArray.show).mkString("; ")
 
   /** A map storing information about primary induced transitions with no
     * unifications that are currently prevented by condition (b).  This
@@ -212,23 +216,31 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     * synchronized blocks. */
   private var conditionBInducedMap = 
     if(singleRef) 
-      new OpenHashMap[ServersReducedMap, List[CrossRefInfo]](
+      new OpenHashMap[ServersReducedMap, Array[CrossRefInfo]](
         initSize = 4, ThresholdRatio = 0.6F)
     else null
 
   /** Is crossRefs1 a subset of crossRefs2? */
   @inline private 
   def subset(crossRefs1: CrossRefInfo, crossRefs2: CrossRefInfo): Boolean = {
-    // crossRefs1.forall(cs1 => crossRefs2.exists(cs => cs.sameElements(cs1) ))
-    var crs1 = crossRefs1; var ok = true
-    // Inv: ok is true if all elements of crossRefs1 so far are in crossrefs2
-    while(crs1.nonEmpty && ok){
-      val cs1 = crs1.head; crs1 = crs1.tail
-      // test if crossRefs2 contains cs1
-      var crs2 = crossRefs2
-      while(crs2.nonEmpty && !sameElements(crs2.head, cs1)) crs2 = crs2.tail
-      ok = crs2.nonEmpty
+    var i1 = 0; var ok = true; val len2 = crossRefs2.length
+    while(i1 < crossRefs1.length && ok){
+      val cs1 = crossRefs1(i1); i1 += 1
+      var i2 = 0 // test if crossRefs2 contains cs1
+      while(i2 < len2 && !sameElements(crossRefs2(i2), cs1)) i2 += 1
+      ok = i2 < len2
     }
+
+    // crossRefs1.forall(cs1 => crossRefs2.exists(cs => cs.sameElements(cs1) ))
+    //var crs1 = crossRefs1; var ok = true
+    // // Inv: ok is true if all elements of crossRefs1 so far are in crossrefs2
+    // while(crs1.nonEmpty && ok){
+    //   val cs1 = crs1.head; crs1 = crs1.tail
+    //   // test if crossRefs2 contains cs1
+    //   var crs2 = crossRefs2
+    //   while(crs2.nonEmpty && !sameElements(crs2.head, cs1)) crs2 = crs2.tail
+    //   ok = crs2.nonEmpty
+    // }
     ok
   }
   // IMPROVE.  Maybe keep lists sorted.
@@ -245,14 +257,17 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
       : Boolean = synchronized{
     val key = ServersReducedMap(servers, map)
     conditionBInducedMap.get(key) match{
-      case Some(crl) =>
-        var crossRefsList = crl; var done = false
-        while(crossRefsList.nonEmpty && !done){
-          val crossRefs1 = crossRefsList.head; crossRefsList = crossRefsList.tail
-          // If crossRefs1 is a subset of crossRefs, return true
-          done = subset(crossRefs1, crossRefs)
-        }
-        done
+      case Some(crl) =>  // Test if some element of crl is a subset of crossRefs
+        var i = 0; val len = crl.length
+        while(i < len && !subset(crl(i), crossRefs)) i += 1
+        i < len
+        // var crossRefsList = crl; var done = false
+        // while(crossRefsList.nonEmpty && !done){
+        //   val crossRefs1 = crossRefsList.head; crossRefsList = crossRefsList.tail
+        //   // If crossRefs1 is a subset of crossRefs, return true
+        //   done = subset(crossRefs1, crossRefs)
+        // }
+        // done
       case None => false
     }
   }
@@ -267,26 +282,33 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     val key = ServersReducedMap(servers, map)
     conditionBInducedMap.get(key) match{
       case Some(crl) => 
+        // Find those elements of crl that are not a superset of crossRefs
+        var newList = List[CrossRefInfo](); var i = 0
+        var foundSubset = false // have we found a subset of crossRefs?
+        while(i < crl.length){
+          val crossRefs1 = crl(i); i += 1
+          if(!subset(crossRefs, crossRefs1)) newList ::= crossRefs1
+          foundSubset ||= subset(crossRefs1, crossRefs)
+        }
         // Profiler.count(s"addConditionBInduced:"+crl.length)
         // Up to ~150, but mostly below 10.
         // Remove all supersets of crossRefs
-        var newList = List[CrossRefInfo](); var crossRefsList = crl
-        var foundSubset = false // have we found a subset of crossRefs?
-        while(crossRefsList.nonEmpty){
-          val crossRefs1 = crossRefsList.head; crossRefsList = crossRefsList.tail
-          if(!subset(crossRefs, crossRefs1)) newList ::= crossRefs1
-          foundSubset ||= subset(crossRefs1, crossRefs)
-          // If crossRefs and crossRefs1 are equivalent (permutations), we
-          // retain the latter.
-        }
+        // var newList = List[CrossRefInfo](); var crossRefsList = crl
+        // var foundSubset = false // have we found a subset of crossRefs?
+        // while(crossRefsList.nonEmpty){
+        //   val crossRefs1 = crossRefsList.head; crossRefsList = crossRefsList.tail
+        //   if(!subset(crossRefs, crossRefs1)) newList ::= crossRefs1
+        //   foundSubset ||= subset(crossRefs1, crossRefs)
+        //   // If crossRefs and crossRefs1 are equivalent (permutations), we
+        //   // retain the latter.
+        // }
         // At present, we should always have !foundSubSet.  
         if(!foundSubset) newList ::= crossRefs
-// IMPROVE (if still using this)
-        else if(false)
-          println(s"Not added: ${showCRI(crossRefs)}\n${crl.map(showCRI)}")
-        conditionBInducedMap.add(key, newList); /* += key -> newList;*/ !foundSubset
+        // else if(false)
+        //   println(s"Not added: ${showCRI(crossRefs)}\n${crl.map(showCRI)}")
+        conditionBInducedMap.add(key, newList.toArray); !foundSubset
 
-      case None => conditionBInducedMap.add(key, List(crossRefs)); true
+      case None => conditionBInducedMap.add(key, Array(crossRefs)); true
           // += key -> List(crossRefs); true
     }
   }
@@ -296,7 +318,9 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     // if(doneInducedPostServers != null) doneInducedPostServers.clear
     doneInducedPostServersBM = new Array[Long](0)
     // if(conditionBInducedMap != null) conditionBInducedMap.clear()
-    if(singleRef) conditionBInducedMap =  new OpenHashMap[ServersReducedMap, List[CrossRefInfo]]
+    if(singleRef) 
+      conditionBInducedMap = 
+        new OpenHashMap[ServersReducedMap, Array[CrossRefInfo]]
   }
 
 }

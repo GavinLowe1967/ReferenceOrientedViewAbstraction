@@ -126,7 +126,8 @@ class ServerBasedViewSet{
     if(trans.serverGetsNewId) iteratorAll
     else{
       val index =
-        if(singleRef) ServerBasedViewSet.boolArrayToInt(trans.anyAcquiredRefs)
+        if(singleRef) trans.anyAcquiredRefsInt 
+        //  ServerBasedViewSet.boolArrayToInt(trans.anyAcquiredRefsA)
         else 0
       byAcquiredRefTypes(index).iterator(trans)
     }
