@@ -45,7 +45,8 @@ object RemappingExtenderTest{
     val candMap = testHooks.getCandidatesMap(oaBitMap, rdMap, List())
     // Can map N1 -> N2, N2 -> N2 (but not both) 
     assert(candMap(0)(N0).isEmpty && candMap(0)(N1) == List(N2) &&
-      candMap(0)(N2) == List(N2) && candMap(1).isEmpty)
+      candMap(0)(N2) == List(N2) && candMap(1).isEmpty,
+      candMap(0).mkString(", ")+"\n"+candMap(1).mkString(", "))
     val extMaps = extendMapToCandidates(rdMap, candMap, pre.getNextArgMap)
     assert(extMaps.length == 3)
     for(em <- extMaps)

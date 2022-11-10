@@ -205,10 +205,9 @@ class MissingCommon(
     require(!done && cpt1.hasPID(family,id))
     if(isNewUMCState(cpt1)){
       // All relevant renamings of cpt1: identity on params of servers and
-      // princ1, but otherwise either to other params of cpts2 or to fresh
-      // values.
-// FIXME: also rename to other params of cpts1?
-      val renames = Unification.remapToJoin(servers, princ1, cpts2, cpt1)
+      // princ1, but otherwise either to other params of cpts1 or cpts2, or to
+      // fresh values.  
+      val renames = Unification.remapToJoin(servers, princ1, cpts1, cpts2, cpt1)
       var i = 0; var found = false
       while(i < renames.length && !found){
         val c = renames(i); i += 1

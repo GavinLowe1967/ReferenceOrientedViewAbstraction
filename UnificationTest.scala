@@ -300,10 +300,12 @@ object UnificationTest
   /** Test of remapToJoin. */
   private def remapToJoinTest = {
     println("== remapToJoinTest ==")
+
     def test1 = {
       //println("= test1 =")
       val result = 
-        remapToJoin(servers2, pushSt(T0,N1), Array(pushSt(T1,N2)), aNode(N1,N3))
+        remapToJoin(servers2, pushSt(T0,N1), 
+          Array(pushSt(T0,N1)),  Array(pushSt(T1,N2)), aNode(N1,N3))
       // println(result.mkString(", "))
       // N1 -> N1, N3 -> N2|N3
       assert(result.contains(aNode(N1,N2)) && result.contains(aNode(N1,N3)) &&
@@ -313,7 +315,8 @@ object UnificationTest
     def test2 = { 
       //println("= test2 =")
       val result = 
-        remapToJoin(servers2, popSt(T0,N0,N1), Array(popSt(T1,N2,N3)), aNode(N1,N2))
+        remapToJoin(servers2, popSt(T0,N0,N1), 
+          Array(popSt(T0,N0,N1)), Array(popSt(T1,N2,N3)), aNode(N1,N2))
       //println(result.mkString(", "))
       // N1 -> N1, N3 -> N2|N3|N4
       assert(result.contains(aNode(N1,N2)) && result.contains(aNode(N1,N3)) &&
@@ -323,7 +326,8 @@ object UnificationTest
     def test3 = { 
       //println("= test3 =")
       val result = 
-        remapToJoin(servers2, popSt(T0,N0,N1), Array(popSt(T1,N0,N2)), aNode(N1,N2))
+        remapToJoin(servers2, popSt(T0,N0,N1), 
+          Array(popSt(T0,N0,N1)),  Array(popSt(T1,N0,N2)), aNode(N1,N2))
       //println(result.mkString(", "))
       // N1 -> N1, N3 -> N2|N3
       assert(result.contains(aNode(N1,N2)) && result.contains(aNode(N1,N3)) &&

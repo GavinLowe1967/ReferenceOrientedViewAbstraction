@@ -234,7 +234,10 @@ class NewEffectOnStore{
       val unflattened = CompressedCandidatesMap.splitBy(mcr.candidates, 
         inducedTrans.cv.getParamsBound)
       val map0 = CompressedCandidatesMap.extractMap(unflattened)
-      for(map <- mcr.allCompletions){
+      val allComps = mcr.allCompletions
+      // Profiler.count("NewEffectOnStore allCompletions "+allComps.length)
+      // This doesn't contribute many instances.
+      for(map <- allComps){
         // Instantiate oldCpts in inducedTrans
         val cpts = Remapper.applyRemapping(map, inducedTrans.cv.components)
         Pools.returnRemappingRows(map)
@@ -370,6 +373,7 @@ class NewEffectOnStore{
     (ServerStates, State), OpenHashSet[MissingCommonWrapper] ] 
   = null
 
+  /** Object to produce iterators over the shards of byNextView. */
   private var byNewViewShardIterator: ShardIteratorProducerT[
     ReducedComponentView, ArrayBuffer[MissingCrossReferences]]
   = null
@@ -401,18 +405,23 @@ class NewEffectOnStore{
 
   /** Purge done items from missingCrossRefStore. */
   def purgeMissingCrossRefStore(views: ViewSet) = {
-    /** When is mcr retained?  When not done and not superseded. */
-    def p(mcr: MissingCrossReferences) = !mcr.done(views) && !mcr.isSuperseded
+    /* When is mcr retained?  When not done and not superseded. */
+    @inline def retain(mcr: MissingCrossReferences) = {
+      val res = !mcr.done(views) && !mcr.isSuperseded
+      if(!res) Profiler.count("MissingCrossReferences removed")
+      res
+    }
     /* Purge from the maplet rv -> mcrs. */
-    def process(
+    @inline def process(
       rv: ReducedComponentView, mcrs: OpenHashSet[MissingCrossReferences]) 
-    = filter(rv, mcrs, p _, missingCrossRefStore)
+    = filter(rv, mcrs, retain _, missingCrossRefStore)
 
     missingCrossRefStoreShardIterator.foreach(process)
   }
 
   /** Purge items from byNewView. Remove items where the newView is found.  */
   def purgeByNewView(views: ViewSet) = {
+    Profiler.count("purgeByNewView")
     def process(
       nv: ReducedComponentView, ab: ArrayBuffer[MissingCrossReferences]) 
     = 
@@ -424,8 +433,33 @@ class NewEffectOnStore{
     byNewViewShardIterator.foreach(process)
   }
 
+  /** When is mcw retained?  When it's not done and its new view has not been
+    * found. */
+  @inline private def retain(mcw: MissingCommonWrapper, views: ViewSet) = {
+    val res = !mcw.done && !mcw.isNewViewFound(views)
+    if(!res) Profiler.count("MissingCommonWrapper removed")
+    res
+  }
+
+  /** Purge values from missingCommonStore. */
   def purgeMissingCommonStore(views: ViewSet) = {
-    ???
+    Profiler.count("purgeMissingCommonStore")
+    /* Purge from the maplet rv -> mcws. */
+    @inline def process(
+      rv: ReducedComponentView, mcws: OpenHashSet[MissingCommonWrapper])
+    = filter(rv, mcws, retain(_,views) , missingCommonStore)
+
+    missingCommonStoreShardIterator.foreach(process)
+  }
+
+  /** Purge values from candidateForMCStore. */
+  def purgeCandidateForMCStore(views: ViewSet) = {
+    Profiler.count("purgeCandidateForMCStore")
+    @inline def process(
+      key: (ServerStates, State), mcws: OpenHashSet[MissingCommonWrapper])
+    = filter(key, mcws, retain(_,views), candidateForMCStore)
+
+    candidateForMCStoreShardIterator.foreach(process)
   }
 
   // ================================ Administrative functions

@@ -107,7 +107,8 @@ object SingleRefEffectOnUnificationTest{
     } // end of for(... <- allUnifs)
 
     // Secondary induced transitions
-    assert(testHooks.acquiredRefs == List((1,(0,N2))))
+    val acqRefs: Array[(Int,Parameter)] = testHooks.acquiredRefs
+    assert(acqRefs.sameElements(Array((1,(0,N2)))), acqRefs.mkString(", "))
 
     // Check top-level result
     val (result,result1) = sreou()
@@ -200,7 +201,7 @@ object SingleRefEffectOnUnificationTest{
     } // end of outer for loop
 
     // Secondary induced transitions; but not achievable
-    assert(testHooks.acquiredRefs == List((1,(0,N2))))
+    assert(testHooks.acquiredRefs.sameElements(Array((1,(0,N2)))))
 
     // Check top-level result
     val (result,result1) = sreou()

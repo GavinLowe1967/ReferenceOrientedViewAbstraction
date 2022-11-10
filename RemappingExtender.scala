@@ -251,11 +251,14 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     resultRelevantParams: BitMap, rdMap: RemappingMap, doneB: List[Linkage])
       : CandidatesMap = {
     assert(singleRef && !useNewEffectOnStore)
+//println("rdMap = "+Remapper.show(rdMap))
     // All params of pre, except those in resultRelevantParams or range rdMap 
 // IMPROVE: memoise at least some of this
+//println(pre.getAllParams(0))
     val otherArgs: Array[List[Identity]] = Array.tabulate(numTypes)(t => 
       pre.getAllParams(t).filter(p => 
         !resultRelevantParams(t)(p) && !rdMap(t).contains(p)))
+//println("otherArgs = "+otherArgs.mkString("; "))
     // The same but excluding identities
     val nonIds = Array.tabulate(numTypes)(t => 
       otherArgs(t).filter(p1 => !preCptIds(t)(p1)))

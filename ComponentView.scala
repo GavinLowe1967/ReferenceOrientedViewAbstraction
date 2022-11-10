@@ -373,7 +373,7 @@ class Concretization(val servers: ServerStates, val components: Array[State]){
       var pbm = Empty
       for(c <- components++servers.servers; (t,p) <- c.processIdentities;
           if !isDistinguished(p))
-        set(pbm, t, p)
+        pbm = set(pbm, t, p)
       pbm
     }
     else Empty

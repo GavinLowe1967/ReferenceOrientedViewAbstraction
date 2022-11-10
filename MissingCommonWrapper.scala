@@ -6,9 +6,8 @@ import RemapperP.Remapper
 class MissingCommonWrapper(
   val inducedTrans: InducedTransitionInfo,
   commonMissingPids: Array[ProcessIdentity]
-// IMPROVE: set commonMissingPids = null if empty
 ){
-  require(inducedTrans.cpts != null)
+  require(inducedTrans.cpts != null && commonMissingPids.nonEmpty)
 
   def servers = inducedTrans.servers
 
@@ -99,9 +98,12 @@ object MissingCommonWrapper{
   def apply(inducedTrans: InducedTransitionInfo, 
     commonMissingPids: Array[ProcessIdentity], views: ViewSet)
       : MissingCommonWrapper = {
-    val mcw = new MissingCommonWrapper(inducedTrans, commonMissingPids)
-    val missingHeads = mcw.init(views)
-    if(mcw.done) null else mcw
+    if(commonMissingPids.isEmpty) null // shortcut
+    else{
+      val mcw = new MissingCommonWrapper(inducedTrans, commonMissingPids)
+      val missingHeads = mcw.init(views)
+      if(mcw.done) null else mcw
+    }
   }
 
   import SingleRefEffectOnUnification.commonMissingRefs

@@ -122,6 +122,8 @@ class NewEffectOn(
 // satisfied, so we can improve here.
           val allComps =
             RemappingExtender.allCompletions(map, candidates, cv, trans)
+          // Profiler.count("NewEffectOn allCompletions "+allComps.length)
+          // The average seems to be about 2, or maybe a bit less.
           for(map1 <- allComps){
             val cpts1 = Remapper.applyRemapping(map1, cv.components) 
             val inducedTrans = new InducedTransitionInfo1(
@@ -225,7 +227,7 @@ object NewEffectOn{
 
   /** If it's time for the next purge, then set doPurge and prepare for it.
     * Called at the start of each ply by worker 0. */
-  def prepareForPurge = {
+  def prepareForPurge = if(ply%4 == 0){
     doPurge = SingleRefEffectOn.testPurge
     if(doPurge){  
       newEffectOnStore.prepareForPurge; MissingCommon.prepareForPurge
@@ -233,10 +235,17 @@ object NewEffectOn{
   }
 
   /** Purge from the store.  Done at the end of each ply. */
-  def purge = if(doPurge){
-    if(ply%4 == 0) newEffectOnStore.purgeMissingCrossRefStore(views)
-    else if(ply%4 == 1) newEffectOnStore.purgeByNewView(views)
-    else if(ply%4 == 3) MissingCommon.purgeMCs()
+  def purge = {
+    // Profiler.count(s"purge $ply $doPurge")
+    if(doPurge){
+      if(ply%4 == 0) newEffectOnStore.purgeMissingCrossRefStore(views)
+      else if(ply%4 == 1) newEffectOnStore.purgeByNewView(views)
+      else if(ply%4 == 2){
+        newEffectOnStore.purgeMissingCommonStore(views)
+        newEffectOnStore.purgeCandidateForMCStore(views)
+      }
+      else if(ply%4 == 3) MissingCommon.purgeMCs()
+    }
   }
 // IMPROVE: and other parts of newEffectOnStore
 

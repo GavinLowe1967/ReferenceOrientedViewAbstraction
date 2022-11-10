@@ -272,16 +272,16 @@ object Unification{
   }
 
   /** Remap c, as identity function on parameters of servers and princ1, but
-    * mapping other parameters either to other parameters of cpts2, or to
-    * fresh values.
+    * mapping other parameters either to other parameters of cpts1.tail or
+    * cpts2, or to fresh values.
     * 
     * There is an existing view servers || princ1 || c, and we want to find if
     * there is a view servers || cpts2(0) || c' for c' a renaming of c. 
     * 
     * Pre: princ1 has a reference to c. */ 
 // IMPROVE comment
-  def remapToJoin(
-    servers: ServerStates, princ1: State, cpts2: Array[State], c: State)
+  def remapToJoin(servers: ServerStates, princ1: State, 
+    cpts1: Array[State], cpts2: Array[State], c: State)
       : Array[State] = {
     require(singleRef)
     require(princ1.processIdentities.contains(c.componentProcessIdentity))
@@ -295,7 +295,8 @@ object Unification{
     // Make otherArgMap, with parameters of princ2 not in map0, maintaining
     // otherArgMap
     val otherArgs = Remapper.newOtherArgMap
-    for(cpt2 <- cpts2; (f,id) <- cpt2.processIdentities)
+// IMPROVE
+    for(cpt2 <- cpts1.tail ++ cpts2; (f,id) <- cpt2.processIdentities)
       if(!isDistinguished(id) && map0(f)(id) < 0 && !otherArgs(f).contains(id)){
         assert(!map0(f).contains(id)) // IMPROVE
         otherArgs(f) ::= id; nextArgMap(f) = nextArgMap(f) max (id+1)
