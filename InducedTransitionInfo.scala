@@ -61,7 +61,9 @@ class InducedTransitionInfo(
 
   override def toString = {
     s"$trans\n operating on $cv\n induces $cv \n== "+
-      s"(${trans.pre.servers}, ${StateArray.show(oldCpts)})\n -> $newView"
+      s"(${trans.pre.servers}, "+
+      (if(oldCpts == null) "<null>" else StateArray.show(oldCpts))+
+      s")\n -> $newView"
     // s"(${trans.post.servers}, ${StateArray.show(newCpts)})\n== $newView"
   }
 }

@@ -275,9 +275,6 @@ class MissingCommon(
     * MissingCommon.updateMissingCandidates has been executed on this.  State
     * st is represented by st.index+1. */
   private var doneMissingCandidates = new collection.IntSet
-    // new scala.collection.mutable.HashSet[Int]
-  //  new OpenHashSet[Int](initSize = 4)
-// IMPROVE: smaller? 
 
   /** Called by MissingCommon.updateMissingCandidates when updating this with
     * st.  Return true if this is the first such instance for st. */

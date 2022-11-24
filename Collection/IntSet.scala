@@ -9,7 +9,7 @@ class IntSet{
 
   /* The implementation goes through four stages:
    * - Empty set: elements = null and n = 0;
-   * - Singleton set {x} with x != 0: elements = 0 and n = x;
+   * - Singleton set {x} with x != 0: elements = null and n = x;
    * - Size in range [2..MaxContiguousSize), members of set stored contiguously 
    *   in elements, in sorted order;
    * - Size at least MaxContiguousSize: elements used as a hash set, with n the

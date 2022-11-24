@@ -53,25 +53,41 @@ object Pools{
   /** The pool of rows of remapping rows, flattened to reduce memory
     * accesses. The pool for thread `me` for rows of size `size` are in entry
     * `indexFor(me, size)`. */
-  private var rowPool: Array[Pool[Row]] = null
+  private var rowPool: Array[Row] /*Array[Pool[Row]]*/ = null
 
-  /** The index in rowPool and rowPoolSize for thread `me` for rows of
-    * size `size`. */
+  /** The index for the pool for thread `me` for rows of size `size`.  This is a
+    * direct index into `rowPoolSize`, but needs to be scaled using `indexFor`
+    * for `rowPool`. */
   @inline private def poolIndexFor(me: Int, size: Int) = me*(maxRowSize+1)+size
 
   /** The number of rows available in each pool, indexed as for rowPool. */
   private var rowPoolSize: Array[Int] = null
 
-  /* For each index i, the Rows in rowPool(i)[0..rowPoolSize(i)) are
-   * available. */
+  /** The index into rowPool corresponding to pool index `poolIndex` and offset
+    * `offset`. */
+  @inline private def indexFor(poolIndex: Int, offset: Int) = {
+    require(0 <= offset && offset < RowPoolCapacity)
+    poolIndex*RowPoolCapacity + offset
+  }
+
+  /* For each thread t and size s, the corresponding pool is in 
+   * rowPool[poolIndex(t,s)*RowPoolCapacity, (poolIndex(t,s)+1)*RowPoolCapacity)
+   * = rowPool[index, index+RowPoolCapacity) where 
+   * index = indexFor(poolIndex(t,s),0).  
+   * 
+   * For each index i, the Rows in rowPool[index, index+rowPoolSize(pIndex)) are
+   * available where pIndex = poolIndex(t,s) and index = indexFor(pIndex,0). */
 
   /** Get a remapping row of size `size`.  Note: the initial state of the row is
     * undefined: client code is responsible for initialisation. */
   def getRemappingRow(size: Int): Row = { 
     val me = ThreadID.get 
     Profiler.count(s"Pools.getRemappingRow")
-    val pIndex = poolIndexFor(me,size); val index = rowPoolSize(pIndex)-1
-    if(index >= 0){ rowPoolSize(pIndex) = index; rowPool(pIndex)(index) }
+    val pIndex = poolIndexFor(me,size); val offset = rowPoolSize(pIndex)-1
+    if(offset >= 0){ 
+      rowPoolSize(pIndex) = offset; rowPool(indexFor(pIndex, offset))
+    }
+    // if(index >= 0){ rowPoolSize(pIndex) = offset; rowPool(pIndex)(offset) }
     else /*mkArray(size)*/ new Array[Int](size)
     //  non-inlining for profiling purposes
   }
@@ -85,9 +101,10 @@ object Pools{
     while(i < map.length){
       val row = map(i); i += 1; val size = row.size
       Profiler.count(s"Pools.returnRemappingRow")
-      val pIndex = poolIndexFor(me,size); val index = rowPoolSize(pIndex)
-      if(index < RowPoolCapacity){
-        rowPool(pIndex)(index) = row; rowPoolSize(pIndex) = index+1
+      val pIndex = poolIndexFor(me,size); val offset = rowPoolSize(pIndex)
+      if(offset < RowPoolCapacity){
+        rowPool(indexFor(pIndex,offset)) = row; rowPoolSize(pIndex) = offset+1
+        // rowPool(pIndex)(offset) = row; rowPoolSize(pIndex) = offset+1
       }
       else Profiler.count(s"Pools.returnRemappingRow failed")
     }
@@ -148,7 +165,8 @@ object Pools{
     // remapping rows
     maxRowSize = 2*typeSizes.max+2
     rowPool =
-      Array.fill(numWorkers*(maxRowSize+1))(new Pool[Row](RowPoolCapacity))
+      new Array[Row](numWorkers*(maxRowSize+1)*RowPoolCapacity)
+        // Array.fill(numWorkers*(maxRowSize+1))(new Pool[Row](RowPoolCapacity))
     rowPoolSize = Array.fill(numWorkers*(maxRowSize+1))(0)
     // RemappingMaps
     mapPool = Array.fill(numWorkers)(new Pool[RemappingMap](MapPoolCapacity))

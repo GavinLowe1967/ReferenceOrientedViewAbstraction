@@ -17,9 +17,12 @@ import CompressedCandidatesMap.CompressedCandidatesMap
   * stored, to save memory), and `inducedTrans.cpts` is non-null.  */
 class MissingCrossReferences(
   val inducedTrans: InducedTransitionInfo,
-  private val missingViews: Array[ReducedComponentView]
+  private val missingViews: Array[ReducedComponentView],
+  val conditionCSatisfied: Boolean
 ){
-  def candidates:  CompressedCandidatesMap = null
+  @inline def candidates:  CompressedCandidatesMap = null
+
+  // def conditionCSatisfied = candidates == null
 
   assert(missingViews.nonEmpty && missingViews.forall(_ != null)) 
   // Check sorted
@@ -30,7 +33,7 @@ class MissingCrossReferences(
   assert(missingViews.length <= 12, "missingViews.length = "+missingViews.length)
   // Certain fields are set null to save memory.  We set cpts xor candidates
   assert(inducedTrans.cpts == null ^ candidates == null)
-  Profiler.count("MissingCrossReferences:"+(candidates == null)) 
+  Profiler.count("MissingCrossReferences:"+(candidates == null)+conditionCSatisfied) 
 
   @inline def isNewViewFound(views: ViewSet) = inducedTrans.isNewViewFound(views)
 
@@ -45,7 +48,7 @@ class MissingCrossReferences(
   /** Index of the next element of missingViews needed. */
   private var mvIndex: Short = 0
 
-  @inline private def incMvIndex = mvIndex = (mvIndex+1).asInstanceOf[Short]
+  @inline private def incMvIndex = mvIndex = (mvIndex+1).toShort // asInstanceOf[Short]
 
   /** The first missing view, against which this should be registered. */
   def missingHead = synchronized{ missingViews(mvIndex) }
@@ -70,9 +73,29 @@ class MissingCrossReferences(
         missingViews.mkString("\n"))
     incMvIndex // mvIndex += 1
     while(mvIndex < missingViews.length && 
-      (missingViews(mvIndex) == null || views.contains(missingViews(mvIndex)))
+      (/*missingViews(mvIndex) == null ||*/ views.contains(missingViews(mvIndex)))
     )
       incMvIndex // mvIndex += 1
+  }
+
+  /** Remove all members of missingViews in views.  Called from NewEffectOnStore
+    * while purging.  NOTE: this doesn't have a huge effect, affecting about
+    * 1% of cases, so might not be worthwhile. */
+  def updateMissingViews(views: ViewSet) = synchronized{
+    // Note: views might contain missingViews(mvIndex), in which case it will
+    // be dealt with on the next ply.  We avoid removing it.
+    val len = missingViews.length
+    if(mvIndex+1 < len){ // at least two elements
+      var i = len; var j = len
+      // Inv: we have checked all elements of missingViews[i..len), and
+      // compacted them into positions [j..len).
+      while(i > mvIndex+1){
+        i -= 1; val mv = missingViews(i)
+        if(!views.contains(mv)){ j -= 1; missingViews(j) = mv }
+        else Profiler.count("updateMissingViews removed")
+      }
+      missingViews(j-1) = missingViews(mvIndex); mvIndex = (j-1).toShort
+    }
   }
 
   /** All total maps associated with this. */
@@ -81,6 +104,10 @@ class MissingCrossReferences(
     RemappingExtender.allCompletions(
       null, candidates, inducedTrans.cv, inducedTrans.trans)
   }
+
+  override def toString = 
+    s"MissingCrossReferences for\n$inducedTrans;\nmissingViews = "+
+      missingViews.mkString("; ")
 
 }
 
@@ -92,12 +119,14 @@ class MissingCrossReferencesCandidates(
   inducedTrans: InducedTransitionInfo,
   missingViews: Array[ReducedComponentView],
   override val candidates: CompressedCandidatesMap)
-extends MissingCrossReferences(inducedTrans, missingViews){
+extends MissingCrossReferences(inducedTrans, missingViews, false){
   require(candidates != null)
   require(candidates.length == inducedTrans.cv.getParamsBound.sum,
     "candidates = "+candidates.mkString(",")+"\nsizes = "+
       inducedTrans.cv.getParamsBound.mkString(","))
 }
+// IMPROVE: can we avoid the parameter conditionCSatisfied in the superclass?
+// It's always false.
 
 // =======================================================
 
@@ -105,11 +134,14 @@ object MissingCrossReferences{
   /** Factory method. */
   def apply(inducedTrans: InducedTransitionInfo,
     missingViews: Array[ReducedComponentView],
-    candidates: CompressedCandidatesMap)
-      : MissingCrossReferences =
-    if(candidates == null) new MissingCrossReferences(inducedTrans, missingViews)
+    candidates: CompressedCandidatesMap, conditionCSatisfied: Boolean)
+      : MissingCrossReferences = {
+    assert(conditionCSatisfied == (candidates == null))
+    if(candidates == null) 
+      new MissingCrossReferences(inducedTrans, missingViews, conditionCSatisfied)
     else new MissingCrossReferencesCandidates(
       inducedTrans, missingViews, candidates)
+  }
 
 
   /** Sort missingViews, removing duplicates. */
@@ -142,40 +174,50 @@ object MissingCrossReferences{
 
   /** Compare the missingViews of mcr1 and mcr2.  Return Subset if those of mcr1
     * are a subset of those for mcr2.  Similar for Equal, Superset and
-    * Incomparable. */
+    * Incomparable.  At present, it is assumed that both satisfy condition c. */
+// IMPROVE: also consider condition c.
 // IMPROVE: pass in ViewSet, and ignore views already found
   def compare(mcr1: MissingCrossReferences, mcr2: MissingCrossReferences)
       : Comparison = {
     require(mcr1.inducedTrans.newView == mcr2.inducedTrans.newView)
-    val mv1 = mcr1.missingViews; val mv2 = mcr2.missingViews
-    val len1 = mv1.length; val len2 = mv2.length
-    // Note: we use the fact that mv1, mv2 are sorted
-    var i1: Int = mcr1.mvIndex; var i2: Int = mcr2.mvIndex
-    // Inv: mv1[0..i1) == mv2[0..i2), ignoring found values
-    while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){ i1 += 1; i2 += 1 }
-    if(i1 == len1){ if(i2 == len2) Equal else Subset }
-    else if(i2 == len2) Superset
-    else if(mv1(i1) < mv2(i2)){
-      // mv1 is not a subset of mv2; test if mv2 is a subset of mv1.  Inv:
-      // mv2[0..i2) is a subset of mv1[0..i1); mv1[0..i1) < mv2[i2..len2).
-      while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
-      // Additional inv: mv1(i1) >= mv2(i2) or i1 = len1 or i2 = len2
-      while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
-        i1 += 1; i2 += 1
-        if(i2 < len2) while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
-      }
-      if(i2 == len2) Superset else Incomparable
-    }
+    require(mcr1.conditionCSatisfied && mcr2.conditionCSatisfied)
+    if(!mcr1.conditionCSatisfied || !mcr2.conditionCSatisfied)
+      Incomparable // IMPROVE
     else{
-      // mv2 is not a subset of mv1; test if mv1 is a subset of mv2.  Inv:
-      // mv1[0..i1) is a subset of mv2[0..i2); mv2[0..i2) < mv1[i1..len1).
-      while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
-      // Additional inv: mv2(i1) >= mv1(i1) or i1 = len1 of i2 = len2
-      while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
-        i1 += 1; i2 += 1
-        if(i1 < len1) while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
+      val mv1 = mcr1.missingViews; val mv2 = mcr2.missingViews
+      val len1 = mv1.length; val len2 = mv2.length
+      // Note: we use the fact that mv1, mv2 are sorted
+      var i1: Int = mcr1.mvIndex; var i2: Int = mcr2.mvIndex
+      if(false){
+        for(ix <- i1 until len1-1) assert(mv1(ix) < mv1(ix+1))
+        for(ix <- i2 until len2-1) assert(mv2(ix) < mv2(ix+1))
       }
-      if(i1 == len1) Subset else Incomparable
+      // Inv: mv1[0..i1) == mv2[0..i2), ignoring found values
+      while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){ i1 += 1; i2 += 1 }
+      if(i1 == len1){ if(i2 == len2) Equal else Subset }
+      else if(i2 == len2) Superset
+      else if(mv1(i1) < mv2(i2)){
+        // mv1 is not a subset of mv2; test if mv2 is a subset of mv1.  Inv:
+        // mv2[0..i2) is a subset of mv1[0..i1); mv1[0..i1) < mv2[i2..len2).
+        while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
+        // Additional inv: mv1(i1) >= mv2(i2) or i1 = len1 or i2 = len2
+        while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
+          i1 += 1; i2 += 1
+          if(i2 < len2) while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
+        }
+        if(i2 == len2) Superset else Incomparable
+      }
+      else{
+        // mv2 is not a subset of mv1; test if mv1 is a subset of mv2.  Inv:
+        // mv1[0..i1) is a subset of mv2[0..i2); mv2[0..i2) < mv1[i1..len1).
+        while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
+        // Additional inv: mv2(i1) >= mv1(i1) or i1 = len1 of i2 = len2
+        while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
+          i1 += 1; i2 += 1
+          if(i1 < len1) while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
+        }
+        if(i1 == len1) Subset else Incomparable
+      }
     }
   }
 }

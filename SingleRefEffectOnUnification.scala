@@ -437,10 +437,10 @@ object SingleRefEffectOnUnification{
   import CompressedCandidatesMap.CompressedCandidatesMap
 
   /** The part of the result relating to primary induced transitions.  Each
-    * tuple (map, resultRelevantParams, doneB, unifs, reducedMap) indicates
-    * the remapping of cv.cpts by map, with resultRelevantParams and doneB as
-    * in RemappingExtender, and with unifications corresponding to unifs;
-    * reducedMap is the reduced version of map. */
+    * tuple (map, candidates, unifs, reducedMap) indicates the partial
+    * remapping of cv.cpts by map, with other values mapped according to
+    * candidates; and with unifications corresponding to unifs; reducedMap is
+    * the reduced version of map.  */
 // IMPROVE: map isn't used, other than being recycled
   type InducedInfo = 
     ArrayBuffer[(RemappingMap, CompressedCandidatesMap, UnificationList, ReducedMap)]

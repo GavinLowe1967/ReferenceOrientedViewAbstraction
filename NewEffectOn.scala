@@ -108,6 +108,14 @@ class NewEffectOn(
     newComponentsList: List[Array[State]], candidates: CompressedCandidatesMap)
       : Unit = {
     require(singleRef && useNewEffectOnStore)
+// IMPROVE
+if(true){
+    if(candidates == null){
+      for(t <- 0 until numTypes; id <- map(t)) assert(id >= 0)
+      assert(!RemappingExtender.anyLinkageC(map, cv, trans.pre))
+    }
+    else assert(RemappingExtender.anyLinkageC(map, cv, trans.pre))
+}
     // The cross reference views required for condition (b) implied by map
     val missing: Array[ReducedComponentView] = 
       MissingCrossReferences.sort(missingCrossRefs(crossRefs).toArray)
@@ -135,8 +143,8 @@ class NewEffectOn(
               assert(!condCSat)
               // Create new MissingCrossReferences object
               val newMCR = 
-                new MissingCrossReferences(inducedTrans, newMissingCRs) //, null)
-              newEffectOnStore.add(newMCR, condCSat)
+                new MissingCrossReferences(inducedTrans, newMissingCRs, condCSat)
+              newEffectOnStore.add(newMCR)
             }
             else{ // consider condition (c)
               val mcw = MissingCommonWrapper(inducedTrans, views)
@@ -159,8 +167,8 @@ class NewEffectOn(
             InducedTransitionInfo(nv.asReducedComponentView, trans, cpts, cv)
           // Add a MissingCrossReferences to the store. 
           val missingCrossRefs =
-            MissingCrossReferences(inducedTrans, missing, candidates)
-          newEffectOnStore.add(missingCrossRefs, condCSat)
+            MissingCrossReferences(inducedTrans, missing, candidates, condCSat)
+          newEffectOnStore.add(missingCrossRefs)
           if(isPrimary && unifs.isEmpty &&
               !RemappingExtender.anyLinkageC(map, cv, pre))
             cv.addConditionBInduced(post.servers, reducedMap, crossRefs.toArray)
@@ -238,8 +246,9 @@ object NewEffectOn{
   def purge = {
     // Profiler.count(s"purge $ply $doPurge")
     if(doPurge){
-      if(ply%4 == 0) newEffectOnStore.purgeMissingCrossRefStore(views)
-      else if(ply%4 == 1) newEffectOnStore.purgeByNewView(views)
+      if(ply%4 == 0) newEffectOnStore.purgeByNewView(views) 
+      else if(ply%4 == 1) newEffectOnStore.purgeMissingCrossRefStore(views)
+      // Note: purgeMissingCrossRefStore builds on purgeByNewView
       else if(ply%4 == 2){
         newEffectOnStore.purgeMissingCommonStore(views)
         newEffectOnStore.purgeCandidateForMCStore(views)
@@ -247,9 +256,10 @@ object NewEffectOn{
       else if(ply%4 == 3) MissingCommon.purgeMCs()
     }
   }
-// IMPROVE: and other parts of newEffectOnStore
 
   def report = { require(guard); newEffectOnStore.report }
+
+  def sanityCheck = newEffectOnStore.sanityCheck _
 
   /** Perform a memory profile of this. */
   def memoryProfile = {

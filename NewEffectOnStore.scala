@@ -88,12 +88,17 @@ class NewEffectOnStore{
     * byNewView; and if any there is implied by missingCrossRefs, then mark it
     * as superseded.  Pre: if condCSat then condition (c) must be satisfied
     * for missingCrossRefs. */
-  def add(missingCrossRefs: MissingCrossReferences, condCSat: Boolean): Unit = {
+  def add(missingCrossRefs: MissingCrossReferences /*, condCSat: Boolean*/): Unit = {
+    val condCSat = missingCrossRefs.conditionCSatisfied
+    // require(condCSat == missingCrossRefs.conditionCSatisfied)
+    // IMPROVE: no need for param
     if(!condCSat || shouldStore(missingCrossRefs)){
       val missingHead = missingCrossRefs.missingHead
       addToStore(missingCrossRefStore, missingHead, missingCrossRefs)
     }
   } 
+
+  import MissingCrossReferences.{Superset,Equal,Subset,Incomparable}
 
   /** Should mcr be stored, i.e. is it not implied by any prior
     * MissingCrossReferences object?  Pre: this has no missing common
@@ -102,7 +107,7 @@ class NewEffectOnStore{
     * superset of mcr's missing views is marked as superseded (and removed
     * when purging).  */
   private def shouldStore(mcr: MissingCrossReferences): Boolean = {
-    import MissingCrossReferences.{compare,Superset,Equal,Subset}
+    require(mcr.conditionCSatisfied)
     val newView = mcr.inducedTrans.newView
     var done = false; var found = false
     // found is set to true if we find a MCR that implies mcr
@@ -115,8 +120,10 @@ class NewEffectOnStore{
           // Those MCRs not implied by mcr
           val newAB = 
             new ArrayBuffer[MissingCrossReferences](ab.length max InitABSize)
-          while(i < ab.length && !found){
-            val mcr1 = ab(i); i += 1; val cmp = compare(mcr, mcr1)
+          while(i < ab.length){
+            val mcr1 = ab(i); i += 1; assert(mcr1 != mcr)
+            val cmp = MissingCrossReferences.compare(mcr, mcr1)
+// IMPROVE: include below?  Or does it never happen? 
             if(false && mcr1.allFound) // can purge mcr1 here
               assert(cmp != Subset && cmp != Equal)
             else{
@@ -136,7 +143,11 @@ class NewEffectOnStore{
           }
           else if(!found) ab += mcr 
           else Profiler.count("NewEffectOnStore.shouldStore false")
-        }
+          // if(false && !found) byNewView.get(newView) match{
+          //   case None => assert(false, s"No record ")
+          //   case Some(ab) => assert(ab.contains(mcr), s"Not found $mcr\n") 
+          // }
+        } // end of if(mapsto...)
         // otherwise go round the loop again
       } // end of synchronized block
     } // end of while loop
@@ -205,7 +216,11 @@ class NewEffectOnStore{
           } // end of mcr.synchronized block
           if(flag){
             if(mcr.done) doneMissingCrossRefs(mcr, views, result)
-            else addToStore(missingCrossRefStore, mcr.missingHead, mcr)
+            else 
+              // Note: we do not do the same checks here as in `add`, as mcr
+              // was already in missingCrossRefStore.  In particular, that
+              // would break the logic in shouldStore.
+              addToStore(missingCrossRefStore, mcr.missingHead, mcr)
           }
         } // end of iteration over mcrs/mcr.synchronized
       }
@@ -247,8 +262,9 @@ class NewEffectOnStore{
         if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
           Profiler.count("New MissingCrossReferences from allCompletions")
           val newMCR =
-            new MissingCrossReferences(newInducedTrans, newMissingCRs)
-          add(newMCR, false)
+            new MissingCrossReferences(newInducedTrans, newMissingCRs, false)
+// IMPROVE the false above?
+          add(newMCR)
         }
         else checkConditionC(newInducedTrans, views, result)
       }
@@ -421,14 +437,30 @@ class NewEffectOnStore{
 
   /** Purge items from byNewView. Remove items where the newView is found.  */
   def purgeByNewView(views: ViewSet) = {
-    Profiler.count("purgeByNewView")
     def process(
       nv: ReducedComponentView, ab: ArrayBuffer[MissingCrossReferences]) 
-    = 
+    = {
       if(views.contains(nv)){
         byNewView.remove(nv)
         Profiler.count("purgeByNewView removed")
       }
+      else{
+        for(mcr <- ab) mcr.updateMissingViews(views)
+        // If any MCR implies another, mark the latter as superseded.  NOTE:
+        // this doesn't have a huge effect, marking around 10%, so might not
+        // be worthwhile.
+        for(i <- 0 until ab.length-1){
+          val mcr1 = ab(i)  // IMPROVE: if(!mcr1.isSuperseded)
+          for(j <- i+1 until ab.length){
+            // IMPROVE: if(!mcr2.isSuperseded), and while(!mcr1.isSuperseded)
+            val mcr2 = ab(j); val cmp = MissingCrossReferences.compare(mcr1,mcr2)
+            if(cmp == Subset || cmp == Equal) mcr2.setSuperseded
+            else if(cmp == Superset) mcr1.setSuperseded
+            if(cmp != Incomparable)Profiler.count("purgeByNewView setSuperseded")
+          }
+        }
+      }
+    }
 
     byNewViewShardIterator.foreach(process)
   }
@@ -443,7 +475,6 @@ class NewEffectOnStore{
 
   /** Purge values from missingCommonStore. */
   def purgeMissingCommonStore(views: ViewSet) = {
-    Profiler.count("purgeMissingCommonStore")
     /* Purge from the maplet rv -> mcws. */
     @inline def process(
       rv: ReducedComponentView, mcws: OpenHashSet[MissingCommonWrapper])
@@ -463,6 +494,22 @@ class NewEffectOnStore{
   }
 
   // ================================ Administrative functions
+
+  /** Sanity check: every value in missingCrossRefStore that is not done, not
+    * superseded, and that satisfied condition (c) is also in byNewView.  */
+  def sanityCheck(views: ViewSet) = {
+    println("Sanity check")
+    for(mcrs <- missingCrossRefStore.valuesIterator; mcr <- mcrs.iterator)
+      if(!mcr.done(views) && !mcr.isSuperseded && mcr.conditionCSatisfied){
+        val nv = mcr.inducedTrans.newView
+        byNewView.get(nv) match{
+          case None => 
+            assert(false, s"No record for $nv"+ mcr.isNewViewFound(views))
+          case Some(ab) => assert(ab.contains(mcr), s"Not found $mcr\n"+
+              mcr.isNewViewFound(views))
+        }
+      }
+  }
 
   /** Report on the size of store. */
   def reportStore[A, B <: AnyRef](store: ShardedHashMap[A, OpenHashSet[B]])

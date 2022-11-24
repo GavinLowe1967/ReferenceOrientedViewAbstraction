@@ -284,6 +284,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
 
   import CompressedCandidatesMap._
 
+  /** Representation of all values to which each parameter can be mapped. */
   private def getCompressedCandidatesMap(
     resultRelevantParams: BitMap, rdMap: RemappingMap, doneB: List[Linkage])
       : CompressedCandidatesMap = {
@@ -449,7 +450,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
           getCompressedCandidatesMap(resultRelevantParams, rdMap, doneB)
         maybeAdd(extensions, rdMap, candidates)
       }
-      else{
+      else{ // Condition (c) satisfied vacuously. 
         Remapper.mapUndefinedToFresh(rdMap, trans.getNextArgMap)
         maybeAdd(extensions, rdMap)
       }
@@ -564,7 +565,8 @@ object RemappingExtender{
 
   /** The result returned by makeExtensions.  Each element is a pair (map,
     * candidates), where candidates gives all ways in which undefined
-    * parameters can be mapped. */
+    * parameters can be mapped. If candidates == null then the map is total,
+    * and condition c is satisfied vacuously.  */
   // type ExtensionsInfo = ArrayBuffer[(RemappingMap, CandidatesMap)]
   type ExtensionsInfo = ArrayBuffer[(RemappingMap, CompressedCandidatesMap)]
 
