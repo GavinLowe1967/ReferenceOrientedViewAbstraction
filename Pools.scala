@@ -47,6 +47,8 @@ object Pools{
   /** The maximum size of row stored in the pool. */
   private var maxRowSize = -1 // 2*typeSizes.max+2
 
+  private val UseRowPool = false
+
   /** The max number of rows we store in any pool. */
   private val RowPoolCapacity = 50
 
@@ -80,7 +82,7 @@ object Pools{
 
   /** Get a remapping row of size `size`.  Note: the initial state of the row is
     * undefined: client code is responsible for initialisation. */
-  def getRemappingRow(size: Int): Row = { 
+  def getRemappingRow(size: Int): Row = if(UseRowPool){ 
     val me = ThreadID.get 
     Profiler.count(s"Pools.getRemappingRow")
     val pIndex = poolIndexFor(me,size); val offset = rowPoolSize(pIndex)-1
@@ -88,15 +90,15 @@ object Pools{
       rowPoolSize(pIndex) = offset; rowPool(indexFor(pIndex, offset))
     }
     // if(index >= 0){ rowPoolSize(pIndex) = offset; rowPool(pIndex)(offset) }
-    else /*mkArray(size)*/ new Array[Int](size)
+    else mkArray(size) // new Array[Int](size)
     //  non-inlining for profiling purposes
   }
+  else mkArray(size)
 
-  private def mkArray(size: Int) = new Array[Int](size)
+  @inline private def mkArray(size: Int) = new Array[Int](size)
 
   /** Return the rows of map to the row pool. */
-  def returnRemappingRows(map: RemappingMap): Unit = {
-    // return
+  def returnRemappingRows(map: RemappingMap): Unit = if(UseRowPool){
     val me = ThreadID.get; var i = 0
     while(i < map.length){
       val row = map(i); i += 1; val size = row.size

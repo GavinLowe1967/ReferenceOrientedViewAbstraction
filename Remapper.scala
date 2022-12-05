@@ -588,11 +588,12 @@ object Remapper{
   // ------ Remapping List[State] or  Views
 
   /** Remap procs, updating map and nextArg.  */
-  @inline private def remapStates(
+  @inline private def remapStatesX(
     map: RemappingMap, nextArg: NextArgMap, procs: List[State]): List[State] = 
     procs.map(st => remapState(map, nextArg, st))
 
-  /** Remap procs, updating map and nextArg.  */
+  /** Remap procs, updating map and nextArg.  Use the value registered in
+    * StateArray. */
   @inline private def remapStates(
     map: RemappingMap, nextArg: NextArgMap, procs: Array[State]): Array[State] = 
     StateArray(procs.map(st => remapState(map, nextArg, st)))
@@ -607,7 +608,7 @@ object Remapper{
       : (ServerStates, RemappingMap, NextArgMap) = {
     def mkTuple: (ServerStates, RemappingMap, NextArgMap) = {
       val map0 = newRemappingMap; var nextArg = newNextArgMap
-      val servers = ServerStates(remapStates(map0, nextArg, ss.servers))
+      val servers = ServerStates(remapStatesX(map0, nextArg, ss.servers))
       (servers, map0, nextArg)
     }
     val (servers, map, nextArgs) = remapSSCache.getOrElseUpdate(ss, mkTuple) 

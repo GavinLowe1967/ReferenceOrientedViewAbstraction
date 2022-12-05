@@ -83,16 +83,14 @@ class NewEffectOnStore{
     }
   }
 
-  /** Store missingCommonRefs in the missingCommonRefStore.  If condCSat then
-    * check that missingCrossRefs is not implied by a current value in
-    * byNewView; and if any there is implied by missingCrossRefs, then mark it
-    * as superseded.  Pre: if condCSat then condition (c) must be satisfied
-    * for missingCrossRefs. */
-  def add(missingCrossRefs: MissingCrossReferences /*, condCSat: Boolean*/): Unit = {
-    val condCSat = missingCrossRefs.conditionCSatisfied
-    // require(condCSat == missingCrossRefs.conditionCSatisfied)
-    // IMPROVE: no need for param
-    if(!condCSat || shouldStore(missingCrossRefs)){
+  /** Store missingCommonRefs in the missingCommonRefStore.  Check that
+    * missingCrossRefs is not implied by a current value in byNewView; and if
+    * any there is implied by missingCrossRefs, then mark it as
+    * superseded.  
+    * 
+    * Pre: mcr is a new object, that no other thread will try to lock.*/
+  def add(missingCrossRefs: MissingCrossReferences): Unit = {
+    if(shouldStore(missingCrossRefs)){
       val missingHead = missingCrossRefs.missingHead
       addToStore(missingCrossRefStore, missingHead, missingCrossRefs)
     }
@@ -101,13 +99,13 @@ class NewEffectOnStore{
   import MissingCrossReferences.{Superset,Equal,Subset,Incomparable}
 
   /** Should mcr be stored, i.e. is it not implied by any prior
-    * MissingCrossReferences object?  Pre: this has no missing common
-    * references.  We check that no other such that would produce the same new
-    * view has a subset of the missing views.  Also any other that has a
-    * superset of mcr's missing views is marked as superseded (and removed
-    * when purging).  */
+    * MissingCrossReferences object?  We check that no other such that would
+    * produce the same new view has a subset of mcr's requirements for
+    * conditions (b) and (c).  Also any other that has a superset of mcr's
+    * requirements is marked as superseded (and removed when purging).
+    * 
+    * Pre: mcr is a new object, that no other thread will try to lock.  */
   private def shouldStore(mcr: MissingCrossReferences): Boolean = {
-    require(mcr.conditionCSatisfied)
     val newView = mcr.inducedTrans.newView
     var done = false; var found = false
     // found is set to true if we find a MCR that implies mcr
@@ -120,7 +118,8 @@ class NewEffectOnStore{
           // Those MCRs not implied by mcr
           val newAB = 
             new ArrayBuffer[MissingCrossReferences](ab.length max InitABSize)
-          while(i < ab.length){
+          while(i < ab.length && !found){
+// IMPROVE && !found
             val mcr1 = ab(i); i += 1; assert(mcr1 != mcr)
             val cmp = MissingCrossReferences.compare(mcr, mcr1)
 // IMPROVE: include below?  Or does it never happen? 
@@ -132,17 +131,26 @@ class NewEffectOnStore{
               // Test if mcr1 is superceded by mcr
               if(cmp == Subset){ // mcr1 is superceded by mcr
                 mcr1.setSuperseded
-                Profiler.count("NewEffectOnStore.shouldStore removed old")
+                // Profiler.count("NewEffectOnStore.shouldStore removed old")
               }
-              else newAB += mcr1 // retain mcr1: not superseded by mcr
+              else if(!mcr1.isSuperseded)
+                newAB += mcr1 // retain mcr1: not superseded by mcr
             }
           } // end of while loop
-          if(newAB.length != ab.length){
+// IMPROVE
+          // for(mcr1 <- newAB) assert(!mcr1.isSuperseded)
+          if(newAB.length != i){
+            // At least one value in ab has been superseded.  Copy remaining
+            // into newAB, and replace ab with newAB.
+            while(i < ab.length){ 
+              val mcr1 = ab(i); if(!mcr1.isSuperseded) newAB += mcr1; i += 1
+            }
+            // if(newAB.length != ab.length){
             if(!found) newAB += mcr
             byNewView.replace(newView, newAB)
           }
           else if(!found) ab += mcr 
-          else Profiler.count("NewEffectOnStore.shouldStore false")
+          // else Profiler.count("NewEffectOnStore.shouldStore false")
           // if(false && !found) byNewView.get(newView) match{
           //   case None => assert(false, s"No record ")
           //   case Some(ab) => assert(ab.contains(mcr), s"Not found $mcr\n") 
@@ -260,7 +268,10 @@ class NewEffectOnStore{
         // New missing cross references created by extending
         val newMissingCRs = newMissingCrossRefs(inducedTrans, map0, cpts, views)
         if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
-          Profiler.count("New MissingCrossReferences from allCompletions")
+          // Test whether condition (c) is satisfied.  IMPROVE
+          val condCSat =  MissingCommonWrapper(newInducedTrans, views) == null
+          Profiler.count("New MissingCrossReferences from allCompletions "+
+            condCSat)
           val newMCR =
             new MissingCrossReferences(newInducedTrans, newMissingCRs, false)
 // IMPROVE the false above?
@@ -420,7 +431,7 @@ class NewEffectOnStore{
   }
 
   /** Purge done items from missingCrossRefStore. */
-  def purgeMissingCrossRefStore(views: ViewSet) = {
+  def purgeMissingCrossRefStore(views: ViewSet) = /*if(false)*/{
     /* When is mcr retained?  When not done and not superseded. */
     @inline def retain(mcr: MissingCrossReferences) = {
       val res = !mcr.done(views) && !mcr.isSuperseded
@@ -436,7 +447,7 @@ class NewEffectOnStore{
   }
 
   /** Purge items from byNewView. Remove items where the newView is found.  */
-  def purgeByNewView(views: ViewSet) = {
+  def purgeByNewView(views: ViewSet) = /*if(false)*/{
     def process(
       nv: ReducedComponentView, ab: ArrayBuffer[MissingCrossReferences]) 
     = {
@@ -449,17 +460,32 @@ class NewEffectOnStore{
         // If any MCR implies another, mark the latter as superseded.  NOTE:
         // this doesn't have a huge effect, marking around 10%, so might not
         // be worthwhile.
+        var changed = false // has any been marked?
         for(i <- 0 until ab.length-1){
-          val mcr1 = ab(i)  // IMPROVE: if(!mcr1.isSuperseded)
-          for(j <- i+1 until ab.length){
-            // IMPROVE: if(!mcr2.isSuperseded), and while(!mcr1.isSuperseded)
-            val mcr2 = ab(j); val cmp = MissingCrossReferences.compare(mcr1,mcr2)
-            if(cmp == Subset || cmp == Equal) mcr2.setSuperseded
-            else if(cmp == Superset) mcr1.setSuperseded
-            if(cmp != Incomparable)Profiler.count("purgeByNewView setSuperseded")
+          val mcr1 = ab(i) 
+          if(!mcr1.isSuperseded){
+            for(j <- i+1 until ab.length){
+              // IMPROVE:  while(!mcr1.isSuperseded)
+              val mcr2 = ab(j); assert(mcr1 != mcr2)
+              if(!mcr2.isSuperseded){
+                val cmp = MissingCrossReferences.compare(mcr1,mcr2)
+                if(cmp == Subset || cmp == Equal) mcr2.setSuperseded
+                else if(cmp == Superset) mcr1.setSuperseded
+                if(cmp != Incomparable){
+                  changed = true; Profiler.count("purgeByNewView setSuperseded")
+                }
+              }
+            }
           }
+        } // end of for loop
+        // Remove superseded values.
+        if(changed){
+          val newAB = new ArrayBuffer[MissingCrossReferences]
+          for(mcr <- ab; if !mcr.isSuperseded) newAB += mcr
+          byNewView.replace(nv, newAB)
         }
-      }
+      } // end of outer else
+
     }
 
     byNewViewShardIterator.foreach(process)

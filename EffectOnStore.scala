@@ -21,7 +21,7 @@ trait EffectOnStore{
   /** Add MissingInfo(nv, missing, missingCommon) to the store. 
     * This corresponds to transition trans inducing
     * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView.*/
-  def add(missing: List[ReducedComponentView], 
+  def add(missing: Array[ReducedComponentView], 
     missingCommon: List[MissingCommon],
     nv: ComponentView, trans: Transition, oldCpts: Array[State], 
     cv: ComponentView, newCpts: Array[State]): Unit
@@ -194,7 +194,7 @@ class SimpleEffectOnStore extends EffectOnStore{
   /** Add MissingInfo(nv, missing, missingCommon) to the stores. 
     * This corresponds to transition trans inducing
     * cv == (pre.servers, oldCpts) -> (post.servers, newCpts) == newView. */
-  def add(missing: List[ReducedComponentView], 
+  def add(missing: Array[ReducedComponentView], 
     missingCommon: List[MissingCommon], nv: ComponentView, trans: Transition, 
     oldCpts: Array[State], cv: ComponentView, newCpts: Array[State])
       : Unit = {
@@ -206,7 +206,7 @@ class SimpleEffectOnStore extends EffectOnStore{
     val mcArray = missingCommon.toArray
     val nv1 = nv.asReducedComponentView //ReducedComponentView(nv.servers, nv.components)
     // Profiler.count("ReducedComponentView: EffectOnStore.add")
-    val missingInfo = new MissingInfo(nv1, missing.toArray, mcArray, 
+    val missingInfo = new MissingInfo(nv1, missing, mcArray, 
       trans, oldCpts, cv, newCpts)
     if(missingCommon.isEmpty && !MissingInfoStore.add(missingInfo)) 
       // Doing this test when missingCommon.nonEmpty does very little 

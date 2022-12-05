@@ -171,6 +171,7 @@ class Debugger(
     /* Add to options, avoiding repetitions. */
     def maybeAdd(cv: ComponentView) = if(!options.contains(cv)) options += cv
     def maybeAddList(cvs: Seq[ComponentView]) = for(cv <- cvs) maybeAdd(cv)
+    def maybeAddArray(cvs: Array[ComponentView]) = for(cv <- cvs) maybeAdd(cv)
 
     // All views of conc.  This repeats a view seen in the previous expansion.
     maybeAddList(conc.toComponentView) // options ++= conc.toComponentView
@@ -186,13 +187,13 @@ class Debugger(
       // val crossRefs =
       //   EffectOn.getCrossRefs(servers, cv1.components, pre.components)
       // println("crossRefs = "+crossRefs.map(StateArray.show))
-      val missing: List[ComponentView] =
+      val missing: Array[ComponentView] =
         SingleRefEffectOn.getCrossRefs(servers, cpts1, preCpts)
           .map(new ComponentView(servers, _))
       if(missing.isEmpty) println("No cross reference views.")
       else{
         println(s"Cross reference views: "+missing.mkString(",\n  "))
-        maybeAddList(missing) // options ++= missing
+        maybeAddArray(missing) // options ++= missing
       }
 
       // Find the missing views required for condition (c).

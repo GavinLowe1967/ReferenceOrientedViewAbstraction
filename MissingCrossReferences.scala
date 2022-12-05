@@ -41,14 +41,14 @@ class MissingCrossReferences(
     * newView and a subset of the missingViews? */
   private var superseded = false
 
-  def setSuperseded = superseded = true
+  def setSuperseded = synchronized{ superseded = true }
 
-  def isSuperseded = superseded
+  def isSuperseded = synchronized{ superseded }
 
   /** Index of the next element of missingViews needed. */
   private var mvIndex: Short = 0
 
-  @inline private def incMvIndex = mvIndex = (mvIndex+1).toShort // asInstanceOf[Short]
+  @inline private def incMvIndex = mvIndex = (mvIndex+1).toShort 
 
   /** The first missing view, against which this should be registered. */
   def missingHead = synchronized{ missingViews(mvIndex) }
@@ -172,52 +172,76 @@ object MissingCrossReferences{
   /** Possible results from compare. */
   val Subset = 0; val Equal = 1; val Superset = 2; val Incomparable = 3
 
-  /** Compare the missingViews of mcr1 and mcr2.  Return Subset if those of mcr1
-    * are a subset of those for mcr2.  Similar for Equal, Superset and
-    * Incomparable.  At present, it is assumed that both satisfy condition c. */
-// IMPROVE: also consider condition c.
+  /** Compare the requirements of mcr1 and mcr2 for conditions (b) and (c).
+    * Return Subset if those of mcr1 are a subset of those for mcr2.  Similar
+    * for Equal, Superset and Incomparable. 
+    * 
+    * The operation uses synchronized on both mcr1 and mcr2.  This is sound
+    * providing either: (1) mcr1 is a new object, that no other thread has
+    * access to, as is the case in calls from NewEffectOnStore.shouldStore; or
+    * (2) no other thread will be accessing either object, as is the case
+    * during calls from NewEffectOnStore.purgeByNewView.  */
 // IMPROVE: pass in ViewSet, and ignore views already found
   def compare(mcr1: MissingCrossReferences, mcr2: MissingCrossReferences)
-      : Comparison = {
+      : Comparison = mcr1.synchronized{ mcr2.synchronized{
     require(mcr1.inducedTrans.newView == mcr2.inducedTrans.newView)
-    require(mcr1.conditionCSatisfied && mcr2.conditionCSatisfied)
-    if(!mcr1.conditionCSatisfied || !mcr2.conditionCSatisfied)
-      Incomparable // IMPROVE
+    // require(mcr1.conditionCSatisfied && mcr2.conditionCSatisfied)
+    // Perform case analysis on whether condition (c) is satisfied for each.
+    if(mcr1.conditionCSatisfied){
+      if(mcr2.conditionCSatisfied) compareMissingViews(mcr1, mcr2)
+      else compareMissingViews(mcr1, mcr2) match{ 
+        // IMPROVE: more specialised comparison?
+        case Subset | Equal => Subset 
+        case _ => Incomparable
+      }
+    }
+    else if(mcr2.conditionCSatisfied)
+      // mcr1's condition c requirements are a proper superset of mcr2's
+      compareMissingViews(mcr1, mcr2) match{
+        case Superset | Equal => Superset
+        case _ => Incomparable
+      }
+    else Incomparable // neither satisfied, probably for different requirements
+  }}
+
+  /** Compare the missingViews of mcr1 and mcr2, i.e. the requirements for
+    * condition (b). */
+  @inline private def compareMissingViews(
+    mcr1: MissingCrossReferences, mcr2: MissingCrossReferences)
+      : Comparison = {
+    val mv1 = mcr1.missingViews; val mv2 = mcr2.missingViews
+    val len1 = mv1.length; val len2 = mv2.length
+    // Note: we use the fact that mv1, mv2 are sorted
+    var i1: Int = mcr1.mvIndex; var i2: Int = mcr2.mvIndex
+    if(false){
+      for(ix <- i1 until len1-1) assert(mv1(ix) < mv1(ix+1))
+      for(ix <- i2 until len2-1) assert(mv2(ix) < mv2(ix+1))
+    }
+    // Inv: mv1[0..i1) == mv2[0..i2), ignoring found values
+    while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){ i1 += 1; i2 += 1 }
+    if(i1 == len1){ if(i2 == len2) Equal else Subset }
+    else if(i2 == len2) Superset
+    else if(mv1(i1) < mv2(i2)){
+      // mv1 is not a subset of mv2; test if mv2 is a subset of mv1.  Inv:
+      // mv2[0..i2) is a subset of mv1[0..i1); mv1[0..i1) < mv2[i2..len2).
+      while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
+      // Additional inv: mv1(i1) >= mv2(i2) or i1 = len1 or i2 = len2
+      while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
+        i1 += 1; i2 += 1
+        if(i2 < len2) while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
+      }
+      if(i2 == len2) Superset else Incomparable
+    }
     else{
-      val mv1 = mcr1.missingViews; val mv2 = mcr2.missingViews
-      val len1 = mv1.length; val len2 = mv2.length
-      // Note: we use the fact that mv1, mv2 are sorted
-      var i1: Int = mcr1.mvIndex; var i2: Int = mcr2.mvIndex
-      if(false){
-        for(ix <- i1 until len1-1) assert(mv1(ix) < mv1(ix+1))
-        for(ix <- i2 until len2-1) assert(mv2(ix) < mv2(ix+1))
+      // mv2 is not a subset of mv1; test if mv1 is a subset of mv2.  Inv:
+      // mv1[0..i1) is a subset of mv2[0..i2); mv2[0..i2) < mv1[i1..len1).
+      while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
+      // Additional inv: mv2(i1) >= mv1(i1) or i1 = len1 of i2 = len2
+      while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
+        i1 += 1; i2 += 1
+        if(i1 < len1) while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
       }
-      // Inv: mv1[0..i1) == mv2[0..i2), ignoring found values
-      while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){ i1 += 1; i2 += 1 }
-      if(i1 == len1){ if(i2 == len2) Equal else Subset }
-      else if(i2 == len2) Superset
-      else if(mv1(i1) < mv2(i2)){
-        // mv1 is not a subset of mv2; test if mv2 is a subset of mv1.  Inv:
-        // mv2[0..i2) is a subset of mv1[0..i1); mv1[0..i1) < mv2[i2..len2).
-        while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
-        // Additional inv: mv1(i1) >= mv2(i2) or i1 = len1 or i2 = len2
-        while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
-          i1 += 1; i2 += 1
-          if(i2 < len2) while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
-        }
-        if(i2 == len2) Superset else Incomparable
-      }
-      else{
-        // mv2 is not a subset of mv1; test if mv1 is a subset of mv2.  Inv:
-        // mv1[0..i1) is a subset of mv2[0..i2); mv2[0..i2) < mv1[i1..len1).
-        while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
-        // Additional inv: mv2(i1) >= mv1(i1) or i1 = len1 of i2 = len2
-        while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
-          i1 += 1; i2 += 1
-          if(i1 < len1) while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
-        }
-        if(i1 == len1) Subset else Incomparable
-      }
+      if(i1 == len1) Subset else Incomparable
     }
   }
 }

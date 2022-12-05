@@ -64,10 +64,10 @@ class NewEffectOn(
       Profiler.count("EffectOn step "+unifs.isEmpty)
       val cpts = mkComponents(map)
       // The components needed for condition (b).
-      val crossRefs: List[Array[State]] = 
+      val crossRefs: Array[Array[State]] = 
         getCrossRefs(pre.servers, cpts, pre.components)
       if(unifs.nonEmpty || reducedMapInfo == null ||
-          !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs.toArray)){
+          !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs)){
         val newPrinc = getNewPrinc(cpts(0), unifs)
         var newComponentsList =
           StateArray.makePostComponents(newPrinc, postCpts, cpts)
@@ -87,7 +87,7 @@ class NewEffectOn(
       val (map, candidates, unifs, k) = secondaryInduced(index); index += 1
       val cpts = mkComponents(map) 
       Profiler.count("SecondaryInduced")
-      val crossRefs: List[Array[State]] = 
+      val crossRefs: Array[Array[State]] = 
         getCrossRefs(pre.servers, cpts, pre.components)
       val newPrinc = getNewPrinc(cpts(0), unifs)
       val newComponentsList = List(StateArray(Array(postCpts(k), newPrinc)))
@@ -104,7 +104,7 @@ class NewEffectOn(
     * corresponding to candidates. */
   @inline private def processInducedInfo(
     map: RemappingMap, unifs: UnificationList,
-    reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: List[Array[State]],
+    reducedMap: ReducedMap, isPrimary: Boolean, crossRefs: Array[Array[State]],
     newComponentsList: List[Array[State]], candidates: CompressedCandidatesMap)
       : Unit = {
     require(singleRef && useNewEffectOnStore)
@@ -118,7 +118,7 @@ if(true){
 }
     // The cross reference views required for condition (b) implied by map
     val missing: Array[ReducedComponentView] = 
-      MissingCrossReferences.sort(missingCrossRefs(crossRefs).toArray)
+      MissingCrossReferences.sort(missingCrossRefs(crossRefs))
     // Is condition (c) guaranteed to be satisfied?
     val condCSat = candidates == null
     
@@ -171,7 +171,7 @@ if(true){
           newEffectOnStore.add(missingCrossRefs)
           if(isPrimary && unifs.isEmpty &&
               !RemappingExtender.anyLinkageC(map, cv, pre))
-            cv.addConditionBInduced(post.servers, reducedMap, crossRefs.toArray)
+            cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
         }
       }
       else // views already contains nv
@@ -200,7 +200,7 @@ if(true){
 
   /** All cross references implied by map.  These can only be via references
     * where map is defined. */
-  @inline private def makeCrossRefs(map: RemappingMap): List[Array[State]] = {
+  @inline private def makeCrossRefs(map: RemappingMap): Array[Array[State]] = {
     val cpts = mkComponents(map)
     getCrossRefs(pre.servers, cpts, pre.components)
   }

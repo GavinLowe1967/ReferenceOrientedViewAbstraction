@@ -66,10 +66,10 @@ class SingleRefEffectOn(
       Profiler.count("EffectOn step "+unifs.isEmpty)
       val cpts =  Remapper.applyRemapping(map, cv.components)
       // The components needed for condition (b).
-      val crossRefs: List[Array[State]] =
+      val crossRefs: Array[Array[State]] =
         getCrossRefs(pre.servers, cpts, pre.components)
       if(unifs.nonEmpty || reducedMapInfo == null ||
-          !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs.toArray)){
+          !cv.containsConditionBInduced(post.servers,reducedMapInfo,crossRefs)){
         val newPrinc = getNewPrinc(cpts(0), unifs)
         // If singleRef, the principals are unified, but the principal loses
         // the reference to the second component, we can ignore this case.  
@@ -96,7 +96,7 @@ class SingleRefEffectOn(
       val (map, _, unifs, k) = secondaryInduced(index); index += 1
       val cpts = Remapper.applyRemapping(map, cv.components) 
       Profiler.count("SecondaryInduced")
-      val crossRefs: List[Array[State]] =
+      val crossRefs: Array[Array[State]] =
         getCrossRefs(pre.servers, cpts, pre.components)
       val newPrinc = getNewPrinc(cpts(0), unifs)
       val newComponentsList = List(StateArray(Array(postCpts(k), newPrinc)))
@@ -120,7 +120,7 @@ class SingleRefEffectOn(
     * @param reducedMap a representation of the RemappingMap |> post.servers. */
   @inline private def processInducedInfo(
     cpts: Array[State], unifs: UnificationList, reducedMap: ReducedMap,
-    isPrimary: Boolean, crossRefs: List[Array[State]],
+    isPrimary: Boolean, crossRefs: Array[Array[State]],
     newComponentsList: List[Array[State]])
       : Unit = {
     require(singleRef)
@@ -129,7 +129,7 @@ class SingleRefEffectOn(
     // If there are references between components from pre and cv, then check
     // that that combination is possible in sysAbsViews: those that are
     // missing.
-    val missing: List[ReducedComponentView] = missingCrossRefs(crossRefs)
+    val missing: Array[ReducedComponentView] = missingCrossRefs(crossRefs)
     for(newComponents <- newComponentsList){
       val nv = Remapper.mkComponentView(post.servers, newComponents)
       Profiler.count("newViewCount") 
@@ -147,7 +147,7 @@ class SingleRefEffectOn(
           nv.setCreationInfoIndirect(trans, cpts, cv) //, newComponents)
           // IMPROVE: do we need to check isPrimary here?
           if(isPrimary && unifs.isEmpty && missingCommons.isEmpty){
-            cv.addConditionBInduced(post.servers, reducedMap, crossRefs.toArray)
+            cv.addConditionBInduced(post.servers, reducedMap, crossRefs)
           }
         }
       } // end of if(!views.contains(nv))
@@ -211,8 +211,8 @@ class SingleRefEffectOn(
   // ------------------------------ Helper functions for conditions (b) and (c)
 
   /** The missing cross reference views required for condition (b). */
-  @inline protected def missingCrossRefs(crossRefs: List[Array[State]])
-      : List[ReducedComponentView] =
+  @inline protected def missingCrossRefs(crossRefs: Array[Array[State]])
+      : Array[ReducedComponentView] =
     crossRefs.map{ cpts => ReducedComponentView(pre.servers, cpts) }.
       filter(!views.contains(_))
 
@@ -335,12 +335,19 @@ object SingleRefEffectOn{
   /* ---- Helper functions for conditions (b) and (c). ---------- */
 
   /** Get (the components of) the cross reference views between cpts1 and cpts2,
-    * needed for condition (b). */
+    * needed for condition (b). 
+    * 
+    * The result is sorted according to StateArray.lessThan.  Each element is
+    * the value registered in StateArray. */
   @inline def getCrossRefs(
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State])
-      : List[Array[State]] = {
+      : Array[Array[State]] = {
     assert(singleRef)
-    StateArray.crossRefs(cpts1, cpts2).map(Remapper.remapComponents(servers,_))
+    val cr0 = StateArray.crossRefs(cpts1, cpts2)
+    val cr1 = cr0.map(Remapper.remapComponents(servers,_)).distinct
+    // IMPROVE: remove duplicates in sortCrossRefs
+    StateArray.sortCrossRefs(cr1)
+    cr1
   }
 
   // /** All common included missing references from cpts1 and cpts2. */

@@ -242,7 +242,7 @@ object StateArray{
     * crossRefFlag is false, include the cross reference only if a principal
     * also has a reference to one of the components. */
   def crossRefs(cpts1: Array[State], cpts2: Array[State])
-      : List[Array[State]] = {
+      : Array[Array[State]] = {
     require(singleRef)
     if(CrossRefFlag){ // currently true
       var result = List[Array[State]](); var i = 0
@@ -263,7 +263,7 @@ object StateArray{
           }
         }
       }
-      result
+      result.toArray
     }
     else{
       var res0 = crossRefs1(cpts1, cpts2) ++ crossRefs1(cpts2, cpts1)
@@ -273,8 +273,29 @@ object StateArray{
         if(!result.exists(states1 => states1.sameElements(states)))
           result ::= states
       }
-      result
+      result.toArray
     }
+  }
+
+  /** Sort crossRefs in-situ. 
+    * 
+    * Pre: there are no repetitions.  IMPROVE: remove duplicates here. */
+  @inline def sortCrossRefs(crossRefs: Array[Array[State]]) = {
+    // val a = new Array[Array[State]](crossRefs.length)
+    // Use insertion sort, since crossRefs is short.  Inv: crossRefs[0..i) is sorted.
+    // Still need to add elements of cr.
+    var i = 0
+    while(i < crossRefs.length){
+      val cpts = crossRefs(i); var j = i
+      // Inv cpts < a[j..i)
+      while(j > 0 && lessThan(cpts, crossRefs(j-1))){ 
+        crossRefs(j) = crossRefs(j-1); j -= 1 
+      }
+      crossRefs(j) = cpts; i += 1
+    }
+    // for(i <- 1 until crossRefs.length) 
+    //   assert(lessThan(crossRefs(i-1), crossRefs(i)), 
+    //     crossRefs.map(show).mkString("; "))
   }
 
   /** All cross references between cpts1 and cpts2 that involve a component c2

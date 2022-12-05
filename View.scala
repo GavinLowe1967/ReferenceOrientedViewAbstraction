@@ -3,7 +3,9 @@ package ViewAbstraction
 import collection.ShardedHashSet
 import ox.gavin.profiling.Profiler
 
-/** A minimal ComponentView.  Used where it's useful to use less memory. */
+/** A minimal ComponentView.  Used where it's useful to use less memory. 
+  * 
+  * Pre: components is stored in StateArray. */
 class ReducedComponentView(
   val servers: ServerStates, val components: Array[State]){
 // IMPROVE
@@ -17,20 +19,30 @@ class ReducedComponentView(
   override def equals(that: Any) = {
     if(that != null){
       val cv = that.asInstanceOf[ReducedComponentView]
-      servers == cv.servers && sameCpts(cv.components)
+      servers == cv.servers && components == cv.components 
+      // Note: the value of components is shared between
+      // ReducedComponentViews, so we can use reference equality above.
     }
     else false
   }
 
-  @inline private def sameCpts(cpts: Array[State]) = {
-    val len = components.length
-    if(cpts.length == len){
-      var i = 0
-      while(i < len && components(i) == cpts(i)) i += 1
-      i == len
-    }
-    else false
-  }
+  // /** Does this have the same components as cpts? */
+  // @inline private def sameCpts(cpts: Array[State]) = {
+  //   // Note: I believe that cpts is always the same as StateArray(cpts) here.
+  //   // The code below takes advantage of this.
+  //   if(cpts == components) true
+  //   else{
+  //     // If the above is true, the following can be replaced with "false".
+  //     val len = components.length
+  //     if(cpts.length == len){
+  //       var i = 0
+  //       while(i < len && components(i) == cpts(i)) i += 1
+  //       assert(i != len) 
+  //       i == len
+  //     }
+  //     else false
+  //   }
+  // }
 
   /** Is this known to be in the ViewSet? */
   private var found = false

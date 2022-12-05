@@ -220,17 +220,35 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
         initSize = 4, ThresholdRatio = 0.6F)
     else null
 
-  /** Is crossRefs1 a subset of crossRefs2? */
+  /** Is crossRefs1 a subset of crossRefs2? 
+    * 
+    * Pre: both are sorted by StateArray.lessThan. */
   @inline private 
   def subset(crossRefs1: CrossRefInfo, crossRefs2: CrossRefInfo): Boolean = {
+    import StateArray.lessThan
+    val len1 = crossRefs1.length; val len2 = crossRefs2.length
+    // IMPROVE
+    for(i <- 1 until len1) assert(lessThan(crossRefs1(i-1), crossRefs1(i)))
+    for(i <- 1 until len2) assert(lessThan(crossRefs2(i-1), crossRefs2(i)))
+    var i1 = 0; var i2 = 0; var ok = true
+    // Inv: ok = true if crossRefs1[0..i1) is a subset of crossRefs[0..i2) and
+    // false if crossRefs(i1) is not in crossRefs2.  Also no element of
+    // crossRefs1[i1..) is in crossRefs[0..i2).
+    while(i1 < len1 && ok){
+      val cr1 = crossRefs1(i1); i1 += 1
+      while(i2 < len2 && lessThan(crossRefs2(i2), cr1)) i2 += 1
+      ok = i2 < len2 && crossRefs2(i2) == cr1
+    }
+/*
     var i1 = 0; var ok = true; val len2 = crossRefs2.length
     while(i1 < crossRefs1.length && ok){
       val cs1 = crossRefs1(i1); i1 += 1
       var i2 = 0 // test if crossRefs2 contains cs1
-      while(i2 < len2 && !sameElements(crossRefs2(i2), cs1)) i2 += 1
+      // while(i2 < len2 && !sameElements(crossRefs2(i2), cs1)) i2 += 1
+      while(i2 < len2 && crossRefs2(i2) != cs1) i2 += 1
       ok = i2 < len2
     }
-
+ */
     // crossRefs1.forall(cs1 => crossRefs2.exists(cs => cs.sameElements(cs1) ))
     //var crs1 = crossRefs1; var ok = true
     // // Inv: ok is true if all elements of crossRefs1 so far are in crossrefs2
@@ -251,10 +269,14 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   }
 
   /** Is there a stored primary induced transition with no unifications that
-    * subsumes the transition corresponding to (servers, map, crossRefs)? */
+    * subsumes the transition corresponding to (servers, map, crossRefs)?
+    * 
+    * Pre: each element of crossRefs must be the value registered in
+    * StateArray.  */
   def containsConditionBInduced(
     servers: ServerStates, map: ReducedMap, crossRefs: CrossRefInfo)
       : Boolean = synchronized{
+    // assert(crossRefs.forall(cpts => components.eq(StateArray(components))))
     val key = ServersReducedMap(servers, map)
     conditionBInducedMap.get(key) match{
       case Some(crl) =>  // Test if some element of crl is a subset of crossRefs
@@ -275,10 +297,14 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   /** Record that there is a stored primary induced transition with no
     * unifications corresponding to (servers, map, crossRefs)?  Return true if
     * this is a genuine addition, i.e. not subsumed in an existing record
-    * (with a subset of the crossRefs) */
+    * (with a subset of the crossRefs).
+    *  
+    * Pre: each element of crossRefs must be the value registered in
+    * StateArray. */
   def addConditionBInduced(
     servers: ServerStates, map: ReducedMap, crossRefs: CrossRefInfo)
       : Boolean = synchronized{
+    // assert(crossRefs.forall(cpts => components.eq(StateArray(components))))
     val key = ServersReducedMap(servers, map)
     conditionBInducedMap.get(key) match{
       case Some(crl) => 
