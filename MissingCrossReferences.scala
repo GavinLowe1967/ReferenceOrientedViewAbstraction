@@ -189,18 +189,21 @@ object MissingCrossReferences{
     // Perform case analysis on whether condition (c) is satisfied for each.
     if(mcr1.conditionCSatisfied){
       if(mcr2.conditionCSatisfied) compareMissingViews(mcr1, mcr2)
-      else compareMissingViews(mcr1, mcr2) match{ 
-        // IMPROVE: more specialised comparison?
-        case Subset | Equal => Subset 
-        case _ => Incomparable
-      }
+      else if(subset(mcr1, mcr2)) Subset else Incomparable 
+        // compareMissingViews(mcr1, mcr2) match{
+        // // IMPROVE: more specialised comparison?
+        // case Subset | Equal => Subset 
+        // case _ => Incomparable
+        // }
     }
-    else if(mcr2.conditionCSatisfied)
-      // mcr1's condition c requirements are a proper superset of mcr2's
-      compareMissingViews(mcr1, mcr2) match{
-        case Superset | Equal => Superset
-        case _ => Incomparable
-      }
+    else if(mcr2.conditionCSatisfied){
+      if(subset(mcr2, mcr1)) Superset else Incomparable
+    }
+      // // mcr1's condition c requirements are a proper superset of mcr2's
+      // compareMissingViews(mcr1, mcr2) match{
+      //   case Superset | Equal => Superset
+      //   case _ => Incomparable
+      // }
     else Incomparable // neither satisfied, probably for different requirements
   }}
 
@@ -213,35 +216,71 @@ object MissingCrossReferences{
     val len1 = mv1.length; val len2 = mv2.length
     // Note: we use the fact that mv1, mv2 are sorted
     var i1: Int = mcr1.mvIndex; var i2: Int = mcr2.mvIndex
-    if(false){
-      for(ix <- i1 until len1-1) assert(mv1(ix) < mv1(ix+1))
-      for(ix <- i2 until len2-1) assert(mv2(ix) < mv2(ix+1))
-    }
+    //   for(ix <- i1 until len1-1) assert(mv1(ix) < mv1(ix+1))
+    //   for(ix <- i2 until len2-1) assert(mv2(ix) < mv2(ix+1))
     // Inv: mv1[0..i1) == mv2[0..i2), ignoring found values
     while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){ i1 += 1; i2 += 1 }
     if(i1 == len1){ if(i2 == len2) Equal else Subset }
     else if(i2 == len2) Superset
     else if(mv1(i1) < mv2(i2)){
-      // mv1 is not a subset of mv2; test if mv2 is a subset of mv1.  Inv:
-      // mv2[0..i2) is a subset of mv1[0..i1); mv1[0..i1) < mv2[i2..len2).
-      while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
-      // Additional inv: mv1(i1) >= mv2(i2) or i1 = len1 or i2 = len2
-      while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
-        i1 += 1; i2 += 1
-        if(i2 < len2) while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
-      }
-      if(i2 == len2) Superset else Incomparable
+      // mv1 is not a subset of mv2; test if mv2 is a subset of mv1. 
+      if(subset(mv2, i2, len2, mv1, i1, len1)) Superset else Incomparable
+      // Inv: mv2[0..i2) is a subset of mv1[0..i1); mv1[0..i1) <
+      // mv2[i2..len2).
+      // val ss = subset(mv2, i2, len2, mv1, i1, len1)
+      // while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
+      // // Additional inv: mv1(i1) >= mv2(i2) or i1 = len1 or i2 = len2
+      // while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
+      //   i1 += 1; i2 += 1
+      //   if(i2 < len2) while(i1 < len1 && mv1(i1) < mv2(i2)) i1 += 1
+      // }
+      // assert(ss == (i2 == len2)) 
+      // if(i2 == len2) Superset else Incomparable
     }
     else{
-      // mv2 is not a subset of mv1; test if mv1 is a subset of mv2.  Inv:
-      // mv1[0..i1) is a subset of mv2[0..i2); mv2[0..i2) < mv1[i1..len1).
+      // mv2 is not a subset of mv1; test if mv1 is a subset of mv2.  
+      if(subset(mv1, i1, len1, mv2, i2, len2)) Subset else Incomparable
+      // Inv: mv1[0..i1) is a subset of mv2[0..i2); mv2[0..i2) <
+      // mv1[i1..len1).
+      // val ss = subset(mv1, i1, len1, mv2, i2, len2)
+      // while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
+      // // Additional inv: mv2(i1) >= mv1(i1) or i1 = len1 of i2 = len2
+      // while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
+      //   i1 += 1; i2 += 1
+      //   if(i1 < len1) while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
+      // }
+      // assert(ss == (i1 == len1))
+      // if(i1 == len1) Subset else Incomparable
+    }
+  }
+
+  /** Is mv1[ix1..len1) a subset of mv2[ix2..len2) (or equal)? */
+  @inline private def subset(
+    mv1: Array[ReducedComponentView], ix1: Int, len1: Int,
+    mv2: Array[ReducedComponentView], ix2: Int, len2: Int)
+      : Boolean = {
+    if(ix1 == len1) true
+    else{
+      var i1 = ix1; var i2 = ix2
+      // Inv: mv1[ix1..i1) is a subset of mv2[ix2..i2);
+      // mv2[ix2..i2) < mv1[i1..len1)
       while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
       // Additional inv: mv2(i1) >= mv1(i1) or i1 = len1 of i2 = len2
       while(i1 < len1 && i2 < len2 && mv1(i1) == mv2(i2)){
         i1 += 1; i2 += 1
         if(i1 < len1) while(i2 < len2 && mv2(i2) < mv1(i1)) i2 += 1
       }
-      if(i1 == len1) Subset else Incomparable
+// IMPROVE: could bail out if len2-i2 < len1-i1
+      i1 == len1
     }
   }
+
+  /** Are the missing views of mcr1 a subset of, or equal to, those of mcr2? */
+  @inline private 
+  def subset(mcr1: MissingCrossReferences, mcr2: MissingCrossReferences)
+      : Boolean = {
+    val mv1 = mcr1.missingViews; val mv2 = mcr2.missingViews
+    subset(mv1, mcr1.mvIndex, mv1.length, mv2, mcr2.mvIndex, mv2.length)
+  }
+
 }

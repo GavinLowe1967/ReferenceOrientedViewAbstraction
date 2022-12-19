@@ -119,25 +119,19 @@ class NewEffectOnStore{
           val newAB = 
             new ArrayBuffer[MissingCrossReferences](ab.length max InitABSize)
           while(i < ab.length && !found){
-// IMPROVE && !found
             val mcr1 = ab(i); i += 1; assert(mcr1 != mcr)
             val cmp = MissingCrossReferences.compare(mcr, mcr1)
-// IMPROVE: include below?  Or does it never happen? 
-            if(false && mcr1.allFound) // can purge mcr1 here
-              assert(cmp != Subset && cmp != Equal)
-            else{
-              // IMPROVE: calculate cmp here, and remove above assertion
-              if(cmp == Superset || cmp == Equal) found = true
-              // Test if mcr1 is superceded by mcr
-              if(cmp == Subset){ // mcr1 is superceded by mcr
-                mcr1.setSuperseded
-                // Profiler.count("NewEffectOnStore.shouldStore removed old")
-              }
-              else if(!mcr1.isSuperseded)
-                newAB += mcr1 // retain mcr1: not superseded by mcr
+            // if(false && mcr1.allFound) // can purge mcr1 here
+            //   assert(cmp != Subset && cmp != Equal)
+            if(cmp == Superset || cmp == Equal) found = true
+            // Test if mcr1 is superceded by mcr
+            if(cmp == Subset){ // mcr1 is superceded by mcr
+              mcr1.setSuperseded
+              // Profiler.count("NewEffectOnStore.shouldStore removed old")
             }
+            else if(!mcr1.isSuperseded)
+              newAB += mcr1 // retain mcr1: not superseded by mcr
           } // end of while loop
-// IMPROVE
           // for(mcr1 <- newAB) assert(!mcr1.isSuperseded)
           if(newAB.length != i){
             // At least one value in ab has been superseded.  Copy remaining

@@ -227,17 +227,21 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   def subset(crossRefs1: CrossRefInfo, crossRefs2: CrossRefInfo): Boolean = {
     import StateArray.lessThan
     val len1 = crossRefs1.length; val len2 = crossRefs2.length
-    // IMPROVE
-    for(i <- 1 until len1) assert(lessThan(crossRefs1(i-1), crossRefs1(i)))
-    for(i <- 1 until len2) assert(lessThan(crossRefs2(i-1), crossRefs2(i)))
+    // for(i <- 1 until len1) assert(lessThan(crossRefs1(i-1), crossRefs1(i)))
+    // for(i <- 1 until len2) assert(lessThan(crossRefs2(i-1), crossRefs2(i)))
     var i1 = 0; var i2 = 0; var ok = true
     // Inv: ok = true if crossRefs1[0..i1) is a subset of crossRefs[0..i2) and
-    // false if crossRefs(i1) is not in crossRefs2.  Also no element of
-    // crossRefs1[i1..) is in crossRefs[0..i2).
+    // false if crossRefs(i1) is not in crossRefs2 or it's found that
+    // crossRefs1 cannot be a subset of crossRefs2.  Also no element of
+    // crossRefs1[i1..) is in crossRefs[0..i2).  Note: if len1-i1 > len2-i2
+    // (or i2 > len2-len1+i1) then there is no way that we can have
+    // crossRefs[i1..len1) a subset of crossRefs2[i2..len2).
     while(i1 < len1 && ok){
-      val cr1 = crossRefs1(i1); i1 += 1
-      while(i2 < len2 && lessThan(crossRefs2(i2), cr1)) i2 += 1
-      ok = i2 < len2 && crossRefs2(i2) == cr1
+      val cr1 = crossRefs1(i1); val limit = len2-len1+i1
+      // while(i2 <= limit && lessThan(crossRefs2(i2), cr1)) i2 += 1
+      // ok = i2 <= limit && crossRefs2(i2) == cr1; i1 += 1
+      while(i2 <= limit && crossRefs2(i2) != cr1) i2 += 1
+      ok = i2 <= limit; i1 += 1; i2 += 1
     }
 /*
     var i1 = 0; var ok = true; val len2 = crossRefs2.length
@@ -316,26 +320,12 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
           if(!subset(crossRefs, crossRefs1)) newList ::= crossRefs1
           foundSubset ||= subset(crossRefs1, crossRefs)
         }
-        // Profiler.count(s"addConditionBInduced:"+crl.length)
-        // Up to ~150, but mostly below 10.
-        // Remove all supersets of crossRefs
-        // var newList = List[CrossRefInfo](); var crossRefsList = crl
-        // var foundSubset = false // have we found a subset of crossRefs?
-        // while(crossRefsList.nonEmpty){
-        //   val crossRefs1 = crossRefsList.head; crossRefsList = crossRefsList.tail
-        //   if(!subset(crossRefs, crossRefs1)) newList ::= crossRefs1
-        //   foundSubset ||= subset(crossRefs1, crossRefs)
-        //   // If crossRefs and crossRefs1 are equivalent (permutations), we
-        //   // retain the latter.
-        // }
-        // At present, we should always have !foundSubSet.  
+        // Note: we might have foundSubset = true, if another thread added the
+        // subset after this thread called containsConditionBInduced.
         if(!foundSubset) newList ::= crossRefs
-        // else if(false)
-        //   println(s"Not added: ${showCRI(crossRefs)}\n${crl.map(showCRI)}")
         conditionBInducedMap.add(key, newList.toArray); !foundSubset
 
       case None => conditionBInducedMap.add(key, Array(crossRefs)); true
-          // += key -> List(crossRefs); true
     }
   }
 

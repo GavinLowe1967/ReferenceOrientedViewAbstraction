@@ -421,12 +421,15 @@ object StateArray{
 
   /** Comparison function. */
   @inline def compare(cpts1: Array[State], cpts2: Array[State]): Int = {
-    val len = cpts1.length; val lenComp = len - cpts2.length
-    if(lenComp != 0) lenComp
+    if(cpts1 == cpts2) 0 // shortcut
     else{
-      var i = 0
-      while(i < len && cpts1(i) == cpts2(i)) i += 1
-      if(i == len) 0 else cpts1(i).compare(cpts2(i))
+      val len = cpts1.length; val lenComp = len - cpts2.length
+      if(lenComp != 0) lenComp
+      else{
+        var i = 0
+        while(i < len && cpts1(i) == cpts2(i)) i += 1
+        if(i == len) 0 else cpts1(i).compare(cpts2(i))
+      }
     }
   }
 
