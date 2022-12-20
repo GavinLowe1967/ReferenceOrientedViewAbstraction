@@ -34,7 +34,9 @@ $(COLLDIR)/MyHashSet.class:	$(COLLDIR)/Sharding.class $(DIR)/package.class
 
 $(COLLDIR)/ShardedHashSet.class:	$(COLLDIR)/MyHashSet.class
 
-$(COLLDIR)/ShardedHashMap.class: $(COLLDIR)/Sharding.class $(DIR)/package.class
+$(COLLDIR)/ShardedHashMap.class: $(COLLDIR)/Sharding.class $(DIR)/package.class $(COLLDIR)/DeletableMap.class
+
+$(COLLDIR)/LockableMap.class: $(COLLDIR)/ShardedHashMap.class
 
 # States etc.
 
@@ -154,7 +156,8 @@ $(DIR)/MissingCrossReferences.class: $(DIR)/InducedTransitionInfo.class \
 
 $(DIR)/MissingCommonWrapper.class: $(DIR)/MissingCommon.class $(DIR)/MissingCrossReferences.class
 
-$(DIR)/NewEffectOnStore.class: $(DIR)/MissingCommonWrapper.class $(DIR)/SingleRefEffectOnUnification.class
+$(DIR)/NewEffectOnStore.class: $(DIR)/MissingCommonWrapper.class		\
+  $(DIR)/SingleRefEffectOnUnification.class $(COLLDIR)/LockableMap.class
 
 $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 
