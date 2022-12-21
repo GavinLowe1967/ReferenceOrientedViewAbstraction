@@ -4,22 +4,33 @@ package ViewAbstraction.collection
   * operations, but also allows the mapping of a particular key to be locked.
   * Note that if B values are shared, they might also need to be locked. */
 trait LockableMap[A, B]{
-  /** Get the value associated with `a`, if one exists; otherwise update it to
-    * the value of `b`.  Also lock the mapping for `a`. */
-  def getOrElseUpdateAndLock(a: A, b: => B): B
+
+  /** Acquire the lock on `a`. */
+  def acquireLock(a: A): Unit 
 
   /** Release the lock on `a`.  Pre: this thread holds the lock. */
   def releaseLock(a: A): Unit
 
+  /** Get the value associated with `a`, if one exists; otherwise update it to
+    * the value of `b`.  Pre: this thread holds the lock on `a`. */
+  def getOrElseUpdate(a: A, b: => B): B
+
+  def add(a: A, b: B): Unit 
+
+  /* Each of the operations below has a precondition: if withLock then this
+   * thread holds the lock for `a`; otherwise it is assumed that no other
+   * thread is using `a` (in cases where operations are being done by a single
+   * thread per shard).  */
+
   /** Replace the mapping for `a` with `b`.  Pre: this thread holds the lock
     * for `a`. */
-  def replace(a: A, b: B): Unit
+  def replace(a: A, b: B, withLock: Boolean): Unit
+
+  /** Optionally get the value associated with `a`. */
+  def get(a: A, withLock: Boolean): Option[B]
 
   /** Remove the mapping for `a`, optionally returning the value previously
-    * associated with `a`.  
-    * 
-    * Pre: if withLock then this thread holds the lock for `a`; otherwise it
-    * is assumed that no other thread is using `a`. */
+    * associated with `a`.   */
   def remove(a: A, withLock: Boolean): Option[B]
 }
 
@@ -65,46 +76,76 @@ class ShardedLockableMap[A, B](shards: Int = 128, initLength: Int = 32)
       }
     }
 
-    /** Check that the current thread holds the lock on `a`.  Throw an 
-      * exception if not. */
-    def checkLock(a: A) = {
-      val pair = (a, Thread.currentThread())
-      synchronized{ require(lockList.contains(pair)) }
-    }
+    /** If `withLock`, check that the current thread holds the lock on `a`;
+      * otherwise check that no thread holds any lock. */
+    def checkLock(a: A, withLock: Boolean) = 
+      if(withLock){
+        val pair = (a, Thread.currentThread())
+        synchronized{ require(lockList.contains(pair)) }
+      }
+      else synchronized{ require(lockList.isEmpty) }
+
   } // end of LockInfo
 
   /** Information about locking of shards. */
   private val lockInfo = Array.fill(shards)(new LockInfo)
-
-  /** Get the value associated with `a`, if one exists; otherwise update it to
-    * the value of `b`.  Also lock the mapping for `a`. */
-  def getOrElseUpdateAndLock(a: A, b: => B): B = {
-    val h = hashOf(a); val sh = shardFor(h)
-    lockInfo(sh).lock(a) // obtain the lock for a
-    getOrElseUpdate(a, b, h, sh) // now do the update
-  }
 
   /** Release the lock on `a`.  Pre: this thread holds the lock. */
   def releaseLock(a: A): Unit = {
     val h = hashOf(a); val sh = shardFor(h); lockInfo(sh).unlock(a)
   }
 
-  /** Replace the mapping for `a` with `b`.  Pre: this thread holds the lock
-    * for `a`. */
-  def replace(a: A, b: B): Unit = {
+  /** Acquire the lock on `a`. */
+  def acquireLock(a: A): Unit = {
+    val h = hashOf(a); val sh = shardFor(h); lockInfo(sh).lock(a)
+  }
+
+  /** Get the value associated with `a`, if one exists; otherwise update it to
+    * the value of `b`.  Also lock the mapping for `a`. */
+  // def getOrElseUpdateAndLock(a: A, b: => B): B = {
+  //   val h = hashOf(a); val sh = shardFor(h)
+  //   lockInfo(sh).lock(a) // obtain the lock for a
+  //   getOrElseUpdate(a, b, h, sh) // now do the update
+  // } 
+  
+
+  /** Get the value associated with `a`, if one exists; otherwise update it to
+    * the value of `b`.  This thread must hold the lock on a. */
+  def getOrElseUpdate(a: A, b: => B): B = {
     val h = hashOf(a); val sh = shardFor(h)
-    lockInfo(sh).checkLock(a) // check this thread has a locked
+    lockInfo(sh).checkLock(a, true) // check lock for a held
+    getOrElseUpdate(a, b, h, sh) // now do the update
+  }
+
+  def add(a: A, b: B): Unit = {
+    val h = hashOf(a); val sh = shardFor(h)
+    lockInfo(sh).checkLock(a, true) // check lock for a held
+    add(a, b, h, sh)
+  }
+
+  /* Each of the operations below has a precondition: if withLock then this
+   * thread holds the lock for `a`; otherwise it is assumed that no other
+   * thread is using `a`.  */
+
+  /** Replace the mapping for `a` with `b`.  */
+  def replace(a: A, b: B, withLock: Boolean): Unit = {
+    val h = hashOf(a); val sh = shardFor(h)
+    lockInfo(sh).checkLock(a, withLock) // check this thread has a locked
     replace(a, b, h, sh)
   }
 
+  /** Optionally get the value associated with `a`. */
+  def get(a: A, withLock: Boolean): Option[B] = {
+    val h = hashOf(a); val sh = shardFor(h);
+    lockInfo(sh).checkLock(a, withLock)
+    get(a, h, sh)
+  }
+
   /** Remove the mapping for `a`, optionally returning the value previously
-    * associated with `a`.  
-    * 
-    * Pre: if withLock then this thread holds the lock for `a`; otherwise it
-    * is assumed that no other thread is using `a`. */
+    * associated with `a`.  */
   def remove(a: A, withLock: Boolean): Option[B] = {
     val h = hashOf(a); val sh = shardFor(h)
-    if(withLock) lockInfo(sh).checkLock(a) // check this thread has a locked
+    lockInfo(sh).checkLock(a, withLock) // check this thread has a locked
     remove(a, h, sh)
   }
 

@@ -79,6 +79,8 @@ abstract class ShardedHashMap0[A, B] // [A: ClassTag, B: ClassTag](
    * wrap around in the same shard, rather than moving onto the next
    * shard.  */
 
+  // ========= Standard map functions
+
   /** The number of elements in this. */
   def size: Int = counts.sum
 
@@ -87,9 +89,27 @@ abstract class ShardedHashMap0[A, B] // [A: ClassTag, B: ClassTag](
   @noinline protected def find(sh: Int, x: A, h: Int): Int = {
     var i = entryFor(sh, h)
     assert(i < widths(sh))
-    while(hashes(sh)(i) != 0 && (hashes(sh)(i) != h || keys(sh)(i) != x))
+    while(hashes(sh)(i) != Empty && (hashes(sh)(i) != h || keys(sh)(i) != x))
       i = (i+1) & widthMasks(sh)
     i
+  }
+
+
+  /** Add the mapping a -> b to the map, where a has hash h, in shard sh. */
+  @inline protected def add(a: A, b: B, h: Int, sh: Int): Unit = {
+    locks(sh).synchronized{
+      if(usedSlots(sh) >= thresholds(sh)) resize(sh)
+      // Find empty slot or slot containing a
+      val i = find(sh, a, h)
+      if(hashes(sh)(i) == h){ assert(keys(sh)(i) == a); elements(sh)(i) = b }
+      else{
+        // println("Adding "+a+" -> "+b)
+        assert(hashes(sh)(i) == 0 && keys(sh)(i) == null && 
+          elements(sh)(i) == null)
+        hashes(sh)(i) = h; keys(sh)(i) = a; elements(sh)(i) = b
+        counts(sh) += 1; usedSlots(sh) += 1
+      }
+    }
   }
 
   /** Get the value associated with a, with hash h, in shard sh, if one exits;
@@ -102,11 +122,19 @@ abstract class ShardedHashMap0[A, B] // [A: ClassTag, B: ClassTag](
     if(hashes(sh)(i) == h){ assert(keys(sh)(i) == a); elements(sh)(i) }
     else{
       // println("Adding "+a+" -> "+b)
-      assert(hashes(sh)(i) == 0 && keys(sh)(i) == null &&
+      assert(hashes(sh)(i) == Empty && keys(sh)(i) == null &&
         elements(sh)(i) == null)
       hashes(sh)(i) = h; keys(sh)(i) = a; val myB = b; elements(sh)(i) = myB
       counts(sh) += 1; usedSlots(sh) += 1; myB
     }
+  }
+
+  /** Optionally get the value associated with a. */
+  @inline protected 
+  def get(a: A, h: Int, sh: Int): Option[B] = locks(sh).synchronized{
+    val i = find(sh, a, h)
+    if(hashes(sh)(i) == h){ assert(keys(sh)(i) == a); Some(elements(sh)(i)) }
+    else{ assert(hashes(sh)(i) == Empty); None }
   }
 
   /** Resize shard sh of the hash table. */
@@ -166,6 +194,60 @@ abstract class ShardedHashMap0[A, B] // [A: ClassTag, B: ClassTag](
 
   // ========= Iterators
 
+  /** An iterator over the range of this map. */
+  def valuesIterator = new Iterator[B]{
+    /** Current shard. */
+    private var sh = 0
+
+    /** Current index in that shard. */
+    private var ix = 0
+
+    /* We maintain the invariant that sh and ix point to the next element to be
+     * returned. */
+
+    /** Advance to the next element. */
+    private def advance(): Unit = {
+      // Advance within this shard
+      while(ix < widths(sh) && !filled(hashes(sh)(ix))) ix += 1
+      // Maybe move to next shard
+      if(ix == widths(sh)){ sh += 1; ix = 0; if(sh < shards) advance() }
+    }
+
+    advance()
+
+    def hasNext = sh < shards 
+
+    def next() = { val res = elements(sh)(ix); ix += 1; advance(); res }
+  } // end of Iterator
+
+  /** An iterator over the (key, value) pairs in this map. */
+  def iterator = new Iterator[(A,B)]{
+    /** Current shard. */
+    private var sh = 0
+
+    /** Current index in that shard. */
+    private var ix = 0
+
+    /* We maintain the invariant that sh and ix point to the next element to be
+     * returned. */
+
+    /** Advance to the next element. */
+    private def advance(): Unit = {
+      // Advance within this shard
+      while(ix < widths(sh) && !filled(hashes(sh)(ix))) ix += 1
+      // Maybe move to next shard
+      if(ix == widths(sh)){ sh += 1; ix = 0; if(sh < shards) advance() }
+    }
+
+    advance()
+
+    def hasNext = sh < shards 
+
+    def next() = { 
+      val res = (keys(sh)(ix), elements(sh)(ix)); ix += 1; advance(); res 
+    }
+  } // end of iterator
+
   /** An iterator over the (key, value) pairs in shard sh. */
   private def shardIterator(sh: Int) = new Iterator[(A,B)]{
     /** Current index in the shard. */
@@ -223,12 +305,12 @@ class ShardedHashMap[A, B](shards: Int = 128, initLength: Int = 32)
 
   /** Optionally get the value associated with a. */
   def get(a: A): Option[B] = {
-    val h = hashOf(a); val sh = shardFor(h)
-    locks(sh).synchronized{
-      val i = find(sh, a, h)
-      if(hashes(sh)(i) == h){ assert(keys(sh)(i) == a); Some(elements(sh)(i)) }
-      else{ assert(hashes(sh)(i) == 0); None }
-    }
+    val h = hashOf(a); val sh = shardFor(h); get(a, h, sh)
+    // locks(sh).synchronized{
+    //   val i = find(sh, a, h)
+    //   if(hashes(sh)(i) == h){ assert(keys(sh)(i) == a); Some(elements(sh)(i)) }
+    //   else{ assert(hashes(sh)(i) == 0); None }
+    // }
   }
 
   /** Get the value associated with a.  Pre: a is in the mapping. */
@@ -262,21 +344,22 @@ class ShardedHashMap[A, B](shards: Int = 128, initLength: Int = 32)
   }
 
   /** Add the mapping a -> b to the map. */
-  def add(a: A, b: B) = {
+  def add(a: A, b: B): Unit = {
     val h = hashOf(a); val sh = shardFor(h)
-    locks(sh).synchronized{
-      if(usedSlots(sh) >= thresholds(sh)) resize(sh)
-      // Find empty slot or slot containing a
-      val i = find(sh, a, h)
-      if(hashes(sh)(i) == h){ assert(keys(sh)(i) == a); elements(sh)(i) = b }
-      else{
-        // println("Adding "+a+" -> "+b)
-        assert(hashes(sh)(i) == 0 && keys(sh)(i) == null && 
-          elements(sh)(i) == null)
-        hashes(sh)(i) = h; keys(sh)(i) = a; elements(sh)(i) = b
-        counts(sh) += 1; usedSlots(sh) += 1
-      }
-    }
+    add(a, b, h, sh)
+    // locks(sh).synchronized{
+    //   if(usedSlots(sh) >= thresholds(sh)) resize(sh)
+    //   // Find empty slot or slot containing a
+    //   val i = find(sh, a, h)
+    //   if(hashes(sh)(i) == h){ assert(keys(sh)(i) == a); elements(sh)(i) = b }
+    //   else{
+    //     // println("Adding "+a+" -> "+b)
+    //     assert(hashes(sh)(i) == 0 && keys(sh)(i) == null && 
+    //       elements(sh)(i) == null)
+    //     hashes(sh)(i) = h; keys(sh)(i) = a; elements(sh)(i) = b
+    //     counts(sh) += 1; usedSlots(sh) += 1
+    //   }
+    // }
   }
 
   /** Update the mapping so a -> b.  Pre: a is already in the domain.  Can be
@@ -324,59 +407,7 @@ class ShardedHashMap[A, B](shards: Int = 128, initLength: Int = 32)
     }
   }
 
-  /** An iterator over the range of this map. */
-  def valuesIterator = new Iterator[B]{
-    /** Current shard. */
-    private var sh = 0
 
-    /** Current index in that shard. */
-    private var ix = 0
-
-    /* We maintain the invariant that sh and ix point to the next element to be
-     * returned. */
-
-    /** Advance to the next element. */
-    private def advance(): Unit = {
-      // Advance within this shard
-      while(ix < widths(sh) && !filled(hashes(sh)(ix))) ix += 1
-      // Maybe move to next shard
-      if(ix == widths(sh)){ sh += 1; ix = 0; if(sh < shards) advance() }
-    }
-
-    advance()
-
-    def hasNext = sh < shards 
-
-    def next() = { val res = elements(sh)(ix); ix += 1; advance(); res }
-  } // end of Iterator
-
-  /** An iterator over the (key, value) pairs in this map. */
-  def iterator = new Iterator[(A,B)]{
-    /** Current shard. */
-    private var sh = 0
-
-    /** Current index in that shard. */
-    private var ix = 0
-
-    /* We maintain the invariant that sh and ix point to the next element to be
-     * returned. */
-
-    /** Advance to the next element. */
-    private def advance(): Unit = {
-      // Advance within this shard
-      while(ix < widths(sh) && !filled(hashes(sh)(ix))) ix += 1
-      // Maybe move to next shard
-      if(ix == widths(sh)){ sh += 1; ix = 0; if(sh < shards) advance() }
-    }
-
-    advance()
-
-    def hasNext = sh < shards 
-
-    def next() = { 
-      val res = (keys(sh)(ix), elements(sh)(ix)); ix += 1; advance(); res 
-    }
-  } // end of iterator
 }
 
 
