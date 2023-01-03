@@ -5,23 +5,81 @@ import ox.gavin.profiling.Profiler
 object StateArray{
   /* --------- A cache of Array[State] to allow sharing ------------ */
   /** Keys used to store states.  A wrapper around an Array[State], allowing
-    * equality tests. */
-  private class Key(private val states: Array[State]){
-    override def equals(that: Any) = that match{
-      case k: Key => 
-        // k.states.sameElements(states)
-        val len = states.length; val thatStates = k.states
-        if(thatStates.length != len) false
-        else{
-          var i = 0
-          while(i < len && states(i) == thatStates(i)) i += 1
-          i == len
-        }
-    }
+    * equality tests.  */
+  abstract private class Key(states: Array[State]){
+    // override def equals(that: Any) = that match{
+    //   case k: Key => 
+    //     // k.states.sameElements(states)
+    //     val len = states.length; val thatStates = k.states
+    //     if(thatStates.length != len) false
+    //     else{
+    //       var i = 0
+    //       while(i < len && states(i) == thatStates(i)) i += 1
+    //       i == len
+    //     }
+    // }
 
     override def hashCode = mkHash(states)
 
     def get = states
+  }
+
+  /* We build subclasses of Key, based on length, to make equality tests
+   * efficient. */
+
+  /** Keys of length 1. */
+  private class Key1(states: Array[State]) extends Key(states){
+    require(states.length == 1)
+
+    private val st0 = states(0)
+
+    override def equals(that: Any) = 
+      that.isInstanceOf[Key1] && that.asInstanceOf[Key1].st0 == st0
+  }
+
+  /** Keys of length 2. */
+  private class Key2(states: Array[State]) extends Key(states){
+    require(states.length == 2)
+
+    private val st0 = states(0); private val st1 = states(1)
+
+    override def equals(that: Any) = 
+      that.isInstanceOf[Key2] && {
+        val k = that.asInstanceOf[Key2]; k.st0 == st0 && k.st1 == st1 
+      }
+  }
+
+  /** Keys of length 3. */
+  private class Key3(states: Array[State]) extends Key(states){
+    require(states.length == 3)
+
+    private val st0 = states(0); private val st1 = states(1);
+    private val st2 = states(2)
+
+    override def equals(that: Any) = 
+      that.isInstanceOf[Key3] && {
+        val k = that.asInstanceOf[Key3]
+        k.st0 == st0 && k.st1 == st1 && k.st2 == st2
+      }
+  }
+
+  /** Keys of length > 3. */
+  private class KeyN(private val states: Array[State]) extends Key(states){
+    require(states.length > 3)
+    Profiler.count("KeyN: "+states.length)
+
+    override def equals(that: Any) = 
+      that.isInstanceOf[KeyN] && 
+        that.asInstanceOf[KeyN].states.sameElements(states)
+  }
+
+  /** Make a Key containing states. */
+  private def mkKey(states: Array[State]): Key = {
+    val len = states.length
+    if(len == 1) new Key1(states)
+    else if(len == 2) new Key2(states)
+    else if(len == 3) new Key3(states)
+    else new KeyN(states) 
   }
 
   /** The store holding wrapped Array[State]. */
@@ -29,7 +87,7 @@ object StateArray{
 
   /** Get an Array[State] equivalent to states, to allow sharing. */
   def apply(states: Array[State]): Array[State] = {
-    val key = store.getOrAdd(new Key(states)); 
+    val key = store.getOrAdd(mkKey(states)); 
     // Profiler.count("StateArray.apply "+(key.get.eq(states)))
     key.get
   }

@@ -1,5 +1,5 @@
 package ViewAbstraction
-import collection.{OpenHashSet,ShardedHashMap,ShardedLockableMap}
+import collection.{OpenHashSet,ShardedHashMap,ShardedHashMap0,ShardedLockableMap}
 import RemapperP.Remapper
 import ox.gavin.profiling.Profiler
 import scala.collection.mutable.ArrayBuffer
@@ -20,8 +20,11 @@ class NewEffectOnStore{
 
   /** A store, abstractly a set of (A,B) pairs.  Implemented as a map A => sets
     * of B. */
+  // private type StoreX[A, B <: AnyRef with ClassTag[B]] = 
+  //   ShardedHashMap[A, OpenHashSet[B]]
+
   private type Store[A, B <: AnyRef with ClassTag[B]] = 
-    ShardedHashMap[A, OpenHashSet[B]]
+    ShardedLockableMap[A, OpenHashSet[B]]
 
   /* Maplets in each Store are updated by: (1) reading a -> bs; (2) locking bs;
    * (3) checking store still holds a -> bs; (4) updating bs, maybe replacing
@@ -41,7 +44,6 @@ class NewEffectOnStore{
     * missing references, keyed against the new views they would produce. */
   private val byNewView = 
     new ShardedLockableMap[ReducedComponentView, Array[MissingCrossReferences]]
-    //new ShardedHashMap[ReducedComponentView, Array[MissingCrossReferences]]
 
   /** Minimum size to initialise an ArrayBuffer in byNewView.  Note: when an
     * ArrayBuffer is resized, it is to size at least 16; so a smaller initial
@@ -70,18 +72,30 @@ class NewEffectOnStore{
     }
 
   /** Add a -> b to store. */
+  // @inline private def addToStore[A, B <: AnyRef]
+  //   (store: ShardedHashMap[A, OpenHashSet[B]], a: A, b: B)
+  //   (implicit tag: ClassTag[B])
+  // = {
+  //   var done = false
+  //   while(!done){
+  //     val set = store.getOrElseUpdate(a, mkSet[B])
+  //     set.synchronized{
+  //       if(mapsto(store, a, set)){ set.add(b); done = true }
+  //       // Otherwise go round the loop again
+  //     }
+  //   }
+  // }
+// IMPROVE: remove above eventually
+
+  /** Add a -> b to store. */
   @inline private def addToStore[A, B <: AnyRef]
-    (store: ShardedHashMap[A, OpenHashSet[B]], a: A, b: B)
+    (store: ShardedLockableMap[A, OpenHashSet[B]], a: A, b: B)
     (implicit tag: ClassTag[B])
   = {
-    var done = false
-    while(!done){
-      val set = store.getOrElseUpdate(a, mkSet[B])
-      set.synchronized{
-        if(mapsto(store, a, set)){ set.add(b); done = true }
-        // Otherwise go round the loop again
-      }
-    }
+    store.acquireLock(a)
+    val set = store.getOrElseUpdate(a, mkSet[B])
+    set.add(b)
+    store.releaseLock(a)
   }
 
   /** Store missingCommonRefs in the missingCommonRefStore.  Check that
@@ -149,7 +163,7 @@ class NewEffectOnStore{
             i += 1
           }
           assert(j == count)
-          // Maybe add mcr, and replace oldMCRs with newMCRs.
+          // Maybe add mcr; replace oldMCRs with newMCRs; unlock.
           if(!found) newMCRs(count) = mcr
           byNewView.replace(newView, newMCRs, true)
           byNewView.releaseLock(newView)
@@ -227,27 +241,6 @@ class NewEffectOnStore{
   }
  */
 
-
-/*
-  /** Remove mcr from missingCrossRefStore. */
-  private def remove(mcr: MissingCrossReferences) = {
-    val missingHead = mcr.missingHead; var done = false
-    while(!done){
-      missingCrossRefStore.get(missingHead) match{
-        case Some(set) => 
-          set.synchronized{
-            if(mapsto(missingCrossRefStore, missingHead, set)){
-              set.remove(mcr); done = true 
-            }
-          }
-          // otherwise go round the loop
-        case None => // This is possible if another thread removed mcr
-          done = true
-      }
-    }
-  }
- */
-
   /** Store mcw in missingCommonStore and candidateForMCStore. */
   def add(mcw: MissingCommonWrapper) = {
     require(!mcw.done)
@@ -276,6 +269,43 @@ class NewEffectOnStore{
   private def completeMissingCrossRefs(
     cv: ComponentView, views: ViewSet, result: ViewBuffer)
   = {
+    missingCrossRefStore.acquireLock(cv)
+    missingCrossRefStore.remove(cv, true) match{
+      case Some (mcrs) => mcrs.synchronized{
+// IMPROVE: above synchronized not necessary? 
+        // Note: cv < mcr.missingHead, so the MissingCrossRefSets are locked
+        // in increasing order of their associated keys.
+        for(mcr <- mcrs.iterator){
+          var flag = false
+          mcr.synchronized{
+            if(!mcr.done && !mcr.isNewViewFound(views)){
+              mcr.updateMissingViewsBy(cv, views); flag = true
+            }
+            // otherwise, we can ignore it
+          } // end of mcr.synchronized block
+          if(flag){
+            if(mcr.done) doneMissingCrossRefs(mcr, views, result)
+            else 
+              // Note: we do not do the same checks here as in `add`, as mcr
+              // was already in missingCrossRefStore.  In particular, that
+              // would break the logic in shouldStore.
+              addToStore(missingCrossRefStore, mcr.missingHead, mcr)
+          }
+        } // end of iteration over mcrs/mcr.synchronized
+      }
+
+// IMPROVE: could store those mcr that we update, and then do the "if(flag)"
+// part outside the mcrs.synchronized block
+ 
+      // Note: if an addMissingCrossRef reads and checks the mapping cv ->
+      // mcrs before this function removes cv, then this function will see the
+      // effect of that add (because of the locking of mcrs).  There cannot be
+      // another call to completeMissingCrossRefs with the same cv.
+
+      case None => {}
+    } // end of match
+    missingCrossRefStore.releaseLock(cv)
+/*
     missingCrossRefStore.remove(cv) match{
       case Some (mcrs) => mcrs.synchronized{
         // Note: cv < mcr.missingHead, so the MissingCrossRefSets are locked
@@ -308,6 +338,7 @@ class NewEffectOnStore{
 
       case None => {}
     }
+ */
   }
 
   import InducedTransitionInfo.newMissingCrossRefs
@@ -385,7 +416,9 @@ class NewEffectOnStore{
   private def completeMissingCommons(
     cv: ComponentView, views: ViewSet, result: ViewBuffer)
   = {
-    missingCommonStore.remove(cv) match{
+    missingCommonStore.acquireLock(cv)
+    missingCommonStore.remove(cv, true) match{
+// mcws.synchronized necessary?  I think not
       case Some(mcws) => mcws.synchronized{
         for(mcw <- mcws.iterator) mcw.synchronized{
           assert(mcw.servers == cv.servers)
@@ -397,6 +430,7 @@ class NewEffectOnStore{
 
       case None => {}
     } // end of match
+    missingCommonStore.releaseLock(cv)
   }
 
   /** Try to complete values in candidateForMCStore based on cv. */
@@ -404,6 +438,36 @@ class NewEffectOnStore{
     cv: ComponentView, views: ViewSet, result: ViewBuffer)
       : Unit = {
     val key = (cv.servers, cv.principal)
+    candidateForMCStore.acquireLock(key)
+    candidateForMCStore.get(key, true) match{
+      case Some(mcws) => 
+// IMPROVE: synchronized block necessary?  I think not
+        mcws.synchronized{
+          val newMCWs = mkSet[MissingCommonWrapper] // values to retain
+          for(mcw <- mcws.iterator) mcw.synchronized{
+            if(!mcw.done && !mcw.isNewViewFound(views)){
+              val cb = mcw.updateWithNewMatch(cv, views)
+              updateMCW(mcw, cb, result)
+              if(!mcw.done) newMCWs.add(mcw)
+            }
+          }
+          // Update the mapping for key
+          if(newMCWs.nonEmpty) candidateForMCStore.replace(key, newMCWs, true)
+          else candidateForMCStore.remove(key, true)
+        } // end of mcws.synchronized block
+
+      case None => {}
+    }
+    candidateForMCStore.releaseLock(key)
+  }
+
+/*
+  /** Try to complete values in candidateForMCStore based on cv. */
+  private def completeCandidateForMC(
+    cv: ComponentView, views: ViewSet, result: ViewBuffer)
+      : Unit = {
+    val key = (cv.servers, cv.principal)
+    candidateForMCStore.acquireKey(key)
     candidateForMCStore.get(key) match{
       case Some(mcws) => 
         var done = false
@@ -435,6 +499,7 @@ class NewEffectOnStore{
       case None => {}
     }
   }
+ */
 
   /** Try to complete values in the store, based on the addition of cv, and with
     * views as the current ViewSet (i.e. from earlier plies).  Return the
@@ -495,6 +560,22 @@ class NewEffectOnStore{
       if(newSet.nonEmpty) store.replace(key, newSet) else store.remove(key)
     }
   }
+// IMPROVE: remove above eventually
+
+  private def filter[A, B <: AnyRef]
+    (key: A, set: OpenHashSet[B], p: B => Boolean, 
+      store: ShardedLockableMap[A, OpenHashSet[B]])
+    (implicit tag: ClassTag[B])
+  = {
+    val iter = set.iterator; val newSet = mkSet[B]; var changed = false
+    while(iter.hasNext){
+      val x = iter.next(); if(p(x)) newSet += x else changed = true
+    }
+    if(changed){
+      if(newSet.nonEmpty) store.replace(key, newSet, false) 
+      else store.remove(key, false)
+    }
+  }
 
   /** Purge done items from missingCrossRefStore. */
   def purgeMissingCrossRefStore(views: ViewSet) = /*if(false)*/{
@@ -513,7 +594,7 @@ class NewEffectOnStore{
   }
 
   /** Purge items from byNewView. Remove items where the newView is found.  */
-  def purgeByNewView(views: ViewSet) = /*if(false)*/{
+  def purgeByNewView(views: ViewSet) = {
     def process(
       nv: ReducedComponentView, ab: Array[MissingCrossReferences]) 
     = {
@@ -549,7 +630,7 @@ class NewEffectOnStore{
           val newAB = new ArrayBuffer[MissingCrossReferences]
           for(mcr <- ab; if !mcr.isSuperseded) newAB += mcr
           byNewView.replace(nv, newAB.toArray, false)
-// IMPROVE
+          // IMPROVE: above record which are to be retained, and use Array
         }
       } // end of outer else
 
@@ -605,7 +686,7 @@ class NewEffectOnStore{
   }
 
   /** Report on the size of store. */
-  def reportStore[A, B <: AnyRef](store: ShardedHashMap[A, OpenHashSet[B]])
+  def reportStore[A, B <: AnyRef](store: ShardedHashMap0[A, OpenHashSet[B]])
     (implicit tag: ClassTag[B])
   = {
     var keys = 0; var data = 0L

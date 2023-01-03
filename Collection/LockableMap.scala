@@ -1,5 +1,7 @@
 package ViewAbstraction.collection
 
+import ox.gavin.profiling.Profiler
+
 /** Trait for a lockable map.  This provides fairly standard concurrent map
   * operations, but also allows the mapping of a particular key to be locked.
   * Note that if B values are shared, they might also need to be locked. */
@@ -15,6 +17,8 @@ trait LockableMap[A, B]{
     * the value of `b`.  Pre: this thread holds the lock on `a`. */
   def getOrElseUpdate(a: A, b: => B): B
 
+  /** Add the mapping a -> b to the map.  Pre: this thread holds the lock on
+    * `a`.*/
   def add(a: A, b: B): Unit 
 
   /* Each of the operations below has a precondition: if withLock then this
@@ -60,9 +64,15 @@ class ShardedLockableMap[A, B](shards: Int = 128, initLength: Int = 32)
       val th = Thread.currentThread()
       synchronized{
         // Block if lockList contains an entry for a
-        while(lockList.exists(pair => pair._1 == a)) wait()
+        while(contains(a)){ Profiler.count("LockableMap.Lock wait"); wait() }
         lockList ::= (a,th)
       }
+    }
+
+    private def contains(a: A) = {
+      var ll = lockList
+      while(ll.nonEmpty && ll.head._1 != a)  ll = ll .tail
+      ll.nonEmpty
     }
 
     /** Unlock key `a` by the current thread.  Pre: this thread has `a` 
@@ -101,15 +111,6 @@ class ShardedLockableMap[A, B](shards: Int = 128, initLength: Int = 32)
   }
 
   /** Get the value associated with `a`, if one exists; otherwise update it to
-    * the value of `b`.  Also lock the mapping for `a`. */
-  // def getOrElseUpdateAndLock(a: A, b: => B): B = {
-  //   val h = hashOf(a); val sh = shardFor(h)
-  //   lockInfo(sh).lock(a) // obtain the lock for a
-  //   getOrElseUpdate(a, b, h, sh) // now do the update
-  // } 
-  
-
-  /** Get the value associated with `a`, if one exists; otherwise update it to
     * the value of `b`.  This thread must hold the lock on a. */
   def getOrElseUpdate(a: A, b: => B): B = {
     val h = hashOf(a); val sh = shardFor(h)
@@ -117,6 +118,8 @@ class ShardedLockableMap[A, B](shards: Int = 128, initLength: Int = 32)
     getOrElseUpdate(a, b, h, sh) // now do the update
   }
 
+  /** Add the mapping a -> b to the map.  Pre: this thread holds the lock on
+    * `a`.*/
   def add(a: A, b: B): Unit = {
     val h = hashOf(a); val sh = shardFor(h)
     lockInfo(sh).checkLock(a, true) // check lock for a held
@@ -130,14 +133,14 @@ class ShardedLockableMap[A, B](shards: Int = 128, initLength: Int = 32)
   /** Replace the mapping for `a` with `b`.  */
   def replace(a: A, b: B, withLock: Boolean): Unit = {
     val h = hashOf(a); val sh = shardFor(h)
-    lockInfo(sh).checkLock(a, withLock) // check this thread has a locked
+    lockInfo(sh).checkLock(a, withLock) // check lock usage
     replace(a, b, h, sh)
   }
 
   /** Optionally get the value associated with `a`. */
   def get(a: A, withLock: Boolean): Option[B] = {
-    val h = hashOf(a); val sh = shardFor(h);
-    lockInfo(sh).checkLock(a, withLock)
+    val h = hashOf(a); val sh = shardFor(h)
+    lockInfo(sh).checkLock(a, withLock) // check lock usage
     get(a, h, sh)
   }
 
@@ -145,7 +148,7 @@ class ShardedLockableMap[A, B](shards: Int = 128, initLength: Int = 32)
     * associated with `a`.  */
   def remove(a: A, withLock: Boolean): Option[B] = {
     val h = hashOf(a); val sh = shardFor(h)
-    lockInfo(sh).checkLock(a, withLock) // check this thread has a locked
+    lockInfo(sh).checkLock(a, withLock) // check lock usage
     remove(a, h, sh)
   }
 

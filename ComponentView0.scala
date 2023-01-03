@@ -265,7 +265,6 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
     // }
     ok
   }
-  // IMPROVE.  Maybe keep lists sorted.
 
   @inline private def sameElements(cr1: Array[State], cr2: Array[State]) = {
     // assert(cr1.length == 2 && cr2.length == 2) 
