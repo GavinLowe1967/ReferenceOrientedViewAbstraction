@@ -18,74 +18,36 @@ class NewEffectOnStore{
   def mkSet[D <: AnyRef](implicit tag: ClassTag[D]) =
     new OpenHashSet[D](initSize = 8, ThresholdRatio = 0.6F)
 
+  /** The number of shards to use in the stores below. */
+  private val numShards = powerOfTwoAtLeast(numWorkers*8)
+
   /** A store, abstractly a set of (A,B) pairs.  Implemented as a map A => sets
     * of B. */
-  // private type StoreX[A, B <: AnyRef with ClassTag[B]] = 
-  //   ShardedHashMap[A, OpenHashSet[B]]
-
   private type Store[A, B <: AnyRef with ClassTag[B]] = 
     ShardedLockableMap[A, OpenHashSet[B]]
-
-  /* Maplets in each Store are updated by: (1) reading a -> bs; (2) locking bs;
-   * (3) checking store still holds a -> bs; (4) updating bs, maybe replacing
-   * it in the Store; (5) unlocking bs.  If (3) fails then re-try.
-   * Alternatively, a maplet a -> bs can be removed by: (1) removing a
-   * (optaining bs); (2) locking bs; (3) processing bs; (4) unlocking bs.  At
-   * most one such remove may be performed for each a.  If a standard update
-   * performs the locking before a remove, then the remove will see the effect
-   * of the update.  */
 
   /** A store of MissingCrossReferences objects.  Each is stored against its
     * next missing view. */
   private val missingCrossRefStore = 
-    new Store[ReducedComponentView, MissingCrossReferences]
+    new Store[ReducedComponentView, MissingCrossReferences](shards = numShards)
 
   /** A store of MissingCrossReferneces objects for which there are no common
     * missing references, keyed against the new views they would produce. */
   private val byNewView = 
-    new ShardedLockableMap[ReducedComponentView, Array[MissingCrossReferences]]
-
-  /** Minimum size to initialise an ArrayBuffer in byNewView.  Note: when an
-    * ArrayBuffer is resized, it is to size at least 16; so a smaller initial
-    * size might lead to higher memory consumption. */
-  private val InitABSize = 8
+    new ShardedLockableMap[ReducedComponentView, Array[MissingCrossReferences]](
+      shards = numShards)
 
   /** A store of MissingCommonWrapper objects.  Each is stored against its next
     * missing view. */
   private val missingCommonStore = 
-    new Store[ReducedComponentView, MissingCommonWrapper]
+    new Store[ReducedComponentView, MissingCommonWrapper](shards = numShards)
 
   /** A store for MissingCommonWrapper objects.  Each is stored against the
     * servers and principal of the pre-state of the transition.  Given a new
     * view v, we match against (v.servers,v.principal), and try to use
     * v.components(1) to instantiate c.  */
   private val candidateForMCStore =
-    new Store[(ServerStates, State), MissingCommonWrapper]
-
-  /** Does store still hold key -> value? */
-  @inline private 
-  def mapsto[A, B <: AnyRef](store: ShardedHashMap[A, B], key: A, value: B)
-      : Boolean =
-    store.get(key) match{
-      case Some(b) => b eq value // Note: reference equality
-      case None => false
-    }
-
-  /** Add a -> b to store. */
-  // @inline private def addToStore[A, B <: AnyRef]
-  //   (store: ShardedHashMap[A, OpenHashSet[B]], a: A, b: B)
-  //   (implicit tag: ClassTag[B])
-  // = {
-  //   var done = false
-  //   while(!done){
-  //     val set = store.getOrElseUpdate(a, mkSet[B])
-  //     set.synchronized{
-  //       if(mapsto(store, a, set)){ set.add(b); done = true }
-  //       // Otherwise go round the loop again
-  //     }
-  //   }
-  // }
-// IMPROVE: remove above eventually
+    new Store[(ServerStates, State), MissingCommonWrapper](shards = numShards)
 
   /** Add a -> b to store. */
   @inline private def addToStore[A, B <: AnyRef]
@@ -93,8 +55,7 @@ class NewEffectOnStore{
     (implicit tag: ClassTag[B])
   = {
     store.acquireLock(a)
-    val set = store.getOrElseUpdate(a, mkSet[B])
-    set.add(b)
+    val set = store.getOrElseUpdate(a, mkSet[B]); set.add(b)
     store.releaseLock(a)
   }
 
@@ -122,28 +83,21 @@ class NewEffectOnStore{
     * Pre: mcr is a new object, that no other thread will try to lock.  */
   private def shouldStore(mcr: MissingCrossReferences): Boolean = {
     val newView = mcr.inducedTrans.newView
-    var done = false; var found = false
-    // found is set to true if we find a MCR that implies mcr
     byNewView.acquireLock(newView)
-    // val oldMCRs = 
-    //   byNewView.getOrElseUpdate(newView, new Array[MissingCrossReferences](0))
     byNewView.get(newView, true) match{
       case None => 
-        byNewView.add(newView, Array(mcr))
-        byNewView.releaseLock(newView); true
+        byNewView.add(newView, Array(mcr)); byNewView.releaseLock(newView); true
       case Some(oldMCRs) =>
-        var i = 0; done = true; val len = oldMCRs.length
+        var i = 0; val len = oldMCRs.length; var found = false
+        // found is set to true if we find a MCR that implies mcr.
         // Bitmap showing those MCRs not implied by mcr, and their count
         val include = new Array[Boolean](len); var count = 0
         while(i < len && !found){
-          val mcr1 = oldMCRs(i); assert(mcr1 != mcr && !mcr1.isSuperseded)
+          val mcr1 = oldMCRs(i); // assert(mcr1 != mcr && !mcr1.isSuperseded)
           val cmp = MissingCrossReferences.compare(mcr, mcr1)
           if(cmp == Superset || cmp == Equal) found = true
-          // Test if mcr1 is superceded by mcr
-          if(cmp == Subset){ // mcr1 is superceded by mcr
-            mcr1.setSuperseded
+          if(cmp == Subset) mcr1.setSuperseded  // mcr1 is superceded by mcr
             // Profiler.count("NewEffectOnStore.shouldStore removed old")
-          }
           else{ include(i) = true; count += 1 }
           i += 1
         } // end of while loop
@@ -153,14 +107,14 @@ class NewEffectOnStore{
         }
         else{
           // None of remainder can be superseded, so include them.
-          while(i < len){ include(i) = true; count += 1; i += 1 }
+          // while(i < len){ include(i) = true; count += 1; i += 1 }
+          // We retain all of oldMCRs[i..len)
+          count += len-i
           // Create new array holding retained elements of oldMCRs and maybe mcr
-          val newLen = if(found) count else count+1
-          val newMCRs = new Array[MissingCrossReferences](newLen)
-          i = 0; var j = 0
-          while(i < len){
-            if(include(i)){ newMCRs(j) = oldMCRs(i); j += 1 }
-            i += 1
+          val newLen = if(found) count else count+1; var k = 0
+          val newMCRs = new Array[MissingCrossReferences](newLen); var j = 0
+          while(k < len){
+            if(k >= i || include(k)){ newMCRs(j) = oldMCRs(k); j += 1 }; k += 1
           }
           assert(j == count)
           // Maybe add mcr; replace oldMCRs with newMCRs; unlock.
@@ -171,75 +125,6 @@ class NewEffectOnStore{
         }
     } // end of match
   }
-
-
-/*
-  private def shouldStore(mcr: MissingCrossReferences): Boolean = {
-    val newView = mcr.inducedTrans.newView
-    var done = false; var found = false
-    // found is set to true if we find a MCR that implies mcr
-    while(!done){
-      val oldMCRs = 
-        byNewView.getOrElseUpdate(newView, new Array[MissingCrossReferences](0))
-      oldMCRs.synchronized{
-        if(mapsto(byNewView, newView, oldMCRs)){ 
-          var i = 0; done = true; val len = oldMCRs.length
-          // Bitmap showing those MCRs not implied by mcr, and their count
-          val include = new Array[Boolean](len); var count = 0
-          while(i < len && !found){
-            val mcr1 = oldMCRs(i); assert(mcr1 != mcr)
-            val cmp = MissingCrossReferences.compare(mcr, mcr1)
-            // if(false && mcr1.allFound) // can purge mcr1 here
-            //   assert(cmp != Subset && cmp != Equal)
-            if(cmp == Superset || cmp == Equal) found = true
-            // Test if mcr1 is superceded by mcr
-            if(cmp == Subset){ // mcr1 is superceded by mcr
-              mcr1.setSuperseded
-              // Profiler.count("NewEffectOnStore.shouldStore removed old")
-            }
-// IMPROVE: can mcr1 be superseded here?
-            else if(!mcr1.isSuperseded){ // retain mcr1: not superseded by mcr
-              include(i) = true; count += 1
-            }
-            else assert(false)
-            i += 1
-          } // end of while loop
-          // Prepare to purge remaining is superseded.
-          while(i < len){
-            val mcr1 = oldMCRs(i)
-// IMPROVE if assertion holds
-            assert(!mcr1.isSuperseded)
-            if(!mcr1.isSuperseded){ 
-              include(i) = true; count += 1
-            }
-            i += 1
-          }
-// IMPROVE: merge above loops
-          // Create new array holding retained elements of oldMCRs and maybe mcr
-          val newLen = if(found) count else count+1
-          val newMCRs = new Array[MissingCrossReferences](newLen)
-          i = 0; var j = 0
-          while(i < len){
-            if(include(i)){ newMCRs(j) = oldMCRs(i); j += 1 }
-            i += 1
-          }
-          assert(j == count)
-          // Maybe add mcr, and replace oldMCRs with newMCRs.
-          if(!found) newMCRs(count) = mcr //  newMCRs += mcr
-          byNewView.replace(newView, newMCRs)
-          // else if(!found) ab += mcr 
-          // else Profiler.count("NewEffectOnStore.shouldStore false")
-          // if(false && !found) byNewView.get(newView) match{
-          //   case None => assert(false, s"No record ")
-          //   case Some(ab) => assert(ab.contains(mcr), s"Not found $mcr\n") 
-          // }
-        } // end of if(mapsto...)
-        // otherwise go round the loop again
-      } // end of synchronized block
-    } // end of while loop
-    !found
-  }
- */
 
   /** Store mcw in missingCommonStore and candidateForMCStore. */
   def add(mcw: MissingCommonWrapper) = {
@@ -271,10 +156,8 @@ class NewEffectOnStore{
   = {
     missingCrossRefStore.acquireLock(cv)
     missingCrossRefStore.remove(cv, true) match{
-      case Some (mcrs) => mcrs.synchronized{
+      case Some (mcrs) => /*mcrs.synchronized*/{
 // IMPROVE: above synchronized not necessary? 
-        // Note: cv < mcr.missingHead, so the MissingCrossRefSets are locked
-        // in increasing order of their associated keys.
         for(mcr <- mcrs.iterator){
           var flag = false
           mcr.synchronized{
@@ -285,60 +168,16 @@ class NewEffectOnStore{
           } // end of mcr.synchronized block
           if(flag){
             if(mcr.done) doneMissingCrossRefs(mcr, views, result)
-            else 
-              // Note: we do not do the same checks here as in `add`, as mcr
-              // was already in missingCrossRefStore.  In particular, that
-              // would break the logic in shouldStore.
-              addToStore(missingCrossRefStore, mcr.missingHead, mcr)
+            else addToStore(missingCrossRefStore, mcr.missingHead, mcr)
           }
         } // end of iteration over mcrs/mcr.synchronized
       }
-
 // IMPROVE: could store those mcr that we update, and then do the "if(flag)"
 // part outside the mcrs.synchronized block
- 
-      // Note: if an addMissingCrossRef reads and checks the mapping cv ->
-      // mcrs before this function removes cv, then this function will see the
-      // effect of that add (because of the locking of mcrs).  There cannot be
-      // another call to completeMissingCrossRefs with the same cv.
 
       case None => {}
     } // end of match
     missingCrossRefStore.releaseLock(cv)
-/*
-    missingCrossRefStore.remove(cv) match{
-      case Some (mcrs) => mcrs.synchronized{
-        // Note: cv < mcr.missingHead, so the MissingCrossRefSets are locked
-        // in increasing order of their associated keys.
-        for(mcr <- mcrs.iterator){
-          var flag = false
-          mcr.synchronized{
-            if(!mcr.done && !mcr.isNewViewFound(views)){
-              mcr.updateMissingViewsBy(cv, views); flag = true
-            }
-            // otherwise, we can ignore it
-          } // end of mcr.synchronized block
-          if(flag){
-            if(mcr.done) doneMissingCrossRefs(mcr, views, result)
-            else 
-              // Note: we do not do the same checks here as in `add`, as mcr
-              // was already in missingCrossRefStore.  In particular, that
-              // would break the logic in shouldStore.
-              addToStore(missingCrossRefStore, mcr.missingHead, mcr)
-          }
-        } // end of iteration over mcrs/mcr.synchronized
-      }
-// IMPROVE: could store those mcr that we update, and then do the "if(flag)"
-// part outside the mcrs.synchronized block
- 
-      // Note: if an addMissingCrossRef reads and checks the mapping cv ->
-      // mcrs before this function removes cv, then this function will see the
-      // effect of that add (because of the locking of mcrs).  There cannot be
-      // another call to completeMissingCrossRefs with the same cv.
-
-      case None => {}
-    }
- */
   }
 
   import InducedTransitionInfo.newMissingCrossRefs
@@ -366,11 +205,13 @@ class NewEffectOnStore{
         val newMissingCRs = newMissingCrossRefs(inducedTrans, map0, cpts, views)
         if(newMissingCRs.nonEmpty){ // Create new MissingCrossReferences object
           // Test whether condition (c) is satisfied.  IMPROVE
-          val condCSat =  MissingCommonWrapper(newInducedTrans, views) == null
+          val condCSat = 
+            MissingCommonWrapper.conditionCSatisfied(newInducedTrans, views)
+            // MissingCommonWrapper(newInducedTrans, views) == null
           Profiler.count("New MissingCrossReferences from allCompletions "+
             condCSat)
           val newMCR =
-            new MissingCrossReferences(newInducedTrans, newMissingCRs, false)
+            new MissingCrossReferences(newInducedTrans, newMissingCRs, condCSat)
 // IMPROVE the false above?
           add(newMCR)
         }
@@ -396,8 +237,10 @@ class NewEffectOnStore{
     inducedTrans: InducedTransitionInfo, views: ViewSet, result: ViewBuffer) 
   = {
     val mcw = MissingCommonWrapper(inducedTrans, views)
-    if(mcw != null) add(mcw)
-    else maybeAdd(inducedTrans, result) // can fire transition
+    //if(/*true ||*/ mcw != null){
+      if(mcw != null && !mcw.done) add(mcw)
+      else maybeAdd(inducedTrans, result) // can fire transition
+    //} // if mcr = null, subsumed
   }
 
   /** If mcw is now done, add the resulting views to result; otherwise register
@@ -419,7 +262,7 @@ class NewEffectOnStore{
     missingCommonStore.acquireLock(cv)
     missingCommonStore.remove(cv, true) match{
 // mcws.synchronized necessary?  I think not
-      case Some(mcws) => mcws.synchronized{
+      case Some(mcws) => /*mcws.synchronized*/{
         for(mcw <- mcws.iterator) mcw.synchronized{
           assert(mcw.servers == cv.servers)
           if(!mcw.done && !mcw.isNewViewFound(views)){
@@ -442,7 +285,7 @@ class NewEffectOnStore{
     candidateForMCStore.get(key, true) match{
       case Some(mcws) => 
 // IMPROVE: synchronized block necessary?  I think not
-        mcws.synchronized{
+        /*mcws.synchronized*/{
           val newMCWs = mkSet[MissingCommonWrapper] // values to retain
           for(mcw <- mcws.iterator) mcw.synchronized{
             if(!mcw.done && !mcw.isNewViewFound(views)){
@@ -460,46 +303,6 @@ class NewEffectOnStore{
     }
     candidateForMCStore.releaseLock(key)
   }
-
-/*
-  /** Try to complete values in candidateForMCStore based on cv. */
-  private def completeCandidateForMC(
-    cv: ComponentView, views: ViewSet, result: ViewBuffer)
-      : Unit = {
-    val key = (cv.servers, cv.principal)
-    candidateForMCStore.acquireKey(key)
-    candidateForMCStore.get(key) match{
-      case Some(mcws) => 
-        var done = false
-        mcws.synchronized{
-          if(mapsto(candidateForMCStore, key, mcws)){
-            val newMCWs = mkSet[MissingCommonWrapper] // values to retain
-            done = true
-            for(mcw <- mcws.iterator) mcw.synchronized{
-              if(!mcw.done && !mcw.isNewViewFound(views)){
-                val cb = mcw.updateWithNewMatch(cv, views)
-                updateMCW(mcw, cb, result)
-                if(!mcw.done) newMCWs.add(mcw)
-              }
-            }
-            // Update the mapping for key
-            val ok = 
-              if(newMCWs.nonEmpty)
-                candidateForMCStore.compareAndSet(key, mcws, newMCWs)
-              else candidateForMCStore.removeIfEquals(key, mcws)
-            assert(ok)
-          }
-        } // end of mcws.synchronized block
-
-        if(!done){ // this raced with another operation, so retry
-          Profiler.count("completeCandidateForMC retry")
-          completeCandidateForMC(cv, views, result)
-        }
-
-      case None => {}
-    }
-  }
- */
 
   /** Try to complete values in the store, based on the addition of cv, and with
     * views as the current ViewSet (i.e. from earlier plies).  Return the
@@ -547,19 +350,19 @@ class NewEffectOnStore{
 
   /** Filter `set` according to `p`, and update `store` so that `key` maps to
     * the new set (if non-empty). */
-  private def filter[A, B <: AnyRef]
-    (key: A, set: OpenHashSet[B], p: B => Boolean, 
-      store: ShardedHashMap[A, OpenHashSet[B]])
-    (implicit tag: ClassTag[B])
-  = {
-    val iter = set.iterator; val newSet = mkSet[B]; var changed = false
-    while(iter.hasNext){
-      val x = iter.next(); if(p(x)) newSet += x else changed = true
-    }
-    if(changed){
-      if(newSet.nonEmpty) store.replace(key, newSet) else store.remove(key)
-    }
-  }
+  // private def filter[A, B <: AnyRef]
+  //   (key: A, set: OpenHashSet[B], p: B => Boolean, 
+  //     store: ShardedHashMap[A, OpenHashSet[B]])
+  //   (implicit tag: ClassTag[B])
+  // = {
+  //   val iter = set.iterator; val newSet = mkSet[B]; var changed = false
+  //   while(iter.hasNext){
+  //     val x = iter.next(); if(p(x)) newSet += x else changed = true
+  //   }
+  //   if(changed){
+  //     if(newSet.nonEmpty) store.replace(key, newSet) else store.remove(key)
+  //   }
+  // }
 // IMPROVE: remove above eventually
 
   private def filter[A, B <: AnyRef]

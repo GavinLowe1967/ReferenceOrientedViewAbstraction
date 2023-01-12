@@ -26,6 +26,8 @@ class ReducedComponentView(
     else false
   }
 
+  // Note: outside NewViewSet.contains, reference equality can be used.
+
   // /** Does this have the same components as cpts? */
   // @inline private def sameCpts(cpts: Array[State]) = {
   //   // Note: I believe that cpts is always the same as StateArray(cpts) here.

@@ -95,6 +95,9 @@ object StateArray{
   /** Get an Array[State] equivalent to states, to allow sharing. */
   def apply1(states: State*): Array[State] = apply(states.toArray)
 
+  /** Is states the canonical version of itself? */
+  @inline def isCanonical(states: Array[State]) = apply(states).eq(states)
+
   // ------------------------------------------------------------------
 
   /** Convert states into a String. */
@@ -477,7 +480,7 @@ object StateArray{
     }
   }
 
-  /** Comparison function. */
+  /** Comparison function.  This creates a rather arbitrary total order. */
   @inline def compare(cpts1: Array[State], cpts2: Array[State]): Int = {
     if(cpts1 == cpts2) 0 // shortcut
     else{

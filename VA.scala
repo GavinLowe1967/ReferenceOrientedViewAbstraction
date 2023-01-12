@@ -128,7 +128,7 @@ object VA{
     for((fname, states) <- theTestSuite){
       State.reset; MyStateMap.reset; MissingCommon.reset; 
       MissingInfoStore.reset; SingleRefEffectOn.reset; NewEffectOn.reset; 
-      ThreadID.reset
+      ThreadID.reset; MissingCommonWrapper.reset()
       println("********* "+fname)
       val states1 = run(fname)
       assert(states == states1,

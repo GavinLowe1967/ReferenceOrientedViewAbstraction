@@ -54,9 +54,71 @@ class ShardedLockableMap[A, B](shards: Int = 128, initLength: Int = 32)
   private class LockInfo{
     import java.lang.Thread
 
+/*
     /** List of which keys are locked by which threads.  Protected by 
       * synchronized blocks.  Note: we expect this list to be short.  */
     private var lockList = List[(A, Thread)]()
+
+    /** Is a lock held on a? */
+    @inline private def contains(a: A) = {
+      var ll = lockList
+      while(ll.nonEmpty && ll.head._1 != a)  ll = ll .tail
+      ll.nonEmpty
+    }
+
+    /** Record that a is locked by th. */
+    @inline private def add(a: A, th: Thread) = lockList ::= (a,th)
+
+    /** Record that a is no longer locked by th. */
+    @inline private def remove(a: A, th: Thread) = {
+      val pair = (a, Thread.currentThread())
+      require(lockList.contains(pair))
+      lockList = lockList.filter(_ != pair)
+    }
+ */
+
+    private var size = 16 // initial size
+
+    private var lockedKeys = new Array[A](size)
+
+    private var lockers = new Array[Thread](size)
+
+    private var count = 0
+
+    /* This represents that lockers(i) has lockedKeys(i) locked, for each i <-
+     * [0..count). */
+
+    /** Is a lock held on a? */
+    @inline private def contains(a: A): Boolean = {
+      var i = 0
+      while(i < count && lockedKeys(i) != a) i += 1
+      i < count
+    }
+
+    /** Record that a is locked by th. */
+    @inline private def add(a: A, th: Thread) = {
+      if(count == size){ // resize
+        val oldLockedKeys = lockedKeys; val oldLockers = lockers
+        val oldSize = size; size = size*2; lockedKeys = new Array[A](size);
+        lockers = new Array[Thread](size)
+        Profiler.count("LockableMap resize"+size)
+        for(i <- 0 until oldSize){ 
+          lockedKeys(i) = oldLockedKeys(i); lockers(i) = oldLockers(i)
+        }
+      }
+      lockedKeys(count) = a; lockers(count) = th; count += 1
+    }
+
+    /** Record that a is no longer locked by th. */
+    @inline private def remove(a: A, th: Thread) = {
+      // Find the entry for a
+      var i = 0; while(lockedKeys(i) != a) i += 1
+      require(lockers(i) == th)
+      if(i < count-1){
+        lockedKeys(i) = lockedKeys(count-1); lockers(i) = lockers(count-1)
+      }
+      count -= 1
+    }
 
     /** Lock key `a` by the current thread.  Block if another thread holds the
       * lock. */
@@ -65,23 +127,19 @@ class ShardedLockableMap[A, B](shards: Int = 128, initLength: Int = 32)
       synchronized{
         // Block if lockList contains an entry for a
         while(contains(a)){ Profiler.count("LockableMap.Lock wait"); wait() }
-        lockList ::= (a,th)
+        add(a,th)
       }
-    }
-
-    private def contains(a: A) = {
-      var ll = lockList
-      while(ll.nonEmpty && ll.head._1 != a)  ll = ll .tail
-      ll.nonEmpty
     }
 
     /** Unlock key `a` by the current thread.  Pre: this thread has `a` 
       * locked. */
     def unlock(a: A): Unit = {
-      val pair = (a, Thread.currentThread())
+      // val pair = (a, Thread.currentThread())
+      val th = Thread.currentThread()
       synchronized{
-        require(lockList.contains(pair))
-        lockList = lockList.filter(_ != pair)
+        remove(a, th)
+        // require(lockList.contains(pair))
+        // lockList = lockList.filter(_ != pair)
         notifyAll() // Signal to all blocked threads.  IMPROVE?
       }
     }
@@ -90,11 +148,24 @@ class ShardedLockableMap[A, B](shards: Int = 128, initLength: Int = 32)
       * otherwise check that no thread holds any lock. */
     def checkLock(a: A, withLock: Boolean) = 
       if(withLock){
+        val th = Thread.currentThread; var i = 0
+        synchronized{
+          while(i < size && lockedKeys(i) != a) i += 1
+          require(i < size && lockers(i) == th)
+        }
+      }
+      else synchronized{ require(count == 0) }
+
+/*
+    /** If `withLock`, check that the current thread holds the lock on `a`;
+      * otherwise check that no thread holds any lock. */
+    def checkLock(a: A, withLock: Boolean) = 
+      if(withLock){
         val pair = (a, Thread.currentThread())
         synchronized{ require(lockList.contains(pair)) }
       }
       else synchronized{ require(lockList.isEmpty) }
-
+ */
   } // end of LockInfo
 
   /** Information about locking of shards. */

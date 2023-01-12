@@ -55,7 +55,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   /** The result returned by makeExtensions.  Each map is paired with the
     * representation of the cross references it creates for condition (b). */
   import RemappingExtender.ExtensionsInfo
-  // = ArrayBuffer[(RemappingMap, List[Linkage])]
+  // = ArrayBuffer[(RemappingMap, CompressedCandidatesMap)]
 
   /** For each parameter, the list of identities it can be mapped to when
     * forming all completions. */

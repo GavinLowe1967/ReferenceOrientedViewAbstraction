@@ -224,7 +224,7 @@ object MissingCrossReferences{
     else if(i2 == len2) Superset
     else if(mv1(i1) < mv2(i2)){
       // mv1 is not a subset of mv2; test if mv2 is a subset of mv1. 
-      if(subset(mv2, i2, len2, mv1, i1, len1)) Superset else Incomparable
+      if(subset1(mv2, i2, len2, mv1, i1, len1)) Superset else Incomparable
       // Inv: mv2[0..i2) is a subset of mv1[0..i1); mv1[0..i1) <
       // mv2[i2..len2).
       // val ss = subset(mv2, i2, len2, mv1, i1, len1)
@@ -239,7 +239,7 @@ object MissingCrossReferences{
     }
     else{
       // mv2 is not a subset of mv1; test if mv1 is a subset of mv2.  
-      if(subset(mv1, i1, len1, mv2, i2, len2)) Subset else Incomparable
+      if(subset1(mv1, i1, len1, mv2, i2, len2)) Subset else Incomparable
       // Inv: mv1[0..i1) is a subset of mv2[0..i2); mv2[0..i2) <
       // mv1[i1..len1).
       // val ss = subset(mv1, i1, len1, mv2, i2, len2)
@@ -255,10 +255,24 @@ object MissingCrossReferences{
   }
 
   /** Is mv1[ix1..len1) a subset of mv2[ix2..len2) (or equal)? */
-  @inline private def subset(
+  @inline private def subset1(
     mv1: Array[ReducedComponentView], ix1: Int, len1: Int,
     mv2: Array[ReducedComponentView], ix2: Int, len2: Int)
       : Boolean = {
+    // Note: here we avoid comparing ReducedComponentViews using "<", but just
+    // test for reference equality.  We use the fact that the arrays are sorted. 
+    var i1 = ix1; var i2 = ix2; val lenDiff = len2-len1
+    // Inv: (1) mv1[ix1..i1) is a subset of mv2[ix2..i2); (2) if mv1[i1..len1)
+    // is a subset of mv2[ix2..len2) then it is a subset of mv2[i2..len2).
+    // We iterate only while len1-i1 <= len2-i2
+    while(i1 < len1 && i2-i1 <= lenDiff){ // i2 < len2
+      val v1 = mv1(i1); val limit = lenDiff+i1
+      // Iterate only while len1-i1 <= len2-i2
+      while(i2 <= limit && ! mv2(i2).eq(v1)) i2 += 1 
+      if(i2 <= limit) i1 += 1
+    }
+    i1 == len1
+/*
     if(ix1 == len1) true
     else{
       var i1 = ix1; var i2 = ix2
@@ -273,6 +287,7 @@ object MissingCrossReferences{
 // IMPROVE: could bail out if len2-i2 < len1-i1
       i1 == len1
     }
+ */
   }
 
   /** Are the missing views of mcr1 a subset of, or equal to, those of mcr2? */
@@ -280,7 +295,7 @@ object MissingCrossReferences{
   def subset(mcr1: MissingCrossReferences, mcr2: MissingCrossReferences)
       : Boolean = {
     val mv1 = mcr1.missingViews; val mv2 = mcr2.missingViews
-    subset(mv1, mcr1.mvIndex, mv1.length, mv2, mcr2.mvIndex, mv2.length)
+    subset1(mv1, mcr1.mvIndex, mv1.length, mv2, mcr2.mvIndex, mv2.length)
   }
 
 }

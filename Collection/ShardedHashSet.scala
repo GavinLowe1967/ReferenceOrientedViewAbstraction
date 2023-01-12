@@ -61,13 +61,13 @@ class ShardedHashSet[A : scala.reflect.ClassTag](
   private val widthMasks = Array.fill(shards)(initLength-1)
 
   /** Maximum load factor before resizing. */
-  private val MaxLoad = 0.6
+  private val MaxLoad = 0.50
 
    /** Threshold at which resizing should be performed. */
   private val thresholds = Array.fill(shards)((initLength*MaxLoad).toInt)
 
   /** Locks: locks(s) protects shard(s). */
-  private val locks = Array.fill(shards)(new AnyRef)
+  private val locks = Array.fill(shards)(new AnyRef) // ShardedHashSet.Lock)
 
   /** The entry in shard sh = shardFor(h) in which a value with hash h
     * should be placed. */
@@ -87,10 +87,11 @@ class ShardedHashSet[A : scala.reflect.ClassTag](
     * Empty slot, where h should be placed.  Note: we skip over Deleted
     * items. */
   @inline private def find(sh: Int, x: A, h: Int): Int = {
-    var i = entryFor(sh, h)
+    var i = entryFor(sh, h); val mask = widthMasks(sh)
+    val hs = hashes(sh); val els = elements(sh) // does this improve performance?
     // assert(i < widths(sh))
-    while(hashes(sh)(i) != Empty && (hashes(sh)(i) != h || elements(sh)(i) != x))
-      i = (i+1) & widthMasks(sh)
+    while(hs(i) != Empty && (hs(i) != h || els(i) != x))
+      i = (i+1) & mask // widthMasks(sh)
     i
   }
 
@@ -261,6 +262,9 @@ class ShardedHashSet[A : scala.reflect.ClassTag](
 // ==================================================================
 
 object ShardedHashSet{
+  /** Objects used for locking.  This allows profiling. */
+  class Lock extends AnyRef
+
   /** Log (base 2) of the maximum width of rows in the arrays. */
   private val LogMaxWidth = 30
 

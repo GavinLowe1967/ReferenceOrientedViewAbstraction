@@ -12,6 +12,7 @@ import collection.OpenHashSet
   */
 abstract class ComponentView0(servers: ServerStates, components: Array[State])
     extends ReducedComponentView(servers, components){
+  import ComponentView0.{CrossRefInfo,subset}
 
   Profiler.count("ComponentView0") // 179M with lazySetNoJoined.csp!
 
@@ -199,10 +200,6 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
    * CrossRefInfo.  The transition will create a view equivalent to
    * (post.servers, map(v.components))*/
 
-  /** A representation of the views needed for condition (b) of an induced
-    * transition: the list of component states. */
-  private type CrossRefInfo = Array[Array[State]] // List[Array[State]]
-
   private def showCRI(crossRefs: CrossRefInfo) =
     crossRefs.map(StateArray.show).mkString("; ")
 
@@ -220,56 +217,6 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
         initSize = 4, ThresholdRatio = 0.6F)
     else null
 
-  /** Is crossRefs1 a subset of crossRefs2? 
-    * 
-    * Pre: both are sorted by StateArray.lessThan. */
-  @inline private 
-  def subset(crossRefs1: CrossRefInfo, crossRefs2: CrossRefInfo): Boolean = {
-    import StateArray.lessThan
-    val len1 = crossRefs1.length; val len2 = crossRefs2.length
-    // for(i <- 1 until len1) assert(lessThan(crossRefs1(i-1), crossRefs1(i)))
-    // for(i <- 1 until len2) assert(lessThan(crossRefs2(i-1), crossRefs2(i)))
-    var i1 = 0; var i2 = 0; var ok = true
-    // Inv: ok = true if crossRefs1[0..i1) is a subset of crossRefs[0..i2) and
-    // false if crossRefs(i1) is not in crossRefs2 or it's found that
-    // crossRefs1 cannot be a subset of crossRefs2.  Also no element of
-    // crossRefs1[i1..) is in crossRefs[0..i2).  Note: if len1-i1 > len2-i2
-    // (or i2 > len2-len1+i1) then there is no way that we can have
-    // crossRefs[i1..len1) a subset of crossRefs2[i2..len2).
-    while(i1 < len1 && ok){
-      val cr1 = crossRefs1(i1); val limit = len2-len1+i1
-      // while(i2 <= limit && lessThan(crossRefs2(i2), cr1)) i2 += 1
-      // ok = i2 <= limit && crossRefs2(i2) == cr1; i1 += 1
-      while(i2 <= limit && crossRefs2(i2) != cr1) i2 += 1
-      ok = i2 <= limit; i1 += 1; i2 += 1
-    }
-/*
-    var i1 = 0; var ok = true; val len2 = crossRefs2.length
-    while(i1 < crossRefs1.length && ok){
-      val cs1 = crossRefs1(i1); i1 += 1
-      var i2 = 0 // test if crossRefs2 contains cs1
-      // while(i2 < len2 && !sameElements(crossRefs2(i2), cs1)) i2 += 1
-      while(i2 < len2 && crossRefs2(i2) != cs1) i2 += 1
-      ok = i2 < len2
-    }
- */
-    // crossRefs1.forall(cs1 => crossRefs2.exists(cs => cs.sameElements(cs1) ))
-    //var crs1 = crossRefs1; var ok = true
-    // // Inv: ok is true if all elements of crossRefs1 so far are in crossrefs2
-    // while(crs1.nonEmpty && ok){
-    //   val cs1 = crs1.head; crs1 = crs1.tail
-    //   // test if crossRefs2 contains cs1
-    //   var crs2 = crossRefs2
-    //   while(crs2.nonEmpty && !sameElements(crs2.head, cs1)) crs2 = crs2.tail
-    //   ok = crs2.nonEmpty
-    // }
-    ok
-  }
-
-  @inline private def sameElements(cr1: Array[State], cr2: Array[State]) = {
-    // assert(cr1.length == 2 && cr2.length == 2) 
-    cr1(0) == cr2(0) && cr1(1) == cr2(1)
-  }
 
   /** Is there a stored primary induced transition with no unifications that
     * subsumes the transition corresponding to (servers, map, crossRefs)?
@@ -298,7 +245,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   }
 
   /** Record that there is a stored primary induced transition with no
-    * unifications corresponding to (servers, map, crossRefs)?  Return true if
+    * unifications corresponding to (servers, map, crossRefs).  Return true if
     * this is a genuine addition, i.e. not subsumed in an existing record
     * (with a subset of the crossRefs).
     *  
@@ -307,6 +254,7 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
   def addConditionBInduced(
     servers: ServerStates, map: ReducedMap, crossRefs: CrossRefInfo)
       : Boolean = synchronized{
+    import ComponentView0.{compareCR,Equal,Subset,Superset,Incomparable}
     // assert(crossRefs.forall(cpts => components.eq(StateArray(components))))
     val key = ServersReducedMap(servers, map)
     conditionBInducedMap.get(key) match{
@@ -316,8 +264,16 @@ abstract class ComponentView0(servers: ServerStates, components: Array[State])
         var foundSubset = false // have we found a subset of crossRefs?
         while(i < crl.length){
           val crossRefs1 = crl(i); i += 1
-          if(!subset(crossRefs, crossRefs1)) newList ::= crossRefs1
-          foundSubset ||= subset(crossRefs1, crossRefs)
+
+          val cmp = compareCR(crossRefs, crossRefs1)
+          if(cmp != Subset) newList ::= crossRefs1
+          if(cmp == Superset || cmp == Equal) foundSubset = true
+
+          // if(!subset(crossRefs, crossRefs1)) newList ::= crossRefs1
+          // foundSubset ||= subset(crossRefs1, crossRefs)
+          // The above looks wrong.  If crossRefs, crossRefs1 are equal, we
+          // don't retain either value.
+
         }
         // Note: we might have foundSubset = true, if another thread added the
         // subset after this thread called containsConditionBInduced.
@@ -387,6 +343,62 @@ object ComponentView0{
         }
       }
     }
+
+  /** A representation of the views needed for condition (b) of an induced
+    * transition: the list of component states. */
+  private type CrossRefInfo = Array[Array[State]] // List[Array[State]]
+
+  /** Is crossRefs1 a subset of crossRefs2?  Pre: both are sorted by
+    * StateArray.lessThan.  Note: we can use reference equality on
+    * Array[State]s, because each is the value registered in StateArray. */
+  @inline private 
+  def subset(crossRefs1: CrossRefInfo, crossRefs2: CrossRefInfo): Boolean = {
+    import StateArray.lessThan
+    val len1 = crossRefs1.length; val len2 = crossRefs2.length
+    // for(i <- 1 until len1) assert(lessThan(crossRefs1(i-1), crossRefs1(i)))
+    // for(i <- 1 until len2) assert(lessThan(crossRefs2(i-1), crossRefs2(i)))
+    var i1 = 0; var i2 = 0; var ok = len1 <= len2
+    // Inv: ok = true if crossRefs1[0..i1) is a subset of crossRefs[0..i2) and
+    // false if crossRefs(i1) is not in crossRefs2 or it's found that
+    // crossRefs1 cannot be a subset of crossRefs2.  Also no element of
+    // crossRefs1[i1..) is in crossRefs[0..i2).  Note: if len1-i1 > len2-i2
+    // (or i2 > len2-len1+i1) then there is no way that we can have
+    // crossRefs[i1..len1) a subset of crossRefs2[i2..len2).
+    while(i1 < len1 && ok){
+      val cr1 = crossRefs1(i1); val limit = len2-len1+i1
+      // while(i2 <= limit && lessThan(crossRefs2(i2), cr1)) i2 += 1
+      // ok = i2 <= limit && crossRefs2(i2) == cr1; i1 += 1
+      while(i2 <= limit && crossRefs2(i2) != cr1) i2 += 1
+      ok = i2 <= limit; i1 += 1; i2 += 1
+    }
+    ok
+  }
+
+  // @inline private def sameElements(cr1: Array[State], cr2: Array[State]) = {
+  //   // assert(cr1.length == 2 && cr2.length == 2) 
+  //   cr1(0) == cr2(0) && cr1(1) == cr2(1)
+  // }
+
+  private val Equal = 0; private val Subset = 1
+  private val Superset = 2; private val Incomparable = 3
+
+  /** Compare crossRefs1 and crossRefs2.  Return Equal, Subset, Superset or
+    * Incomparable if crossRefs1 is equal to, a subset of, a superset of, or
+    * incomparable to crossRefs2, respectively. */ 
+  def compareCR(crossRefs1: CrossRefInfo, crossRefs2: CrossRefInfo):Int = {
+    val len1 = crossRefs1.length; val len2 = crossRefs2.length
+    if(len1 < len2){
+      if(subset(crossRefs1, crossRefs2)) Subset else Incomparable
+    }
+    else if(len2 < len1){
+      if(subset(crossRefs2, crossRefs1)) Superset else Incomparable
+    }
+    else{ // len1 = len2
+      var i = 0
+      while(i < len1 && crossRefs1(i) == crossRefs2(i)) i += 1
+      if(i == len1) Equal else Incomparable
+    }
+  }
 
 
 

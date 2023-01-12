@@ -148,14 +148,16 @@ if(true){
             }
             else{ // consider condition (c)
               val mcw = MissingCommonWrapper(inducedTrans, views)
-              if(mcw == null){          // can fire transition
-                if(nextNewViews.add(nv))
-                  addedView(cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
-                else if(isPrimary) recordInduced(unifs, reducedMap)
+              //if(/*true ||*/ mcw != null){
+                if(mcw == null || mcw.done){          // can fire transition
+                  if(nextNewViews.add(nv))
+                    addedView(cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
+                  else if(isPrimary) recordInduced(unifs, reducedMap)
                   // recordInducedRedundant(
                   // cpts1, newCpts, nv, unifs, isPrimary, reducedMap)
-              }
-              else{ assert(!condCSat); newEffectOnStore.add(mcw) }
+                }
+                else{ assert(!condCSat); newEffectOnStore.add(mcw) }
+              //} // if mcr == null, subsumed
             }
           } // end of inner for loop
         } // end of if(missing.isEmpty)

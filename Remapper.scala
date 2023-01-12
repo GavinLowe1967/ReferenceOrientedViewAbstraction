@@ -617,7 +617,8 @@ object Remapper{
 
   // =================== Remapping views
 
-  /** Remap a ComponentView. */
+  /** Remap a ComponentView.  Use the component array registered in
+    * StateArray. */
   @inline def remapView(v: ComponentView): ComponentView = {
     val (servers1, map, nextArg) = remapServerStates(v.servers)
     val components1 = remapStates(map, nextArg, v.components)
