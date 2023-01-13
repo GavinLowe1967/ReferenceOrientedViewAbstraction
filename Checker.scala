@@ -201,7 +201,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     traverse("EffectOnStore", EffectOnStore, maxPrint = 0)
     traverse("EffectOnUnification", EffectOnUnification, maxPrint = 0)
     traverse("FDRTransitionMap", FDRTransitionMap, maxPrint = 0)
-    traverse("MissingInfo", MissingInfo, maxPrint = 0)
+    // traverse("MissingInfo", MissingInfo, maxPrint = 0)
     traverse("Pools", Pools, maxPrint = 0)
     traverse("Remapper", Remapper, maxPrint = 0)
     traverse("ServerBasedViewSet", ServerBasedViewSet, maxPrint = 0)
@@ -209,14 +209,14 @@ class Checker(system: SystemP.System, numWorkers: Int){
     traverse("SingleRefEffectOnUnification", SingleRefEffectOnUnification, maxPrint = 0)
     traverse("State", State, maxPrint = 0)
     traverse("Transition", Transition, maxPrint = 0)
-    traverse("TransitionSet", TransitionSet, maxPrint = 0)
+    // traverse("TransitionSet", TransitionSet, maxPrint = 0)
     traverse("TransitionTemplateSet", TransitionTemplateSet, maxPrint = 0)
     traverse("Unification", Unification, maxPrint = 0)
     traverse("View", View, maxPrint = 0)
-    traverse("ViewSet", ViewSet, maxPrint = 0)
+    // traverse("ViewSet", ViewSet, maxPrint = 0)
     val others = List(
       Profiler, Concretization, Debugger, FDRTransitionMap,
-      MissingCommon, MissingInfoStore, ServerBasedViewSet, ThreadID,
+      MissingCommon,  ServerBasedViewSet, ThreadID,
       collection.IntSet, collection.LockFreeReadHashSet, 
       collection.ShardedHashMap, collection.ShardedHashSet)
     for(obj <- others)  traverse(obj.toString, obj, maxPrint = 0)

@@ -344,7 +344,7 @@ object NewEffectOn{
   def prepareForPurge = if(ply%4 == 0){
     doPurge = testPurge
     if(doPurge){  
-      newEffectOnStore.prepareForPurge; MissingCommon.prepareForPurge
+      newEffectOnStore.prepareForPurge; MissingCommonFactory.prepareForPurge
     }
   }
 
@@ -359,7 +359,7 @@ object NewEffectOn{
         newEffectOnStore.purgeMissingCommonStore(views)
         newEffectOnStore.purgeCandidateForMCStore(views)
       }
-      else if(ply%4 == 3) MissingCommon.purgeMCs()
+      else if(ply%4 == 3) MissingCommonFactory.purgeMCs()
     }
   }
 

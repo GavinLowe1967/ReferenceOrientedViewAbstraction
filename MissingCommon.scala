@@ -1,10 +1,8 @@
 package ViewAbstraction
 
-import ViewAbstraction.collection.ShardedHashMap
 import ViewAbstraction.RemapperP.Remapper
 import ox.gavin.profiling.Profiler
-import scala.collection.mutable.{ArrayBuffer,HashSet,HashMap,Set}
-import collection.OpenHashSet
+import scala.collection.mutable.ArrayBuffer
 import MissingCommon.Cpts // = Array[State]
 
 /** The representation of the obligation to find a component state c with
@@ -17,8 +15,8 @@ import MissingCommon.Cpts // = Array[State]
   * corresponds to the pre-state of a transition, and cpts2 to the view acted
   * upon. */
 class MissingCommon(
-    val servers: ServerStates, val cpts1: Cpts, val cpts2: Cpts,
-    val family: Int, val id: Int){
+  val servers: ServerStates, val cpts1: Cpts, val cpts2: Cpts,
+  val family: Int, val id: Int){
 
   // assert(cpts1.eq(StateArray(cpts1))); assert(cpts2.eq(StateArray(cpts2)))
 
@@ -103,7 +101,7 @@ class MissingCommon(
 
   /** Record that this is now done.  Also clear missingCandidates and
     * doneMissingCandidates to reclaim memory. */
-  private def setDone = { 
+  def setDone = { 
     setDoneFlag; missingCandidates = null
     doneMissingCandidates = null // ; log(SetDoneMC)
   }
@@ -191,7 +189,7 @@ class MissingCommon(
     * instantiate clause (1) of this.
     * 
     * @return true if this is now complete. */
-  @inline private 
+  @inline 
   def updateMissingCandidates(cpt1: State, views: ViewSet, vb: CptsBuffer)
       : Boolean = {
     //if(highlight) println(s"updateMissingCandidates($cpt1) $pid")
@@ -427,6 +425,7 @@ object MissingCommon{
   def showMissingComponents(mc: MissingComponents) = 
     mc.map(StateArray.show).mkString("; ")
 
+/*
   /** Type of keys for storing MissingCommons. */
   class Key(
     val ssIndex: Int, val cpts1: Array[State], val cpts2: Array[State],
@@ -448,6 +447,8 @@ object MissingCommon{
     servers: ServerStates, cpts1: Cpts, cpts2: Cpts, pid: ProcessIdentity) = 
     new Key(servers.index, cpts1, cpts2, pid._1, pid._2)
 
+  import ViewAbstraction.collection.ShardedHashMap
+
   /** The type of the store of all MissingCommon we have created. */
   type MissingCommonStore = ShardedHashMap[Key, MissingCommon]
 
@@ -462,7 +463,9 @@ object MissingCommon{
     * the resulting stored value. */
   private def setOrGet(key: Key, mc: MissingCommon) = 
     allMCs.getOrElseUpdate(key, mc)
+ */
 
+/*
   private var shardIteratorProducer: 
        ShardedHashMap.ShardIteratorProducerT[Key, MissingCommon] = null
 
@@ -497,6 +500,7 @@ object MissingCommon{
 
   /** Reset ready for a new check. */
   def reset =  allMCs = new MissingCommonStore
+ */
 
   /** Bit masks used for extracting state from the `flags` of a
     * MissingCommon. */
@@ -504,6 +508,7 @@ object MissingCommon{
 
   private val CountedMask = 2
 
+/*
   /** A MissingCommon object, corresponding to servers, cpts1, cpts2 and pid, or
     * null if the obligation is already satisfied.  Here cpts1 corresponds to
     * the pre-state of a transition, and cpts2 to the view acted upon.
@@ -550,6 +555,7 @@ object MissingCommon{
         if(mc2.done) null else mc2
     }
   }
+ */
 
   /** All component states cpt with identity pid such that views contains
     * servers || princ || cpt.  Pre: servers || princ is in normal form. */

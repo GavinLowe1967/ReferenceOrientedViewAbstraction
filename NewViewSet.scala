@@ -101,7 +101,6 @@ class NewViewSet extends ViewSet{
   override def toString = allViews.toString
 }
 
-
 // ==================================================================
 
 /** A set of views, all of which have the same servers. */
@@ -326,4 +325,3 @@ class PrincTypesViewSet(typeFlags: Array[Boolean]){
 
 }
 
-// ==================================================================  

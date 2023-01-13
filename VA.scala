@@ -126,9 +126,10 @@ object VA{
   def runTestSuite() = {
     val theTestSuite = if(singleRef) srTestSuite else testSuite
     for((fname, states) <- theTestSuite){
-      State.reset; MyStateMap.reset; MissingCommon.reset; 
-      MissingInfoStore.reset; /*SingleRefEffectOn.reset;*/ NewEffectOn.reset; 
-      ThreadID.reset; MissingCommonWrapper.reset()
+      State.reset; MyStateMap.reset; MissingCommonFactory.reset; 
+      // MissingInfoStore.reset; /*SingleRefEffectOn.reset;*/ 
+      NewEffectOn.reset;
+      ThreadID.reset; // MissingCommonWrapper.reset()
       println("********* "+fname)
       val states1 = run(fname)
       assert(states == states1,
@@ -160,7 +161,7 @@ object VA{
       case "--showTransitions" => showTransitions = true; i += 1
       case "--showRedundancies" => showRedundancies = true; i += 1
       // case "--reverseTransitionIter" => TransitionSet.reversed = true; i += 1
-      case "--useOldViewSet" => UseNewViewSet = false; i += 1
+      // case "--useOldViewSet" => UseNewViewSet = false; i += 1
       case "--doSanityCheck" => doSanityCheck = true; i += 1
       case "--reportEffectOn" => reportEffectOn = true; i += 1
       case "--useOldReferencingViews" => useNewReferencingViews = false; i += 1

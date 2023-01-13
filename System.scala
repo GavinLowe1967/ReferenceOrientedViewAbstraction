@@ -313,7 +313,8 @@ class System(fname: String) {
   def initViews: (ViewSet, Array[ComponentView]) = {
     val serverInits: List[State] = servers.inits
     val viewSet: ViewSet = 
-      if(UseNewViewSet) new NewViewSet else new ServerPrincipalBasedViewSet(16)
+      if(UseNewViewSet) new NewViewSet 
+      else ??? // new ServerPrincipalBasedViewSet(16)
     val activeViews = new ArrayBuffer[ComponentView]
     // All views 
     val views = components.initViews(ServerStates(serverInits))

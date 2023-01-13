@@ -1,7 +1,7 @@
 package ViewAbstraction
 import collection.ShardedHashMap
 import scala.collection.mutable.{HashMap}
-import ViewAbstraction.BasicHashMap
+// import ViewAbstraction.BasicHashMap
 
 /** A mapping used to cache the results of Checker.compatibleWith.  Abstractly
   * a mapping from CompatibleWithCache.Key to CompatibleWithCache.Cache. */

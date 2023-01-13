@@ -32,7 +32,7 @@ trait ViewSet{
 
   /** Iterator over all views v such that trans might induce a new view from
     * v. */
-  def iterator(trans: Transition): Iterator[ComponentView] = ???
+  def iterator(trans: Transition): Iterator[ComponentView] 
 
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 
@@ -40,6 +40,7 @@ trait ViewSet{
 
 // =======================================================
 
+/*
 object ViewSet{
   // Now constructed directly in System.scala
 //  def apply(): ViewSet = new NewViewSet // new ServerPrincipalBasedViewSet(16)
@@ -141,9 +142,11 @@ class BasicHashMap[K: scala.reflect.ClassTag, D: scala.reflect.ClassTag]
     def next() = { val d = data(ix); ix += 1; advance; d }
   } // end of iterator
 } // end of BasicHashMap
+ */
 
 // ==================================================================
 
+/*
 /** A set of views, all of which have the same servers and principal. */
 class ComponentsSet(initSize: Int = 4){
   checkPow2(initSize)
@@ -263,11 +266,13 @@ class ComponentsSet(initSize: Int = 4){
     assert(i < n); views(i)
   }
 }
+*/
 
 // =======================================================
 
 import scala.collection.mutable.ArrayBuffer
 
+/*
 /** An implementation of a set of Views, all with the same ServerStates.  This
   * allows efficient iteration over the views corresponding to a particular
   * principal.  Used in ServerPrincipalBasedViewSet. */
@@ -456,3 +461,4 @@ class ServerPrincipalBasedViewSet(initSize: Int = 16) extends ViewSet {
   override def toString = iterator.toArray.map(_.toString).sorted.mkString("\n")
 
 }
+ */

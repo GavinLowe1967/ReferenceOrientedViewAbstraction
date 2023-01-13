@@ -47,6 +47,7 @@ class SimpleTransitionSet extends TransitionSet{
 
 // =====================================================================
 
+/*
 import scala.collection.mutable.Set
 
 /** An implementation of TransitionTemplateSet implemented as a map over the
@@ -137,3 +138,4 @@ object TransitionSet{
   // Should the iterator be reversed.
   // var reversed = false
 }
+ */

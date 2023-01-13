@@ -6,9 +6,7 @@ import ox.gavin.profiling.Profiler
 class Transition(
   val pre: Concretization, val e: EventInt, val post: Concretization)
 extends TransitionT{
-
   Profiler.count("Transition")
-
 
   /** Do the servers change state? */
   def changedServers = preServers != post.servers

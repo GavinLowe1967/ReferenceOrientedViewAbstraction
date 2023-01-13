@@ -109,7 +109,7 @@ $(DIR)/SingleRefEffectOnUnificationTest.class: $(DIR)/SingleRefEffectOnUnificati
 $(DIR)/Transition.class: $(DIR)/ComponentView.class # $(DIR)/Unification.class 
 # $(DIR)/SystemP/System.class
 
-$(DIR)/TransitionSet.class $(DIR)/NewTransitionSet.class: $(DIR)/Transition.class $(DIR)/ComponentView.class
+$(DIR)/TransitionSet.class $(DIR)/NewTransitionSet.class: $(DIR)/Transition.class $(DIR)/ComponentView.class $(COLLDIR)/ShardedHashMap.class
 
 $(DIR)/TransitionTemplateSet.class: $(DIR)/ComponentView.class
 
@@ -141,22 +141,25 @@ $(DIR)/MissingCommon.class: $(DIR)/Unification.class $(DIR)/ViewSet.class	\
   $(COLLDIR)/IntSet.class $(COLLDIR)/KeyedSet.class
 # $(COLLDIR)/ShardedHashMap.class
 
-$(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
+# $(DIR)/MissingInfo.class:  $(DIR)/MissingCommon.class
 
-$(DIR)/MissingInfoStore.class: $(COLLDIR)/ShardedHashSet.class $(DIR)/MissingInfo.class 
+# $(DIR)/MissingInfoStore.class: $(COLLDIR)/ShardedHashSet.class $(DIR)/MissingInfo.class 
 
-$(DIR)/EffectOnStore.class: $(DIR)/MissingInfoStore.class	\
-  $(COLLDIR)/OpenHashSet.class $(COLLDIR)/ShardedHashMap.class
+$(DIR)/EffectOnStore.class: $(COLLDIR)/OpenHashSet.class	\
+  $(COLLDIR)/ShardedHashMap.class
+# $(DIR)/MissingInfoStore.class
 
 # New EffectOn store
 
 $(DIR)/InducedTransitionInfo.class:  $(DIR)/ComponentView.class \
-  $(DIR)/Transition.class
+  $(DIR)/Transition.class $(DIR)/SingleRefEffectOnUnification.class
 
 $(DIR)/MissingCrossReferences.class: $(DIR)/InducedTransitionInfo.class \
   $(DIR)/ViewSet.class  $(DIR)/RemappingExtender.class
 
-$(DIR)/MissingCommonWrapper.class: $(DIR)/MissingCommon.class $(DIR)/MissingCrossReferences.class
+$(DIR)/MissingCommonFactory.class: $(DIR)/MissingCommon.class
+
+$(DIR)/MissingCommonWrapper.class: $(DIR)/MissingCommonFactory.class $(DIR)/MissingCrossReferences.class
 
 $(DIR)/NewEffectOnStore.class: $(DIR)/MissingCommonWrapper.class		\
   $(DIR)/SingleRefEffectOnUnification.class $(COLLDIR)/LockableMap.class
@@ -168,11 +171,11 @@ $(DIR)/EffectOn.class: $(DIR)/EffectOnUnification.class $(DIR)/ViewSet.class $(D
 # $(DIR)/SingleRefEffectOn.class: $(DIR)/EffectOn.class			\
 #    $(DIR)/EffectOnStore.class $(DIR)/SingleRefEffectOnUnification.class
 
-$(DIR)/NewEffectOn.class:  $(DIR)/NewEffectOnStore.class
+$(DIR)/NewEffectOn.class:  $(DIR)/NewEffectOnStore.class $(DIR)/EffectOn.class
 
 # Extending of transition templates
 
-$(DIR)/CompatibleWithCache.class: $(DIR)/BasicHashMap.class
+$(DIR)/CompatibleWithCache.class: $(COLLDIR)/ShardedHashMap.class
 
 $(EXTENDERP)/Extendability.class: $(DIR)/Unification.class $(COMBINERP)/Combiner.class  $(DIR)/CompatibleWithCache.class
 
@@ -192,7 +195,8 @@ $(DIR)/Debugger.class: $(DIR)/SystemP/System.class $(DIR)/EffectOn.class $(DIR)/
 
 $(DIR)/CheckerState.class: $(DIR)/TransitionSet.class			\
   $(DIR)/NewTransitionSet.class $(DIR)/Unification.class		\
-  $(DIR)/NewEffectOn.class $(DIR)/TransitionTemplateExtender.class
+  $(DIR)/NewEffectOn.class $(DIR)/TransitionTemplateExtender.class	\
+  $(DIR)/NewViewSet.class
 
 $(DIR)/Checker.class: $(DIR)/CheckerState.class $(DIR)/Debugger.class	\
   $(DIR)/Barrier.class $(DIR)/Concurrency.class

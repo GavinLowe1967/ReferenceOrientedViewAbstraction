@@ -227,7 +227,7 @@ package object ViewAbstraction{
   var doSanityCheck = false
 
   /** Do we use NewViewSet? */
-  var UseNewViewSet = true
+  val UseNewViewSet = true
 
   /** Do we report the size of the EffectOnStore? */
   var reportEffectOn = false

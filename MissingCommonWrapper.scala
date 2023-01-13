@@ -88,7 +88,7 @@ class MissingCommonWrapper(
     // done = true if we've created an new MissingCommon
     while(pidsIndex < commonMissingPids.length && !done){
       val pid = commonMissingPids(pidsIndex)
-      val newMC = MissingCommon.makeMissingCommon(
+      val newMC = MissingCommonFactory.makeMissingCommon(
         inducedTrans.servers, inducedTrans.preCpts, inducedTrans.cpts, 
         pid, views)
       if(newMC == null) pidsIndex += 1 else{ mc = newMC; done = true }
@@ -184,6 +184,7 @@ object MissingCommonWrapper{
     else if(subset2) Superset else Incomparable
   }
 
+/*
   /** Keys used in keying the store map. */
   private class Key(
     val newView: ReducedComponentView, val servers: ServerStates,
@@ -205,11 +206,12 @@ object MissingCommonWrapper{
         // Note: reference equality, because canonical
     }
   }
+ */
 
   // private var store = 
   //   new collection.ShardedLockableMap[Key, Array[MissingCommonWrapper]]
 
-  def reset() = {}
+  // def reset() = {}
   //  store = new collection.ShardedLockableMap[Key, Array[MissingCommonWrapper]]
 
 /* This is currently disabled.  On the lock-free set example, only 23,570

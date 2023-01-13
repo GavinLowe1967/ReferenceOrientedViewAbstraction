@@ -14,6 +14,7 @@ object TestUtils{
     map.indices.forall(i => pairs.filter(_._1 == i) match{
       case List() => map(i) == -1
       case List((i1,j)) => map(i) == j
+      case _ => ??? // Shouldn't happen
     })
 
   def emptyMap(map: Array[Int]) = map.forall(_ == -1)

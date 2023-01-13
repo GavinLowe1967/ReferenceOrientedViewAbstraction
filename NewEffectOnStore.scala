@@ -505,7 +505,7 @@ class NewEffectOnStore{
 
   /** Report on the size of the stores. */
   def report = {
-    println("allMCs: size = "+printLong(MissingCommon.allMCsSize))
+    println("allMCs: size = "+printLong(MissingCommonFactory.allMCsSize))
     print("missingCrossRefStore: "); reportStore(missingCrossRefStore)
     print("byNewView: "); reportByNewView()
     print("missingCommonStore: "); reportStore(missingCommonStore)
@@ -516,7 +516,7 @@ class NewEffectOnStore{
   def memoryProfile = {
     import ox.gavin.profiling.MemoryProfiler.traverse
     // profile MissingCommon, MissingInfoStore
-    MissingCommon.memoryProfile
+    MissingCommonFactory.memoryProfile
 
     // traverse N MissingCrossReferences
     val N = 5
