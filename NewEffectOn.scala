@@ -37,7 +37,7 @@ class NewEffectOn(
   import SingleRefEffectOnUnification.{
     InducedInfo, SecondaryInducedInfo, commonMissingRefs}
   import SingleRefEffectOn.{getCrossRefs}
-  import InducedTransitionInfo.newMissingCrossRefs
+  import MissingCrossReferences.newMissingCrossRefs
   import NewEffectOn.{newEffectOnStore}
   import EffectOn.views
 

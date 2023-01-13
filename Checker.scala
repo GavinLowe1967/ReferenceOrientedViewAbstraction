@@ -38,8 +38,6 @@ class Checker(system: SystemP.System, numWorkers: Int){
       newViews = checkerState.getNewViews; nextIndex.set(0)
       if(showEachPly)
         println("newViews =\n"+newViews.map(_.toString).sorted.mkString("\n"))
-      // if(singleRef && doSanityCheck && useNewEffectOnStore)
-      //   NewEffectOn.sanityCheck(checkerState.sysAbsViews)
     }
     ply += 1
     if(newViews.isEmpty || ply > bound) done.set(true)
@@ -68,10 +66,10 @@ class Checker(system: SystemP.System, numWorkers: Int){
     // Following are expensive and verbose so normally disabled
     if(singleRef && doSanityCheck && bound == Int.MaxValue){
       if(useNewEffectOnStore) NewEffectOn.sanityCheck(checkerState.sysAbsViews)
-      else SingleRefEffectOn.sanityCheck
+      else ??? // SingleRefEffectOn.sanityCheck
     }
     if(singleRef && reportEffectOn){
-      if(useNewEffectOnStore) NewEffectOn.report else SingleRefEffectOn.report
+      if(useNewEffectOnStore) NewEffectOn.report else ??? // SingleRefEffectOn.report
     }
     checkerState.endOfCheck
     println(s"#ServerStates = ${ServerStates.count}")
@@ -127,8 +125,8 @@ class Checker(system: SystemP.System, numWorkers: Int){
                 if(singleRef){
                   if(useNewEffectOnStore)
                     NewEffectOn.completeDelayed(view, checkerState.nextNewViews)
-                  else SingleRefEffectOn.completeDelayed(
-                    view, checkerState.nextNewViews)
+                  else ???//  SingleRefEffectOn.completeDelayed(
+                    // view, checkerState.nextNewViews)
                 }
             } // end of match
           }
@@ -188,7 +186,7 @@ class Checker(system: SystemP.System, numWorkers: Int){
     // println()
     if(singleRef){
       if(useNewEffectOnStore) NewEffectOn.memoryProfile
-      else SingleRefEffectOn.memoryProfile
+      else ??? // SingleRefEffectOn.memoryProfile
       println()
     }
     traverse("checker", this, maxPrint = 1, ignore = List("System")); println()

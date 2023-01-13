@@ -215,7 +215,9 @@ class Transition(
     // i < cptsLength
   }
   
-  import Unification.UnificationList // = List[(Int,Int)]
+  // import Unification.UnificationList // = List[(Int,Int)]
+
+  type UnificationList = List[(Int,Int)] 
 
   /** Given unification list unifs, is the principal unified with a component
     * that changes state and acquires a reference? */

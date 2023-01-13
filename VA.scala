@@ -164,7 +164,7 @@ object VA{
       case "--doSanityCheck" => doSanityCheck = true; i += 1
       case "--reportEffectOn" => reportEffectOn = true; i += 1
       case "--useOldReferencingViews" => useNewReferencingViews = false; i += 1
-      case "--useNewEffectOnStore" => useNewEffectOnStore = true; i += 1
+      //case "--useNewEffectOnStore" => useNewEffectOnStore = true; i += 1
       // case "--lazyNewEffectOnStore" => 
       //   useNewEffectOnStore = true; lazyNewEffectOnStore = true; i += 1
       case "--doGC" => doGC = true; i += 1
@@ -178,8 +178,8 @@ object VA{
         else{ fname = fn; i += 1 }
     }
     assert(fname.nonEmpty || testing || testSuite, "no filename specified")
-    if(useNewEffectOnStore) 
-      assert(singleRef, "--newEffectOnStore can be used only with --singleRef")
+    // if(useNewEffectOnStore) 
+    //   assert(singleRef, "--newEffectOnStore can be used only with --singleRef")
     // println("numThreads = "+numThreads)
     println("numWorkers = "+numWorkers)
     // IMPROVE: we don't want both numWorkers and numThreads

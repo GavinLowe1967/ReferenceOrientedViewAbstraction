@@ -74,6 +74,7 @@ object EffectOnStore{
 
 // =======================================================
 
+/*
 /** A simple implementation of EffectOnStore.  The name "simple" is a
   * misnomer.  */
 class SimpleEffectOnStore extends EffectOnStore{
@@ -652,4 +653,6 @@ class SimpleEffectOnStore extends EffectOnStore{
  * objects for which condition (c) has been satisfied.  A copy will have been
  * added to mcDoneStore (if the object is not done), indicated by its
  * transferred field.  These objects can be purged from those stores.
+ */
+
  */

@@ -289,10 +289,11 @@ object SingleRefEffectOn{
     * because relevant views are not yet in the store.  completeDelayed
     * subsequently tries to complete the transitions.  */
   var effectOnStore: EffectOnStore = 
-    if(singleRef && !useNewEffectOnStore) new SimpleEffectOnStore else null
+    if(singleRef && !useNewEffectOnStore) ??? // new SimpleEffectOnStore 
+    else null
 
   def reset = { 
-    if(guard)  effectOnStore = new SimpleEffectOnStore
+    if(guard) ??? //  effectOnStore = new SimpleEffectOnStore
     lastPurgeViewCount = 0L; doPurge = false
   }
 

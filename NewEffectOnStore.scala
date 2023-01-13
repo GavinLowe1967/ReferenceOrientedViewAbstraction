@@ -180,7 +180,7 @@ class NewEffectOnStore{
     missingCrossRefStore.releaseLock(cv)
   }
 
-  import InducedTransitionInfo.newMissingCrossRefs
+  import MissingCrossReferences.newMissingCrossRefs
 
   /** Deal with a MissingCrossReferences object that is done: either create and
     * store a corresponding MissingCommonWrapper, or fire the transition. */

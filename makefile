@@ -34,7 +34,8 @@ $(COLLDIR)/MyHashSet.class:	$(COLLDIR)/Sharding.class $(DIR)/package.class
 
 $(COLLDIR)/ShardedHashSet.class:	$(COLLDIR)/MyHashSet.class
 
-$(COLLDIR)/ShardedHashMap.class: $(COLLDIR)/Sharding.class $(DIR)/package.class $(COLLDIR)/DeletableMap.class
+$(COLLDIR)/ShardedHashMap.class: $(COLLDIR)/Sharding.class	\
+  $(DIR)/package.class $(COLLDIR)/DeletableMap.class
 
 $(COLLDIR)/LockableMap.class: $(COLLDIR)/ShardedHashMap.class
 
@@ -42,7 +43,8 @@ $(COLLDIR)/LockableMap.class: $(COLLDIR)/ShardedHashMap.class
 
 $(DIR)/State.class: $(DIR)/package.class
 
-$(DIR)/StateArray.class: $(DIR)/State.class
+$(DIR)/StateArray.class: $(DIR)/State.class $(COLLDIR)/ShardedHashSet.class \
+  $(DIR)/IdentitiesBitMap.class
 
 $(DIR)/StateMap.class: $(DIR)/State.class
 
@@ -76,7 +78,7 @@ $(DIR)/ComponentView0.class: $(DIR)/View.class $(DIR)/IdentitiesBitMap.class	\
   $(COLLDIR)/MyHashSet.class $(DIR)/ServersReducedMap.class			\
   $(COLLDIR)/OpenHashMap.class
 
-$(DIR)/ComponentView.class: $(DIR)/ComponentView0.class
+$(DIR)/ComponentView.class: $(DIR)/ComponentView0.class $(DIR)/Transition.class
 
 $(DIR)/TestStates.class: $(DIR)/MyStateMap.class
 
@@ -104,7 +106,7 @@ $(DIR)/SingleRefEffectOnUnificationTest2.class: $(DIR)/SingleRefEffectOnUnificat
 
 $(DIR)/SingleRefEffectOnUnificationTest.class: $(DIR)/SingleRefEffectOnUnification.class $(DIR)/SingleRefEffectOnUnificationTest2.class
 
-$(DIR)/Transition.class: $(DIR)/Unification.class 
+$(DIR)/Transition.class: $(DIR)/ComponentView0.class # $(DIR)/Unification.class 
 # $(DIR)/SystemP/System.class
 
 $(DIR)/TransitionSet.class $(DIR)/NewTransitionSet.class: $(DIR)/Transition.class $(DIR)/ComponentView.class
@@ -161,7 +163,7 @@ $(DIR)/NewEffectOnStore.class: $(DIR)/MissingCommonWrapper.class		\
 
 $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 
-$(DIR)/EffectOn.class: $(DIR)/EffectOnUnification.class
+$(DIR)/EffectOn.class: $(DIR)/EffectOnUnification.class $(DIR)/ViewSet.class $(DIR)/EffectOnStore.class $(DIR)/SystemP/System.class
 
 $(DIR)/SingleRefEffectOn.class: $(DIR)/EffectOn.class			\
    $(DIR)/EffectOnStore.class $(DIR)/SingleRefEffectOnUnification.class

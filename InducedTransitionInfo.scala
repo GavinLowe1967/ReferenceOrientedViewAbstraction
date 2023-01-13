@@ -88,63 +88,63 @@ object InducedTransitionInfo{
     else new InducedTransitionInfo(newView, trans, cv)
 
 
-  /** Shared empty result from newMissingCrossRefs. */
-  private val EmptyReducedComponentView = Array[ReducedComponentView]()
+  // /** Shared empty result from newMissingCrossRefs. */
+  // private val EmptyReducedComponentView = Array[ReducedComponentView]()
 
-  /** The new missing cross reference views corresponding to inducedTrans,
-    * formed by extending map0 so as to produce cpts1. */
-  def newMissingCrossRefs(inducedTrans: InducedTransitionInfo, 
-    map0: RemappingMap, cpts1: Array[State], views: ViewSet)
-      : Array[ReducedComponentView] = 
-    newMissingCrossRefs(
-      map0, inducedTrans.servers, cpts1, inducedTrans.preCpts, views)
+  // /** The new missing cross reference views corresponding to inducedTrans,
+  //   * formed by extending map0 so as to produce cpts1. */
+  // def newMissingCrossRefs(inducedTrans: InducedTransitionInfo, 
+  //   map0: RemappingMap, cpts1: Array[State], views: ViewSet)
+  //     : Array[ReducedComponentView] = 
+  //   newMissingCrossRefs(
+  //     map0, inducedTrans.servers, cpts1, inducedTrans.preCpts, views)
  
-  /** The new missing cross reference views caused by extending map0 so as to
-    * produce cpts1.  This corresponds to a transition starting with
-    * (servers,preCpts), acting on (servers,cpts1). */
-  def newMissingCrossRefs(map0: RemappingMap, servers: ServerStates,
-    cpts1: Array[State], preCpts: Array[State], views: ViewSet)
-      : Array[ReducedComponentView] = {
-    // The components corresponding to the new cross references
-    val newCRs = newCrossRefs(map0, cpts1, preCpts)
-    if(newCRs.nonEmpty){
-      // extending the previous map has created new cross references
-      val crossRefViews = // the views for the new  cross refs
-        newCRs.map(Remapper.mkReducedComponentView(servers,_))
-      MissingCrossReferences.sort(crossRefViews.filter(!views.contains(_)))
-    }
-    else EmptyReducedComponentView // Array[ReducedComponentView]()
-  }
+  // /** The new missing cross reference views caused by extending map0 so as to
+  //   * produce cpts1.  This corresponds to a transition starting with
+  //   * (servers,preCpts), acting on (servers,cpts1). */
+  // private def newMissingCrossRefs(map0: RemappingMap, servers: ServerStates,
+  //   cpts1: Array[State], preCpts: Array[State], views: ViewSet)
+  //     : Array[ReducedComponentView] = {
+  //   // The components corresponding to the new cross references
+  //   val newCRs = newCrossRefs(map0, cpts1, preCpts)
+  //   if(newCRs.nonEmpty){
+  //     // extending the previous map has created new cross references
+  //     val crossRefViews = // the views for the new  cross refs
+  //       newCRs.map(Remapper.mkReducedComponentView(servers,_))
+  //     MissingCrossReferences.sort(crossRefViews.filter(!views.contains(_)))
+  //   }
+  //   else EmptyReducedComponentView // Array[ReducedComponentView]()
+  // }
 
-  /** Cross references between cpts and preCpts, or vice versa, where the
-    * relevant parameter of cpts is not in the range of map.  Here cpts is
-    * created by an extension of map, so any such cross reference was caused
-    * by map being extended. */
-  @inline private 
-  def newCrossRefs(map: RemappingMap, cpts: Array[State], preCpts: Array[State])
-      : Array[Array[State]] = {
-    /* Is pid in the range of map? */
-    @inline def inMap(pid: ProcessIdentity) = map(pid._1).contains(pid._2)
-    var result = List[Array[State]](); var i = 0
-    while(i < cpts.length){
-      val c1 = cpts(i); i += 1
-      val newId = !inMap(c1.componentProcessIdentity) // cross refs to c1 are new
-      if(! contains(preCpts, c1)){
-        var j = 0
-        while(j < preCpts.length){
-          val c2 = preCpts(j); j += 1
-          if(! contains(cpts, c2)){
-            // Cross reference from cpts to preCpts
-            if(c1.hasIncludedParam(c2.family, c2.id) &&
-                !inMap(c2.componentProcessIdentity))
-              result ::= StateArray(Array(c1,c2))
-            // Cross reference from preCpts to cpts
-            if(newId && c2.hasIncludedParam(c1.family, c1.id))
-              result ::= StateArray(Array(c2,c1))
-          }
-        }
-      }
-    }
-    result.toArray
-  }
+  // /** Cross references between cpts and preCpts, or vice versa, where the
+  //   * relevant parameter of cpts is not in the range of map.  Here cpts is
+  //   * created by an extension of map, so any such cross reference was caused
+  //   * by map being extended. */
+  // @inline private 
+  // def newCrossRefs(map: RemappingMap, cpts: Array[State], preCpts: Array[State])
+  //     : Array[Array[State]] = {
+  //   /* Is pid in the range of map? */
+  //   @inline def inMap(pid: ProcessIdentity) = map(pid._1).contains(pid._2)
+  //   var result = List[Array[State]](); var i = 0
+  //   while(i < cpts.length){
+  //     val c1 = cpts(i); i += 1
+  //     val newId = !inMap(c1.componentProcessIdentity) // cross refs to c1 are new
+  //     if(! contains(preCpts, c1)){
+  //       var j = 0
+  //       while(j < preCpts.length){
+  //         val c2 = preCpts(j); j += 1
+  //         if(! contains(cpts, c2)){
+  //           // Cross reference from cpts to preCpts
+  //           if(c1.hasIncludedParam(c2.family, c2.id) &&
+  //               !inMap(c2.componentProcessIdentity))
+  //             result ::= StateArray(Array(c1,c2))
+  //           // Cross reference from preCpts to cpts
+  //           if(newId && c2.hasIncludedParam(c1.family, c1.id))
+  //             result ::= StateArray(Array(c2,c1))
+  //         }
+  //       }
+  //     }
+  //   }
+  //   result.toArray
+  // }
 }

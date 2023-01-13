@@ -175,7 +175,7 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
       t: Transition, cv: ComponentView, nextNewViews: MyHashSet[ComponentView]) =
     if(singleRef){
       if(useNewEffectOnStore) new NewEffectOn(t, cv, nextNewViews)()
-      else new SingleRefEffectOn(t, cv, nextNewViews)()
+      else ??? // new SingleRefEffectOn(t, cv, nextNewViews)()
     }
     else new EffectOn(t, cv, nextNewViews)()
 
@@ -251,7 +251,7 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
     transitionShardIteratorProducer = newTransitions.shardIteratorProducer
     if(singleRef){
       if(useNewEffectOnStore) NewEffectOn.prepareForPurge 
-      else SingleRefEffectOn.prepareForPurge
+      else ??? // SingleRefEffectOn.prepareForPurge
     }
   }
 
@@ -282,7 +282,7 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
 
     // Purges from the effectOnStore
     if(singleRef){
-      if(useNewEffectOnStore) NewEffectOn.purge else SingleRefEffectOn.purge
+      if(useNewEffectOnStore) NewEffectOn.purge else ??? // SingleRefEffectOn.purge
     }
 
     // Collectively copy views
