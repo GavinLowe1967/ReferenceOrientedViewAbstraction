@@ -2,6 +2,23 @@ package ViewAbstraction
 
 import ox.gavin.profiling.Profiler
 
+/** The interface of a Transition, as seen by a ComponentView. */
+trait TransitionT{
+  /* This represents the transition pre -e-> post. */
+  val pre: Concretization
+  val e: EventInt
+  val post: Concretization
+
+  /** The servers in the pre-state. */
+  def preServers = pre.servers
+
+  /** Perform a memory profile. */
+  def memoryProfile: Unit
+
+}
+
+// =======================================================
+
 /** A component-centric view.
   * @param servers the states of the servers
   * @param components the components, with the principal component state first.
@@ -19,10 +36,10 @@ class ComponentView(servers: ServerStates, components: Array[State])
 
   /** This view was created by the view transition creationTrans post. */
   // private var pre, post: Concretization = null
-  private var creationTrans: Transition = null
+  private var creationTrans: TransitionT = null
 
   /** record that this was created by the view transition trans. */
-  def setCreationTrans(trans: Transition) = synchronized{
+  def setCreationTrans(trans: TransitionT) = synchronized{
     require(creationTrans == null && creationIngredients == null)
     creationTrans = trans
   }
@@ -33,7 +50,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * mkExtendedPre(trans.pre, cpts, cv) -trans.e-> mkExtendedPost.  We lazily
     * avoid creating these concretizations until needed. */ 
   private 
-  var creationIngredients: (Transition, Array[State], ComponentView) = null
+  var creationIngredients: (TransitionT, Array[State], ComponentView) = null
 
   /** Get the creation information for this. */
   def getCreationInfo: (Concretization, EventInt, Concretization) = synchronized{
@@ -65,7 +82,7 @@ class ComponentView(servers: ServerStates, components: Array[State])
     * mkExtendedPre(trans.pre, cpts, cv) -trans.e-> 
     * mkExtendedPost(trans.post, newCpts).   */
   def setCreationInfoIndirect(
-    trans: Transition, cpts: Array[State], cv: ComponentView)
+    trans: TransitionT, cpts: Array[State], cv: ComponentView)
   = synchronized{
     require(creationTrans == null && creationIngredients == null)
     creationIngredients = (trans, cpts, cv)

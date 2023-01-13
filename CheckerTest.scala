@@ -27,7 +27,7 @@ class CheckerTest(system: SystemP.System, numWorkers: Int)
       val trans = new Transition(pre, e, post)
       if(singleRef){
         if(useNewEffectOnStore) new NewEffectOn(trans, cv, nextNewViews)()
-        else new SingleRefEffectOn(trans, cv, nextNewViews)()
+        else ??? // new SingleRefEffectOn(trans, cv, nextNewViews)()
       }
       else new EffectOn(trans, cv, nextNewViews)()
     }

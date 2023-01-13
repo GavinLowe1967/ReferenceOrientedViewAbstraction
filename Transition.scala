@@ -4,12 +4,11 @@ import ox.gavin.profiling.Profiler
 
 /** A transition, representing pre -e-> post. */
 class Transition(
-  val pre: Concretization, val e: EventInt, val post: Concretization){
+  val pre: Concretization, val e: EventInt, val post: Concretization)
+extends TransitionT{
 
   Profiler.count("Transition")
 
-  /** The servers in the pre-state. */
-  def preServers = pre.servers
 
   /** Do the servers change state? */
   def changedServers = preServers != post.servers
@@ -26,34 +25,8 @@ class Transition(
     csbb
   }
 
-  // private val changedStateBitMap = { 
-  //   val changedStateBitMap = new Array[Boolean](cptsLength); var i = 0
-  //   while(i < cptsLength){
-  //     changedStateBitMap(i) = pre.components(i) != post.components(i); i += 1
-  //   }
-  //   changedStateBitMap
-  // }
-
   def changedStateBitMap(i: Int) = ByteBitMap.get(changedStateBitMapB, i)
 
-/*
-  /** Bit map indicating which components have changed state, stored as an
-    * Int. */
-  private val changedStateBits: Int = {
-    var csb = 0; var mask = 1; var i = 0
-    while(i < cptsLength){
-      if(pre.components(i) != post.components(i)) csb += mask
-      mask += mask; i += 1
-    }
-    csb
-  }
- */
-
-  /** Has component i changed state? */
-  //def changedStateBitMap(i: Int) = (changedStateBits | (1 << i)) != 0
-
-  /** The control states of pre. */
-  //private val preCptCS: Array[ControlState] = pre.components.map(_.cs)
 
   /** The control states in pre of components that change state. */
   val changingCptCS: Array[ControlState] = {

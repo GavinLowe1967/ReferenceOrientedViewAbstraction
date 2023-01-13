@@ -188,7 +188,7 @@ class Debugger(
       //   EffectOn.getCrossRefs(servers, cv1.components, pre.components)
       // println("crossRefs = "+crossRefs.map(StateArray.show))
       val missing: Array[ComponentView] =
-        SingleRefEffectOn.getCrossRefs(servers, cpts1, preCpts)
+        NewEffectOn.getCrossRefs(servers, cpts1, preCpts)
           .map(new ComponentView(servers, _))
       if(missing.isEmpty) println("No cross reference views.")
       else{
@@ -275,5 +275,9 @@ object Debugger{
   // Sub-view symbols
   private val Sqle = '\u2291' // ⊑
   private val Sqge = '\u2292' // ⊒
+
+
+
+
 
 }

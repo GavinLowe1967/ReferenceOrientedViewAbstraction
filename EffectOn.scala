@@ -7,7 +7,7 @@ import scala.collection.mutable.{ArrayBuffer}
 
 /** Object to calculate the effect of the transition trans on cv.  Create
   * extra views caused by the way the transition changes cv, and add them to
-  * nextNewViews. */
+  * nextNewViews.   */
 class EffectOn(
   trans: Transition, cv: ComponentView, nextNewViews: MyHashSet[ComponentView])
 {
@@ -19,6 +19,7 @@ class EffectOn(
    * |  |--getCrossRefs
    * |  |--processInducedInfo
    */
+
 
   import Unification.UnificationList //  = List[(Int,Int)]
   import EffectOnUnification.InducedInfo
@@ -50,8 +51,6 @@ class EffectOn(
   }
   
   import EffectOn.views
-
-  //protected var sreou: SingleRefEffectOnUnification = null
 
   /** The effect of the transition t on cv.  Create extra views caused by the
     * way the transition changes cv, and add them to nextNewViews. */
@@ -118,7 +117,7 @@ class EffectOn(
     Profiler.count("addedViewCount")
     if(showTransitions || ComponentView0.highlight(nv))
       showTransition(cpts, newComponents, nv, unifs)
-    nv.setCreationInfoIndirect(trans, cpts, cv) // , newComponents)
+    nv.setCreationInfoIndirect(trans, cpts, cv)
     checkRepresentable(nv)
   }
 

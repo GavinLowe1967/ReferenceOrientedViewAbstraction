@@ -276,7 +276,7 @@ class CheckerState(system: SystemP.System, initViewSet: ViewSet){
     }
     // Thread 1 maybe does a garbage collection
 // IMPROVE: and with newEffectOnStore
-    else if(me == 1 && doGC && ply%4 == 0 && SingleRefEffectOn.doPurge){
+    else if(me == 1 && doGC && ply%4 == 0 && NewEffectOn.doPurge){
       print("Garbage collection..."); java.lang.System.gc(); println(".  Done.")
     }
 

@@ -78,7 +78,7 @@ $(DIR)/ComponentView0.class: $(DIR)/View.class $(DIR)/IdentitiesBitMap.class	\
   $(COLLDIR)/MyHashSet.class $(DIR)/ServersReducedMap.class			\
   $(COLLDIR)/OpenHashMap.class
 
-$(DIR)/ComponentView.class: $(DIR)/ComponentView0.class $(DIR)/Transition.class
+$(DIR)/ComponentView.class: $(DIR)/ComponentView0.class 
 
 $(DIR)/TestStates.class: $(DIR)/MyStateMap.class
 
@@ -106,7 +106,7 @@ $(DIR)/SingleRefEffectOnUnificationTest2.class: $(DIR)/SingleRefEffectOnUnificat
 
 $(DIR)/SingleRefEffectOnUnificationTest.class: $(DIR)/SingleRefEffectOnUnification.class $(DIR)/SingleRefEffectOnUnificationTest2.class
 
-$(DIR)/Transition.class: $(DIR)/ComponentView0.class # $(DIR)/Unification.class 
+$(DIR)/Transition.class: $(DIR)/ComponentView.class # $(DIR)/Unification.class 
 # $(DIR)/SystemP/System.class
 
 $(DIR)/TransitionSet.class $(DIR)/NewTransitionSet.class: $(DIR)/Transition.class $(DIR)/ComponentView.class
@@ -165,11 +165,10 @@ $(DIR)/EffectOnUnification.class:  $(DIR)/Unification.class
 
 $(DIR)/EffectOn.class: $(DIR)/EffectOnUnification.class $(DIR)/ViewSet.class $(DIR)/EffectOnStore.class $(DIR)/SystemP/System.class
 
-$(DIR)/SingleRefEffectOn.class: $(DIR)/EffectOn.class			\
-   $(DIR)/EffectOnStore.class $(DIR)/SingleRefEffectOnUnification.class
+# $(DIR)/SingleRefEffectOn.class: $(DIR)/EffectOn.class			\
+#    $(DIR)/EffectOnStore.class $(DIR)/SingleRefEffectOnUnification.class
 
-$(DIR)/NewEffectOn.class: $(DIR)/SingleRefEffectOn.class	\
-  $(DIR)/NewEffectOnStore.class
+$(DIR)/NewEffectOn.class:  $(DIR)/NewEffectOnStore.class
 
 # Extending of transition templates
 
@@ -191,10 +190,9 @@ $(DIR)/TransitionTemplateExtender.class: $(DIR)/Transition.class	\
 
 $(DIR)/Debugger.class: $(DIR)/SystemP/System.class $(DIR)/EffectOn.class $(DIR)/NewEffectOn.class
 
-$(DIR)/CheckerState.class: $(DIR)/TransitionSet.class		\
-  $(DIR)/NewTransitionSet.class $(DIR)/Unification.class	\
-  $(DIR)/SingleRefEffectOn.class $(DIR)/NewEffectOn.class	\
-  $(DIR)/TransitionTemplateExtender.class
+$(DIR)/CheckerState.class: $(DIR)/TransitionSet.class			\
+  $(DIR)/NewTransitionSet.class $(DIR)/Unification.class		\
+  $(DIR)/NewEffectOn.class $(DIR)/TransitionTemplateExtender.class
 
 $(DIR)/Checker.class: $(DIR)/CheckerState.class $(DIR)/Debugger.class	\
   $(DIR)/Barrier.class $(DIR)/Concurrency.class
