@@ -157,7 +157,9 @@ $(DIR)/InducedTransitionInfo.class:  $(DIR)/ComponentView.class \
 $(DIR)/MissingCrossReferences.class: $(DIR)/InducedTransitionInfo.class \
   $(DIR)/ViewSet.class  $(DIR)/RemappingExtender.class
 
-$(DIR)/MissingCommonFactory.class: $(DIR)/MissingCommon.class
+$(DIR)/SimpleMissingCommon.class: $(DIR)/MissingCommon.class
+
+$(DIR)/MissingCommonFactory.class: $(DIR)/SimpleMissingCommon.class
 
 $(DIR)/MissingCommonWrapper.class: $(DIR)/MissingCommonFactory.class $(DIR)/MissingCrossReferences.class
 

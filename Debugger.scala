@@ -207,8 +207,8 @@ class Debugger(
         for(pid <- commonMissing){
           // All states instantiating pid compatible with pre.  Note, using
           // cpts1(0) here would be wrong, since it's not in normal form.
-          val insts =
-            MissingCommon.allInstantiations(servers, prePrinc, pid, sysAbsViews)
+          val insts = MissingCommonFactory.allInstantiations(
+            servers, prePrinc, pid, sysAbsViews)
           // println("Possible states for "+getScriptName(pid)+
           //   s" with $prePrinc: "+insts.mkString(", "))
           for(c <- insts){

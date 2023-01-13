@@ -3,7 +3,9 @@ package ViewAbstraction
 import scala.collection.mutable.ArrayBuffer
 import ox.gavin.profiling.Profiler
 
+/** Object to create MissingCommons. */
 object MissingCommonFactory{
+  // ======================================= Storing of previous MissingCommons.
 
   private type Cpts = Array[State]
 
@@ -45,6 +47,8 @@ object MissingCommonFactory{
   private def setOrGet(key: Key, mc: MissingCommon) = 
     allMCs.getOrElseUpdate(key, mc)
 
+  // ======================================================= Main function
+
   /** A MissingCommon object, corresponding to servers, cpts1, cpts2 and pid, or
     * null if the obligation is already satisfied.  Here cpts1 corresponds to
     * the pre-state of a transition, and cpts2 to the view acted upon.
@@ -70,12 +74,12 @@ object MissingCommonFactory{
         if(mc.done) null else mc 
       case None => 
         // IMPROVE: can we avoid creating the MissingCommon if it will be done?
-        val mc = new MissingCommon(servers, cpts1, cpts2, pid._1, pid._2)
+        val mc = new SimpleMissingCommon(servers, cpts1, cpts2, pid._1, pid._2)
         Profiler.count("new MissingCommon")
         val ab = new ArrayBuffer[Cpts]; val princ1 = cpts1(0); var found = false
         // All component states c with identity pid such that views contains
         // servers || princ1 || c
-        val cs = MissingCommon.allInstantiations(servers, princ1, pid, views); var i = 0
+        val cs = allInstantiations(servers, princ1, pid, views); var i = 0
         // Update mc for each
         while(i < cs.length && !found){
           val c = cs(i); i += 1
@@ -92,6 +96,22 @@ object MissingCommonFactory{
     }
   }
 
+  /** All component states cpt with identity pid such that views contains
+    * servers || princ || cpt.  Pre: servers || princ is in normal form. */
+  @inline def allInstantiations(
+    servers: ServerStates, princ: State, pid: ProcessIdentity, views: ViewSet)
+      : ArrayBuffer[State] = {
+    val ab = new ArrayBuffer[State]; val iter = views.iterator(servers, princ)
+    while(iter.hasNext){
+      val cv = iter.next(); val cpts = cv.components;
+      assert(cpts.length == 2, cv); val cpt = cpts(1)
+      if(cpt.hasPID(pid)) ab += cpt
+    }
+    ab
+  }
+
+  // ======================================================= Purging
+
   private var shardIteratorProducer: 
        ShardedHashMap.ShardIteratorProducerT[Key, MissingCommon] = null
 
@@ -107,6 +127,8 @@ object MissingCommonFactory{
       shardIterator = shardIteratorProducer.get
     }
   }
+
+  // ================================================Administrative functions
 
   def allMCsSize = allMCs.size
 
