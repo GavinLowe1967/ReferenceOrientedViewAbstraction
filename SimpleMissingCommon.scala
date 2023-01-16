@@ -3,7 +3,6 @@ package ViewAbstraction
 import ViewAbstraction.RemapperP.Remapper
 import MissingCommon.Cpts // = Array[State]
 
-
 import scala.collection.mutable.ArrayBuffer
 
 /** The representation of the obligation to find a component state c with
@@ -16,8 +15,7 @@ import scala.collection.mutable.ArrayBuffer
   * corresponds to the pre-state of a transition, and cpts2 to the view acted
   * upon. */
 class SimpleMissingCommon(
-  val servers: ServerStates, val cpts1: Cpts, val cpts2: Cpts,
-  val family: Int, val id: Int)
+  val servers: ServerStates, cpts1: Cpts, cpts2: Cpts, family: Int, id: Int)
     extends MissingCommon{
 
   // assert(cpts1.eq(StateArray(cpts1))); assert(cpts2.eq(StateArray(cpts2)))
@@ -80,19 +78,19 @@ class SimpleMissingCommon(
    * the current ply.  The MissingInfo object containing this object will be
    * registered against those first elements in the EffectOnStore. */
 
-  import MissingCommon.{DoneMask,CountedMask}
+  //import MissingCommon.{DoneMask,CountedMask}
 
-  /** Variable encapsulating some flags. */
-  private var flags = 0
+  // /** Variable encapsulating some flags. */
+  // private var flags = 0
 
-  /** Is this constraint satisfied? */
-  @inline private def isDone = (flags & DoneMask) != 0
+  // /** Is this constraint satisfied? */
+  // @inline private def isDone = (flags & DoneMask) != 0
 
-  /** Record that this constraint is satisfied. */
-  @inline private def setDoneFlag = flags = (flags | DoneMask)
+  // /** Record that this constraint is satisfied. */
+  // @inline private def setDoneFlag = flags = (flags | DoneMask)
 
-  /** Is this constraint satisfied? */
-  @inline def done = synchronized{ isDone }
+  // /** Is this constraint satisfied? */
+  // @inline def done = synchronized{ isDone }
 
   // Log for debugging
   // import MissingCommon.{MCEvent, AddMC, UpdateMC, SetDoneMC,
@@ -120,6 +118,14 @@ class SimpleMissingCommon(
   @inline private 
   def removeViews(mc: MissingComponents, views: ViewSet, toRegister: CptsBuffer)
       : MissingComponents = {
+    val mc1 = remove(mc, views)
+    if(mc1 == null) setDone    // This is now satisfied
+    else if(mc != mc1) toRegister += mc1(0)   
+    // If unchanged, no need to re-register (???).
+    mc1
+
+
+/*
     // For simplicity, we convert to a List, and back to an Array at the end.
     // This could be improved.
     var mc1 = mc.toList
@@ -128,6 +134,7 @@ class SimpleMissingCommon(
     if(mc1.isEmpty) setDone    // This is now satisfied
     else toRegister += mc1.head
     mc1.toArray
+ */
   }
 
   /** Update missingCandidates based on views.  Remove elements of views from
@@ -145,8 +152,9 @@ class SimpleMissingCommon(
       if(done){ assert(missingCandidates == null);  null }
       else{
         missingCandidates = newMC
-        assert(missingCandidates.isEmpty || toRegister.nonEmpty, 
-          s"updateMissingViews with\n${missingCandidates}")
+        // NOT TRUE
+        // assert(missingCandidates.isEmpty || toRegister.nonEmpty, 
+        //   s"updateMissingViews with\n${missingCandidates}")
         toRegister
       }
     }
@@ -331,15 +339,15 @@ class SimpleMissingCommon(
     i == mCpts.length-1
   }
 
-  /** Sanity check that no head element of missingCandidates is in views. */
-  def sanityCheck(views: ViewSet) = {
-    if(done) assert(missingCandidates.isEmpty, 
-      s"missingCandidates = \n"+missingCandidates.mkString("\n"))
-    else for(mcs <- missingCandidates){
-      val v = new ComponentView(servers, mcs.head)
-      assert(!views.contains(v), s"\n$this\n  still contains $v")
-    }
-  }
+  // /** Sanity check that no head element of missingCandidates is in views. */
+  // def sanityCheck(views: ViewSet) = {
+  //   if(done) assert(missingCandidates.isEmpty, 
+  //     s"missingCandidates = \n"+missingCandidates.mkString("\n"))
+  //   else for(mcs <- missingCandidates){
+  //     val v = new ComponentView(servers, mcs.head)
+  //     assert(!views.contains(v), s"\n$this\n  still contains $v")
+  //   }
+  // }
 
   override def toString = 
     s"MissingCommon($servers, ${StateArray.show(cpts1)},\n"+
@@ -351,50 +359,50 @@ class SimpleMissingCommon(
   /* Note: we avoid creating duplicates of MissingCommon objects, so we can use
    * object equality. */
 
-  /** Ordering on MissingCommon values.  Return a value x s.t.: x < 0 if this <
-    * that; x == 0 when this == that; x > 0 when this > that. */
-  def compare(that: MissingCommon) = {
-    // Note: refers only to parameters, so locking not necessary.
-    /* The following makes comparison more efficient, but makes the ordering
-     * nondeterministic (varying from one run to another), and so makes the
-     * final sizes of the stores nondeterministic.
-    val hashComp = compareHash(hashCode, that.hashCode)
-    if(hashComp != 0) hashComp
-    else{ */
-    val ssComp = servers.compare(that.servers)
-    if(ssComp != 0) ssComp
-    else{
-      val cmp1 = StateArray.compare(cpts1, that.cpts1)
-      if(cmp1 != 0) cmp1
-      else{
-        val cmp2 = StateArray.compare(cpts2, that.cpts2)
-        if(cmp2 != 0) cmp2
-        else{
-          val familyDiff = family - that.family // pid._1 - that.pid._1
-          if(familyDiff != 0) familyDiff
-          else id - that.id //  pid._2 - that.pid._2
-        }
-      }
-    }
-  }
+  // /** Ordering on MissingCommon values.  Return a value x s.t.: x < 0 if this <
+  //   * that; x == 0 when this == that; x > 0 when this > that. */
+  // def compare(that: MissingCommon) = {
+  //   // Note: refers only to parameters, so locking not necessary.
+  //   /* The following makes comparison more efficient, but makes the ordering
+  //    * nondeterministic (varying from one run to another), and so makes the
+  //    * final sizes of the stores nondeterministic.
+  //   val hashComp = compareHash(hashCode, that.hashCode)
+  //   if(hashComp != 0) hashComp
+  //   else{ */
+  //   val ssComp = servers.compare(that.servers)
+  //   if(ssComp != 0) ssComp
+  //   else{
+  //     val cmp1 = StateArray.compare(cpts1, that.cpts1)
+  //     if(cmp1 != 0) cmp1
+  //     else{
+  //       val cmp2 = StateArray.compare(cpts2, that.cpts2)
+  //       if(cmp2 != 0) cmp2
+  //       else{
+  //         val familyDiff = family - that.family // pid._1 - that.pid._1
+  //         if(familyDiff != 0) familyDiff
+  //         else id - that.id //  pid._2 - that.pid._2
+  //       }
+  //     }
+  //   }
+  // }
 
-  /** Has this been counted for profiling purposes? */
-  @inline private def counted = (flags & CountedMask) != 0
+  // /** Has this been counted for profiling purposes? */
+  // @inline private def counted = (flags & CountedMask) != 0
 
-  /** Record that this has been counted. */
-  @inline private def setCounted = flags = (flags | CountedMask)
+  // /** Record that this has been counted. */
+  // @inline private def setCounted = flags = (flags | CountedMask)
 
-  /** A measure of the size of this: the number of ComponentViews stored.  If
-    * size has already been called, then return 0 to avoid double-counting. */
-  def size = {
-    if(counted || missingCandidates == null) 0
-    else{
-      setCounted; var i = 0; var size = 0
-      while(i < missingCandidates.length){
-        size += missingCandidates(i).length; i += 1
-      }
-      size
-    }
-  }
+  // /** A measure of the size of this: the number of ComponentViews stored.  If
+  //   * size has already been called, then return 0 to avoid double-counting. */
+  // def size = {
+  //   if(counted || missingCandidates == null) 0
+  //   else{
+  //     setCounted; var i = 0; var size = 0
+  //     while(i < missingCandidates.length){
+  //       size += missingCandidates(i).length; i += 1
+  //     }
+  //     size
+  //   }
+  // }
 }
 

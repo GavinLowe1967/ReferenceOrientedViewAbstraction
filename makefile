@@ -159,7 +159,9 @@ $(DIR)/MissingCrossReferences.class: $(DIR)/InducedTransitionInfo.class \
 
 $(DIR)/SimpleMissingCommon.class: $(DIR)/MissingCommon.class
 
-$(DIR)/MissingCommonFactory.class: $(DIR)/SimpleMissingCommon.class
+$(DIR)/TwoStepMissingCommon.class: $(DIR)/MissingCommon.class
+
+$(DIR)/MissingCommonFactory.class: $(DIR)/SimpleMissingCommon.class $(DIR)/TwoStepMissingCommon.class
 
 $(DIR)/MissingCommonWrapper.class: $(DIR)/MissingCommonFactory.class $(DIR)/MissingCrossReferences.class
 

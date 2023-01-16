@@ -5,17 +5,58 @@ import ox.gavin.profiling.Profiler
 import scala.collection.mutable.ArrayBuffer
 import MissingCommon.Cpts // = Array[State]
 
-trait MissingCommon{
+/** The representation of the obligation to find a component state c with
+  * identity pid = (family,id) such that (1) servers || cpts1(0) || c is in
+  * the ViewSet; (2) servers || cpts2(0) || c is in the ViewSet; (3) if c has
+  * a reference to a secondary component c2 of cpts1 or cpts2, or vice versa,
+  * then servers || c || c2 is in ViewSet (modulo renaming).  This corresponds
+  * to condition (c) in the definition of induced transitions with restricted
+  * views, for a common missing component with identity pid.  Here cpts1
+  * corresponds to the pre-state of a transition, and cpts2 to the view acted
+  * upon. */
+abstract class MissingCommon{
   import MissingCommon.CptsBuffer // = ArrayBuffer[Cpts]
 
+  import MissingCommon.MissingComponents // = Array[Cpts]
+
   val servers: ServerStates 
-  val cpts1: Cpts
-  val cpts2: Cpts
-  val family: Int
-  val id: Int
+  //val cpts1: Cpts
+  //val cpts2: Cpts
+  //val family: Int
+  //val id: Int
+
+  import MissingCommon.{DoneMask,CountedMask}
+
+  /** Variable encapsulating some flags. */
+  private var flags = 0
 
   /** Is this constraint satisfied? */
-  def done: Boolean  
+  @inline private def isDone = (flags & DoneMask) != 0
+
+  /** Record that this constraint is satisfied. */
+  @inline protected def setDoneFlag = flags = (flags | DoneMask)
+
+  /** Is this constraint satisfied? */
+  @inline def done = synchronized{ isDone }
+
+  /** The result of removing the longest prefix of mc such that views contains
+    * the corresponding components, with servers.  Or return null if all are
+    * in views. */
+  @inline protected def remove(mc: MissingComponents, views: ViewSet)
+      : MissingComponents = {
+    var i = 0; val len = mc.length
+    while(i < len && views.contains(servers, mc(i))) i += 1
+    if(i == 0) mc
+    else if(i == len) null
+    else{
+      // Copy mc[i..len) into result
+      val result = new Array[Cpts](len-i); var j = 0
+      // Inv: result[0..j) = mc[i0..i) where i0 is value of i at start of this
+      // stage
+      while(i < len){ result(j) = mc(i); j += 1; i += 1 }
+      result
+    }
+  }
 
   /** The heads of the missing candidates.  The corresponding MissingInfo should
     * be registered against these in EffectOnStore.mcNotDoneStore. */
@@ -77,6 +118,10 @@ object MissingCommon{
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State], c: State)
       : ArrayBuffer[Array[State]] = {
     val ab = new ArrayBuffer[Array[State]]
+    getRequiredCpts(servers, cpts1, c, ab)
+    getRequiredCpts(servers, cpts2, c, ab)
+    ab
+/*
     /* Add the normalised version of cpts to ab. */
     @inline def add(cpts: Array[State]) = {
       // ComponentView0.checkValid(servers, cpts) // IMPROVE
@@ -107,7 +152,47 @@ object MissingCommon{
     }
     Profiler.count("MissingCommon.requiredCpts "+ab.length)
     ab
+ */
   } 
+
+  /** Those components that are required for common missing references to
+    * component c to/from cpts.  (1) From cpts(0) to c; (2) possibly from c to
+    * a secondary component of cpts; (3) possibly from a secondary component
+    * of cpts to c.  Add each to ab. */
+  @inline private def getRequiredCpts(
+    servers: ServerStates, cpts: Cpts, c: State, ab: ArrayBuffer[Cpts]) 
+  = {
+    @inline def add(cpts: Array[State]) = 
+      ab += Remapper.remapComponents(servers, cpts)
+
+    add(Array(cpts(0), c))
+    var j = 1
+    // Condition (3): refs from c to components of cpts
+    while(j < c.length){
+      if(c.includeParam(j)){
+        // Does c's jth parameter reference an element c1 of cpts?
+        val c1 = StateArray.find(c.processIdentities(j), cpts);
+        if(c1 != null) add(Array(c, c1))
+      }
+      j += 1
+    }
+    // Does any component of cpts reference c?
+    val (ct,cid) = c.componentProcessIdentity; j = 1
+    while(j < cpts.length){
+      val c1 = cpts(j); j += 1; 
+      if(c1.hasIncludedParam(ct, cid)) add(Array(c1, c))
+    }
+  }
+
+
+  /** Those components that are required for common missing references to
+    * component c to/from cpts.  (1) From cpts(0) to c; (2) possibly from c to
+    * a secondary component of cpts; (3) possibly from a secondary component
+    * of cpts to c.   */
+  @inline def getRequiredCpts(servers: ServerStates, cpts: Cpts, c: State)
+      : ArrayBuffer[Cpts] = {
+    val ab = new ArrayBuffer[Cpts]; getRequiredCpts(servers, cpts, c, ab); ab
+  }
 
   // Possible returns from compare
   val Eq = 0; val Sub = 1; 
