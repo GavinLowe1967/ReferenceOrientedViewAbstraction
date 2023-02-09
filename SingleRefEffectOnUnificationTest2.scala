@@ -83,12 +83,23 @@ object SingleRefEffectOnUnificationTest2{
       Array(getDatumSt(T1,N1,N4), aNode(N1,N3)),
       Array(getDatumSt(T1,N1,N5), aNode(N1,N3)),
     )
+    //println(result.map(tuple => Remapper.show(tuple._1)).mkString(";;"))
     assert(result.length == expected.length)
+    // Apply each map in result to cv.components
+    val nextArg = Array(4,1)
+    val resultApplied = result.map(tuple => {
+      val mapR = tuple._1; Remapper.mapUndefinedToFresh(mapR, nextArg)
+      applyRemapping(mapR, cv.components)
+    })
+    //println(resultApplied.map(StateArray.show).mkString("; "))
     for(exp <- expected) 
-      assert(result.exists(tuple => {
-        val states = applyRemapping(tuple._1, cv.components)
-        exp.sameElements(states/*tuple._2*/)
-      }))
+      assert(resultApplied.exists(states => exp.sameElements(states)), 
+        exp.mkString("(",",",")"))
+      // assert(result.exists(tuple => {
+      //   val mapR = tuple._1; Remapper.mapUndefinedToFresh(mapR, nextArg)
+      //   val states = applyRemapping(mapR, cv.components)
+      //   exp.sameElements(states/*tuple._2*/)
+      // }), exp.mkString("(",",",")") )
     assert(result1.isEmpty)
   }
 

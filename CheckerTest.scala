@@ -46,7 +46,7 @@ class CheckerTest(system: SystemP.System, numWorkers: Int)
       ply = 2
       effectOn(pre, 1, post, mkCV(servers0, initNode(N0), Array()))
       effectOn(pre, 1, post, mkCV(servers0, aNode(N1, Null), Array()))
-      // println(nextNewViews.mkString("\n"))
+      // println(nextNewViews.iterator.mkString("\n"))
       assert(nextNewViews.size == 2)
       assert(nextNewViews(new ComponentView(servers1, initNode(N0), Array())))
       assert(nextNewViews(new ComponentView(servers1, aNode(N0, Null), Array())))
@@ -113,10 +113,11 @@ class CheckerTest(system: SystemP.System, numWorkers: Int)
       // println("\n"+nextNewViews.mkString("\n"))
       // The two bNodes unify
       assert(nextNewViews.contains(
-        new ComponentView(serversB1, Array(pushSt(T1,N0), bNode(N0,N1)))))
+        new ComponentView(serversB1, pushSt(T1,N0), Array(bNode(N0,N1)))))
+        // new ComponentView(serversB1, StateArray(Array(pushSt(T1,N0), bNode(N0,N1))))))
       // No unification
       assert(nextNewViews.contains(
-        new ComponentView(serversB1, Array(pushSt(T1,N1), bNode(N1,N2)))))
+        new ComponentView(serversB1, pushSt(T1,N1), Array(bNode(N1,N2)))))
       assert(nextNewViews.size == 6)
     }
 
@@ -131,7 +132,7 @@ class CheckerTest(system: SystemP.System, numWorkers: Int)
         Array(setTopB(T0,N0), bNode(N0,Null)))
       // Principal unifies with principal.  But we don't look for that if
       // !singleRef.
-      val cv1 = new ComponentView(servers1, Array(initNodeSt(T0,Null)))
+      val cv1 = new ComponentView(servers1, initNodeSt(T0,Null), Array())
 
       //val map0 = servers1.remappingMap1(cv1.getParamsBound)
       val unifs = Unification.allUnifs(pre, cv1) // .components)
@@ -148,18 +149,18 @@ class CheckerTest(system: SystemP.System, numWorkers: Int)
       // assert(nextNewViews.size == 1)
 
       // Principal unifies with secondary component.
-      val cv2 = new ComponentView(servers1, Array(initNode(N0)))
+      val cv2 = new ComponentView(servers1, initNode(N0))
       effectOn(pre, 1, post, cv2)        
       //println("\n"+nextNewViews.mkString("\n"))
       // With unification
       assert(nextNewViews.contains(
-        new ComponentView(servers1, Array(bNode(N0,Null)))))
+        new ComponentView(servers1, bNode(N0,Null))))
       // Without unification -- not included
       // assert(nextNewViews.contains(
       //   new ComponentView(servers1, Array(initNode(N0)))))
       assert(nextNewViews.size == 1)
 
-      val cv3 = new ComponentView(servers1, Array(aNode(N0,Null))) 
+      val cv3 = new ComponentView(servers1, aNode(N0,Null)) 
       effectOn(pre, 1, post, cv3)        
       //println("\n"+nextNewViews.mkString("\n"))
       // Without unification -- not included
@@ -188,7 +189,7 @@ class CheckerTest(system: SystemP.System, numWorkers: Int)
       //println(nextNewViews.iterator.mkString("\n"))
       for(x <- List(N1, N3, N4))
         assert(nextNewViews.contains(new ComponentView(servers0, 
-          Array(dNode(N0,N1,N2), bNode(N1,N3), cNode(N2,x)) )))
+          dNode(N0,N1,N2), Array(bNode(N1,N3), cNode(N2,x)) )))
       assert(nextNewViews.size == 3)
     }
 

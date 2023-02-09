@@ -165,6 +165,7 @@ object VA{
       case "--doSanityCheck" => doSanityCheck = true; i += 1
       case "--reportEffectOn" => reportEffectOn = true; i += 1
       case "--useOldReferencingViews" => useNewReferencingViews = false; i += 1
+      case "--useTwoStepMC" => useTwoStepMC = true; i += 1
       //case "--useNewEffectOnStore" => useNewEffectOnStore = true; i += 1
       // case "--lazyNewEffectOnStore" => 
       //   useNewEffectOnStore = true; lazyNewEffectOnStore = true; i += 1
@@ -221,7 +222,7 @@ object VA{
     }
     finally{ if(system != null) system.finalise }
  
-    profileReport
+    if(!testing) profileReport
     if(!timing) println("goodbye")
   }
 

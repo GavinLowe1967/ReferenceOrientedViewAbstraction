@@ -12,23 +12,24 @@ object MissingCommonFactory{
   /** Type of keys for storing MissingCommons. */
   private class Key(
     val ssIndex: Int, val cpts1: Array[State], val cpts2: Array[State],
-    val pf: Int, val pId: Int
+    val pf: Int, val pId: Int, val simple: Boolean
   ){
     override def hashCode = {
       val h1 = StateArray.mkHash1((ssIndex*71+pf)*71+pId, cpts1)
-      StateArray.mkHash1(h1, cpts2)
+      2*StateArray.mkHash1(h1, cpts2) + (if(simple) 0 else 1)
     }
 
     override def equals(that: Any) = that match{
       case key: Key => 
+        key.simple == simple && 
         key.ssIndex == ssIndex && key.pf == pf && key.pId == pId &&
         key.cpts1.sameElements(cpts1) && key.cpts2.sameElements(cpts2)
     }
   }
 
-  private def mkKey(
-    servers: ServerStates, cpts1: Cpts, cpts2: Cpts, pid: ProcessIdentity) = 
-    new Key(servers.index, cpts1, cpts2, pid._1, pid._2)
+  private def mkKey(servers: ServerStates, cpts1: Cpts, cpts2: Cpts,
+      pid: ProcessIdentity, simple: Boolean) =
+    new Key(servers.index, cpts1, cpts2, pid._1, pid._2, simple)
 
   import ViewAbstraction.collection.ShardedHashMap
 
@@ -60,21 +61,27 @@ object MissingCommonFactory{
     * secondary component c2 of cpts1 or cpts2, then servers || c || c2
     * (renamed).
     * 
+    * If simple, a SimpleMissingCommon object is returned; otherwise a
+    * TwoStepMissingCommon object.
+    * 
     * Pre: servers || cpts1 is in normal form.
     */
   def makeMissingCommon(
     servers: ServerStates, cpts1: Cpts, cpts2: Cpts, 
-    pid: ProcessIdentity, views: ViewSet)
+    pid: ProcessIdentity, views: ViewSet, simple: Boolean)
       : MissingCommon = {
     require(singleRef && cpts2.length == 2, StateArray.show(cpts2))
-    val key = mkKey(servers, cpts1, cpts2, pid)
+    val key = mkKey(servers, cpts1, cpts2, pid, simple)
     getMC(key) match{
       case Some(mc) => 
         Profiler.count("old MissingCommon")
         if(mc.done) null else mc 
       case None => 
+        val (f,id) = pid
         // IMPROVE: can we avoid creating the MissingCommon if it will be done?
-        val mc = new SimpleMissingCommon(servers, cpts1, cpts2, pid._1, pid._2)
+        val mc: MissingCommon = 
+          if(simple) new SimpleMissingCommon(servers, cpts1, cpts2, f, id)
+          else new TwoStepMissingCommon(servers, cpts1, cpts2, f, id)
         Profiler.count("new MissingCommon")
         val ab = new ArrayBuffer[Cpts]; val princ1 = cpts1(0); var found = false
         // All component states c with identity pid such that views contains

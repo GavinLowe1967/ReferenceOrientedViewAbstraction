@@ -23,6 +23,22 @@ abstract class MissingCommon(
   import MissingCommon.MissingComponents // = Array[Cpts]
   import MissingCommon.{DoneMask,CountedMask}
 
+  // assert(cpts1.eq(StateArray(cpts1))); assert(cpts2.eq(StateArray(cpts2)))
+
+  /* Overview of main functions.
+   * 
+   * updateMissingViews       (called from MissingCommonWrapper; in subclasses)
+   * 
+   * updateWithNewMatch      (called from MissingCommonWrapper)
+   * |--updateMissingCandidates (also called from MissingCommonFactory)
+   *    |--Unification.remapToJoin
+   *    |--updateMissingCandidatesWith (in subclasses)
+   * 
+   * Other public functions: done, setDone, missingHeads
+   * 
+   * Used by subclasses: remove, unseen, matches
+   */
+
   @inline protected def pid = (family, id)
 
   @inline protected def princ1 = cpts1(0)
@@ -37,12 +53,19 @@ abstract class MissingCommon(
   @inline private def isDone = (flags & DoneMask) != 0
 
   /** Record that this constraint is satisfied. */
-  @inline protected def setDoneFlag = flags = (flags | DoneMask)
+  @inline private def setDoneFlag = flags = (flags | DoneMask)
 
   /** Is this constraint satisfied? */
   @inline def done = synchronized{ isDone }
 
-  def setDone: Unit
+  /** Record that this is now done.  Also clear data structures to reclaim
+    * memory. */
+  @inline def setDone: Unit = {
+    setDoneFlag; doneMissingCandidates = null; clear
+  }
+
+  /** Clear data structures used by subclasses, to reclaim memory. */
+  @inline protected def clear: Unit
 
   /** The result of removing the longest prefix of mc such that views contains
     * the corresponding components, with servers.  Or return null if all are
@@ -85,6 +108,63 @@ abstract class MissingCommon(
     missing.toArray.sortWith(StateArray.lessThan)
   }
 
+  /** Compare `mCpts` against the elements of `array`, to decide if `mCpts` is
+    * implied by any element of `array`, or vice versa.  Return a triple
+    * (`found`, `toRetain`, `count`) where: (1) `found` is true if any element
+    * of `array` is a subset of (or equal to) `mCpts` (so there is no need to
+    * store `mCpts`; (2) `toRetain` is a bitmap where `toRetain(i)` is true if
+    * `array(i)` is not a proper subset of `mCpts` (so should be retained);
+    * `count` is the number of elements of `array` to retain (so the number of
+    * trues in `toRetain`). */
+  // @inline protected def compareMissingComponents(
+  //   array: Array[MissingComponents], mCpts: MissingComponents)
+  //     : (Boolean, Array[Boolean], Int) = {
+  //   import MissingCommon.{Eq,Sub,Sup,Inc,compare}
+  //   val len = array.length; val toRetain = new Array[Boolean](len)
+  //   var count = 0; var i = 0; var found = false
+  //   while(i < len){
+  //     // Note: mCpts is local; this is locked; so neither mCpts nor mCpts1 can
+  //     // be mutated by a concurrent thread.
+  //     val mCpts1 = array(i); val cmp = compare(mCpts1, mCpts)
+  //     if(cmp != Sup){ toRetain(i) = true; count += 1 }
+  //     found ||= cmp == Sub || cmp == Eq; i += 1
+  //   }
+  //   (found, toRetain, count)
+  // }
+
+// IMPROVE: move to companion object.
+
+  /** Add `cpts` to `array`, if not a superset of any element there.  Remove any
+    * element of `array` that is a proper subset of `cpts`.  Return the
+    * resulting array (possibly `array`). */
+  @inline protected 
+  def addTo(array: Array[MissingComponents], cpts: MissingComponents)
+      : Array[MissingComponents] = {
+    import MissingCommon.{Eq,Sub,Sup,Inc,compare}
+    val len = array.length; val toRetain = new Array[Boolean](len)
+    var retainCount = 0; var i = 0; var found = false
+    while(i < len){
+      // Note: mCpts is local; this is locked; so neither mCpts nor mCpts1 can
+      // be mutated by a concurrent thread.
+      val mCpts1 = array(i); val cmp = compare(mCpts1, cpts)
+      if(cmp != Sup){ toRetain(i) = true; retainCount += 1 }
+      found ||= cmp == Sub || cmp == Eq; i += 1
+    }
+    // val (found, toRetain, retainCount) = compareMissingComponents(array, cpts)
+    if(!found || retainCount < array.length){
+      val newLen = if(found) retainCount else retainCount+1; assert(newLen > 0)
+      val newMC = new Array[MissingComponents](newLen); var j = 0; var i = 0
+      while(i < array.length){
+        if(toRetain(i)){ newMC(j) = array(i); j += 1 }
+        i += 1
+      } // end of while
+      assert(j == retainCount)
+      if(!found) newMC(retainCount) = cpts
+      newMC
+    } // end of if(!found ...)
+    else array // no change
+  }
+
   /** The heads of the missing candidates.  The corresponding MissingInfo should
     * be registered against these in EffectOnStore.mcNotDoneStore.  Defined in
     * subclasses. */
@@ -93,7 +173,7 @@ abstract class MissingCommon(
   /** Representation of the States for which
     * MissingCommon.updateMissingCandidates has been executed on this.  State
     * st is represented by st.index+1. */
-  protected var doneMissingCandidates = new collection.IntSet
+  private var doneMissingCandidates = new collection.IntSet
 
   /** Called by MissingCommon.updateMissingCandidates when updating this with
     * st.  Return true if this is the first such instance for st. */
@@ -145,23 +225,17 @@ abstract class MissingCommon(
       // All relevant renamings of cpt1: identity on params of servers and
       // princ1, but otherwise either to other params of cpts1 or cpts2, or to
       // fresh values.  
-      val renames = Unification.remapToJoin(servers, princ1, cpts1, cpts2, cpt1)
+      val renames = 
+        Unification.newRemapToJoin(servers, princ1, cpts1, cpts2, cpt1)
       var i = 0; var found = false
       while(i < renames.length && !found){
         val c = renames(i); i += 1
         if(true || isNewUMCRenamedState(c)){ // IMPROVE
           if(updateMissingCandidatesWith(c, views, vb)) found = true
-          // val missing = getMissingCandidates(c, views) 
-          // // Note: missing is compatible with StateArray, sorted
-          // if(missing.isEmpty) found = true 
-          // else{
-          //   // Note we have to register the corresponding MissingInfo against
-          //   // missing.head, whether or not the add succeeded, because this
-          //   // might be shared between MissingInfos.
-          //   add(missing); vb += missing.head 
-          // }
         }
       } // end of while loop
+// IMPROVE: can we do all the updateMissingCandidatesWith updates together?  
+// Each copies the arrays.
       found
     } // end of if isNewUMCState
     else{ 
@@ -169,7 +243,6 @@ abstract class MissingCommon(
       // re-register the MissingInfo object, because of sharing.  The
       // following might be a bit pessimistic.  IMPROVE: store the relevant
       // values from one instance to reuse in the next.
-      // log(UMCRepeat(cpt1))
 // IMPROVE: I think the commented-out code is better, but needs to deal with the
 // case that vb1 is null.  
 /*    val vb1 = updateMissingViews(views); assert(vb1 != null, this)
@@ -189,8 +262,14 @@ abstract class MissingCommon(
     if(!done){
       val cpt1 = cv.components(1); val vb = new CptsBuffer
       if(cpt1.hasPID(family,id)){
-        // Remap cpt1 to a normal form
-        val cpt1Norm = Remapper.remapWRT(servers, cpts1, cpts2, cpt1) 
+        // Remap cpt1 to a normal form.  This avoids repeating work for
+        // equivalent states within updateMissingCandidates.
+        // val cpt1Norm =  Remapper.remapWRT(servers, cpts1, cpts2, cpt1) 
+// I think the following is sound.  If so, simplify remapWRT
+        val cpt1Norm = Remapper.remapWRT(servers, Array(princ1), Array(), cpt1)
+// IMPROVE: if assertion below true, can simplify
+        assert(cpt1 == cpt1Norm, s"servers = $servers;\n"+
+            s"princ1 = $princ1; cpt1 = $cpt1; cpt1Norm = $cpt1Norm")
         if(updateMissingCandidates(cpt1Norm, views, vb)){ 
           //log(MissingCommon.UpdateWithNewMatchSuccess(cv, ply))
           setDone; null

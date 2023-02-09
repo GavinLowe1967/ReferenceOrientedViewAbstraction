@@ -137,15 +137,15 @@ object SystemTest{
     // }
     // Node about to be initiailised
     def test9 = {
-      println("test9")
+      // println("test9")
       val conc = 
         new Concretization(servers2, Array(initNodeSt(T0,N0), aNode(N0,N1)))
       val cv1 = new ComponentView(servers2, initNode(N1), Array())
       val e = system.fdrEvents.eventToInt("initNode.T0.N2.A.N0")
       val buff = csf.consistentStates(conc, (0,N2), e, cv1)
       // println("buff = "+buff.mkString("\n")+"XXX")
-      println(buff.map{ case (n,nexts) => 
-        n.toString+", "+nexts.mkString("(",",",")") }.mkString("\n"))
+      // println(buff.map{ case (n,nexts) => 
+      //   n.toString+", "+nexts.mkString("(",",",")") }.mkString("\n"))
       assert(buff.length == 1 && buff(0)._1 == initNode(N2) && 
         buff(0)._2.toList == List(aNode(N2,N0)))
     }
@@ -157,7 +157,7 @@ object SystemTest{
 
   /** Test system, assumed to correspond to test3.scala. */
   def test(system: System) = {
-    println("SystemTest")
+    println("=== SystemTest ===")
     consistentStatesTest(system)
   }
 

@@ -81,6 +81,7 @@ class MissingCommonWrapper(
     if(mc != null) mc.missingHeads else null 
   }
 
+
   /** Initialise the MissingCommon for the next common missing process identity,
     * if any.  If all are done, set mc = null.  */
   @inline private def advance(views: ViewSet) = {
@@ -90,7 +91,8 @@ class MissingCommonWrapper(
       val pid = commonMissingPids(pidsIndex)
       val newMC = MissingCommonFactory.makeMissingCommon(
         inducedTrans.servers, inducedTrans.preCpts, inducedTrans.cpts, 
-        pid, views)
+        pid, views, !useTwoStepMC)
+// IMPROVE: don't use TwoStep after first iteration
       if(newMC == null) pidsIndex += 1 else{ mc = newMC; done = true }
     }
     if(!done) mc = null
@@ -104,6 +106,8 @@ class MissingCommonWrapper(
 // ==================================================================
 
 object MissingCommonWrapper{
+  // Do we use two-step missing commons? 
+  // val UseTwoStep = true
 
   type Cpts = Array[State]
 

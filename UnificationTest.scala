@@ -9,7 +9,7 @@ object UnificationTest
   import TestUtils._
   import RemapperP.Remapper.{show,newRemappingMap,applyRemapping}
   // import RemapperP.RemapperTest.{emptyMap,checkMap}
-  import Unification.{unify,CombineResult,remapToJoin}
+  import Unification.{unify,CombineResult,remapToJoin,newRemapToJoin}
   import EffectOnUnification.MatchingTuple
 
   /** Adapt tests to new interface of EffectOnUinfication. */
@@ -196,7 +196,8 @@ object UnificationTest
       val post = 
         new Concretization(servers2, 
           Array(setTopB(T0,N0), bNode(N0,N1), bNode(N1,N3)) )
-      val cv = new ComponentView(servers0, Array(aNode(N0,N1), cNode(N1,Null)))
+      val cv = new ComponentView(servers0, 
+        StateArray(Array(aNode(N0,N1), cNode(N1,Null))))
       val buffer = combine(pre, post, cv)
       // Note, N2 in pre is ignored as it doesn't unify 
       // println(showBuffer(buffer))
@@ -339,6 +340,107 @@ object UnificationTest
     singleRef = false
   }
 
+  /** Test of newRemapToJoin. */
+  def newRemapToJoinTest = {
+    println("== newRemapToJoinTest ==")
+
+    def test1 = {
+      //println("= test1 =")
+      val result = 
+        newRemapToJoin(servers2, pushSt(T0,N1), 
+          Array(pushSt(T0,N1)),  Array(popSt(T1,N1,N2)), aNode(N1,N3))
+      // println(result.mkString("; "))
+      // N1 -> N1,  N3 -> N2|N3(fresh)
+      assert(result.contains(aNode(N1,N2)) && result.contains(aNode(N1,N3)) &&
+        result.length == 2)
+    }
+
+    def test2 = { 
+      println("= test2 =")
+      val result = 
+        newRemapToJoin(servers2, popSt(T0,N0,N1), 
+          Array(popSt(T0,N0,N1), bNode(N0,N2)), 
+          Array(popSt(T1,N3,N1)),
+          aNode(N1,N2))
+      // Note: shouldn't include bNode(N0,N2) here
+      // println(result.mkString(", "))
+      // N1 -> N1, N2 -> N3|N4
+      assert(result.contains(aNode(N1,N3)) &&
+        result.contains(aNode(N1,N4)) && result.length == 2)
+    }
+
+    def test3 = { 
+      println("= test3 =")
+      val result = 
+        newRemapToJoin(servers2, popSt(T0,N0,N1), 
+          Array(popSt(T0,N0,N1), dNode(N0,N1,N2)), 
+          Array(popSt(T1,N3,N1), cNode(N3,N4)),
+          aNode(N1,N3))
+      // Note: should include dNode(N0,N1,N2) here, but not cNode(N3,N4)
+      //println(result.mkString(", "))
+      // N1 -> N1, N3 -> N3|N2|N5
+      assert(result.contains(aNode(N1,N2)) && result.contains(aNode(N1,N3)) &&
+        result.contains(aNode(N1,N5)) && result.length == 3)
+    }
+
+    def test4 = { 
+      println("= test4 =")
+      val result = 
+        newRemapToJoin(servers2, popSt(T0,N0,N1), 
+          Array(popSt(T0,N0,N1), cNode(N0,N2)), 
+          Array(popSt(T1,N3,N1), dNode(N3,N1,N4)),
+          aNode(N1,N3))
+      // Note: should include dNode(N3,N1,N4) here, but not cNode(N0,N2)
+      //println(result.mkString(", "))
+      // N1 -> N1, N3 -> N3|N4|N5
+      assert(result.contains(aNode(N1,N4)) && result.contains(aNode(N1,N3)) &&
+        result.contains(aNode(N1,N5)) && result.length == 3)
+    }
+
+    def test5 = { 
+      println("= test5 =")
+      val result = 
+        newRemapToJoin(servers2, popSt(T0,N0,N1), 
+          Array(popSt(T0,N0,N1), dNode(N0,N1,N2)), 
+          Array(popSt(T1,N3,N1), cNode(N3,N4)),
+          dNode(N1,N3,N4))
+      // Note: should include dNode(N0,N1,N2) here (so mapping to N2, N3,
+      // fresh), and should include cNode(N3,N4) if N3->N3 or N4->N3 (so
+      // mapping to N4)
+      //println(result.mkString(", "))
+      // N1 -> N1, N3 -> N2, N4 -> N3|N5, 
+      // N1 -> N1, N3 -> N3, N4 -> N2|N4|N5 (link from cNode)
+      // N1 -> N1, N3 -> N4, N4 -> N3 (link from cNode)
+      // N1 -> N1, N3 -> N5, N4 -> N2|N3|N6,
+      val expected = List(
+        (N2,N3), (N2,N5), (N3,N2), (N3,N4), (N3,N5), (N4,N3), 
+        (N5,N2), (N5,N3), (N5,N6))
+      assert(result.length == expected.length)
+      for((n2,n3) <- expected) assert(result.contains(dNode(N1,n2,n3)))
+    }
+
+    def test6 = { 
+      println("= test6 =")
+      val result = 
+        newRemapToJoin(servers2, popSt(T0,N0,N1), 
+          Array(popSt(T0,N0,N1), cNode(N0,N2)), 
+          Array(popSt(T1,N3,N1), dNode(N3,N4,N1)),
+          dNode(N1,N3,N4))
+      // should include dNode(N3,N4,N2) here, so mapping to N3, N4 or fresh.
+      // Shouldn't include cNode(N0,N2).
+      println(result.mkString(", "))
+      val expected = List(
+        (N3,N4), (N3,N5), (N4,N3), (N4,N5), (N5,N3), (N5,N4), (N5,N6))
+      assert(result.length == expected.length)
+      for((n2,n3) <- expected) assert(result.contains(dNode(N1,n2,n3)))
+    }
+
+    singleRef = true
+    test1; test2; test3; test4; test5; test6
+    singleRef = false
+  }
+
+
 /* Code no longer used.
   /** Test of reampToCreateCrossRefs. */
   private def remapToCreateCrossRefsTest = {
@@ -414,6 +516,7 @@ object UnificationTest
   def test = {
     println("===UnificationTest===")
     unifyTest; allUnifsTest; combineTest; remapToJoinTest
+    newRemapToJoinTest
     // remapToCreateCrossRefsTest
   }
 }

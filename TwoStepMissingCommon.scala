@@ -3,6 +3,7 @@ package ViewAbstraction
 import MissingCommon.Cpts // = Array[State]
 
 import scala.collection.mutable.ArrayBuffer
+import ox.gavin.profiling.Profiler
 
 /** The representation of the obligation to find a component state c with
   * identity pid = (family,id) such that (1) servers || cpts1(0) || c is in
@@ -16,8 +17,20 @@ import scala.collection.mutable.ArrayBuffer
 class TwoStepMissingCommon(
   servers: ServerStates, cpts1: Cpts, cpts2: Cpts, family: Int, id: Int) 
     extends MissingCommon(servers,cpts1, cpts2, family, id){
-  import MissingCommon.CptsBuffer // = ArrayBuffer[Cpts]
 
+  Profiler.count("TwoStepMissingCommon")
+
+  /* Overview of main functions.
+   * 
+   * updateMissingViews  
+   * |--updateMissingViews1
+   * |  |-update
+   * |--update
+   * 
+   * updateMissingCandidatesWith
+   */
+
+  import MissingCommon.CptsBuffer // = ArrayBuffer[Cpts]
   import MissingCommon.MissingComponents // = Array[Cpts]
 
   /** Each componentCandidate(i) represents a component state to instantiate the
@@ -38,9 +51,9 @@ class TwoStepMissingCommon(
 
   // NOTE: I think we might have to store the corresponding oldCpts
 
-  /** Record that this is now done.  Also clear arrays to reclaim memory. */
-  def setDone = { 
-    setDoneFlag; componentCandidate = null; missingComponentsForCpts1 = null;
+  /** Clear data structures, to reclaim memory. */
+  @inline protected def clear: Unit = {
+    componentCandidate = null; missingComponentsForCpts1 = null;
     missingComponentsForCpts2 = null
   }
   
@@ -78,6 +91,7 @@ class TwoStepMissingCommon(
         val missing = unseen(required, views)
         if(missing.isEmpty) setDone
         else{ newMissingCandidates2(i) = missing; toRegister += missing.head }
+        i += 1
       }
       if(done) null // an element of toTransfer is complete
       else{
@@ -95,13 +109,14 @@ class TwoStepMissingCommon(
           if(toTransferLen > 0)
             missingComponentsForCpts2 =
               missingComponentsForCpts2 ++ newMissingCandidates2
-          // IMPROVE: use below
+          // IMPROVE: use below; and remove subsets
           toRegister
         }
       }
     }
   }
 
+  // KEEP
   // Add newMissingCandidates2 to missingComponentsForCpts2
           // val newCpts = new Array[MissingComponents](count+toTransferLen)
           // var j = 0
@@ -140,6 +155,7 @@ class TwoStepMissingCommon(
     // Update each entry; count is number to retain
     val count = update(missingComponentsForCpts1, views, toRegister)
     val len = missingComponentsForCpts1.length
+    assert(componentCandidate.length == len)
     val toTransfer = new ArrayBuffer[State]
     // Filter out those elements of missingComponentsForCpts1 that are now
     // null, and add the corresponding candidate missing component to
@@ -163,21 +179,110 @@ class TwoStepMissingCommon(
     toTransfer
   }
 
-  
 
   /** Update missingCandidates to include lists of missing components
-    * corresponding to instantiating c with a renaming of cpt1.  Add to vb the
-    * views that this needs to be registered against in the EffectOnStore,
-    * namely missingHeads.
-    * 
-    * Pre: views contains a view servers || cpts1(0) || cpt1 to
-    * instantiate clause (1) of this.
-    * 
-    * @return true if this is now complete. */
-  // def updateMissingCandidates(cpt1: State, views: ViewSet, vb: CptsBuffer)
-  //     : Boolean = ???
-
+    * corresponding to instantiating the missing component with c.  Add to cb
+    * the components that this needs to be registered against in the
+    * EffectOnStore, namely missingHeads.  Return true if this is now
+    * done.  */
   protected
   def updateMissingCandidatesWith(c: State, views: ViewSet, cb: CptsBuffer)
-      : Boolean = ???
+      : Boolean = {
+    val required1 = MissingCommon.getRequiredCpts(servers, cpts1, c)
+    val missing1 = unseen(required1, views)
+    if(missing1.nonEmpty){ 
+      // Add to missingComponentsForCpts1 if not implied by one there
+      addToMissingComponents1(missing1, c)
+      cb += missing1.head // IMPROVE: only if !found ??
+      false
+    } // end of if(missing1.nonEmpty)
+    else{
+      // Is this the first time we've got past the first stage?
+      if(missingComponentsForCpts2.isEmpty)
+        Profiler.count("TwoStepMissingCommon.step2")
+      // Consider requirements for cpts2
+      val required2 = MissingCommon.getRequiredCpts(servers, cpts2, c)
+      val missing2 = unseen(required2, views)
+      if(missing2.nonEmpty){
+        // Add to missingComponentsForCpts2 if not implied by one there
+        addToMissingComponents2(missing2)
+        cb += missing2.head // IMPROVE: only if !found ??
+        false
+      }
+      else true 
+    }
+  }
+
+  /** Add cpts to missingComonentsForCpts1, associated with c.  */
+  @inline private 
+  def addToMissingComponents1(cpts: MissingComponents, c: State) = {
+    // Test if c in componentCandidate
+    var i = 0; val len = componentCandidate.length
+    while(i < len && componentCandidate(i) != c) i += 1
+    if(i == len){
+      missingComponentsForCpts1 :+= cpts; componentCandidate :+= c
+    }
+    else{
+      // Does this case ever happen? 
+      Profiler.count("TwoStepMissingCommon.Existing")
+      // I'm unsure about the following.  It might be a superset
+      assert(missingComponentsForCpts1(i).sameElements(cpts),
+        s"c = $c;\ncpts = "+cpts.mkString("; ")+
+          "\nexisting = "+missingComponentsForCpts1(i).mkString("; "))
+    }
+  }
+
+  /** Add cpts to missingComonentsForCpts1, associated with c, if not implied by
+    * a value there.  Purge entries implied by cpts.  */
+//   @inline private 
+//   def OLDaddToMissingComponents1(cpts: MissingComponents, c: State) = {
+// //IS THIS RIGHT?  THEY MIGHT CORRESPOND TO DIFFERENT COMPONENTS
+//     ???
+//     val (found, toRetain, retainCount) =
+//       compareMissingComponents(missingComponentsForCpts1, cpts)
+//     if(!found || retainCount < missingComponentsForCpts1.length){
+//       val newLen = if(found) retainCount else retainCount+1
+//       val newMC = new Array[MissingComponents](newLen)
+//       val newCC = new Array[State](newLen)
+//       assert(newMC.length > 0); var j = 0; var i = 0
+//       while(i < missingComponentsForCpts1.length){
+//         if(toRetain(i)){
+//           newMC(j) = missingComponentsForCpts1(i);
+//           newCC(j) = componentCandidate(i); j += 1
+//         }
+//         i += 1
+//       } // end of while
+//       assert(j == retainCount)
+//       if(!found){ newMC(retainCount) = cpts; newCC(j) = c }
+//       missingComponentsForCpts1 = newMC; componentCandidate = newCC
+//     } // end of if(!found ...)
+//     // missingComponentsForCpts1 :+= missing1; componentCandidate :+= c
+//   }
+
+
+  /** Add cpts to missingComponentsForCpts2 if it's not implied by any value
+    * there.  Remove any value implied by cpts. */
+  @inline private def addToMissingComponents2(cpts: MissingComponents) = {
+    // Profiler.count("TwoStepMissingCommon.addToMissingComponents2:"+
+    //   missingComponentsForCpts2.isEmpty)
+    // Add to missingComponentsForCpts2 if not implied by one there
+    missingComponentsForCpts2 = addTo(missingComponentsForCpts2, cpts)
+
+    // val (found, toRetain, retainCount) =
+    //   compareMissingComponents(missingComponentsForCpts2, cpts)
+    // if(!found || retainCount < missingComponentsForCpts2.length){
+    //   val newLen = if(found) retainCount else retainCount+1
+    //   val newMC = new Array[MissingComponents](newLen)
+    //   assert(newMC.length > 0); var j = 0; var i = 0
+    //   while(i < missingComponentsForCpts2.length){
+    //     if(toRetain(i)){ newMC(j) = missingComponentsForCpts2(i); j += 1 }
+    //     i += 1
+    //   } // end of while
+    //   assert(j == retainCount)
+    //   if(!found) newMC(retainCount) = cpts
+    //   missingComponentsForCpts2 = newMC
+    // } // end of if(!found ...)
+    // missingComponentsForCpts2 :+= missing2
+  }
+
 }

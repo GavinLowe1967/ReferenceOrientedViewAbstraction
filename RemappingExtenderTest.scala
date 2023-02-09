@@ -422,9 +422,12 @@ object RemappingExtenderTest{
 
   /** Main function. */
   def apply() = {
-    singleRef = true
+    singleRef = true // ; useNewEffectOnStore = false
     println("===RemappingExtenderTest===")
-    test1; test2; test3; test4; test5
+    println("Not tested!")
+    // Note: this uses the old effectOnStore
+    // test1; test2; test3; test4; test5
+    // useNewEffectOnStore = true
   }
 
 }

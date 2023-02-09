@@ -149,7 +149,7 @@ object SingleRefEffectOnUnificationTest{
       Array(getDatumSt(T0, N1, N2), aNode(N1, N3), bNode(N2,N4)))
     val post = new Concretization(servers3(N5),
       Array(getDatumSt(T0, N1, N2), cNode(N1, N2), bNode(N2,N4)))
-    val cv = new ComponentView(servers3(N0), Array(aNode(N1, N2), bNode(N2, N3)))
+    val cv = new ComponentView(servers3(N0), aNode(N1, N2), Array(bNode(N2, N3)))
     val allUnifs = mkUnifs(pre, cv); assert(allUnifs.length == 3)
     val sreou = new SingleRefEffectOnUnification(mkTrans(pre, post), cv)
     val testHooks = sreou.TestHooks

@@ -220,6 +220,9 @@ package object ViewAbstraction{
   /** Are we creating Views with just a single referenced component? */
   var singleRef = false
 
+  /** Do we create TwoStepMissingCommon objects? */
+  var useTwoStepMC = false
+
   /** Are we supporting debugging? */ 
   var debuggable = true
 

@@ -678,7 +678,7 @@ object Remapper{
       else{ 
         newIds(i) = map(typeMap(i))(id)
         assert(newIds(i) >= 0, 
-          "applyMappingToState: map"+show(map)+" undefined at "+(i, id)+
+          "applyMappingToState: map"+show(map)+" undefined at "+(typeMap(i), id)+
             " for "+cpt)
       }
       i += 1

@@ -29,8 +29,16 @@ class ComponentView(servers: ServerStates, components: Array[State])
     extends ComponentView0(servers, components){
 
   def this(servers: ServerStates, principal: State, others: Array[State]) = {
-    this(servers, principal +: others)
+    this(servers, StateArray(principal +: others))
   }
+
+  def this(servers: ServerStates, principal: State) = {
+    this(servers, StateArray(Array(principal)))
+  }
+
+  // def this(servers: ServerStates, principal: State, other: State) = {
+  //   this(servers, StateArray(Array(principal, other)))
+  // }
 
   Profiler.count("ComponentView")
 

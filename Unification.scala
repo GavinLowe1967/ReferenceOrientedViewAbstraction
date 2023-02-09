@@ -292,18 +292,17 @@ object Unification{
     for((f,id) <- princ1.processIdentities; if !isDistinguished(id)){
       map0(f)(id) = id; nextArgMap(f) = nextArgMap(f) max (id+1)
     }
-    // Make otherArgMap, with parameters of princ2 not in map0, maintaining
-    // otherArgMap
+    // Make otherArgMap, with parameters of not in map0, maintaining
+    // nextArgMap
     val otherArgs = Remapper.newOtherArgMap
-// IMPROVE
     for(cpt2 <- cpts1.tail ++ cpts2; (f,id) <- cpt2.processIdentities)
       if(!isDistinguished(id) && map0(f)(id) < 0 && !otherArgs(f).contains(id)){
+        // Note: we use map0(f)(id) < 0 as a proxy for !map0(f).contains(id)
+        // here, as map0 is a partial identity mapping.
         assert(!map0(f).contains(id)) // IMPROVE
         otherArgs(f) ::= id; nextArgMap(f) = nextArgMap(f) max (id+1)
       }
-    // println(s"otherArgs = "+otherArgs.mkString(", "))
-    // the bitmap is empty: c's id should not be remapped, by precondition.
-    // Profiler.count("Unification:newBitMap")
+    // Note: the bitmap is empty: c's id should not be remapped, by precondition.
     val maps = 
       getCombiningMaps(map0, otherArgs, emptyBitMap, nextArgMap, Array(c))
     val result = new Array[State](maps.length); var i = 0
@@ -313,11 +312,149 @@ object Unification{
     }
     Pools.returnRemappingRows(map0)
     result
-    // maps.map{ case map => Remapper.applyRemappingToState(map, c) }
   }
 
   /** An empty bit map, for use in remapToJoin. */
   private val emptyBitMap = newBitMap
+
+  /** New version of above, mapping parameters of c to parameters of a secondary
+    * component c2 of cpts1 or cpts2 only if there is already a cross
+    * reference between c and c2 (in either direction). */ 
+  def newRemapToJoin(servers: ServerStates, princ1: State, 
+    cpts1: Array[State], cpts2: Array[State], c: State)
+      : Array[State] = {
+    require(singleRef)
+    require(princ1.processIdentities.contains(c.componentProcessIdentity))
+    // Identity map on parameters of servers and princ1; and next args to use
+    val map0 = servers.remappingMap; val nextArg = servers.nextArgMap
+// IMPROVE: limit to params of c
+    for((t,id) <- princ1.processIdentities; if !isDistinguished(id)){
+      assert(id <= nextArg(t));
+      map0(t)(id) = id; nextArg(t) = nextArg(t) max (id+1)
+    }
+    // Params not to map onto; include params of servers and princ1
+    val omit = Array.tabulate(numTypes)(t => (0 until nextArg(t)).toList)
+    // Calculate nextArg
+    for(st <- cpts1.tail ++ cpts2; t <- 0 until numTypes)
+      nextArg(t) = nextArg(t) max st.getParamsBound(t)
+    //println("nextArg = "+nextArg.mkString(", "))
+    // Params of c
+    val cIds = c.processIdentities
+    val (t,id) = c.componentProcessIdentity; assert(map0(t)(id) == id)
+    // Secondary cpts
+    val secondaries: Array[State] = cpts1.tail++cpts2.tail
+    val stateBuffer = new ArrayBuffer[State]
+
+    /* If there is a cross reference between map(c) and a secondary component c2
+     * with index not in doneSecondaries, extend map to map to parameters of
+     * c2; and recurse.  Add results of mapping c in such a way to
+     * stateBuffer. */
+    def rec(map: RemappingMap, doneSecondaries: List[Int]): Unit = {
+      // Try to find a reference between a secondary cpt and map(c)
+      var i = 0; var found = false
+      while(i < secondaries.length && !found){
+        if(!doneSecondaries.contains(i)){
+          val st1 = secondaries(i)
+          if(st1.hasRef(t,id)) found = true         // reference from st1 to c 
+          else{
+            // Search for ref from map(c) to st1
+            var j = 1; val (t1,id1) = st1.componentProcessIdentity
+            while(j < cIds.length && !found){
+              val (t2,id2) = cIds(j); j += 1
+              found = (t2 == t1 && !isDistinguished(id2) && map(t2)(id2) == id1)
+            }
+          }
+        } // end of outer if
+        if(!found) i += 1
+      } // end of while
+
+      if(found){
+        //println("Extending "+Remapper.show(map)+" for "+secondaries(i))
+        //println("omit = "+omit.mkString("; "))
+        val oldOmit = omit.clone                         // store (*)
+        val ab1 = extendToCpt(map, c, secondaries(i), omit)
+        //println("Result: "+ab1.map(Remapper.show))
+        for(map1 <- ab1) rec(map1, i::doneSecondaries)
+        for(t <- 0 until numTypes) omit(t) = oldOmit(t)  // backtrack to (*)
+      }
+      else{        // Extend map to map to fresh params, and apply to c
+        val map1 = Remapper.cloneMap(map)
+        // println("map1 = "+Remapper.show(map1))
+        for(t <- 0 until numTypes){
+          var next = nextArg(t)
+          for((t1,x) <- cIds; if t1 == t && !isDistinguished(x))
+            if(map1(t)(x) < 0){ map1(t)(x) = next; next += 1 }
+        }
+        // Remapper.mapUndefinedToFresh(map1, nextArg)
+        //println("extended: "+Remapper.show(map1))
+        stateBuffer += Remapper.applyRemappingToState(map1, c)
+      }
+    } // end of rec
+
+    // Extend map to params of cpts2(0)
+    val ab1 = extendToCpt(map0, c, cpts2(0), omit)
+    for(map1 <- ab1) rec(map1, List())
+    stateBuffer.toArray
+  }
+
+  /** Extend map0, mapping parameters of c, other than its identity, to
+    * parameters of st other than omit.  Add each to ab.  Also add parameters
+    * of st to omit. */
+  @inline private def extendToCpt(
+    map0: RemappingMap, c: State, st: State, omit: Array[List[Identity]])
+      : ArrayBuffer[RemappingMap] = {
+    // Parameters of st not in omit
+    val otherArgs = Remapper.newOtherArgMap
+    for((f,id) <- st.processIdentities; if !isDistinguished(id))
+      if(!omit(f).contains(id) && !otherArgs(f).contains(id))
+        otherArgs(f) ::= id
+    val cIds = c.ids; val cLen = cIds.length; val typeMap = c.typeMap
+    val ab = new ArrayBuffer[RemappingMap]
+
+    /* Extend map0 over cIds[j..cLen), mapping to values in otherArgs, or not.
+     * Add each resulting map to ab.  Roll back updates to map0 and
+     * otherArgs. */
+    def rec(j: Int): Unit = {
+      if(j == cLen) ab += Remapper.cloneMap(map0)
+      else{
+        val x = cIds(j); val t = c.typeMap(j)
+        // Maybe remap (t,x)
+        if(!isDistinguished(x) && map0(t)(x) < 0){
+          // map (t,x) to each parameter of otherArgs(t)
+          var toDoIds = otherArgs(t); var doneIds = List[Identity]()
+          // Still need to map to each param of toDoIds; doneIds is those ids
+          // already done.
+          while(toDoIds.nonEmpty){
+            val id1 = toDoIds.head; toDoIds = toDoIds.tail
+            otherArgs(t) = append1(doneIds, toDoIds) // temporary update (*)
+            map0(t)(x) = id1                         // temporary update (+)
+            rec(j+1)                                 // rename rest
+            map0(t)(x) = -1                          // backtrack (+)
+            doneIds ::= id1 // order doesn't matter
+          } // end of while
+          otherArgs(t) = doneIds                     // backtrack (*)
+        } // end of if
+        // Also leave x unmapped 
+        rec(j+1)              
+      }
+    } // end of rec
+
+    require(map0(typeMap(0))(cIds(0)) >= 0) // c's id already remapped
+    rec(1) // calculate the extensions
+    // Add parameters of st to omit
+    for(t <- 0 until numTypes) omit(t) = omit(t) ++ otherArgs(t)
+    ab
+  }
+
+  // private def extendToCpts(map0: RemappingMap, c: State, sts: List[State])
+  //     : Array[RemappingMap] = {
+  //   if(sts.isEmpty) Array(map0)
+  //   else{
+  //     val maps1 = extendToCpt(map0, c, sts.head, ???).toArray
+  //     maps1.flatMap(map1 => extendToCpts(map1, c, sts.tail))
+  //   }
+  // }
+
 
   /** Hooks for testing. */
   trait Tester{
