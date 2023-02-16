@@ -55,6 +55,17 @@ object Remapper{
     map1
   }
 
+  /** Get a remapping map with sizes given by `sizes`. */
+  @inline def getRemappingMap(sizes: Array[Int]): RemappingMap = {
+    val map1 = Pools.getRemappingMap; var t = 0
+    while(t < numTypes){ 
+      val size = sizes(t); val newMap = new Array[Int](size); var i = 0
+      while(i < size){ newMap(i) = -1; i += 1 }
+      map1(t) = newMap; t += 1 
+    }
+    map1
+  }
+
   /** Is the mapping represented by map injective? */
   def isInjective(map: RemappingMap): Boolean = {
     var ok = true; var f = 0

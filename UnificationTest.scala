@@ -8,8 +8,7 @@ object UnificationTest
   import TestStates._
   import TestUtils._
   import RemapperP.Remapper.{show,newRemappingMap,applyRemapping}
-  // import RemapperP.RemapperTest.{emptyMap,checkMap}
-  import Unification.{unify,CombineResult,remapToJoin,newRemapToJoin}
+  import Unification.{unify,CombineResult}
   import EffectOnUnification.MatchingTuple
 
   /** Adapt tests to new interface of EffectOnUinfication. */
@@ -298,14 +297,14 @@ object UnificationTest
 
   }
 
-  /** Test of remapToJoin. */
-  private def remapToJoinTest = {
-    println("== remapToJoinTest ==")
+  /** Test of oldRemapToJoin. */
+  private def oldRemapToJoinTest = {
+    println("== oldRemapToJoinTest ==")
 
     def test1 = {
       //println("= test1 =")
       val result = 
-        remapToJoin(servers2, pushSt(T0,N1), 
+        oldRemapToJoin(servers2, pushSt(T0,N1), 
           Array(pushSt(T0,N1)),  Array(pushSt(T1,N2)), aNode(N1,N3))
       // println(result.mkString(", "))
       // N1 -> N1, N3 -> N2|N3
@@ -316,7 +315,7 @@ object UnificationTest
     def test2 = { 
       //println("= test2 =")
       val result = 
-        remapToJoin(servers2, popSt(T0,N0,N1), 
+        oldRemapToJoin(servers2, popSt(T0,N0,N1), 
           Array(popSt(T0,N0,N1)), Array(popSt(T1,N2,N3)), aNode(N1,N2))
       //println(result.mkString(", "))
       // N1 -> N1, N3 -> N2|N3|N4
@@ -327,7 +326,7 @@ object UnificationTest
     def test3 = { 
       //println("= test3 =")
       val result = 
-        remapToJoin(servers2, popSt(T0,N0,N1), 
+        oldRemapToJoin(servers2, popSt(T0,N0,N1), 
           Array(popSt(T0,N0,N1)),  Array(popSt(T1,N0,N2)), aNode(N1,N2))
       //println(result.mkString(", "))
       // N1 -> N1, N3 -> N2|N3
@@ -377,7 +376,7 @@ object UnificationTest
           Array(popSt(T1,N3,N1), cNode(N3,N4)),
           aNode(N1,N3))
       // Note: should include dNode(N0,N1,N2) here, but not cNode(N3,N4)
-      //println(result.mkString(", "))
+      // println(result.mkString(", "))
       // N1 -> N1, N3 -> N3|N2|N5
       assert(result.contains(aNode(N1,N2)) && result.contains(aNode(N1,N3)) &&
         result.contains(aNode(N1,N5)) && result.length == 3)
@@ -515,7 +514,7 @@ object UnificationTest
   /** Main test function. */
   def test = {
     println("===UnificationTest===")
-    unifyTest; allUnifsTest; combineTest; remapToJoinTest
+    unifyTest; allUnifsTest; combineTest; oldRemapToJoinTest
     newRemapToJoinTest
     // remapToCreateCrossRefsTest
   }

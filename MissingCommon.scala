@@ -225,8 +225,7 @@ abstract class MissingCommon(
       // All relevant renamings of cpt1: identity on params of servers and
       // princ1, but otherwise either to other params of cpts1 or cpts2, or to
       // fresh values.  
-      val renames = 
-        Unification.newRemapToJoin(servers, princ1, cpts1, cpts2, cpt1)
+      val renames = Unification.remapToJoin(servers, princ1, cpts1, cpts2, cpt1)
       var i = 0; var found = false
       while(i < renames.length && !found){
         val c = renames(i); i += 1
@@ -264,13 +263,12 @@ abstract class MissingCommon(
       if(cpt1.hasPID(family,id)){
         // Remap cpt1 to a normal form.  This avoids repeating work for
         // equivalent states within updateMissingCandidates.
-        // val cpt1Norm =  Remapper.remapWRT(servers, cpts1, cpts2, cpt1) 
-// I think the following is sound.  If so, simplify remapWRT
-        val cpt1Norm = Remapper.remapWRT(servers, Array(princ1), Array(), cpt1)
-// IMPROVE: if assertion below true, can simplify
-        assert(cpt1 == cpt1Norm, s"servers = $servers;\n"+
-            s"princ1 = $princ1; cpt1 = $cpt1; cpt1Norm = $cpt1Norm")
-        if(updateMissingCandidates(cpt1Norm, views, vb)){ 
+        // val cpt1Norm =  Remapper.remapWRT(servers, cpts1, cpts2, cpt1)
+        // I think the following is sound.  If so, simplify remapWRT
+        // val cpt1Norm = Remapper.remapWRT(servers, Array(princ1), Array(), cpt1)
+        // assert(cpt1 == cpt1Norm, s"servers = $servers;\n"+
+        //     s"princ1 = $princ1; cpt1 = $cpt1; cpt1Norm = $cpt1Norm")
+        if(updateMissingCandidates(cpt1, views, vb)){ 
           //log(MissingCommon.UpdateWithNewMatchSuccess(cv, ply))
           setDone; null
         }

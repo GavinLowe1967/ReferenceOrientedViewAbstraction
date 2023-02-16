@@ -24,28 +24,10 @@ object Unification{
     * Note: map is unchanged.
     * @return the new map, or null if unsuccessful. */
   @inline def unify(map: RemappingMap, st1: State, st2: State): RemappingMap = {
-    // println(s"unify(${showRemappingMap(map)}, $st1, $st2)")
-    if(st1.cs != st2.cs) null // false
+    if(st1.cs != st2.cs) null 
     else{
       val map1 = Remapper.cloneMap(map)
       val ok = unify1(map1, st1, st2)
-      // val ids1 = st1.ids; val ids2 = st2.ids
-      // val len = ids1.length; val typeMap = st1.typeMap
-      // assert(st1.family == st2.family && st2.typeMap == typeMap && 
-      //   ids2.length == len)
-      // // Iterate through the parameters; ok indicates if matching successful
-      // // so far.
-      // var i = 0; var ok = true
-      // while(i < len && ok){
-      //   val id1 = ids1(i); val id2 = ids2(i); val t = typeMap(i)
-      //   if(isDistinguished(id1) || isDistinguished(id2)) ok = id1 == id2
-      //   else if(map1(t)(id2) < 0){
-      //     if(map1(t).contains(id1)) ok = false // must preserve injectivity 
-      //     else map1(t)(id2) = id1 // extend map
-      //   }
-      //   else ok = map1(t)(id2) == id1
-      //   i += 1
-      // }
       if(ok) map1 else { Pools.returnRemappingRows(map1); null }
     }
   }
@@ -280,7 +262,7 @@ object Unification{
     * 
     * Pre: princ1 has a reference to c. */ 
 // IMPROVE comment
-  def remapToJoin(servers: ServerStates, princ1: State, 
+  private def oldRemapToJoin(servers: ServerStates, princ1: State, 
     cpts1: Array[State], cpts2: Array[State], c: State)
       : Array[State] = {
     require(singleRef)
@@ -317,47 +299,83 @@ object Unification{
   /** An empty bit map, for use in remapToJoin. */
   private val emptyBitMap = newBitMap
 
+  val remapToJoin = newRemapToJoin _
+
   /** New version of above, mapping parameters of c to parameters of a secondary
     * component c2 of cpts1 or cpts2 only if there is already a cross
     * reference between c and c2 (in either direction). */ 
-  def newRemapToJoin(servers: ServerStates, princ1: State, 
+  private def newRemapToJoin(servers: ServerStates, princ1: State, 
     cpts1: Array[State], cpts2: Array[State], c: State)
       : Array[State] = {
-    require(singleRef)
-    require(princ1.processIdentities.contains(c.componentProcessIdentity))
-    // Identity map on parameters of servers and princ1; and next args to use
-    val map0 = servers.remappingMap; val nextArg = servers.nextArgMap
-// IMPROVE: limit to params of c
-    for((t,id) <- princ1.processIdentities; if !isDistinguished(id)){
-      assert(id <= nextArg(t));
-      map0(t)(id) = id; nextArg(t) = nextArg(t) max (id+1)
+    require(singleRef && cpts2.length <= 2); assert(princ1 == cpts1(0))
+    require(contains(princ1.processIdentities, c.componentProcessIdentity))
+    // Next args to use
+    val nextArg = servers.nextArgMap; val sizes = c.getParamsBound
+    // Map over params of c
+    val map0 = Remapper.getRemappingMap(sizes); var t = 0
+    // Set map0 to identity on params of fixed procs
+    while(t < numTypes){
+      val bound = nextArg(t) min sizes(t); var i = 0
+      while(i < bound){ map0(t)(i) = i; i += 1 }
+      t += 1
     }
-    // Params not to map onto; include params of servers and princ1
-    val omit = Array.tabulate(numTypes)(t => (0 until nextArg(t)).toList)
-    // Calculate nextArg
-    for(st <- cpts1.tail ++ cpts2; t <- 0 until numTypes)
-      nextArg(t) = nextArg(t) max st.getParamsBound(t)
-    //println("nextArg = "+nextArg.mkString(", "))
+    // Set map0 to id on params of princ1; update nextArg
+    var ix = 0
+    while(ix < princ1.length){
+      val (t,id) = princ1.processIdentities(ix); ix += 1
+      if(!isDistinguished(id)){
+        assert(id <= nextArg(t))
+        if(id < sizes(t)) map0(t)(id) = id
+        nextArg(t) = nextArg(t) max (id+1)
+      }
+    }
+    val omitSize = new Array[Int](numTypes) //  #params of servers and princ1
+    // Secondary components; set to cpts1.tail++cpts2.tail below.
+    val numSecondaries = cpts1.length+cpts2.length-2 
+    val secondaries = new Array[State](numSecondaries)
+    var i = 1; while(i < cpts1.length){ secondaries(i-1) = cpts1(i); i += 1 }
+    if(cpts2.length == 2) secondaries(numSecondaries-1) = cpts2(1)
+    // Which secondaries have been used?
+    val doneSecondaries = new Array[Boolean](numSecondaries); 
+    // i = 1; 
+    // while(i < cpts2.length){ secondaries(i+cpts1.length-2) = cpts2(i); i += 1 }
+    t = 0
+    // Update nextArg for other components
+    while(t < numTypes){
+      omitSize(t) = nextArg(t); var i = 1
+      while(i < cpts1.length){
+        nextArg(t) = nextArg(t) max cpts1(i).getParamsBound(t); i += 1
+      }
+      i = 0
+      while(i < cpts2.length){
+        nextArg(t) = nextArg(t) max cpts2(i).getParamsBound(t); i += 1
+      }
+      t += 1
+    }
+    // Params not to map onto; set to params of servers and princ1.
+    val omit = new Array[Array[Boolean]](numTypes); t = 0
+    while(t < numTypes){
+      omit(t) = new Array[Boolean](nextArg(t)); var i = 0
+      while(i < omitSize(t)){ omit(t)(i) = true; i += 1 }
+      t += 1
+    }
     // Params of c
     val cIds = c.processIdentities
-    val (t,id) = c.componentProcessIdentity; assert(map0(t)(id) == id)
-    // Secondary cpts
-    val secondaries: Array[State] = cpts1.tail++cpts2.tail
-    val stateBuffer = new ArrayBuffer[State]
+    val (tc,id) = c.componentProcessIdentity; assert(map0(tc)(id) == id)
+    val stateBuffer = new ArrayBuffer[State]    // Buffer to hold results
 
     /* If there is a cross reference between map(c) and a secondary component c2
      * with index not in doneSecondaries, extend map to map to parameters of
      * c2; and recurse.  Add results of mapping c in such a way to
      * stateBuffer. */
-    def rec(map: RemappingMap, doneSecondaries: List[Int]): Unit = {
+    def rec(map: RemappingMap): Unit = {
       // Try to find a reference between a secondary cpt and map(c)
       var i = 0; var found = false
       while(i < secondaries.length && !found){
-        if(!doneSecondaries.contains(i)){
+        if(!doneSecondaries(i)){
           val st1 = secondaries(i)
-          if(st1.hasRef(t,id)) found = true         // reference from st1 to c 
-          else{
-            // Search for ref from map(c) to st1
+          if(st1.hasRef(tc,id)) found = true         // reference from st1 to c 
+          else{                        // Search for ref from map(c) to st1
             var j = 1; val (t1,id1) = st1.componentProcessIdentity
             while(j < cIds.length && !found){
               val (t2,id2) = cIds(j); j += 1
@@ -369,45 +387,54 @@ object Unification{
       } // end of while
 
       if(found){
-        //println("Extending "+Remapper.show(map)+" for "+secondaries(i))
-        //println("omit = "+omit.mkString("; "))
-        val oldOmit = omit.clone                         // store (*)
-        val ab1 = extendToCpt(map, c, secondaries(i), omit)
-        //println("Result: "+ab1.map(Remapper.show))
-        for(map1 <- ab1) rec(map1, i::doneSecondaries)
-        for(t <- 0 until numTypes) omit(t) = oldOmit(t)  // backtrack to (*)
+        val oldOmit = new Array[Array[Boolean]](numTypes); var t = 0
+        while(t < numTypes){ oldOmit(t) = omit(t).clone; t += 1 } // store (*)
+        // Extend map to that secondary component
+        val ab1 = extendToCpt(map, c, secondaries(i), omit); var ix = 0
+        // And recurse on each
+        assert(!doneSecondaries(i)); doneSecondaries(i) = true    // (+)
+        while(ix < ab1.length){ rec(ab1(ix)); ix += 1 }
+        doneSecondaries(i) = false; t = 0                    // backtrack (+) 
+        while(t < numTypes){ omit(t) = oldOmit(t); t += 1 }  // backtrack to (*)
       }
-      else{        // Extend map to map to fresh params, and apply to c
-        val map1 = Remapper.cloneMap(map)
-        // println("map1 = "+Remapper.show(map1))
-        for(t <- 0 until numTypes){
-          var next = nextArg(t)
-          for((t1,x) <- cIds; if t1 == t && !isDistinguished(x))
-            if(map1(t)(x) < 0){ map1(t)(x) = next; next += 1 }
-        }
-        // Remapper.mapUndefinedToFresh(map1, nextArg)
-        //println("extended: "+Remapper.show(map1))
+      else{        
+        // Extend map to map undefined values to fresh params
+        val map1 = Remapper.cloneMap(map); var t = 0
+        while(t < numTypes){
+          var next = nextArg(t); var ix = 0
+          while(ix < cIds.length){
+            val (t1,x) = cIds(ix); ix += 1
+            if(t1 == t && !isDistinguished(x) && map1(t)(x) < 0){ 
+              map1(t)(x) = next; next += 1 
+            }
+          }
+          t += 1
+        } // end of while(t < numTypes)
+        // Apply to c and store
         stateBuffer += Remapper.applyRemappingToState(map1, c)
       }
     } // end of rec
 
     // Extend map to params of cpts2(0)
-    val ab1 = extendToCpt(map0, c, cpts2(0), omit)
-    for(map1 <- ab1) rec(map1, List())
+    val ab1 = extendToCpt(map0, c, cpts2(0), omit); ix = 0
+    // Then to other components
+    while(ix < ab1.length){ rec(ab1(ix)); ix += 1 }
     stateBuffer.toArray
   }
 
   /** Extend map0, mapping parameters of c, other than its identity, to
-    * parameters of st other than omit.  Add each to ab.  Also add parameters
-    * of st to omit. */
-  @inline private def extendToCpt(
-    map0: RemappingMap, c: State, st: State, omit: Array[List[Identity]])
+    * parameters of st other than omit.  Also add parameters of st to omit. */
+  @inline private 
+  def extendToCpt(map0: RemappingMap, c: State, st: State, omit: BitMap)
       : ArrayBuffer[RemappingMap] = {
-    // Parameters of st not in omit
-    val otherArgs = Remapper.newOtherArgMap
-    for((f,id) <- st.processIdentities; if !isDistinguished(id))
-      if(!omit(f).contains(id) && !otherArgs(f).contains(id))
+    val stIds = st.processIdentities
+    // otherArgs is parameters of st not in omit
+    val otherArgs = Remapper.newOtherArgMap; var ix = 0
+    while(ix < stIds.length){
+      val (f,id) = stIds(ix); ix += 1
+      if(!isDistinguished(id) && !omit(f)(id) && !contains(otherArgs(f),id))
         otherArgs(f) ::= id
+    }
     val cIds = c.ids; val cLen = cIds.length; val typeMap = c.typeMap
     val ab = new ArrayBuffer[RemappingMap]
 
@@ -415,6 +442,7 @@ object Unification{
      * Add each resulting map to ab.  Roll back updates to map0 and
      * otherArgs. */
     def rec(j: Int): Unit = {
+// IMPROVE: if otherArgs is empty, just clone map
       if(j == cLen) ab += Remapper.cloneMap(map0)
       else{
         val x = cIds(j); val t = c.typeMap(j)
@@ -442,24 +470,22 @@ object Unification{
     require(map0(typeMap(0))(cIds(0)) >= 0) // c's id already remapped
     rec(1) // calculate the extensions
     // Add parameters of st to omit
-    for(t <- 0 until numTypes) omit(t) = omit(t) ++ otherArgs(t)
+    var t = 0
+    while(t < numTypes){ 
+      var oa = otherArgs(t)
+      while(oa.nonEmpty){ omit(t)(oa.head) = true; oa = oa.tail }
+      t += 1
+    }
     ab
   }
-
-  // private def extendToCpts(map0: RemappingMap, c: State, sts: List[State])
-  //     : Array[RemappingMap] = {
-  //   if(sts.isEmpty) Array(map0)
-  //   else{
-  //     val maps1 = extendToCpt(map0, c, sts.head, ???).toArray
-  //     maps1.flatMap(map1 => extendToCpts(map1, c, sts.tail))
-  //   }
-  // }
 
 
   /** Hooks for testing. */
   trait Tester{
     type AllUnifsResult = Unification.AllUnifsResult
     protected val allUnifs = Unification.allUnifs _
+    protected val oldRemapToJoin = Unification.oldRemapToJoin _
+    protected val newRemapToJoin = Unification.newRemapToJoin _
   }
 
 
