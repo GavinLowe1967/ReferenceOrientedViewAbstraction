@@ -17,7 +17,7 @@ import MissingCommon.Cpts // = Array[State]
   * 
   * The subclasses differ in the way they represent the missing views.  */
 abstract class MissingCommon(
-  servers: ServerStates, cpts1: Cpts, cpts2: Cpts, family: Int, id: Int)
+  servers: ServerStates, cpts1: Cpts, val cpts2: Cpts, family: Int, id: Int)
 {
   import MissingCommon.CptsBuffer // = ArrayBuffer[Cpts]
   import MissingCommon.MissingComponents // = Array[Cpts]
@@ -31,7 +31,7 @@ abstract class MissingCommon(
    * 
    * updateWithNewMatch      (called from MissingCommonWrapper)
    * |--updateMissingCandidates (also called from MissingCommonFactory)
-   *    |--Unification.remapToJoin
+   *    |--remapToJoin (in subclasses)
    *    |--updateMissingCandidatesWith (in subclasses)
    * 
    * Other public functions: done, setDone, missingHeads
@@ -108,29 +108,6 @@ abstract class MissingCommon(
     missing.toArray.sortWith(StateArray.lessThan)
   }
 
-  /** Compare `mCpts` against the elements of `array`, to decide if `mCpts` is
-    * implied by any element of `array`, or vice versa.  Return a triple
-    * (`found`, `toRetain`, `count`) where: (1) `found` is true if any element
-    * of `array` is a subset of (or equal to) `mCpts` (so there is no need to
-    * store `mCpts`; (2) `toRetain` is a bitmap where `toRetain(i)` is true if
-    * `array(i)` is not a proper subset of `mCpts` (so should be retained);
-    * `count` is the number of elements of `array` to retain (so the number of
-    * trues in `toRetain`). */
-  // @inline protected def compareMissingComponents(
-  //   array: Array[MissingComponents], mCpts: MissingComponents)
-  //     : (Boolean, Array[Boolean], Int) = {
-  //   import MissingCommon.{Eq,Sub,Sup,Inc,compare}
-  //   val len = array.length; val toRetain = new Array[Boolean](len)
-  //   var count = 0; var i = 0; var found = false
-  //   while(i < len){
-  //     // Note: mCpts is local; this is locked; so neither mCpts nor mCpts1 can
-  //     // be mutated by a concurrent thread.
-  //     val mCpts1 = array(i); val cmp = compare(mCpts1, mCpts)
-  //     if(cmp != Sup){ toRetain(i) = true; count += 1 }
-  //     found ||= cmp == Sub || cmp == Eq; i += 1
-  //   }
-  //   (found, toRetain, count)
-  // }
 
 // IMPROVE: move to companion object.
 
@@ -150,7 +127,6 @@ abstract class MissingCommon(
       if(cmp != Sup){ toRetain(i) = true; retainCount += 1 }
       found ||= cmp == Sub || cmp == Eq; i += 1
     }
-    // val (found, toRetain, retainCount) = compareMissingComponents(array, cpts)
     if(!found || retainCount < array.length){
       val newLen = if(found) retainCount else retainCount+1; assert(newLen > 0)
       val newMC = new Array[MissingComponents](newLen); var j = 0; var i = 0
@@ -208,6 +184,15 @@ abstract class MissingCommon(
   def updateMissingCandidatesWith(c: State, views: ViewSet, cb: CptsBuffer)
       : Boolean 
 
+  /** All relevant renamings of cpt1 as a possible instantiation of the common
+    * missing component.  Identity on params of servers and princ1, but
+    * otherwise mapping to parameters of a secondary component c2 of cpts1 or
+    * cpts2 only if there is already a cross reference between cpt1 and c2 (in
+    * either direction).  Defined in subclasses; but (TODO) ignoring secondary
+    * components of cpts2 in TwoStepMissingCommon.  */
+  protected def remapToJoin(cpt1: State) : Array[State]//  = 
+    // Unification.remapToJoin(servers, princ1, cpts1, cpts2, cpt1)
+
   /** Update missingCandidates to include lists of missing components
     * corresponding to instantiating c with a renaming of cpt1.  Add to vb the
     * views that this needs to be registered against in the EffectOnStore,
@@ -219,14 +204,12 @@ abstract class MissingCommon(
     * @return true if this is now complete. */
   def updateMissingCandidates(cpt1: State, views: ViewSet, vb: CptsBuffer)
       : Boolean = {
-    //if(highlight) println(s"updateMissingCandidates($cpt1) $pid")
     require(!done && cpt1.hasPID(family,id))
     if(isNewUMCState(cpt1)){
       // All relevant renamings of cpt1: identity on params of servers and
       // princ1, but otherwise either to other params of cpts1 or cpts2, or to
       // fresh values.  
-      val renames = Unification.remapToJoin(servers, princ1, cpts1, cpts2, cpt1)
-      var i = 0; var found = false
+      val renames = remapToJoin(cpt1); var i = 0; var found = false
       while(i < renames.length && !found){
         val c = renames(i); i += 1
         if(true || isNewUMCRenamedState(c)){ // IMPROVE
@@ -325,14 +308,21 @@ object MissingCommon{
     * those components that are required for conditions (2) and (3).  Here
     * cpts1 corresponds to the pre-state of a transition, and cpts2 to the
     * view acted upon.  Uses values registered in StateArray. */
+// IMPROVE: seems to include value for condition (1)
   @inline def requiredCpts(
     servers: ServerStates, cpts1: Array[State], cpts2: Array[State], c: State)
       : ArrayBuffer[Array[State]] = {
     val ab = new ArrayBuffer[Array[State]]
+    // IMPROVE: do we need (cpts1(0), c)?  (We do in Debugger.)
     getRequiredCpts(servers, cpts1, c, ab)
     getRequiredCpts(servers, cpts2, c, ab)
     ab
   } 
+
+  /** Add (servers,cpts) (remapped) to ab. */
+  @inline private
+  def add1(servers: ServerStates, cpts: Array[State], ab: ArrayBuffer[Cpts]) =
+    ab += Remapper.remapComponents(servers, cpts)
 
   /** Those components that are required for common missing references to
     * component c to/from cpts.  (1) From cpts(0) to c; (2) possibly from c to
@@ -341,10 +331,13 @@ object MissingCommon{
   @inline private def getRequiredCpts(
     servers: ServerStates, cpts: Cpts, c: State, ab: ArrayBuffer[Cpts]) 
   = {
-    @inline def add(cpts: Array[State]) = 
-      ab += Remapper.remapComponents(servers, cpts)
+    @inline def add(cpts: Array[State]): Unit = // add1(servers, cpts1, ab)
+     ab += Remapper.remapComponents(servers, cpts)
+// FIXME: change name
 
     add(Array(cpts(0), c))
+    // add1(servers, Array(cpts(0), c), ab)
+    // getRequiredSecondaryCpts(servers, cpts, c, ab)
     var j = 1
     // Condition (3): refs from c to components of cpts
     while(j < c.length){
@@ -360,6 +353,51 @@ object MissingCommon{
     while(j < cpts.length){
       val c1 = cpts(j); j += 1; 
       if(c1.hasIncludedParam(ct, cid)) add(Array(c1, c))
+    }
+  }
+
+  /** Get the first set of required components for a TwoStepMissingCommon. */
+  def getRequiredCptsTwoStep1(
+    servers: ServerStates, cpts1: Cpts, princ2: State, c: State)
+      : ArrayBuffer[Array[State]] = {
+    val ab = new ArrayBuffer[Array[State]]
+    add1(servers, Array(cpts1(0), c), ab)
+    add1(servers, Array(princ2, c), ab)
+    getRequiredSecondaryCpts(servers, cpts1, c, ab)
+    ab
+  }
+
+  /** Get the second set of required components for a TwoStepMissingCommon. */
+  def getRequiredCptsTwoStep2(servers: ServerStates, cpts2: Cpts, c: State)
+      : ArrayBuffer[Array[State]] = {
+    // Note: this possible includes the components corresponding to c having a
+    // reference to cpts2(0) (principal of the view). 
+    val ab = new ArrayBuffer[Array[State]]
+    getRequiredSecondaryCpts(servers, cpts2, c, ab)
+    ab
+  }
+
+  /** Find required components for secondary components, and add to ab: possibly
+    * from c to a secondary component of cpts; and possibly from a secondary
+    * component of cpts to c. */ 
+  @inline private def getRequiredSecondaryCpts(
+    servers: ServerStates, cpts: Cpts, c: State, ab: ArrayBuffer[Cpts]) 
+  = {
+    var j = 1
+    // Condition (3): refs from c to components of cpts
+    while(j < c.length){
+      if(c.includeParam(j)){
+        // Does c's jth parameter reference an element c1 of cpts?
+        val c1 = StateArray.find(c.processIdentities(j), cpts);
+        if(c1 != null) add1(servers, Array(c, c1), ab)
+      }
+      j += 1
+    }
+    // Does any component of cpts reference c?
+    val (ct,cid) = c.componentProcessIdentity; j = 1
+    while(j < cpts.length){
+      val c1 = cpts(j); j += 1; 
+      if(c1.hasIncludedParam(ct, cid)) add1(servers, Array(c1, c), ab)
     }
   }
 

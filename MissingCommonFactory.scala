@@ -81,7 +81,10 @@ object MissingCommonFactory{
         // IMPROVE: can we avoid creating the MissingCommon if it will be done?
         val mc: MissingCommon = 
           if(simple) new SimpleMissingCommon(servers, cpts1, cpts2, f, id)
-          else new TwoStepMissingCommon(servers, cpts1, cpts2, f, id)
+          else{
+            val c2 = if(cpts2.length > 1) cpts2(1) else null
+            new TwoStepMissingCommon(servers, cpts1, cpts2(0), c2, f, id)
+          }
         Profiler.count("new MissingCommon")
         val ab = new ArrayBuffer[Cpts]; val princ1 = cpts1(0); var found = false
         // All component states c with identity pid such that views contains

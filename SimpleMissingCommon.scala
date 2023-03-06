@@ -90,6 +90,8 @@ class SimpleMissingCommon(
     mc1
   }
 
+  import MissingCommon.{Eq,Sub,Sup,Inc,compare}
+
   /** Update missingCandidates based on views.  Remove elements of views from
     * the front of each.  If any is now empty, then mark this as satisfied.
     * Return views against which this should now be registered, or null if
@@ -99,11 +101,49 @@ class SimpleMissingCommon(
     //   missingCandidates.map(showMissingComponents))
     if(done){ assert(missingCandidates == null); null } 
     else{
-      val toRegister = new CptsBuffer
+      val toRegister = new CptsBuffer; val len = missingCandidates.length
       // Note: it's possible that missingCandidates is empty here
-      val newMC = missingCandidates.map(mc => removeViews(mc, views, toRegister))
+      val newMC = new Array[MissingComponents](len); var i = 0
+      // Which missingComponents have been superseded by others?
+      val superseded = new Array[Boolean](len); var count = len
+      while(i < len && !done){
+        val mc1 = removeViews(missingCandidates(i), views, toRegister); 
+// IMPROVE: Either make use of the following or remove it. 
+        if(!done){
+          // Test if mc1 implied by another value in newMC, or vice versa
+          var j = 0
+          while(j < i && !superseded(i)){
+            if(!superseded(j)){
+              val cmp = compare(newMC(j), mc1)
+              if(cmp != Inc){
+                Profiler.count("SMC.updateMissingView superseded")
+                // About 0.025 cases per MissingCommon for lazySet; much
+                // better for lockFreeSet
+                if(cmp == Sup){ superseded(j) = true; count -= 1 }
+                else{ superseded(i) = true; count -= 1 } // cmp == Sub or Eq
+              }
+            }
+            j += 1
+          } // end of inner while loop
+        } // end of if(!done)
+        newMC(i) = mc1; i += 1
+      } // end of outer while loop
       if(done){ assert(missingCandidates == null);  null }
-      else{ missingCandidates = newMC; toRegister }
+      else{ 
+// FIXME
+        if(true || count == len) missingCandidates = newMC
+        else{
+          // Copy the non-superseded elements of newMC into missingCandidates
+          val toStore = new Array[MissingComponents](count); var i = 0; var j = 0
+          while(i < len){
+            if(!superseded(i)){ toStore(j) = newMC(i); j += 1 }
+            i += 1
+          }
+          assert(j == count); missingCandidates = toStore
+        }
+// IMPROVE: only need to register those not superseded.
+        toRegister
+      }
     }
   }
 
@@ -126,6 +166,14 @@ class SimpleMissingCommon(
     }
   }
 
+  /** All relevant renamings of cpt1 as a possible instantiation of the common
+    * missing component.  Identity on params of servers and princ1, but
+    * otherwise mapping to parameters of a secondary component c2 of cpts1 or
+    * cpts2 only if there is already a cross reference between cpt1 and c2 (in
+    * either direction).  */
+  protected def remapToJoin(cpt1: State) : Array[State]  = 
+    Unification.remapToJoin(servers, princ1, cpts1, cpts2, cpt1)
+
   /** Find the missing components that (with servers) are necessary to complete
     * this for a particular candidate state c.  Return an array containing
     * each of the following that is not currently in views: (1) cpts2(0) || c;
@@ -144,41 +192,7 @@ class SimpleMissingCommon(
     * superset of mCand.  Pre: mCpts is sorted and all elements are registered
     * in StateArray.  */
   private[this] def add(mCpts: MissingComponents): Unit = {
-    assert(!done)
-    // assert(mCpts.forall(cpts => cpts.eq(StateArray(cpts))))
-    // require(isSorted(mCpts), mCpts.map(StateArray.show)) 
-    // Traverse missingCandidates.  We aim to retain any that is  not a proper
-    // superset of mCpts.  Record which to retain in toRetain.
-    // val toRetain = new Array[Boolean](missingCandidates.length); 
-    // var i = 0; var retainCount = 0 // number to retain
-    // var found = false // true if missingCandidates includes a subset of mCpts
-    // while(i < missingCandidates.length){
-    //   val mCpts1 = missingCandidates(i)
-    //   // Note: mCpts is local; this is locked; so neither of following
-    //   // parameters can be mutated by a concurrent thread.
-    //   val cmp = MissingCommon.compare(mCpts1, mCpts)
-    //   if(cmp != Sup){ toRetain(i) = true; retainCount += 1}
-    //   found ||= cmp == Sub || cmp == Eq // mCpts can be replaced by mCpts1
-    //   i += 1
-    // }
-    missingCandidates = addTo(missingCandidates, mCpts)
-    // val (found, toRetain, retainCount) = 
-    //   compareMissingComponents(missingCandidates, mCpts)
-    // // Update missingCandidates, retaining elements of missingCandidates as
-    // // indicated by toRetain.
-    // if(!found || retainCount < missingCandidates.length){
-    //   val newMC =
-    //     new Array[MissingComponents](if(found) retainCount else retainCount+1)
-    //   assert(newMC.length > 0); var j = 0; var i = 0
-    //   while(i < missingCandidates.length){
-    //     if(toRetain(i)){ newMC(j) = missingCandidates(i); j += 1 }
-    //     i += 1
-    //   }
-    //   assert(j == retainCount)
-    //   if(!found) newMC(retainCount) = mCpts
-    //   missingCandidates = newMC; 
-    // }
-    // !found
+    assert(!done); missingCandidates = addTo(missingCandidates, mCpts)
   }
 
   /** Is mCand sorted, without repetitions. */

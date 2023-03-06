@@ -8,7 +8,7 @@ object RemappingExtenderTest{
   import TestStates._
   import TestUtils._
   import Unification.UnificationList // = List[(Int,Int)]
-  import RemappingExtender.extendMapToCandidates
+  import RemappingExtender.TestHooks1.extendMapToCandidates
 
   private def showCandMap(candMap: Array[Array[List[Identity]]]): String = 
     candMap.map(_.mkString(", ")).mkString("; ")

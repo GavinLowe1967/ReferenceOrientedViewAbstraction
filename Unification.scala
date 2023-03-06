@@ -86,9 +86,6 @@ object Unification{
     require(pre.servers == cv.servers)
     val cpts = cv.components; val preCpts = pre.components
     val map0 = pre.servers.remappingMap1(cv.getParamsBound)
-    // Map from identities to the index of the corresponding component in
-    // preCpts, if any, otherwise -1.
-    // val preCptsIndexMap = pre.idsIndexMap // State.indexMap(preCpts)
     val result = new AllUnifsResult // holds final result
 
     // Extend map and unifs to cpts[from..), adding results to results.  Each
@@ -109,7 +106,6 @@ object Unification{
             var j = 0; var ok = true
             while(j < from && ok){
               val cj = cpts(j); val f = cj.family; val id = cj.ids(0)
-              // val (f,id) = cpts(j).componentProcessIdentity
               val id1 = map1(f)(id)
               // Check map not extended on (f,id), or (f,id1) doesn't match an
               // identity in preCpts
@@ -336,10 +332,7 @@ object Unification{
     var i = 1; while(i < cpts1.length){ secondaries(i-1) = cpts1(i); i += 1 }
     if(cpts2.length == 2) secondaries(numSecondaries-1) = cpts2(1)
     // Which secondaries have been used?
-    val doneSecondaries = new Array[Boolean](numSecondaries); 
-    // i = 1; 
-    // while(i < cpts2.length){ secondaries(i+cpts1.length-2) = cpts2(i); i += 1 }
-    t = 0
+    val doneSecondaries = new Array[Boolean](numSecondaries); t = 0
     // Update nextArg for other components
     while(t < numTypes){
       omitSize(t) = nextArg(t); var i = 1

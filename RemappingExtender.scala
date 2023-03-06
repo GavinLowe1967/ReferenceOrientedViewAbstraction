@@ -46,6 +46,16 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
       preCpts(0).cs == 23 && preCpts(1).cs == 15 && 
       cpts(0).cs == 24 && cpts(1).cs == 11 && cpts(0).ids(2) == 2
 
+  /** Bound on the parameters of cpts.  If NewEffectOnStore3 then ignoring
+    * secondary. */
+  // private val paramsBound = {
+  //   val pb = pre.servers.paramsBound.clone
+  //   for(i <- 0 until (if(NewEffectOnStore3) 1 else cpts.length); 
+  //       t <- 0 until numTypes)
+  //     pb(t) = pb(t) max cpts(i).getParamsBound(t)
+  //   pb
+  // }
+
   import Unification.UnificationList // = List[(Int,Int)]
 
   /** Representation of a linkage.  A pair (i, j) represents a linkage between
@@ -573,7 +583,7 @@ object RemappingExtender{
   /** Extend rdMap, mapping each parameter (t,p) to each element of
     * candidates(t)(p), or not.  Each map is fresh.  rdMap is mutated, but all
     * changes are backtracked.  */
-  def extendMapToCandidates(
+  private def extendMapToCandidates(
     rdMap: RemappingMap, candidates: Array[Array[List[Identity]]], 
     preParamSizes: Array[Int])
       : ArrayBuffer[RemappingMap] = {
@@ -646,6 +656,7 @@ object RemappingExtender{
       : ArrayBuffer[RemappingMap] = {
     val completions = new ArrayBuffer[RemappingMap]
     val nextArgMap = trans.getNextArgMap // IMPROVE: don't clone
+
     // Build all completions of rdMap, mapping each parameter to each element
     // of candidates(x), or not, injectively.
     val eMaps = extendMapToCandidates(rdMap, candidates, nextArgMap)
@@ -683,6 +694,12 @@ object RemappingExtender{
       }
     }
     found
+  }
+
+  private val outer = this
+
+  object TestHooks1{
+    val extendMapToCandidates = outer.extendMapToCandidates _
   }
 
 
