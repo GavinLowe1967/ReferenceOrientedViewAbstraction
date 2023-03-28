@@ -17,9 +17,11 @@ import ox.gavin.profiling.Profiler
   * upon. */
 class SimpleMissingCommon(
   servers: ServerStates, cpts1: Cpts, cpts2: Cpts, family: Int, id: Int)
-    extends MissingCommon(servers,cpts1, cpts2, family, id){
+    extends MissingCommon(servers,cpts1, /*cpts2,*/ family, id){
 
   Profiler.count("SimpleMissingCommon")
+
+  require(cpts2(0).processIdentities.contains(pid))
 
   /* Overview of main functions.
    * 

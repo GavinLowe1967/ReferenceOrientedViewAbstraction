@@ -203,7 +203,7 @@ object VA{
         SystemP.SystemTest.test(system); 
         new ExtendabilityP.ExtendabilityTest(system).test
         new CheckerTest(system, numWorkers).test
-        RemappingExtenderTest()
+        RemappingExtenderTest(); RemappingExtenderTest2()
         SingleRefEffectOnUnificationTest()
       }
       else if(testSuite){ 

@@ -17,7 +17,7 @@ import MissingCommon.Cpts // = Array[State]
   * 
   * The subclasses differ in the way they represent the missing views.  */
 abstract class MissingCommon(
-  servers: ServerStates, cpts1: Cpts, val cpts2: Cpts, family: Int, id: Int)
+  servers: ServerStates, cpts1: Cpts, /*val cpts2: Cpts,*/ family: Int, id: Int)
 {
   import MissingCommon.CptsBuffer // = ArrayBuffer[Cpts]
   import MissingCommon.MissingComponents // = Array[Cpts]
@@ -43,8 +43,8 @@ abstract class MissingCommon(
 
   @inline protected def princ1 = cpts1(0)
 
-  require(princ1.processIdentities.contains(pid) && 
-    cpts2(0).processIdentities.contains(pid))
+  require(princ1.processIdentities.contains(pid)) // && 
+    // cpts2(0).processIdentities.contains(pid))
 
   /** Variable encapsulating some flags. */
   private var flags = 0

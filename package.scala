@@ -214,7 +214,7 @@ package object ViewAbstraction{
     * in SingleRefEffectOnUnification.scala? */
   val newEffectOn = true
 
-  val NewEffectOnStore3 = false
+  var NewEffectOnStore3 = false
 
   /** Switch to activate various assertions. */
   val debugging = true // false

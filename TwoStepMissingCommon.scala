@@ -17,10 +17,10 @@ import ox.gavin.profiling.Profiler
 class TwoStepMissingCommon(servers: ServerStates, cpts1: Cpts, 
   princ2: State, secondary2: State, family: Int, id: Int)
     extends MissingCommon(servers, cpts1, 
-       TwoStepMissingCommon.mkCpts2(princ2,secondary2), family, id)
+       /*TwoStepMissingCommon.mkCpts2(princ2,secondary2),*/ family, id)
 {
 // IMPROVE: change to a def, if necessary
-  // val cpts2X = TwoStepMissingCommon.mkCpts2(princ2,secondary2)
+  val cpts2 = TwoStepMissingCommon.mkCpts2(princ2,secondary2)
 
   // assert(cpts2 == cpts2X, 
   //   "cpts2 = "+StateArray.show(cpts2)+"\ncpts2X = "+StateArray.show(cpts2X))

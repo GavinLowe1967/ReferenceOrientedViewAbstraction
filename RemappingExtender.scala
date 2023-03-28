@@ -251,46 +251,46 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     rec(0); Pools.returnBitMap(addedParams); result
   }
 
-  /** Build map showing what each parameter of cv can be mapped to so as to be
-    * consistent with rdMap (so giving List() on parameters in dom rdMap, and
-    * not mapping to an element of range rdMap) and resultRelevantParams (not
-    * mapping to any such parameter) and respecting doneB (for each (i,j) in
-    * doneB, not mapping any parameter of cv.cpts(i) to a component of
-    * pre.cpts(j)).   */
-  private def getCandidatesMap(
-    resultRelevantParams: BitMap, rdMap: RemappingMap, doneB: List[Linkage])
-      : CandidatesMap = {
-    assert(singleRef && !useNewEffectOnStore)
-//println("rdMap = "+Remapper.show(rdMap))
-    // All params of pre, except those in resultRelevantParams or range rdMap 
-// IMPROVE: memoise at least some of this
-//println(pre.getAllParams(0))
-    val otherArgs: Array[List[Identity]] = Array.tabulate(numTypes)(t => 
-      pre.getAllParams(t).filter(p => 
-        !resultRelevantParams(t)(p) && !rdMap(t).contains(p)))
-//println("otherArgs = "+otherArgs.mkString("; "))
-    // The same but excluding identities
-    val nonIds = Array.tabulate(numTypes)(t => 
-      otherArgs(t).filter(p1 => !preCptIds(t)(p1)))
-    // List of parameters that each parameter x of cv could be mapped to;
-    // empty list if x is already mapped in rdMap; otherwise relevant members
-    // of otherArgs, not mapping an identity to an identity.
-    val candidates = Array.tabulate(numTypes)(t => 
-      Array.tabulate(rdMap(t).length)(p => 
-        if(rdMap(t)(p) < 0) 
-          if(cptIds(t)(p)) nonIds(t) else otherArgs(t)
-        else List() 
-      ))
-    // For each (i,j) in doneB, for each param (t,x) of cv.cpts(i),
-    // remove all parameters of preCts(j) from the list candidates(x). 
-    for((i,j) <- doneB){
-      val preC = preCpts(j)
-      for((t,x) <- cpts(i).processIdentities; if !isDistinguished(x)){
-        candidates(t)(x) = candidates(t)(x).filter(y => !preC.hasParam(t,y))
-      }
-    }
-    candidates
-  }
+//   /** Build map showing what each parameter of cv can be mapped to so as to be
+//     * consistent with rdMap (so giving List() on parameters in dom rdMap, and
+//     * not mapping to an element of range rdMap) and resultRelevantParams (not
+//     * mapping to any such parameter) and respecting doneB (for each (i,j) in
+//     * doneB, not mapping any parameter of cv.cpts(i) to a component of
+//     * pre.cpts(j)).   */
+//   private def getCandidatesMap(
+//     resultRelevantParams: BitMap, rdMap: RemappingMap, doneB: List[Linkage])
+//       : CandidatesMap = {
+//     assert(singleRef && !useNewEffectOnStore)
+// //println("rdMap = "+Remapper.show(rdMap))
+//     // All params of pre, except those in resultRelevantParams or range rdMap 
+// // IMPROVE: memoise at least some of this
+// //println(pre.getAllParams(0))
+//     val otherArgs: Array[List[Identity]] = Array.tabulate(numTypes)(t => 
+//       pre.getAllParams(t).filter(p => 
+//         !resultRelevantParams(t)(p) && !rdMap(t).contains(p)))
+// //println("otherArgs = "+otherArgs.mkString("; "))
+//     // The same but excluding identities
+//     val nonIds = Array.tabulate(numTypes)(t => 
+//       otherArgs(t).filter(p1 => !preCptIds(t)(p1)))
+//     // List of parameters that each parameter x of cv could be mapped to;
+//     // empty list if x is already mapped in rdMap; otherwise relevant members
+//     // of otherArgs, not mapping an identity to an identity.
+//     val candidates = Array.tabulate(numTypes)(t => 
+//       Array.tabulate(rdMap(t).length)(p => 
+//         if(rdMap(t)(p) < 0) 
+//           if(cptIds(t)(p)) nonIds(t) else otherArgs(t)
+//         else List() 
+//       ))
+//     // For each (i,j) in doneB, for each param (t,x) of cv.cpts(i),
+//     // remove all parameters of preCts(j) from the list candidates(x). 
+//     for((i,j) <- doneB){
+//       val preC = preCpts(j)
+//       for((t,x) <- cpts(i).processIdentities; if !isDistinguished(x)){
+//         candidates(t)(x) = candidates(t)(x).filter(y => !preC.hasParam(t,y))
+//       }
+//     }
+//     candidates
+//   }
 
   import CompressedCandidatesMap._
 
@@ -337,31 +337,31 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
     // IMPROVE: create in flattened form?
   } 
 
-  /** Implementation of allExtensions from the paper.  All extensions of rdMap,
-    * mapping undefined parameters to an arbitrary parameter of pre, or the
-    * next fresh parameter, but not to parameters of resultRelevantParams, and
-    * only consistently with doneB.  Add each to extensions. */
-  private def allExtensions(
-    resultRelevantParams: BitMap, rdMap: RemappingMap, 
-    doneB: List[Linkage], extensions: ExtensionsInfo)
-      : Unit = {
-    require(!useNewEffectOnStore)
-    Profiler.count("allExtensions")
-    // All parameters that each parameter can be mapped to
-    val candidates = getCandidatesMap(resultRelevantParams, rdMap, doneB)
-    // Build all extensions of rdMap, mapping each parameter to each element
-    // of candidates(x), or not, injectively.
-    val eMaps = RemappingExtender.extendMapToCandidates(
-      rdMap, candidates, pre.getNextArgMap)
-    // Map remainder to fresh variables, and add to extensions.
-    var i = 0
-    while(i < eMaps.length){
-      val eMap = eMaps(i); i += 1
-      mapUndefinedToFresh(eMap)
-      maybeAdd(extensions, eMap) 
-      Profiler.count("allExtensions - add")
-    }
-  }
+  // /** Implementation of allExtensions from the paper.  All extensions of rdMap,
+  //   * mapping undefined parameters to an arbitrary parameter of pre, or the
+  //   * next fresh parameter, but not to parameters of resultRelevantParams, and
+  //   * only consistently with doneB.  Add each to extensions. */
+  // private def allExtensions(
+  //   resultRelevantParams: BitMap, rdMap: RemappingMap, 
+  //   doneB: List[Linkage], extensions: ExtensionsInfo)
+  //     : Unit = {
+  //   require(!useNewEffectOnStore)
+  //   Profiler.count("allExtensions")
+  //   // All parameters that each parameter can be mapped to
+  //   val candidates = getCandidatesMap(resultRelevantParams, rdMap, doneB)
+  //   // Build all extensions of rdMap, mapping each parameter to each element
+  //   // of candidates(x), or not, injectively.
+  //   val eMaps = RemappingExtender.extendMapToCandidates(
+  //     rdMap, candidates, pre.getNextArgMap)
+  //   // Map remainder to fresh variables, and add to extensions.
+  //   var i = 0
+  //   while(i < eMaps.length){
+  //     val eMap = eMaps(i); i += 1
+  //     mapUndefinedToFresh(eMap)
+  //     maybeAdd(extensions, eMap) 
+  //     Profiler.count("allExtensions - add")
+  //   }
+  // }
 
 
   @inline private def maybeAdd(extensions: ExtensionsInfo,
@@ -395,53 +395,56 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
   def makeExtensions(unifs: UnificationList, resultRelevantParams: BitMap, 
     rdMap: RemappingMap, isPrimary: Boolean)
       : ExtensionsInfo = {
+    require(useNewEffectOnStore)
     val extensions = new ExtensionsInfo
-    if(useNewEffectOnStore)
+    //if(useNewEffectOnStore)
       makeExtensionsNew(
         unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
-    else 
-      makeExtensions1(
-        unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
+    // else 
+    //   makeExtensions1(
+    //     unifs, resultRelevantParams, rdMap, List(), isPrimary, extensions)
     extensions
-  }  /** Implementation of makeExtensions from the paper.  Create all required
-    * extensions of result-defining map rdMap.  Add all such to extensions.
-    * doneB gives the instances of condition (b) that we have dealt with so
-    * far.  Note: rdMap may be mutated and might be included in result; but
-    * otherwise should be recycled. */
-  private def makeExtensions1(
-    unifs: UnificationList, resultRelevantParams: BitMap, 
-    rdMap: RemappingMap, doneB: List[Linkage], 
-    isPrimary: Boolean, extensions: ExtensionsInfo)
-      : Unit = {
-    require(!useNewEffectOnStore)
-    // if(highlight)println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
-    //   s"; doneB = $doneB")
-    val linkagesC = RemappingExtender.anyLinkageC(rdMap, cv, pre)
-    if(linkagesC){
-      allExtensions(resultRelevantParams, rdMap, doneB, extensions)
-      recycle(rdMap)
-    }
-    else{
-      val newLinkage = findLinkage(unifs, rdMap, doneB) 
-      if(newLinkage == null){ 
-        mapUndefinedToFresh(rdMap)   // map remaining params to fresh
-        maybeAdd(extensions, rdMap) 
-        // Add to extensions if not there already
-      }
-      else{
-        val (i,j) = newLinkage
-        val extendedMaps = 
-          extendForLinkage(rdMap, resultRelevantParams, i, j, isPrimary, doneB)
-        var k = 0
-        while(k < extendedMaps.length){
-          val eMap = extendedMaps(k); k += 1
-          makeExtensions1(unifs, resultRelevantParams, eMap, 
-            (i,j)::doneB, isPrimary, extensions)
-        }
-        recycle(rdMap)
-      }
-    }
-  }
+  }  
+
+  // /** Implementation of makeExtensions from the paper.  Create all required
+  //   * extensions of result-defining map rdMap.  Add all such to extensions.
+  //   * doneB gives the instances of condition (b) that we have dealt with so
+  //   * far.  Note: rdMap may be mutated and might be included in result; but
+  //   * otherwise should be recycled. */
+  // private def makeExtensions1(
+  //   unifs: UnificationList, resultRelevantParams: BitMap, 
+  //   rdMap: RemappingMap, doneB: List[Linkage], 
+  //   isPrimary: Boolean, extensions: ExtensionsInfo)
+  //     : Unit = {
+  //   require(!useNewEffectOnStore)
+  //   // if(highlight)println("makeExtensions1; rdMap = "+Remapper.show(rdMap)+
+  //   //   s"; doneB = $doneB")
+  //   val linkagesC = RemappingExtender.anyLinkageC(rdMap, cv, pre)
+  //   if(linkagesC){
+  //     allExtensions(resultRelevantParams, rdMap, doneB, extensions)
+  //     recycle(rdMap)
+  //   }
+  //   else{
+  //     val newLinkage = findLinkage(unifs, rdMap, doneB) 
+  //     if(newLinkage == null){ 
+  //       mapUndefinedToFresh(rdMap)   // map remaining params to fresh
+  //       maybeAdd(extensions, rdMap) 
+  //       // Add to extensions if not there already
+  //     }
+  //     else{
+  //       val (i,j) = newLinkage
+  //       val extendedMaps = 
+  //         extendForLinkage(rdMap, resultRelevantParams, i, j, isPrimary, doneB)
+  //       var k = 0
+  //       while(k < extendedMaps.length){
+  //         val eMap = extendedMaps(k); k += 1
+  //         makeExtensions1(unifs, resultRelevantParams, eMap, 
+  //           (i,j)::doneB, isPrimary, extensions)
+  //       }
+  //       recycle(rdMap)
+  //     }
+  //   }
+  // }
 
   /** Implementation of makeExtensions from the paper.  Create extensions
     * necessary for considering missing cross references (condition (b)), but
@@ -531,7 +534,7 @@ class RemappingExtender(trans: Transition, cv: ComponentView){
 
     val findLinkagesC = outer.findLinkagesC _
 
-    val getCandidatesMap = outer.getCandidatesMap _
+    //val getCandidatesMap = outer.getCandidatesMap _
   }
 }
 
@@ -580,12 +583,13 @@ object RemappingExtender{
   // type ExtensionsInfo = ArrayBuffer[(RemappingMap, CandidatesMap)]
   type ExtensionsInfo = ArrayBuffer[(RemappingMap, CompressedCandidatesMap)]
 
-  /** Extend rdMap, mapping each parameter (t,p) to each element of
-    * candidates(t)(p), or not.  Each map is fresh.  rdMap is mutated, but all
-    * changes are backtracked.  */
+  /** Extend rdMap, mapping each unmapped parameter (t,p) to each element of
+    * candidates(t)(p) with p < paramsBound(t), or not.  Each map is fresh.
+    * rdMap is mutated, but all changes are backtracked.  preParamsSizes(t)
+    * gives an upper bound on the parameters of type t in candidates(t).   */
   private def extendMapToCandidates(
     rdMap: RemappingMap, candidates: Array[Array[List[Identity]]], 
-    preParamSizes: Array[Int])
+    preParamSizes: Array[Int], paramsBound: Array[Int])
       : ArrayBuffer[RemappingMap] = {
     val result = new ArrayBuffer[RemappingMap]
     // bitmap showing which parameters of pre have been used in the current
@@ -596,7 +600,7 @@ object RemappingExtender{
     /* Remap from (t,i) onwards. */
     def rec(t: Type, i: Identity): Unit = {
       if(t == numTypes) result += Remapper.cloneMap(rdMap)
-      else if(i == rdMap(t).length) rec(t+1,0)
+      else if(i == paramsBound(t) /*rdMap(t).length*/) rec(t+1,0)
       else{
         if(rdMap(t)(i) < 0){
           for(x <- candidates(t)(i); if !used(t)(x)){
@@ -631,7 +635,15 @@ object RemappingExtender{
       assert(anyLinkageC(map1, cv, trans.pre))
       // IMPROVE: maybe work directly with candidates?
       val candidates1 = unflattened.map(_.map(CompressedCandidatesMap.toList))
-      allCompletions1(map1, candidates1, trans)
+      // Bound on parameters of cv, ignoring secondary if NewEffectOnStore3. 
+      val paramsBound = cv.servers.paramsBound.clone
+      for(i <- 0 until (if(NewEffectOnStore3) 1 else cv.components.length);
+          t <- 0 until numTypes)
+        paramsBound(t) = paramsBound(t) max cv.components(i).getParamsBound(t)
+// IMPROVE, and calculate paramsBound this way
+      if(!NewEffectOnStore3) 
+        for(t <- 0 until numTypes) assert(paramsBound(t) == map1(t).length)
+      allCompletions1(map1, candidates1, trans, paramsBound)
     }
     else{
       // This case arises from NewEffectOn.processInducedInfoLazy, when
@@ -649,17 +661,19 @@ object RemappingExtender{
   }
 
   /** All completions of rdMap, mapping undefined parameters to an element of
-    * the corresponding entry in candidates.  rdMap is mutated, but all
-    * changes are backtracked. */
+    * the corresponding entry in candidates, or a fresh value (wrt trans).
+    * rdMap is mutated, but all changes are backtracked.  Only parameters
+    * (t,i) with i < paramsBound(t) are updated. */
   private def allCompletions1(
-    rdMap: RemappingMap, candidates: CandidatesMap, trans: Transition)
+    rdMap: RemappingMap, candidates: CandidatesMap, trans: Transition, 
+    paramsBound: Array[Int])
       : ArrayBuffer[RemappingMap] = {
     val completions = new ArrayBuffer[RemappingMap]
     val nextArgMap = trans.getNextArgMap // IMPROVE: don't clone
 
     // Build all completions of rdMap, mapping each parameter to each element
     // of candidates(x), or not, injectively.
-    val eMaps = extendMapToCandidates(rdMap, candidates, nextArgMap)
+    val eMaps = extendMapToCandidates(rdMap, candidates, nextArgMap, paramsBound)
     // Map remainder to fresh variables, and add to completions.
     var i = 0
     while(i < eMaps.length){
@@ -671,6 +685,59 @@ object RemappingExtender{
     }
     completions
   }
+
+  /** Extend map, mapping each unmapped identity to an identity of c, or a fresh
+    * value.  Each resulting map is fresh.  map is mutated, but all changes
+    * are backtracked.  */
+  def extendToMissingComponent(map: RemappingMap, c: State)
+      : ArrayBuffer[RemappingMap] = {
+    // nextArg(t) will hold value of next fresh param of type t
+    val nextArg = Array.fill(numTypes)(0)
+    // Find params of c.  We expect there not to be many, so use Lists
+    val candidates = Array.fill(numTypes)(List[Identity]())
+    val cIds = c.processIdentities
+    for(i <- 0 until cIds.length){
+      val (t,x) = cIds(i)
+      if(!isDistinguished(x) && !contains(candidates(t), x)){
+        candidates(t) ::= x; nextArg(t) = nextArg(t) max (x+1)
+      }
+    }
+    // bitmap showing which parameters of c have been used in the current
+    // mapping.  Calls to rec mutate this but backtrack the updates.
+    val used = Array.tabulate(numTypes)(t => new Array[Boolean](nextArg(t)))
+    // Filter out those candidates in range of map; find next fresh param.
+    for(t <- 0 until numTypes; i <- 0 until map(t).length){
+      val x = map(t)(i)
+      candidates(t) = candidates(t).filter(_ != x)
+      nextArg(t) = nextArg(t) max (x+1)
+    }
+    val result = new ArrayBuffer[RemappingMap]
+
+    /* Remap from (t,i) onwards. */
+    def rec(t: Type, i: Identity): Unit = {
+      if(t == numTypes){
+        // Clone; map remaining to fresh; add to result
+        val map1 = Remapper.cloneMap(map)
+        Remapper.mapUndefinedToFresh(map1, nextArg)
+        result += map1
+      }
+      else if(i == map(t).length) rec(t+1,0)
+      else{
+        if(map(t)(i) < 0){
+          for(x <- candidates(t); if !used(t)(x)){
+            used(t)(x) = true          // temporary update (*)
+            map(t)(i) = x; rec(t,i+1)
+            used(t)(x) = false         // backtrack (*)
+          }
+          map(t)(i) = -1               // backtrack update
+        }
+        rec(t,i+1)  // also leave (t,i) unmapped
+      }
+    }
+
+    rec(0,0); result
+  }
+
 
   /** Is there any linkage for condition (c), corresponding to rdMap? */
   @inline 
@@ -700,6 +767,7 @@ object RemappingExtender{
 
   object TestHooks1{
     val extendMapToCandidates = outer.extendMapToCandidates _
+
   }
 
 
